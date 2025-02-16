@@ -23,9 +23,13 @@ import (
 	"golang.org/x/image/math/fixed"
 )
 
-// Path to font files
-const defaultFontPath = "fonts/CourierPrime-Bold.ttf"
-const backupFontPath = "fonts/OpenSans-Bold.ttf"
+// Available fonts embedded in the binary
+var availableFonts = []string{
+	"CourierPrime-Bold",
+	"AmericanTypewriter",
+	"BigBlueTermPlusNerdFont-Regular",
+	"HeavyDataNerdFont-Regular",
+}
 
 // Helper functions
 func hexToRGB(hexColor string) (color.RGBA, error) {
@@ -182,154 +186,68 @@ func createSolidBorder(img image.Image, borderThickness int, borderColor color.R
 	return borderedImg
 }
 
-// Simple Gaussian blur implementation since we're removing stackblur dependency
-func simpleBlur(img *image.RGBA, radius int) *image.RGBA {
-	bounds := img.Bounds()
-	result := image.NewRGBA(bounds)
-	
-	for y := bounds.Min.Y; y < bounds.Max.Y; y++ {
-		for x := bounds.Min.X; x < bounds.Max.X; x++ {
-			var sumR, sumG, sumB, sumA uint32
-			var count uint32
-			
-			for ky := -radius; ky <= radius; ky++ {
-				for kx := -radius; kx <= radius; kx++ {
-					px := x + kx
-					py := y + ky
-					
-					if px >= bounds.Min.X && px < bounds.Max.X && py >= bounds.Min.Y && py < bounds.Max.Y {
-						r, g, b, a := img.At(px, py).RGBA()
-						sumR += r
-						sumG += g
-						sumB += b
-						sumA += a
-						count++
-					}
-				}
-			}
-			
-			if count > 0 {
-				avgR := sumR / count
-				avgG := sumG / count
-				avgB := sumB / count
-				avgA := sumA / count
-				result.Set(x, y, color.RGBA{
-					R: uint8(avgR >> 8),
-					G: uint8(avgG >> 8),
-					B: uint8(avgB >> 8),
-					A: uint8(avgA >> 8),
-				})
-			}
-		}
-	}
-	
-	return result
-}
+// blur function removed as it's no longer needed
 
-func createVintageBorder(img image.Image, borderThickness int, padding int) image.Image {
-	imgW, imgH := img.Bounds().Dx(), img.Bounds().Dy()
-	
-	// Add padding if specified
-	if padding > 0 {
-		paddedW := imgW + 2*padding
-		paddedH := imgH + 2*padding
-		paddedImg := image.NewRGBA(image.Rect(0, 0, paddedW, paddedH))
-		draw.Draw(paddedImg, paddedImg.Bounds(), &image.Uniform{color.RGBA{255, 255, 255, 255}}, image.Point{}, draw.Src)
-		draw.Draw(paddedImg, image.Rect(padding, padding, padding+imgW, padding+imgH), img, image.Point{}, draw.Src)
-		img = paddedImg
-		imgW, imgH = paddedW, paddedH
-	}
+// Vintage border style has been removed
 
-	newW := imgW + 2*borderThickness
-	newH := imgH + 2*borderThickness
-
-	// Create a new white image and paste the original in the center
-	newImage := image.NewRGBA(image.Rect(0, 0, newW, newH))
-	draw.Draw(newImage, newImage.Bounds(), &image.Uniform{color.RGBA{255, 255, 255, 255}}, image.Point{}, draw.Src)
-	draw.Draw(newImage, image.Rect(borderThickness, borderThickness, borderThickness+imgW, borderThickness+imgH), 
-		img, image.Point{}, draw.Src)
-
-	// Create a mask that covers only the border regions
-	mask := image.NewRGBA(image.Rect(0, 0, newW, newH))
-
-	// Draw the mask for the border areas
-	for y := 0; y < newH; y++ {
-		for x := 0; x < newW; x++ {
-			// Check if pixel is in border area
-			inBorder := x < borderThickness || x >= newW-borderThickness || y < borderThickness || y >= newH-borderThickness
-			if inBorder {
-				mask.Set(x, y, color.RGBA{255, 255, 255, 255})
-			} else {
-				mask.Set(x, y, color.RGBA{0, 0, 0, 0})
-			}
-		}
-	}
-
-	// Generate noise
-	noise := image.NewRGBA(image.Rect(0, 0, newW, newH))
-	r := rand.New(rand.NewSource(time.Now().UnixNano()))
-	for y := 0; y < newH; y++ {
-		for x := 0; x < newW; x++ {
-			n := uint8(r.Intn(255))
-			noise.Set(x, y, color.RGBA{n, n, n, 255})
-		}
-	}
-
-	// Blur the noise a little (using our own simple blur)
-	blurredNoise := simpleBlur(noise, 1)
-
-	// Blend the noise with the white border
-	blended := image.NewRGBA(image.Rect(0, 0, newW, newH))
-	for y := 0; y < newH; y++ {
-		for x := 0; x < newW; x++ {
-			maskColor := mask.At(x, y).(color.RGBA)
-			if maskColor.R > 0 {
-				// Get original and noise colors
-				origColor := newImage.At(x, y).(color.RGBA)
-				noiseColor := blurredNoise.At(x, y).(color.RGBA)
-
-				// Blend with 0.2 alpha
-				blendedR := uint8(float64(origColor.R)*0.8 + float64(noiseColor.R)*0.2)
-				blendedG := uint8(float64(origColor.G)*0.8 + float64(noiseColor.G)*0.2)
-				blendedB := uint8(float64(origColor.B)*0.8 + float64(noiseColor.B)*0.2)
-
-				blended.Set(x, y, color.RGBA{blendedR, blendedG, blendedB, 255})
-			} else {
-				blended.Set(x, y, newImage.At(x, y))
-			}
-		}
-	}
-
-	return blended
-}
-
-// loadDefaultFont loads and parses the font file
-func loadDefaultFont() (*truetype.Font, error) {
-    // Try to load the primary font
-    fontData, err := os.ReadFile(defaultFontPath)
-    if err != nil {
-        // Try the backup font
-        fontData, err = os.ReadFile(backupFontPath)
-        if err != nil {
-            return nil, fmt.Errorf("error loading font files: %v", err)
+// loadFont loads and parses a font by name from embedded data
+func loadFont(fontName string) (*truetype.Font, error) {
+    if fontName == "" {
+        fontName = availableFonts[0] // Default to first font
+    }
+    
+    // Try to find the font in our embedded assets
+    var fontData []byte
+    var foundFont bool
+    var err error
+    
+    // Check if it's a TTF
+    assetName := fmt.Sprintf("fonts_data/%s.ttf", fontName)
+    fontData, err = Asset(assetName)
+    if err == nil {
+        foundFont = true
+    }
+    
+    // If not found, check for TTC
+    if !foundFont {
+        assetName = fmt.Sprintf("fonts_data/%s.ttc", fontName)
+        fontData, err = Asset(assetName)
+        if err == nil {
+            foundFont = true
         }
+    }
+    
+    // If not found, try the default font
+    if !foundFont && fontName != availableFonts[0] {
+        assetName = fmt.Sprintf("fonts_data/%s.ttf", availableFonts[0])
+        fontData, err = Asset(assetName)
+        if err != nil {
+            return nil, fmt.Errorf("error loading font '%s' and default fallback: %v", fontName, err)
+        }
+    } else if !foundFont {
+        return nil, fmt.Errorf("error loading font '%s': %v", fontName, err)
     }
     
     // Parse the font data
     f, err := truetype.Parse(fontData)
     if err != nil {
-        return nil, fmt.Errorf("error parsing font: %v", err)
+        return nil, fmt.Errorf("error parsing font '%s': %v", fontName, err)
     }
     
     return f, nil
 }
 
-func addCaption(newImage *image.RGBA, captionText string, fontSize int, fontColor color.RGBA, imageSize image.Point, borderThickness int, padding int, imagePos *image.Point) *image.RGBA {
-	// Load the default font
-	font, err := loadDefaultFont()
+// Returns a list of available fonts
+func getAvailableFonts() []string {
+    return availableFonts
+}
+
+func addCaption(newImage *image.RGBA, captionText string, fontSize int, fontColor color.RGBA, imageSize image.Point, borderThickness int, padding int, imagePos *image.Point, fontName string) *image.RGBA {
+	// Load the requested font
+	font, err := loadFont(fontName)
 	if err != nil {
-		// If we can't load the default font, fall back to a simpler approach
-		log.Printf("Warning: Could not load font: %v. Using fallback font.", err)
+		// If we can't load the font, fall back to a simpler approach
+		log.Printf("Warning: Could not load font '%s': %v. Using fallback font.", fontName, err)
 		return fallbackAddCaption(newImage, captionText, fontSize, fontColor, imageSize, borderThickness, padding, imagePos)
 	}
 
@@ -459,7 +377,7 @@ func processImage(imagePath string, outputPath string, args struct {
 	padding          string
 	borderStyle      string
 	borderColor      string
-	fontFile         string
+	fontName         string
 	fontSize         string
 	fontColor        string
 	instagramMaxSize int
@@ -524,9 +442,6 @@ func processImage(imagePath string, outputPath string, args struct {
 	case "solid":
 		newImage = createSolidBorder(img, t, borderColor, p)
 		resizedSize = image.Point{img.Bounds().Dx(), img.Bounds().Dy()}
-	case "vintage":
-		newImage = createVintageBorder(img, t, p)
-		resizedSize = image.Point{img.Bounds().Dx(), img.Bounds().Dy()}
 	default:
 		log.Printf("Unknown border style %s. Using solid border.", args.borderStyle)
 		newImage = createSolidBorder(img, t, borderColor, p)
@@ -555,7 +470,7 @@ func processImage(imagePath string, outputPath string, args struct {
 
 		fontColor, _ := hexToRGB(args.fontColor)
 		// Add caption with appropriate positioning
-		newImage = addCaption(rgba, captionText, computedFontSize, fontColor, resizedSize, t, p, imagePos)
+		newImage = addCaption(rgba, captionText, computedFontSize, fontColor, resizedSize, t, p, imagePos, args.fontName)
 	}
 
 	// Save the result
@@ -597,18 +512,28 @@ func main() {
 	borderThickness := flag.String("border-thickness", "", "Border thickness in pixels or as a percentage (e.g. '10%')")
 	flag.StringVar(borderThickness, "t", "", "Border thickness in pixels or as a percentage (shorthand)")
 
-	borderStyle := flag.String("border-style", "solid", "Border style: 'solid', 'vintage', or 'instagram' (4:5 ratio, 1080x1350px)")
+	borderStyle := flag.String("border-style", "solid", "Border style: 'solid' or 'instagram' (4:5 ratio, 1080x1350px)")
 	flag.StringVar(borderStyle, "s", "solid", "Border style (shorthand)")
 
 	borderColor := flag.String("border-color", "#000000", "Border color in hex (default: '#000000')")
 	caption := flag.String("caption", "", "Override the caption text (if empty, EXIF date is used)")
-	fontFile := flag.String("font-file", "", "Path to a TTF font file to use for the caption")
+	fontName := flag.String("font-name", "", "Name of the font to use for captions")
 	fontSize := flag.String("font-size", "", "Font size in pixels")
 	fontColor := flag.String("font-color", "#000000", "Font color in hex (default: '#000000')")
 	instagramMaxSize := flag.Int("instagram-max-size", 0, "Maximum width/height for the image in Instagram style")
 	padding := flag.String("padding", "", "Additional padding around the image in pixels")
+	listFonts := flag.Bool("list-fonts", false, "List available fonts and exit")
 
 	flag.Parse()
+	
+	// Check if user wants to list available fonts
+	if *listFonts {
+		fmt.Println("Available fonts:")
+		for _, font := range getAvailableFonts() {
+			fmt.Println("  -", font)
+		}
+		os.Exit(0)
+	}
 
 	// Validate required arguments
 	if *inputPath == "" || *outputPath == "" {
@@ -624,7 +549,7 @@ func main() {
 		padding          string
 		borderStyle      string
 		borderColor      string
-		fontFile         string
+		fontName         string
 		fontSize         string
 		fontColor        string
 		instagramMaxSize int
@@ -634,7 +559,7 @@ func main() {
 		padding:          *padding,
 		borderStyle:      *borderStyle,
 		borderColor:      *borderColor,
-		fontFile:         *fontFile,
+		fontName:         *fontName,
 		fontSize:         *fontSize,
 		fontColor:        *fontColor,
 		instagramMaxSize: *instagramMaxSize,
