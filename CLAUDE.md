@@ -1,10 +1,10 @@
 # Framer Project Guidelines
 
 ## Build Commands
-- Build: `go build frameit.go fonts.go`
-- Run: `./frameit -i /path/to/image.jpg -o /path/to/output_folder`
+- Build: `go build framer.go fonts.go`
+- Run: `./framer -i /path/to/image.jpg -o /path/to/output_folder`
 - Embed fonts: `$(go env GOPATH)/bin/go-bindata -pkg main -o fonts.go fonts_data/`
-- List fonts: `./frameit --list-fonts`
+- List fonts: `./framer --list-fonts`
 
 ## Code Style Guidelines
 - **Formatting**: Standard Go formatting with `gofmt`

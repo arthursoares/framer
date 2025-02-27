@@ -33,31 +33,31 @@ A Go utility that adds elegant borders and captions to your photos. Perfect for 
 
 2. Build the executable:
    ```bash
-   go build frameit.go fonts.go
+   go build framer.go fonts.go
    ```
 
 3. Optional: Move the binary to your PATH for global access:
    ```bash
-   sudo mv frameit /usr/local/bin/
+   sudo mv framer /usr/local/bin/
    ```
 
 ## Usage
 
 ```bash
 # Process a single file with default settings
-./frameit -i /path/to/image.jpg -o /path/to/output_folder
+./framer -i /path/to/image.jpg -o /path/to/output_folder
 
 # Process with custom border and font
-./frameit -i /path/to/image.jpg -o /path/to/output_folder -t 5% --font-size 50 --font-name "AmericanTypewriter" --border-color "#000000"
+./framer -i /path/to/image.jpg -o /path/to/output_folder -t 5% --font-size 50 --font-name "AmericanTypewriter" --border-color "#000000"
 
 # Process a folder of images
-./frameit -i /path/to/folder -o /path/to/output_folder
+./framer -i /path/to/folder -o /path/to/output_folder
 
 # Instagram formatting with maximum size 900px
-./frameit -i /path/to/image.jpg -o /path/to/output_folder --border-style instagram --instagram-max-size 900
+./framer -i /path/to/image.jpg -o /path/to/output_folder --border-style instagram --instagram-max-size 900
 
 # List available embedded fonts
-./frameit --list-fonts
+./framer --list-fonts
 ```
 
 ## Available Fonts
@@ -73,7 +73,7 @@ The following fonts are embedded into the binary:
 To add new fonts to the application:
 
 1. Place your TTF or TTC font file in the `fonts_data/` directory
-2. Update the `availableFonts` array in `frameit.go` to include your font name (without extension)
+2. Update the `availableFonts` array in `framer.go` to include your font name (without extension)
 3. Regenerate the embedded font data:
    ```bash
    go get -u github.com/go-bindata/go-bindata/...
@@ -82,7 +82,7 @@ To add new fonts to the application:
    ```
 4. Rebuild the application:
    ```bash
-   go build frameit.go fonts.go
+   go build framer.go fonts.go
    ```
 
 ## Command-line Arguments

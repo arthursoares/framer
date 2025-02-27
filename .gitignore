@@ -4,7 +4,10 @@
 *.dll
 *.so
 *.dylib
-frameit
+framer
+
+# Generated font data file (large)
+fonts.go
 
 # Test binary, built with `go test -c`
 *.test
