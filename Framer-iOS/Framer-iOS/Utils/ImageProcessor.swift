@@ -5,14 +5,15 @@ class ImageProcessor {
     
     // Generate caption from date
     static func generateCaptionFromDate(_ date: Date?) -> String {
-        guard let date = date else { return " - --- -" }
+        // If no date is available, use current date as fallback
+        let dateToUse = date ?? Date()
         
         let dateFormatter = DateFormatter()
         dateFormatter.dateFormat = "MMM"
-        let month = dateFormatter.string(from: date).uppercased()
+        let month = dateFormatter.string(from: dateToUse).uppercased()
         
         dateFormatter.dateFormat = "yy"
-        let year = dateFormatter.string(from: date)
+        let year = dateFormatter.string(from: dateToUse)
         
         return " - \(month) '\(year) -"
     }
@@ -25,12 +26,42 @@ class ImageProcessor {
         guard let source = imageSource else { return nil }
         
         guard let metadata = CGImageSourceCopyPropertiesAtIndex(source, 0, nil) as? [String: Any] else { return nil }
-        guard let exif = metadata["{Exif}"] as? [String: Any] else { return nil }
         
-        if let dateString = exif["DateTimeOriginal"] as? String {
+        // Try multiple metadata dictionaries to find date
+        if let exif = metadata["{Exif}"] as? [String: Any],
+           let dateString = exif["DateTimeOriginal"] as? String {
             let dateFormatter = DateFormatter()
             dateFormatter.dateFormat = "yyyy:MM:dd HH:mm:ss"
             return dateFormatter.date(from: dateString)
+        }
+        
+        // Try TIFF dictionary if Exif failed
+        if let tiff = metadata["{TIFF}"] as? [String: Any],
+           let dateString = tiff["DateTime"] as? String {
+            let dateFormatter = DateFormatter()
+            dateFormatter.dateFormat = "yyyy:MM:dd HH:mm:ss"
+            return dateFormatter.date(from: dateString)
+        }
+        
+        // Try GPS dictionary if others failed
+        if let gps = metadata["{GPS}"] as? [String: Any],
+           let dateString = gps["GPSDateStamp"] as? String,
+           let timeArray = gps["GPSTimeStamp"] as? [NSNumber],
+           timeArray.count >= 3 {
+            let timeString = String(format: "%02d:%02d:%02d", 
+                                   timeArray[0].intValue, 
+                                   timeArray[1].intValue, 
+                                   timeArray[2].intValue)
+            let dateFormatter = DateFormatter()
+            dateFormatter.dateFormat = "yyyy:MM:dd HH:mm:ss"
+            return dateFormatter.date(from: "\(dateString) \(timeString)")
+        }
+        
+        // Fallback: use file creation date from image properties
+        if let creationDate = metadata["DateTimeOriginal"] as? String {
+            let dateFormatter = DateFormatter()
+            dateFormatter.dateFormat = "yyyy:MM:dd HH:mm:ss"
+            return dateFormatter.date(from: creationDate)
         }
         
         return nil
