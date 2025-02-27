@@ -1,16 +1,30 @@
 # Framer
 
-A Go utility that adds elegant borders and captions to your photos. Perfect for creating consistent photo presentations for social media or portfolios.
+![](./docs/sample_solid.jpg)
 
-![Example Images](docs/examples.png)
+This is a simple Go application that adds borders and captions to JPEG images. It is designed to be used as a post-processing step for images exported from Adobe Lightroom. This was an experiment in using LLM Models for the generation of personal tools and scripts. The entire code was created using [Claude Code](https://docs.anthropic.com/en/docs/agents-and-tools/claude-code/overview).
+
+| Original               | Solid Border                                                                                                 | Instagram Frame                                                                                                                       |
+| ---------------------- | ------------------------------------------------------------------------------------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------- |
+| ![](./docs/sample.jpg) | ![](./docs/sample_solid.jpg)                                                                                 | ![](./docs/sample_instagram.jpg)                                                                                                      |
+| ––                     | Border Style: Solid / Padding: 100px | Border Style: Instagram / Internal Image Max. Size: 1000px / Font Color: #123abc |
+
+## Inspiration
+
+The inspiration for the border format comes from an old box of photos that I found from my grandfather. In the box, there were a number of photos that had a white border with a machine printed date.
+
+![](./docs/inspiration.jpg)
+
 
 ## Features
 
 - Two border styles:
+
   - `solid`: Clean, colored border with customizable padding
   - `instagram`: 4:5 ratio frame (1080x1350px) optimized for Instagram
 
 - Caption features:
+
   - Automatic EXIF date extraction (displays as "MON 'YY")
   - Custom caption text support
   - Multiple embedded fonts
@@ -26,12 +40,14 @@ A Go utility that adds elegant borders and captions to your photos. Perfect for 
 ### From Source
 
 1. Clone this repository:
+
    ```bash
    git clone https://github.com/yourusername/framer.git
    cd framer
    ```
 
 2. Build the executable:
+
    ```bash
    go build framer.go fonts.go
    ```
@@ -48,7 +64,7 @@ A Go utility that adds elegant borders and captions to your photos. Perfect for 
 ./framer -i /path/to/image.jpg -o /path/to/output_folder
 
 # Process with custom border and font
-./framer -i /path/to/image.jpg -o /path/to/output_folder -t 5% --font-size 50 --font-name "AmericanTypewriter" --border-color "#000000"
+./framer -i /path/to/image.jpg -o /path/to/output_folder -t 5% --font-size 50 --font-name "BigBlueTermPlusNerdFont-Regular" --border-color "#000000"
 
 # Process a folder of images
 ./framer -i /path/to/folder -o /path/to/output_folder
@@ -63,8 +79,8 @@ A Go utility that adds elegant borders and captions to your photos. Perfect for 
 ## Available Fonts
 
 The following fonts are embedded into the binary:
+
 - `CourierPrime-Bold` (default)
-- `AmericanTypewriter`
 - `BigBlueTermPlusNerdFont-Regular`
 - `HeavyDataNerdFont-Regular`
 
