@@ -9,7 +9,6 @@ import (
 	"image/jpeg"
 	"io/fs"
 	"log"
-	"math/rand"
 	"os"
 	"path/filepath"
 	"strconv"
