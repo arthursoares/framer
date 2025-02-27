@@ -87,18 +87,18 @@ func generateCaptionFromDate(dt time.Time) string {
 // padWithBorder adds a border to an image
 func padWithBorder(img image.Image, width, height int, borderColor color.RGBA) *image.RGBA {
 	newImg := image.NewRGBA(image.Rect(0, 0, width, height))
-	
+
 	// Fill the entire image with the border color
 	draw.Draw(newImg, newImg.Bounds(), &image.Uniform{borderColor}, image.Point{}, draw.Src)
-	
+
 	// Calculate position to center the original image
 	x := (width - img.Bounds().Dx()) / 2
 	y := (height - img.Bounds().Dy()) / 2
-	
+
 	// Draw the original image centered on the new image
-	draw.Draw(newImg, image.Rect(x, y, x+img.Bounds().Dx(), y+img.Bounds().Dy()), 
+	draw.Draw(newImg, image.Rect(x, y, x+img.Bounds().Dx(), y+img.Bounds().Dy()),
 		img, img.Bounds().Min, draw.Src)
-	
+
 	return newImg
 }
 
@@ -127,7 +127,7 @@ func createInstagramFrame(img image.Image, maxSize int, borderThickness int, bor
 		paddedImg := image.NewRGBA(image.Rect(0, 0, paddedW, paddedH))
 		draw.Draw(paddedImg, paddedImg.Bounds(), &image.Uniform{color.RGBA{255, 255, 255, 255}}, image.Point{}, draw.Src)
 		draw.Draw(paddedImg, image.Rect(padding, padding, padding+newW, padding+newH), resizedImg, image.Point{}, draw.Src)
-		
+
 		// Convert to Image interface to avoid type issues
 		resizedImg = imaging.Clone(paddedImg)
 		newW = paddedW
@@ -143,8 +143,8 @@ func createInstagramFrame(img image.Image, maxSize int, borderThickness int, bor
 	borderedH := resizedImg.Bounds().Dy() + 2*borderThickness
 	borderedImg := image.NewRGBA(image.Rect(0, 0, borderedW, borderedH))
 	draw.Draw(borderedImg, borderedImg.Bounds(), &image.Uniform{borderColor}, image.Point{}, draw.Src)
-	draw.Draw(borderedImg, image.Rect(borderThickness, borderThickness, 
-		borderThickness+resizedImg.Bounds().Dx(), borderThickness+resizedImg.Bounds().Dy()), 
+	draw.Draw(borderedImg, image.Rect(borderThickness, borderThickness,
+		borderThickness+resizedImg.Bounds().Dx(), borderThickness+resizedImg.Bounds().Dy()),
 		resizedImg, image.Point{}, draw.Src)
 
 	// Calculate position to center the bordered image
@@ -152,7 +152,7 @@ func createInstagramFrame(img image.Image, maxSize int, borderThickness int, bor
 	y := (frameH - borderedImg.Bounds().Dy()) / 2
 
 	// Paste bordered image onto white background
-	draw.Draw(newImage, image.Rect(x, y, x+borderedImg.Bounds().Dx(), y+borderedImg.Bounds().Dy()), 
+	draw.Draw(newImage, image.Rect(x, y, x+borderedImg.Bounds().Dx(), y+borderedImg.Bounds().Dy()),
 		borderedImg, image.Point{}, draw.Src)
 
 	// Return the final image, the size of the resized image (without border),
@@ -162,26 +162,26 @@ func createInstagramFrame(img image.Image, maxSize int, borderThickness int, bor
 
 func createSolidBorder(img image.Image, borderThickness int, borderColor color.RGBA, padding int) image.Image {
 	imgW, imgH := img.Bounds().Dx(), img.Bounds().Dy()
-	
+
 	// First, add the colored border around the image
 	borderedW := imgW + 2*borderThickness
 	borderedH := imgH + 2*borderThickness
 	borderedImg := image.NewRGBA(image.Rect(0, 0, borderedW, borderedH))
 	draw.Draw(borderedImg, borderedImg.Bounds(), &image.Uniform{borderColor}, image.Point{}, draw.Src)
-	draw.Draw(borderedImg, image.Rect(borderThickness, borderThickness, 
+	draw.Draw(borderedImg, image.Rect(borderThickness, borderThickness,
 		borderThickness+imgW, borderThickness+imgH), img, image.Point{}, draw.Src)
-	
+
 	// Then, add padding if specified (white border outside the colored border)
 	if padding > 0 {
 		finalW := borderedW + 2*padding
 		finalH := borderedH + 2*padding
 		finalImg := image.NewRGBA(image.Rect(0, 0, finalW, finalH))
 		draw.Draw(finalImg, finalImg.Bounds(), &image.Uniform{color.RGBA{255, 255, 255, 255}}, image.Point{}, draw.Src)
-		draw.Draw(finalImg, image.Rect(padding, padding, padding+borderedW, padding+borderedH), 
+		draw.Draw(finalImg, image.Rect(padding, padding, padding+borderedW, padding+borderedH),
 			borderedImg, image.Point{}, draw.Src)
 		return finalImg
 	}
-	
+
 	return borderedImg
 }
 
@@ -194,19 +194,19 @@ func loadFont(fontName string) (*truetype.Font, error) {
     if fontName == "" {
         fontName = availableFonts[0] // Default to first font
     }
-    
+
     // Try to find the font in our embedded assets
     var fontData []byte
     var foundFont bool
     var err error
-    
+
     // Check if it's a TTF
     assetName := fmt.Sprintf("fonts_data/%s.ttf", fontName)
     fontData, err = Asset(assetName)
     if err == nil {
         foundFont = true
     }
-    
+
     // If not found, check for TTC
     if !foundFont {
         assetName = fmt.Sprintf("fonts_data/%s.ttc", fontName)
@@ -215,7 +215,7 @@ func loadFont(fontName string) (*truetype.Font, error) {
             foundFont = true
         }
     }
-    
+
     // If not found, try the default font
     if !foundFont && fontName != availableFonts[0] {
         assetName = fmt.Sprintf("fonts_data/%s.ttf", availableFonts[0])
@@ -226,13 +226,13 @@ func loadFont(fontName string) (*truetype.Font, error) {
     } else if !foundFont {
         return nil, fmt.Errorf("error loading font '%s': %v", fontName, err)
     }
-    
+
     // Parse the font data
     f, err := truetype.Parse(fontData)
     if err != nil {
         return nil, fmt.Errorf("error parsing font '%s': %v", fontName, err)
     }
-    
+
     return f, nil
 }
 
@@ -252,7 +252,7 @@ func addCaption(newImage *image.RGBA, captionText string, fontSize int, fontColo
 
 	// Calculate position
 	imgW, imgH := imageSize.X, imageSize.Y
-	
+
 	// Create FreeType context
 	c := freetype.NewContext()
 	c.SetDPI(72)
@@ -261,27 +261,27 @@ func addCaption(newImage *image.RGBA, captionText string, fontSize int, fontColo
 	c.SetClip(newImage.Bounds())
 	c.SetDst(newImage)
 	c.SetSrc(&image.Uniform{fontColor})
-	
+
 	// Measure text size
 	opts := truetype.Options{
 		Size: float64(fontSize),
 		DPI:  72,
 	}
 	face := truetype.NewFace(font, &opts)
-	
+
 	// Measure text width by summing the advance of each character
 	var totalWidth fixed.Int26_6
 	for _, r := range captionText {
 		awidth, _ := face.GlyphAdvance(r)
 		totalWidth += awidth
 	}
-	
+
 	// Convert to pixels
 	approxTextWidth := totalWidth.Ceil()
-	
+
 	// Approximate text height
 	fontHeight := face.Metrics().Height.Ceil()
-	
+
 	// Calculate position
 	var x, y int
 	if imagePos != nil { // Instagram style
@@ -292,7 +292,7 @@ func addCaption(newImage *image.RGBA, captionText string, fontSize int, fontColo
 		x = totalBorder + (imgW-approxTextWidth)/2
 		y = totalBorder + imgH + (borderThickness+padding-fontHeight)/2 + fontHeight
 	}
-	
+
 	// Draw text
 	pt := freetype.Pt(x, y)
 	_, err = c.DrawString(captionText, pt)
@@ -300,7 +300,7 @@ func addCaption(newImage *image.RGBA, captionText string, fontSize int, fontColo
 		log.Printf("Warning: Error drawing text: %v", err)
 		return fallbackAddCaption(newImage, captionText, fontSize, fontColor, imageSize, borderThickness, padding, imagePos)
 	}
-	
+
 	return newImage
 }
 
@@ -311,7 +311,7 @@ func fallbackAddCaption(newImage *image.RGBA, captionText string, fontSize int, 
 	textW := len(captionText) * charWidth
 	textH := fontSize
 	imgW, imgH := imageSize.X, imageSize.Y
-	
+
 	// Calculate position
 	var x, y int
 	if imagePos != nil { // Instagram style
@@ -322,7 +322,7 @@ func fallbackAddCaption(newImage *image.RGBA, captionText string, fontSize int, 
 		x = totalBorder + (imgW-textW)/2
 		y = totalBorder + imgH + (borderThickness+padding-textH)/2 + textH
 	}
-	
+
 	// Create a larger font representation by drawing filled rectangles for each character
 	for i, char := range captionText {
 		// Skip spaces with a narrower width
@@ -332,11 +332,11 @@ func fallbackAddCaption(newImage *image.RGBA, captionText string, fontSize int, 
 
 		// Position for this character
 		charX := x + i*charWidth
-		
+
 		// Character dimensions
 		charHeight := fontSize
 		charW := int(float64(charWidth) * 0.8) // slightly narrower than spacing
-		
+
 		// Draw a filled rectangle for each character
 		// Drawing different shapes based on the character to make it more readable
 		switch {
@@ -366,7 +366,7 @@ func fallbackAddCaption(newImage *image.RGBA, captionText string, fontSize int, 
 			}
 		}
 	}
-	
+
 	return newImage
 }
 
@@ -478,7 +478,7 @@ func processImage(imagePath string, outputPath string, args struct {
 	name := strings.TrimSuffix(baseName, ext)
 	suffix := "_instagram"
 	if strings.ToLower(args.borderStyle) != "instagram" {
-		suffix = "_framed"
+		suffix = "_solid"
 	}
 	outFile := filepath.Join(outputPath, fmt.Sprintf("%s%s.jpg", name, suffix))
 
@@ -524,7 +524,7 @@ func main() {
 	listFonts := flag.Bool("list-fonts", false, "List available fonts and exit")
 
 	flag.Parse()
-	
+
 	// Check if user wants to list available fonts
 	if *listFonts {
 		fmt.Println("Available fonts:")
