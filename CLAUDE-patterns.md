@@ -261,38 +261,165 @@ flag.String("border-style", "solid", "Border style: 'solid' or 'instagram'")
 flag.StringVar(borderStyle, "s", "solid", "Border style (shorthand)")
 ```
 
-### Config Struct Pattern (Planned)
+### YAML Config File Pattern (Current)
+**Location**: ConfigFile struct in framer.go:62-76
+
+**Standard Structure**:
 ```go
-type Config struct {
-    // Input/Output
-    InputPath  string
-    OutputPath string
+type ConfigFile struct {
+    Caption         string `yaml:"caption,omitempty"`
+    CaptionTemplate string `yaml:"caption_template,omitempty"`
+    NoCaption       bool   `yaml:"no_caption,omitempty"`
+    BorderStyle     string `yaml:"border_style,omitempty"`
+    BorderThickness string `yaml:"border_thickness,omitempty"`
+    BorderColor     string `yaml:"border_color,omitempty"`
+    Padding         string `yaml:"padding,omitempty"`
+    FontName        string `yaml:"font_name,omitempty"`
+    FontSize        string `yaml:"font_size,omitempty"`
+    FontColor       string `yaml:"font_color,omitempty"`
+    JPEGQuality     int    `yaml:"jpeg_quality,omitempty"`
+    OutputFormat    string `yaml:"output_format,omitempty"`
+}
+```
 
-    // Border
-    BorderStyle     string
-    BorderThickness string  // "5" or "10%"
-    BorderColor     string  // "#000000"
+**Usage**:
+- Use `yaml:"field_name,omitempty"` tags for optional fields
+- Snake_case in YAML matches CLI flag style with underscores
+- Empty/zero values omitted from output (allows partial configs)
 
-    // Caption
-    Caption   string
-    FontName  string
-    FontSize  string
-    FontColor string
+### Config Loading Pattern (Current)
+**Location**: main() in framer.go:932-977
 
-    // Style-specific
-    InstagramMaxSize int
-    Padding          string
+**Priority-based loading**:
+```go
+var loadedConfig *ConfigFile
+
+// Priority 1: --config flag
+if *configFile != "" {
+    if cfg, err := loadConfigFile(*configFile); err == nil {
+        loadedConfig = cfg
+        log.Printf("Loaded config from: %s", *configFile)
+    }
 }
 
-// Validation method
-func (c *Config) Validate() error {
-    if c.InputPath == "" {
-        return errors.New("input path required")
+// Priority 2: --preset flag
+if loadedConfig == nil && *preset != "" {
+    configDir, _ := getConfigDir()
+    presetPath := filepath.Join(configDir, "presets", *preset+".yaml")
+    if cfg, err := loadConfigFile(presetPath); err == nil {
+        loadedConfig = cfg
     }
-    // ... more validation
+}
+
+// Priority 3: ./.framer.yaml
+if loadedConfig == nil {
+    if cfg, err := loadConfigFile(".framer.yaml"); err == nil {
+        loadedConfig = cfg
+    }
+}
+
+// Priority 4: ~/.config/framer/default.yaml
+if loadedConfig == nil {
+    configDir, _ := getConfigDir()
+    defaultPath := filepath.Join(configDir, "default.yaml")
+    if cfg, err := loadConfigFile(defaultPath); err == nil {
+        loadedConfig = cfg
+    }
+}
+```
+
+**Key Pattern**: Use `if err == nil` (success case first) for cleaner chaining
+
+### Config Merging Pattern (Current)
+**Location**: mergeConfig() in framer.go:229-279
+
+**Standard Merge Logic**:
+```go
+func mergeConfig(configFile *ConfigFile, cliConfig ProcessingConfig) ProcessingConfig {
+    result := cliConfig
+
+    // Only use config file value if CLI didn't provide it
+    if result.Caption == "" && configFile.Caption != "" {
+        result.Caption = configFile.Caption
+    }
+    // ... repeat for all fields
+
+    return result
+}
+```
+
+**Key Principles**:
+- Start with CLI config as base
+- Only apply config file values if CLI value is empty/default
+- For strings: check `""`
+- For ints: check `0`
+- For bools: special logic (prefer CLI true over config false)
+- Return new struct (immutability)
+
+### Config Directory Management Pattern (Current)
+**Location**: framer.go:143-211
+
+**Standard Approach**:
+```go
+// Get config directory
+func getConfigDir() (string, error) {
+    homeDir, err := os.UserHomeDir()
+    if err != nil {
+        return "", err
+    }
+    return filepath.Join(homeDir, ".config", "framer"), nil
+}
+
+// Ensure directory exists
+func ensureConfigDir() error {
+    configDir, err := getConfigDir()
+    if err != nil {
+        return err
+    }
+    presetsDir := filepath.Join(configDir, "presets")
+    return os.MkdirAll(presetsDir, 0755)
+}
+
+// Initialize default files
+func initializeDefaultPresets() error {
+    // Only create if doesn't exist
+    if _, err := os.Stat(path); os.IsNotExist(err) {
+        if err := os.WriteFile(path, []byte(content), 0644); err != nil {
+            return fmt.Errorf("writing preset %s: %w", filename, err)
+        }
+    }
     return nil
 }
 ```
+
+**Key Pattern**: Check `os.IsNotExist(err)` before creating to preserve user modifications
+
+### Validation with Fallback Pattern (Current)
+**Location**: validateFontName() in framer.go:213-227
+
+**Standard Approach**:
+```go
+func validateFontName(fontName string) string {
+    if fontName == "" {
+        return availableFonts[0]
+    }
+
+    for _, available := range availableFonts {
+        if fontName == available {
+            return fontName
+        }
+    }
+
+    log.Printf("Warning: Font %q not found, using default %q", fontName, availableFonts[0])
+    return availableFonts[0]
+}
+```
+
+**Key Principles**:
+- Always return a valid value (never return invalid input)
+- Log warning for user feedback
+- Prefer graceful degradation over errors
+- Use for non-critical validation (fonts, colors with fallbacks)
 
 ## Concurrency Patterns (Future)
 

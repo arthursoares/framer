@@ -63,26 +63,110 @@ type BorderStyle interface {
 
 ## Configuration Management
 
-### Flag-Based Configuration (Current)
-**Decision**: Use Go's `flag` package for CLI arguments
+### Hybrid Flag + YAML Configuration (Current)
+**Decision**: Use Go's `flag` package with YAML config file support
+**Implementation Date**: Completed in Branch 7 (feature/config-presets)
 **Rationale**:
-- Standard library, no external dependencies
-- Simple for basic use cases
-- Self-documenting via `flag.Usage()`
+- Standard library for CLI parsing (no dependencies for basic use)
+- YAML config files for complex configurations and presets
+- Priority-based system balances flexibility and simplicity
+- CLI flags always override config files (explicit > implicit)
 
-**Limitations Identified**:
-- No preset/config file support
-- Verbose for complex configurations
-- No validation layer
+**YAML Dependency**:
+- Added `gopkg.in/yaml.v3` for config file parsing
+- Minimal dependency, well-maintained, idiomatic Go
 
-**Planned Evolution**: Add config file support while maintaining flag compatibility:
+**Priority System Design**:
+```
+1. --config flag (explicit config file path) [HIGHEST]
+2. --preset flag (named preset from ~/.config/framer/presets/)
+3. ./.framer.yaml (current directory)
+4. ~/.config/framer/default.yaml (user-wide default)
+5. Hard-coded defaults [LOWEST]
+```
+
+**Examples**:
 ```bash
-# Current
+# CLI flags only (original method)
 ./framer -i img.jpg -o out/ -t 5% --border-color "#000" --font-size 50
 
-# Future (backwards compatible)
-./framer -i img.jpg -o out/ --preset vintage.yaml
+# Using preset
+./framer -i img.jpg -o out/ --preset vintage
+
+# Override preset with CLI flags
+./framer -i img.jpg -o out/ --preset vintage --border-color "#FF0000"
+
+# Custom config file
+./framer -i img.jpg -o out/ --config my-config.yaml
+
+# Auto-load from current directory
+./framer -i img.jpg -o out/  # Uses ./.framer.yaml if exists
 ```
+
+### Config File Structure
+**Decision**: Flat YAML structure matching CLI flag names
+**Location**: ConfigFile struct in framer.go:62-76
+**Rationale**:
+- Easy mental mapping from CLI to config file
+- Simple to document and understand
+- No nested complexity for current feature set
+
+**Example Config**:
+```yaml
+# ~/.config/framer/presets/vintage.yaml
+border_style: solid
+border_thickness: "20"
+border_color: "#000000"
+padding: "150"
+font_name: CourierPrime-Bold
+font_size: "50"
+font_color: "#000000"
+caption_template: " - {{mon}} '{{year2}} -"
+```
+
+### Config Directory Management
+**Decision**: Auto-create ~/.config/framer/presets/ on first run
+**Rationale**:
+- Zero-configuration experience for users
+- Follows XDG Base Directory specification (~/.config/)
+- Presets immediately available without manual setup
+- User can customize presets without affecting defaults
+
+**Implementation**:
+- `ensureConfigDir()` creates directory structure
+- `initializeDefaultPresets()` writes default presets only if they don't exist
+- User modifications to presets are preserved across runs
+
+### Font Validation Strategy
+**Decision**: Validate font names at config load time with automatic fallback
+**Rationale**:
+- Prevents runtime errors from invalid config
+- Provides clear warning messages to user
+- Graceful degradation (fallback to default font)
+- Config files remain portable (invalid font = warning, not error)
+
+**Implementation**:
+```go
+func validateFontName(fontName string) string {
+    // Check against availableFonts array
+    // Return default with warning if not found
+}
+```
+
+### CLI Override Mechanism
+**Decision**: CLI flags always take precedence over config file values
+**Location**: mergeConfig() in framer.go:229-279
+**Rationale**:
+- Explicit beats implicit (Zen of Python principle)
+- Allows quick one-off overrides without editing config
+- Predictable behavior (no hidden config file surprises)
+- Supports workflow: "use preset, tweak one setting"
+
+**Implementation Details**:
+- Build config from CLI flags first
+- Merge with loaded config file
+- Only use config file value if CLI flag is at default/empty
+- Special handling for defaults like "solid", "#000000", "jpeg"
 
 ### Style-Specific Defaults
 **Decision**: Apply different default values based on selected border style

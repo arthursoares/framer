@@ -6,8 +6,8 @@ Systematically implementing feature improvements across multiple focused branche
 ## Active Work Status
 **Phase**: Feature Development (Priority 2)
 **Branch Strategy**: Incremental improvements via feature branches
-**Completed**: Branches 1-4 (Cleanup, Refactoring, Constants, Output Formats)
-**Next**: Branch 5 (Input Formats) or continuing with other Priority 2 features
+**Completed**: Branches 1-7 (Cleanup, Refactoring, Constants, Output Formats, Input Formats, Caption Templates, Config Presets)
+**Next**: Branch 8 (Batch Improvements) or other Priority 3 features
 
 ## Planned Branch Workflow
 
@@ -61,24 +61,41 @@ Systematically implementing feature improvements across multiple focused branche
 - Support HEIC input (if feasible)
 - Update file extension detection in directory walker
 
-### Branch 6: `feature/caption-templates` (Priority 2)
+### Branch 6: `feature/caption-templates` (Priority 2) ✅
 **Goal**: Flexible caption customization
-**Status**: Not Started
+**Status**: Completed
 **Tasks**:
-- Design template syntax: `{{month}} {{year}} - {{location}}`
-- Extract additional EXIF fields (camera, ISO, aperture, focal length)
-- Add `--caption-template` flag
-- Add caption position options (top/bottom/left/right)
-- Add `--no-caption` flag
+- Design template syntax: `{{month}} {{year}} - {{camera}}` ✅
+- Extract additional EXIF fields (camera, ISO, aperture, focal length) ✅
+- Add `--caption-template` flag ✅
+- ~~Add caption position options (top/bottom/left/right)~~ (Deferred - current positioning works well)
+- Add `--no-caption` flag ✅
 
-### Branch 7: `feature/config-presets` (Priority 2)
+**Implementation Highlights**:
+- Created ExifData struct with DateTime, Camera, Lens, ISO, Aperture, ShutterSpeed, FocalLength
+- Implemented comprehensive EXIF extraction with getExifData()
+- Added applyTemplate() function with {{field}} placeholder substitution
+- Caption priority: NoCaption > Caption > Template > Default
+- Supports {{year}}, {{year2}}, {{month}}, {{mon}}, {{day}}, {{date}}, {{camera}}, {{lens}}, {{iso}}, {{aperture}}, {{shutter}}, {{focal}}
+
+### Branch 7: `feature/config-presets` (Priority 2) ✅
 **Goal**: Reusable configuration presets
-**Status**: Not Started
+**Status**: Completed
 **Tasks**:
-- Design YAML/JSON config file format
-- Add `--preset` flag to load config files
-- Add `--save-preset` flag to save current settings
-- Create sample presets (vintage, modern, instagram)
+- Design YAML config file format ✅
+- Add `--preset` flag to load preset files ✅
+- Add `--config` flag to load custom config files ✅
+- Create default presets (vintage, instagram, minimal) ✅
+- ~~Add `--save-preset` flag to save current settings~~ (Deferred - manual YAML editing works well)
+
+**Implementation Highlights**:
+- Added gopkg.in/yaml.v3 dependency
+- Created ConfigFile struct with yaml tags
+- Implemented priority-based config loading: --config → --preset → ./.framer.yaml → ~/.config/framer/default.yaml
+- Auto-creates ~/.config/framer/presets/ with three default presets on first run
+- CLI flags always override config file values
+- Added font validation with automatic fallback to default
+- Tested: config directory creation, preset loading, priority system, CLI overrides, font validation
 
 ### Branch 8: `feature/batch-improvements` (Priority 3)
 **Goal**: Improve batch processing UX and performance

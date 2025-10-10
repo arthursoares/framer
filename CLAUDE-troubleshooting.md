@@ -87,37 +87,73 @@ type ProcessingConfig struct {
 
 ## Configuration Issues
 
-### Magic Numbers
+### ✅ Magic Numbers (RESOLVED)
 **Location**: Various
 **Issue**: Hardcoded values scattered throughout code
+**Status**: ✅ **RESOLVED** in Branch 3 (refactor/constants-config)
 
-**Examples**:
-- `1080, 1350` (Instagram dimensions) - framer.go:107
-- `0.5, 0.7, 0.9` (font scaling factors) - framer.go:462-466
-- `100` (JPEG quality) - framer.go:494
-- `72` (DPI) - framer.go:258, 268
-- `255` (alpha channel) - framer.go:53
-
-**Impact**: Hard to maintain, test, or make configurable
-**Fix**: Extract to constants or configuration:
+**Solution Implemented**:
 ```go
 const (
     InstagramFrameWidth  = 1080
     InstagramFrameHeight = 1350
     DefaultJPEGQuality   = 100
+    MinJPEGQuality       = 60
+    MaxJPEGQuality       = 100
     DefaultDPI           = 72
     SmallFontScale       = 0.5
     MediumFontScale      = 0.7
     LargeFontScale       = 0.9
+    SmallBorderThreshold  = 40
+    MediumBorderThreshold = 80
+    AlphaOpaque          = 255
 )
 ```
 
-### Hardcoded Caption Format
-**Location**: framer.go:84
-**Code**: `fmt.Sprintf(" - %s '%s -", strings.ToUpper(month), year)`
-**Issue**: Caption format is hardcoded, users cannot customize
-**Impact**: Limited flexibility for different use cases
-**Fix**: Implement template system with placeholders
+### ✅ Hardcoded Caption Format (RESOLVED)
+**Location**: Previously framer.go:84
+**Issue**: Caption format was hardcoded, users could not customize
+**Status**: ✅ **RESOLVED** in Branch 6 (feature/caption-templates)
+
+**Solution Implemented**:
+- Added `--caption-template` flag with {{field}} placeholder system
+- Template supports: {{year}}, {{year2}}, {{month}}, {{mon}}, {{day}}, {{date}}, {{camera}}, {{lens}}, {{iso}}, {{aperture}}, {{shutter}}, {{focal}}
+- Comprehensive EXIF extraction (getExifData) for metadata
+- Default vintage format preserved: " - MON 'YY -"
+
+**Example Usage**:
+```bash
+./framer -i photo.jpg -o out/ --caption-template "{{camera}} • {{iso}} {{aperture}} {{shutter}}"
+```
+
+### ✅ No Config File Support (RESOLVED)
+**Issue**: Complex configurations required many CLI flags
+**Status**: ✅ **RESOLVED** in Branch 7 (feature/config-presets)
+
+**Solution Implemented**:
+- YAML config file support with priority-based loading
+- Auto-created presets directory: ~/.config/framer/presets/
+- Three default presets: vintage, instagram, minimal
+- CLI flags override config values (explicit > implicit)
+- Automatic .framer.yaml loading from current directory
+
+**Priority Order**:
+1. `--config` flag
+2. `--preset` flag
+3. `./.framer.yaml`
+4. `~/.config/framer/default.yaml`
+
+**Example Preset**:
+```yaml
+# ~/.config/framer/presets/vintage.yaml
+border_style: solid
+border_thickness: "20"
+border_color: "#000000"
+padding: "150"
+font_name: CourierPrime-Bold
+font_size: "50"
+caption_template: " - {{mon}} '{{year2}} -"
+```
 
 ## Performance Considerations
 
@@ -166,6 +202,66 @@ for i := 0; i < numWorkers; i++ {
 **Issue**: No performance baselines
 **Impact**: Cannot measure optimization improvements
 **Fix**: Add benchmarks for image processing pipeline
+
+## Config System Considerations (New)
+
+### Config File Discovery
+**Behavior**: Multiple config files can exist, priority determines which loads
+**Potential Issue**: User may not realize which config file is being used
+**Mitigation**: Log message shows which config was loaded
+**Example**:
+```
+2025/10/11 00:19:08 Loaded preset: vintage
+```
+
+**Tips for Users**:
+- Use `--config` flag to be explicit about config source
+- Delete/rename `.framer.yaml` to prevent auto-loading
+- Check log output to confirm which config loaded
+
+### Font Validation
+**Behavior**: Invalid font names automatically fall back to default with warning
+**Potential Issue**: User may not notice their font choice was ignored
+**Mitigation**: Clear warning logged to console
+**Example**:
+```
+Warning: Font "InvalidFont" not found in embedded fonts, using default "CourierPrime-Bold"
+```
+
+**Solution**: Use `./framer --list-fonts` to see available options
+
+### CLI Override Behavior
+**Behavior**: CLI flags override config file values
+**Potential Issue**: Default CLI values (e.g., `--border-style solid`) override config
+**Current Limitation**: Cannot distinguish "user specified solid" from "defaulted to solid"
+**Workaround**: Config file values only used when CLI value exactly matches default
+
+**Example**:
+```bash
+# Config has border_style: instagram
+./framer -i photo.jpg -o out/  # Uses instagram from config ✓
+./framer -i photo.jpg -o out/ --border-style solid  # Uses CLI solid ✓
+```
+
+### Preset Modification
+**Behavior**: Default presets only created if they don't exist
+**Benefit**: User modifications preserved across runs
+**Consideration**: Deleted presets won't auto-restore
+**Solution**: Delete `~/.config/framer/` directory to reset all presets
+
+### YAML Syntax Errors
+**Behavior**: Invalid YAML causes config loading to fail silently
+**Current Behavior**: Falls through to next priority level or defaults
+**Example**:
+```
+Warning: Could not load config file my-config.yaml: parsing YAML: ...
+```
+
+**Common YAML Mistakes**:
+- Missing quotes around hex colors: `border_color: #FF0000` (wrong)
+- Correct: `border_color: "#FF0000"`
+- Wrong indentation (YAML is whitespace-sensitive)
+- Mixing tabs and spaces
 
 ## Common User Issues (Anticipated)
 
