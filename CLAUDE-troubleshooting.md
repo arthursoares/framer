@@ -157,26 +157,35 @@ caption_template: " - {{mon}} '{{year2}} -"
 
 ## Performance Considerations
 
-### No Concurrent Processing
-**Location**: framer.go:615-626
-**Issue**: Directory processing is sequential, one image at a time
-**Impact**: Slow for large batches, doesn't utilize multi-core systems
-**Fix**: Implement worker pool with goroutines:
-```go
-// Process images concurrently with worker pool
-jobs := make(chan string, numWorkers)
-var wg sync.WaitGroup
-for i := 0; i < numWorkers; i++ {
-    wg.Add(1)
-    go worker(jobs, &wg, config)
-}
-```
+### ✅ No Concurrent Processing (RESOLVED)
+**Location**: Previously framer.go:615-626
+**Issue**: Directory processing was sequential, one image at a time
+**Status**: ✅ **RESOLVED** in Branch 8 (feature/batch-improvements)
 
-### No Progress Indication
-**Location**: Batch processing
+**Solution Implemented**:
+- Worker pool pattern with configurable concurrency
+- ProcessingResult and ProcessingStats types for tracking
+- Thread-safe progress bar integration
+- Background result collection goroutine
+- `--workers` flag with runtime.NumCPU() default
+
+**Performance Improvement**:
+- Sequential: 4.08 files/sec
+- Concurrent: 11.00 files/sec
+- 2.7x speedup achieved
+
+**Code Location**: framer.go:246-334
+
+### ✅ No Progress Indication (RESOLVED)
+**Location**: Previously batch processing
 **Issue**: No feedback during long-running batch operations
-**Impact**: Poor user experience, appears frozen
-**Fix**: Add progress bar using `github.com/schollz/progressbar/v3`
+**Status**: ✅ **RESOLVED** in Branch 8 (feature/batch-improvements)
+
+**Solution Implemented**:
+- Added github.com/schollz/progressbar/v3 dependency
+- Real-time progress bar showing count, rate, and ETA
+- Thread-safe updates from multiple workers
+- Statistics summary after completion (total, succeeded, failed, duration, rate)
 
 ## Testing Gaps
 
