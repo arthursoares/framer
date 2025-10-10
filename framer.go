@@ -488,7 +488,7 @@ func determineCaption(file *os.File, config ProcessingConfig) string {
 	if err != nil {
 		// Use placeholder if EXIF data not available
 		if config.CaptionTemplate != "" {
-			return ""  // Don't show caption if template requires EXIF but none available
+			return "" // Don't show caption if template requires EXIF but none available
 		}
 		return " - --- -"
 	}
@@ -627,54 +627,54 @@ func createSolidBorder(img image.Image, borderThickness int, borderColor color.R
 
 // loadFont loads and parses a font by name from embedded data
 func loadFont(fontName string) (*truetype.Font, error) {
-    if fontName == "" {
-        fontName = availableFonts[0] // Default to first font
-    }
+	if fontName == "" {
+		fontName = availableFonts[0] // Default to first font
+	}
 
-    // Try to find the font in our embedded assets
-    var fontData []byte
-    var foundFont bool
-    var err error
+	// Try to find the font in our embedded assets
+	var fontData []byte
+	var foundFont bool
+	var err error
 
-    // Check if it's a TTF
-    assetName := fmt.Sprintf("fonts_data/%s.ttf", fontName)
-    fontData, err = Asset(assetName)
-    if err == nil {
-        foundFont = true
-    }
+	// Check if it's a TTF
+	assetName := fmt.Sprintf("fonts_data/%s.ttf", fontName)
+	fontData, err = Asset(assetName)
+	if err == nil {
+		foundFont = true
+	}
 
-    // If not found, check for TTC
-    if !foundFont {
-        assetName = fmt.Sprintf("fonts_data/%s.ttc", fontName)
-        fontData, err = Asset(assetName)
-        if err == nil {
-            foundFont = true
-        }
-    }
+	// If not found, check for TTC
+	if !foundFont {
+		assetName = fmt.Sprintf("fonts_data/%s.ttc", fontName)
+		fontData, err = Asset(assetName)
+		if err == nil {
+			foundFont = true
+		}
+	}
 
-    // If not found, try the default font
-    if !foundFont && fontName != availableFonts[0] {
-        assetName = fmt.Sprintf("fonts_data/%s.ttf", availableFonts[0])
-        fontData, err = Asset(assetName)
-        if err != nil {
-            return nil, fmt.Errorf("error loading font '%s' and default fallback: %v", fontName, err)
-        }
-    } else if !foundFont {
-        return nil, fmt.Errorf("error loading font '%s': %v", fontName, err)
-    }
+	// If not found, try the default font
+	if !foundFont && fontName != availableFonts[0] {
+		assetName = fmt.Sprintf("fonts_data/%s.ttf", availableFonts[0])
+		fontData, err = Asset(assetName)
+		if err != nil {
+			return nil, fmt.Errorf("error loading font '%s' and default fallback: %v", fontName, err)
+		}
+	} else if !foundFont {
+		return nil, fmt.Errorf("error loading font '%s': %v", fontName, err)
+	}
 
-    // Parse the font data
-    f, err := truetype.Parse(fontData)
-    if err != nil {
-        return nil, fmt.Errorf("error parsing font '%s': %v", fontName, err)
-    }
+	// Parse the font data
+	f, err := truetype.Parse(fontData)
+	if err != nil {
+		return nil, fmt.Errorf("error parsing font '%s': %v", fontName, err)
+	}
 
-    return f, nil
+	return f, nil
 }
 
 // Returns a list of available fonts
 func getAvailableFonts() []string {
-    return availableFonts
+	return availableFonts
 }
 
 func addCaption(newImage *image.RGBA, captionText string, fontSize int, fontColor color.RGBA, imageSize image.Point, borderThickness int, padding int, imagePos *image.Point, fontName string) *image.RGBA {
@@ -786,7 +786,7 @@ func fallbackAddCaption(newImage *image.RGBA, captionText string, fontSize int, 
 			}
 		case char == '\'':
 			// Draw an apostrophe (small vertical line at the top)
-			for dx := charW/3; dx < 2*charW/3; dx++ {
+			for dx := charW / 3; dx < 2*charW/3; dx++ {
 				for dy := 0; dy < charHeight/3; dy++ {
 					py := y - charHeight/2 + dy
 					newImage.Set(charX+dx, py, fontColor)
