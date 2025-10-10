@@ -1,19 +1,144 @@
-# Framer Project Guidelines
+# CLAUDE.md
 
-## Build Commands
-- Build: `go build framer.go fonts.go`
-- Run: `./framer -i /path/to/image.jpg -o /path/to/output_folder`
-- Embed fonts: `$(go env GOPATH)/bin/go-bindata -pkg main -o fonts.go fonts_data/`
-- List fonts: `./framer --list-fonts`
+This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
 
-## Code Style Guidelines
-- **Formatting**: Standard Go formatting with `gofmt`
-- **Imports**: Group stdlib imports first, then third-party packages
-- **Error handling**: Always check errors and provide descriptive messages
-- **Variable naming**: Use camelCase for variables, PascalCase for exported functions
-- **Functions**: Keep functions short, focused on a single responsibility
-- **Comments**: Document public functions and complex logic
-- **Types**: Use strong typing; avoid interface{} where possible
-- **File organization**: Group related functionality in logical sections
-- **Constants**: Define constants for magic values
-- **Testing**: Write tests for core functionality
+## Project Overview
+
+Framer is a Go CLI application that adds customizable borders and captions to JPEG images. Created as an experiment using Claude Code, it's designed for post-processing images from Adobe Lightroom with vintage-style borders and EXIF date captions.
+
+## Architecture
+
+### Core Components
+
+The codebase consists of two main files:
+
+- **framer.go** - Main application logic containing:
+  - Image processing pipeline (`processImage`)
+  - Border generation functions (`createSolidBorder`, `createInstagramFrame`)
+  - Caption rendering with TrueType font support (`addCaption`, `fallbackAddCaption`)
+  - EXIF date extraction and formatting (`getExifDate`, `generateCaptionFromDate`)
+  - CLI argument parsing and validation
+
+- **fonts.go** - Auto-generated file containing embedded font data (via go-bindata)
+  - Contains `Asset()` function to access embedded fonts
+  - Should never be manually edited
+
+### Border Styles
+
+Two distinct border rendering strategies:
+
+1. **Solid Border** (`createSolidBorder`): Adds colored border + optional white padding around original image dimensions
+2. **Instagram Frame** (`createInstagramFrame`): Resizes image to fit within 1080x1350px (4:5 ratio) frame with centered positioning
+
+### Font System
+
+- Fonts are embedded into binary using go-bindata at build time
+- Font files stored in `fonts_data/` directory
+- `availableFonts` array defines which fonts are available
+- `loadFont()` attempts .ttf then .ttc extensions with fallback to default
+- Fallback rendering using simple pixel drawing if freetype fails
+
+## Development Commands
+
+### Building
+
+```bash
+# Build the application
+go build framer.go fonts.go
+
+# Install dependencies (if needed)
+go mod download
+```
+
+### Adding New Fonts
+
+```bash
+# 1. Add .ttf or .ttc file to fonts_data/
+# 2. Update availableFonts array in framer.go
+# 3. Regenerate embedded font data:
+go install github.com/go-bindata/go-bindata/...
+$(go env GOPATH)/bin/go-bindata -pkg main -o fonts.go fonts_data/
+
+# 4. Rebuild
+go build framer.go fonts.go
+```
+
+### Testing
+
+```bash
+# Process a single image
+./framer -i test_image.jpg -o output/
+
+# Process a directory
+./framer -i input_folder/ -o output_folder/
+
+# List available fonts
+./framer --list-fonts
+
+# Test with custom settings
+./framer -i test.jpg -o output/ -t 5% --font-size 50 --border-color "#FF0000"
+```
+
+## Key Implementation Details
+
+### Image Processing Flow
+
+1. Parse CLI arguments with style-specific defaults
+2. Open and decode JPEG
+3. Extract EXIF date (or use placeholder/custom caption)
+4. Calculate border thickness (supports pixels or percentage)
+5. Apply border style (solid or instagram)
+6. Render caption using TrueType fonts (with pixel-based fallback)
+7. Save output with `_{style}` suffix
+
+### Caption Positioning
+
+- **Solid style**: Caption centered in bottom border area
+- **Instagram style**: Caption positioned using `imagePos` offset to account for centered image within frame
+- Font size auto-calculated from border thickness if not specified
+
+### Color Handling
+
+- All colors specified as hex strings (e.g., "#000000")
+- Converted to `color.RGBA` via `hexToRGB()` helper
+- Default border and font color is black
+
+## Dependencies
+
+- `github.com/disintegration/imaging` - Image resizing
+- `github.com/golang/freetype` - TrueType font rendering
+- `github.com/rwcarlsen/goexif` - EXIF metadata extraction
+- `golang.org/x/image` - Extended image utilities
+- `github.com/go-bindata/go-bindata` - Font embedding (build-time only)
+
+## AI Guidance
+
+* Ignore GEMINI.md and GEMINI-*.md files
+* To save main context space, for code searches, inspections, troubleshooting or analysis, use code-searcher subagent where appropriate
+* After receiving tool results, carefully reflect on their quality and determine optimal next steps before proceeding
+* For maximum efficiency, invoke multiple independent tools simultaneously rather than sequentially
+* Before finishing, verify your solution
+* NEVER create files unless absolutely necessary
+* ALWAYS prefer editing existing files to creating new ones
+* NEVER proactively create documentation files (*.md) or README files unless explicitly requested
+* When asked to commit changes, exclude CLAUDE.md and CLAUDE-*.md memory bank files from commits
+* **IMPORTANT**: Never manually edit fonts.go - it is auto-generated by go-bindata
+
+## Memory Bank System
+
+This project uses a structured memory bank system with specialized context files. Always check these files for relevant information before starting work:
+
+### Core Context Files
+
+* **CLAUDE-activeContext.md** - Current session state, goals, and progress (if exists)
+* **CLAUDE-patterns.md** - Established code patterns and conventions (if exists)
+* **CLAUDE-decisions.md** - Architecture decisions and rationale (if exists)
+* **CLAUDE-troubleshooting.md** - Common issues and proven solutions (if exists)
+* **CLAUDE-config-variables.md** - Configuration variables reference (if exists)
+* **CLAUDE-temp.md** - Temporary scratch pad (only read when referenced)
+
+**Important:** Always reference the active context file first to understand what's currently being worked on and maintain session continuity.
+
+### Memory Bank System Backups
+
+When asked to backup Memory Bank System files, copy the core context files above and .claude settings directory to the specified backup directory, overwriting if files already exist.

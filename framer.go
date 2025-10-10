@@ -25,9 +25,21 @@ import (
 // Available fonts embedded in the binary
 var availableFonts = []string{
 	"CourierPrime-Bold",
-	"AmericanTypewriter",
 	"BigBlueTermPlusNerdFont-Regular",
 	"HeavyDataNerdFont-Regular",
+}
+
+// ProcessingConfig holds all configuration options for image processing
+type ProcessingConfig struct {
+	Caption          string
+	BorderThickness  string
+	Padding          string
+	BorderStyle      string
+	BorderColor      string
+	FontName         string
+	FontSize         string
+	FontColor        string
+	InstagramMaxSize int
 }
 
 // Helper functions
@@ -82,24 +94,6 @@ func generateCaptionFromDate(dt time.Time) string {
 	month := dt.Format("Jan")
 	year := dt.Format("06")
 	return fmt.Sprintf(" - %s '%s -", strings.ToUpper(month), year)
-}
-
-// padWithBorder adds a border to an image
-func padWithBorder(img image.Image, width, height int, borderColor color.RGBA) *image.RGBA {
-	newImg := image.NewRGBA(image.Rect(0, 0, width, height))
-
-	// Fill the entire image with the border color
-	draw.Draw(newImg, newImg.Bounds(), &image.Uniform{borderColor}, image.Point{}, draw.Src)
-
-	// Calculate position to center the original image
-	x := (width - img.Bounds().Dx()) / 2
-	y := (height - img.Bounds().Dy()) / 2
-
-	// Draw the original image centered on the new image
-	draw.Draw(newImg, image.Rect(x, y, x+img.Bounds().Dx(), y+img.Bounds().Dy()),
-		img, img.Bounds().Min, draw.Src)
-
-	return newImg
 }
 
 func createInstagramFrame(img image.Image, maxSize int, borderThickness int, borderColor color.RGBA, padding int) (image.Image, image.Point, image.Point) {
@@ -184,10 +178,6 @@ func createSolidBorder(img image.Image, borderThickness int, borderColor color.R
 
 	return borderedImg
 }
-
-// blur function removed as it's no longer needed
-
-// Vintage border style has been removed
 
 // loadFont loads and parses a font by name from embedded data
 func loadFont(fontName string) (*truetype.Font, error) {
@@ -370,17 +360,7 @@ func fallbackAddCaption(newImage *image.RGBA, captionText string, fontSize int, 
 	return newImage
 }
 
-func processImage(imagePath string, outputPath string, args struct {
-	caption          string
-	borderThickness  string
-	padding          string
-	borderStyle      string
-	borderColor      string
-	fontName         string
-	fontSize         string
-	fontColor        string
-	instagramMaxSize int
-}) {
+func processImage(imagePath string, outputPath string, config ProcessingConfig) {
 	// Open the image file
 	file, err := os.Open(imagePath)
 	if err != nil {
@@ -398,8 +378,8 @@ func processImage(imagePath string, outputPath string, args struct {
 
 	// Determine caption text
 	var captionText string
-	if args.caption != "" {
-		captionText = args.caption
+	if config.Caption != "" {
+		captionText = config.Caption
 	} else {
 		dt, err := getExifDate(file)
 		if err != nil {
@@ -413,36 +393,53 @@ func processImage(imagePath string, outputPath string, args struct {
 	// Compute actual border thickness in pixels
 	var t int
 	origSize := img.Bounds().Size()
-	if strings.HasSuffix(args.borderThickness, "%") {
-		percentage, _ := strconv.ParseFloat(strings.TrimSuffix(args.borderThickness, "%"), 64)
+	if strings.HasSuffix(config.BorderThickness, "%") {
+		percentage, err := strconv.ParseFloat(strings.TrimSuffix(config.BorderThickness, "%"), 64)
+		if err != nil {
+			log.Printf("Error: invalid border thickness percentage %q: %v", config.BorderThickness, err)
+			return
+		}
 		minDim := origSize.X
 		if origSize.Y < minDim {
 			minDim = origSize.Y
 		}
 		t = int(float64(minDim) * (percentage / 100.0))
 	} else {
-		t, _ = strconv.Atoi(args.borderThickness)
+		var err error
+		t, err = strconv.Atoi(config.BorderThickness)
+		if err != nil {
+			log.Printf("Error: invalid border thickness %q: must be a number or percentage (e.g., '10' or '5%%')", config.BorderThickness)
+			return
+		}
 	}
 
 	// Get padding value
-	p, _ := strconv.Atoi(args.padding)
+	p, err := strconv.Atoi(config.Padding)
+	if err != nil {
+		log.Printf("Error: invalid padding value %q: must be a number", config.Padding)
+		return
+	}
 
 	// Create the image based on style
-	borderColor, _ := hexToRGB(args.borderColor)
+	borderColor, err := hexToRGB(config.BorderColor)
+	if err != nil {
+		log.Printf("Error: invalid border color %q: %v (use format #RRGGBB, e.g., #000000)", config.BorderColor, err)
+		return
+	}
 	var newImage image.Image
 	var resizedSize image.Point
 	var imagePos *image.Point
 
-	switch strings.ToLower(args.borderStyle) {
+	switch strings.ToLower(config.BorderStyle) {
 	case "instagram":
 		var imgPos image.Point
-		newImage, resizedSize, imgPos = createInstagramFrame(img, args.instagramMaxSize, t, borderColor, p)
+		newImage, resizedSize, imgPos = createInstagramFrame(img, config.InstagramMaxSize, t, borderColor, p)
 		imagePos = &imgPos
 	case "solid":
 		newImage = createSolidBorder(img, t, borderColor, p)
 		resizedSize = image.Point{img.Bounds().Dx(), img.Bounds().Dy()}
 	default:
-		log.Printf("Unknown border style %s. Using solid border.", args.borderStyle)
+		log.Printf("Unknown border style %s. Using solid border.", config.BorderStyle)
 		newImage = createSolidBorder(img, t, borderColor, p)
 		resizedSize = image.Point{img.Bounds().Dx(), img.Bounds().Dy()}
 	}
@@ -455,8 +452,13 @@ func processImage(imagePath string, outputPath string, args struct {
 
 		// Use provided font size or compute based on border thickness
 		computedFontSize := 0
-		if args.fontSize != "" {
-			computedFontSize, _ = strconv.Atoi(args.fontSize)
+		if config.FontSize != "" {
+			var err error
+			computedFontSize, err = strconv.Atoi(config.FontSize)
+			if err != nil {
+				log.Printf("Error: invalid font size %q: must be a number", config.FontSize)
+				return
+			}
 		} else {
 			if t < 40 {
 				computedFontSize = int(float64(t) * 0.5)
@@ -467,9 +469,13 @@ func processImage(imagePath string, outputPath string, args struct {
 			}
 		}
 
-		fontColor, _ := hexToRGB(args.fontColor)
+		fontColor, err := hexToRGB(config.FontColor)
+		if err != nil {
+			log.Printf("Error: invalid font color %q: %v (use format #RRGGBB, e.g., #000000)", config.FontColor, err)
+			return
+		}
 		// Add caption with appropriate positioning
-		newImage = addCaption(rgba, captionText, computedFontSize, fontColor, resizedSize, t, p, imagePos, args.fontName)
+		newImage = addCaption(rgba, captionText, computedFontSize, fontColor, resizedSize, t, p, imagePos, config.FontName)
 	}
 
 	// Save the result
@@ -477,7 +483,7 @@ func processImage(imagePath string, outputPath string, args struct {
 	ext := filepath.Ext(baseName)
 	name := strings.TrimSuffix(baseName, ext)
 	suffix := "_instagram"
-	if strings.ToLower(args.borderStyle) != "instagram" {
+	if strings.ToLower(config.BorderStyle) != "instagram" {
 		suffix = "_solid"
 	}
 	outFile := filepath.Join(outputPath, fmt.Sprintf("%s%s.jpg", name, suffix))
@@ -542,57 +548,47 @@ func main() {
 	}
 
 	// Set style-specific defaults if not provided
-	args := struct {
-		caption          string
-		borderThickness  string
-		padding          string
-		borderStyle      string
-		borderColor      string
-		fontName         string
-		fontSize         string
-		fontColor        string
-		instagramMaxSize int
-	}{
-		caption:          *caption,
-		borderThickness:  *borderThickness,
-		padding:          *padding,
-		borderStyle:      *borderStyle,
-		borderColor:      *borderColor,
-		fontName:         *fontName,
-		fontSize:         *fontSize,
-		fontColor:        *fontColor,
-		instagramMaxSize: *instagramMaxSize,
+	config := ProcessingConfig{
+		Caption:          *caption,
+		BorderThickness:  *borderThickness,
+		Padding:          *padding,
+		BorderStyle:      *borderStyle,
+		BorderColor:      *borderColor,
+		FontName:         *fontName,
+		FontSize:         *fontSize,
+		FontColor:        *fontColor,
+		InstagramMaxSize: *instagramMaxSize,
 	}
 
 	if *borderStyle == "instagram" {
-		if args.borderThickness == "" {
-			args.borderThickness = "5"
+		if config.BorderThickness == "" {
+			config.BorderThickness = "5"
 		}
-		if args.instagramMaxSize == 0 {
-			args.instagramMaxSize = 1000
+		if config.InstagramMaxSize == 0 {
+			config.InstagramMaxSize = 1000
 		}
-		if args.fontSize == "" {
-			args.fontSize = "20"
+		if config.FontSize == "" {
+			config.FontSize = "20"
 		}
-		if args.padding == "" {
-			args.padding = "0"
+		if config.Padding == "" {
+			config.Padding = "0"
 		}
 	} else { // solid and vintage styles
-		if args.borderThickness == "" {
-			args.borderThickness = "20"
+		if config.BorderThickness == "" {
+			config.BorderThickness = "20"
 		}
-		if args.fontSize == "" {
-			args.fontSize = "50"
+		if config.FontSize == "" {
+			config.FontSize = "50"
 		}
-		if args.padding == "" {
+		if config.Padding == "" {
 			if *borderStyle == "solid" {
-				args.padding = "150"
+				config.Padding = "150"
 			} else {
-				args.padding = "0"
+				config.Padding = "0"
 			}
 		}
-		if args.instagramMaxSize == 0 {
-			args.instagramMaxSize = 900
+		if config.InstagramMaxSize == 0 {
+			config.InstagramMaxSize = 900
 		}
 	}
 
@@ -619,7 +615,7 @@ func main() {
 			if !d.IsDir() {
 				ext := strings.ToLower(filepath.Ext(path))
 				if ext == ".jpg" || ext == ".jpeg" {
-					processImage(path, *outputPath, args)
+					processImage(path, *outputPath, config)
 				}
 			}
 			return nil
@@ -629,6 +625,6 @@ func main() {
 		}
 	} else {
 		// Single file
-		processImage(*inputPath, *outputPath, args)
+		processImage(*inputPath, *outputPath, config)
 	}
 }
