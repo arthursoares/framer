@@ -96,6 +96,60 @@ func generateCaptionFromDate(dt time.Time) string {
 	return fmt.Sprintf(" - %s '%s -", strings.ToUpper(month), year)
 }
 
+// determineCaption extracts or generates caption text from config and file EXIF data
+func determineCaption(file *os.File, config ProcessingConfig) string {
+	if config.Caption != "" {
+		return config.Caption
+	}
+
+	dt, err := getExifDate(file)
+	if err != nil {
+		// Use placeholder if EXIF data not available
+		return " - --- -"
+	}
+	return generateCaptionFromDate(dt)
+}
+
+// calculateBorderThickness converts border thickness string to pixels
+func calculateBorderThickness(thicknessStr string, imageSize image.Point) (int, error) {
+	if strings.HasSuffix(thicknessStr, "%") {
+		percentage, err := strconv.ParseFloat(strings.TrimSuffix(thicknessStr, "%"), 64)
+		if err != nil {
+			return 0, fmt.Errorf("invalid border thickness percentage %q: %w", thicknessStr, err)
+		}
+		minDim := imageSize.X
+		if imageSize.Y < minDim {
+			minDim = imageSize.Y
+		}
+		return int(float64(minDim) * (percentage / 100.0)), nil
+	}
+
+	thickness, err := strconv.Atoi(thicknessStr)
+	if err != nil {
+		return 0, fmt.Errorf("invalid border thickness %q: must be a number or percentage (e.g., '10' or '5%%')", thicknessStr)
+	}
+	return thickness, nil
+}
+
+// calculateFontSize determines font size based on config or border thickness
+func calculateFontSize(fontSizeStr string, borderThickness int) (int, error) {
+	if fontSizeStr != "" {
+		size, err := strconv.Atoi(fontSizeStr)
+		if err != nil {
+			return 0, fmt.Errorf("invalid font size %q: must be a number", fontSizeStr)
+		}
+		return size, nil
+	}
+
+	// Auto-calculate based on border thickness
+	if borderThickness < 40 {
+		return int(float64(borderThickness) * 0.5), nil
+	} else if borderThickness < 80 {
+		return int(float64(borderThickness) * 0.7), nil
+	}
+	return int(float64(borderThickness) * 0.9), nil
+}
+
 func createInstagramFrame(img image.Image, maxSize int, borderThickness int, borderColor color.RGBA, padding int) (image.Image, image.Point, image.Point) {
 	// Fixed dimensions for Instagram (4:5 ratio)
 	frameW, frameH := 1080, 1350
@@ -377,55 +431,30 @@ func processImage(imagePath string, outputPath string, config ProcessingConfig) 
 	}
 
 	// Determine caption text
-	var captionText string
-	if config.Caption != "" {
-		captionText = config.Caption
-	} else {
-		dt, err := getExifDate(file)
-		if err != nil {
-			// Use placeholder if EXIF data not available
-			captionText = " - --- -"
-		} else {
-			captionText = generateCaptionFromDate(dt)
-		}
+	captionText := determineCaption(file, config)
+
+	// Calculate border thickness in pixels
+	borderThickness, err := calculateBorderThickness(config.BorderThickness, img.Bounds().Size())
+	if err != nil {
+		log.Printf("Error: %v", err)
+		return
 	}
 
-	// Compute actual border thickness in pixels
-	var t int
-	origSize := img.Bounds().Size()
-	if strings.HasSuffix(config.BorderThickness, "%") {
-		percentage, err := strconv.ParseFloat(strings.TrimSuffix(config.BorderThickness, "%"), 64)
-		if err != nil {
-			log.Printf("Error: invalid border thickness percentage %q: %v", config.BorderThickness, err)
-			return
-		}
-		minDim := origSize.X
-		if origSize.Y < minDim {
-			minDim = origSize.Y
-		}
-		t = int(float64(minDim) * (percentage / 100.0))
-	} else {
-		var err error
-		t, err = strconv.Atoi(config.BorderThickness)
-		if err != nil {
-			log.Printf("Error: invalid border thickness %q: must be a number or percentage (e.g., '10' or '5%%')", config.BorderThickness)
-			return
-		}
-	}
-
-	// Get padding value
-	p, err := strconv.Atoi(config.Padding)
+	// Parse padding value
+	padding, err := strconv.Atoi(config.Padding)
 	if err != nil {
 		log.Printf("Error: invalid padding value %q: must be a number", config.Padding)
 		return
 	}
 
-	// Create the image based on style
+	// Parse border color
 	borderColor, err := hexToRGB(config.BorderColor)
 	if err != nil {
 		log.Printf("Error: invalid border color %q: %v (use format #RRGGBB, e.g., #000000)", config.BorderColor, err)
 		return
 	}
+
+	// Apply border based on style
 	var newImage image.Image
 	var resizedSize image.Point
 	var imagePos *image.Point
@@ -433,49 +462,39 @@ func processImage(imagePath string, outputPath string, config ProcessingConfig) 
 	switch strings.ToLower(config.BorderStyle) {
 	case "instagram":
 		var imgPos image.Point
-		newImage, resizedSize, imgPos = createInstagramFrame(img, config.InstagramMaxSize, t, borderColor, p)
+		newImage, resizedSize, imgPos = createInstagramFrame(img, config.InstagramMaxSize, borderThickness, borderColor, padding)
 		imagePos = &imgPos
 	case "solid":
-		newImage = createSolidBorder(img, t, borderColor, p)
+		newImage = createSolidBorder(img, borderThickness, borderColor, padding)
 		resizedSize = image.Point{img.Bounds().Dx(), img.Bounds().Dy()}
 	default:
 		log.Printf("Unknown border style %s. Using solid border.", config.BorderStyle)
-		newImage = createSolidBorder(img, t, borderColor, p)
+		newImage = createSolidBorder(img, borderThickness, borderColor, padding)
 		resizedSize = image.Point{img.Bounds().Dx(), img.Bounds().Dy()}
 	}
 
-	// Add caption for all styles
+	// Add caption if specified
 	if captionText != "" {
 		// Convert to RGBA for drawing
 		rgba := image.NewRGBA(newImage.Bounds())
 		draw.Draw(rgba, rgba.Bounds(), newImage, image.Point{}, draw.Src)
 
-		// Use provided font size or compute based on border thickness
-		computedFontSize := 0
-		if config.FontSize != "" {
-			var err error
-			computedFontSize, err = strconv.Atoi(config.FontSize)
-			if err != nil {
-				log.Printf("Error: invalid font size %q: must be a number", config.FontSize)
-				return
-			}
-		} else {
-			if t < 40 {
-				computedFontSize = int(float64(t) * 0.5)
-			} else if t < 80 {
-				computedFontSize = int(float64(t) * 0.7)
-			} else {
-				computedFontSize = int(float64(t) * 0.9)
-			}
+		// Calculate font size
+		fontSize, err := calculateFontSize(config.FontSize, borderThickness)
+		if err != nil {
+			log.Printf("Error: %v", err)
+			return
 		}
 
+		// Parse font color
 		fontColor, err := hexToRGB(config.FontColor)
 		if err != nil {
 			log.Printf("Error: invalid font color %q: %v (use format #RRGGBB, e.g., #000000)", config.FontColor, err)
 			return
 		}
+
 		// Add caption with appropriate positioning
-		newImage = addCaption(rgba, captionText, computedFontSize, fontColor, resizedSize, t, p, imagePos, config.FontName)
+		newImage = addCaption(rgba, captionText, fontSize, fontColor, resizedSize, borderThickness, padding, imagePos, config.FontName)
 	}
 
 	// Save the result
