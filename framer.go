@@ -690,30 +690,49 @@ func main() {
 		}
 	}
 
+	// Convert to absolute paths for comparison
+	absInputPath, err := filepath.Abs(*inputPath)
+	if err != nil {
+		log.Fatalf("Error resolving input path: %v", err)
+	}
+	absOutputPath, err := filepath.Abs(*outputPath)
+	if err != nil {
+		log.Fatalf("Error resolving output path: %v", err)
+	}
+
 	// Verify output folder exists (or create it)
-	if _, err := os.Stat(*outputPath); os.IsNotExist(err) {
-		err := os.MkdirAll(*outputPath, 0755)
+	if _, err := os.Stat(absOutputPath); os.IsNotExist(err) {
+		err := os.MkdirAll(absOutputPath, 0755)
 		if err != nil {
 			log.Fatalf("Could not create output directory: %v", err)
 		}
 	}
 
 	// Process either a single file or all JPEGs in a folder
-	fileInfo, err := os.Stat(*inputPath)
+	fileInfo, err := os.Stat(absInputPath)
 	if err != nil {
 		log.Fatalf("Error accessing input path: %v", err)
 	}
 
 	if fileInfo.IsDir() {
-		// Process all JPEGs in directory
-		err := filepath.WalkDir(*inputPath, func(path string, d fs.DirEntry, err error) error {
+		// Warn if output is a subdirectory of input
+		if strings.HasPrefix(absOutputPath+string(filepath.Separator), absInputPath+string(filepath.Separator)) {
+			log.Printf("Warning: Output directory is a subdirectory of input directory")
+			log.Printf("  Input:  %s", absInputPath)
+			log.Printf("  Output: %s", absOutputPath)
+			log.Printf("This may cause nested output directories. Collecting files before processing...")
+		}
+
+		// Collect all JPEG files first to avoid processing newly created files
+		var filesToProcess []string
+		err := filepath.WalkDir(absInputPath, func(path string, d fs.DirEntry, err error) error {
 			if err != nil {
 				return err
 			}
 			if !d.IsDir() {
 				ext := strings.ToLower(filepath.Ext(path))
 				if ext == ".jpg" || ext == ".jpeg" {
-					processImage(path, *outputPath, config)
+					filesToProcess = append(filesToProcess, path)
 				}
 			}
 			return nil
@@ -721,8 +740,14 @@ func main() {
 		if err != nil {
 			log.Fatalf("Error walking directory: %v", err)
 		}
+
+		// Now process the collected files
+		fmt.Printf("Found %d JPEG file(s) to process\n", len(filesToProcess))
+		for _, filePath := range filesToProcess {
+			processImage(filePath, absOutputPath, config)
+		}
 	} else {
 		// Single file
-		processImage(*inputPath, *outputPath, config)
+		processImage(absInputPath, absOutputPath, config)
 	}
 }
