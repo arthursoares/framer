@@ -421,39 +421,193 @@ func validateFontName(fontName string) string {
 - Prefer graceful degradation over errors
 - Use for non-critical validation (fonts, colors with fallbacks)
 
-## Concurrency Patterns (Future)
+## Concurrency Patterns (Current)
 
-### Worker Pool for Batch Processing
+### Worker Pool for Batch Processing (Implemented)
+**Location**: processBatchConcurrent() and worker() in framer.go:945-1033
+
+**Pattern Structure**:
 ```go
-type job struct {
-    inputPath  string
-    outputPath string
-    config     Config
-}
+func processBatchConcurrent(files []string, outputPath string, config ProcessingConfig, numWorkers int) *ProcessingStats {
+    // 1. Create buffered channels
+    jobs := make(chan string, len(files))
+    results := make(chan ProcessingResult, len(files))
 
-func processBatch(jobs []job, numWorkers int) {
-    jobChan := make(chan job, len(jobs))
+    // 2. Create progress bar (thread-safe)
+    bar := progressbar.NewOptions(len(files), /* options */)
+
+    // 3. Initialize statistics
+    stats := &ProcessingStats{
+        Total:     len(files),
+        StartTime: time.Now(),
+    }
+
+    // 4. Start worker goroutines
     var wg sync.WaitGroup
-
-    // Start workers
     for i := 0; i < numWorkers; i++ {
         wg.Add(1)
-        go func() {
-            defer wg.Done()
-            for job := range jobChan {
-                processImage(job.inputPath, job.outputPath, job.config)
+        go worker(i, jobs, results, outputPath, config, &wg, bar)
+    }
+
+    // 5. Send all jobs to workers
+    for _, file := range files {
+        jobs <- file
+    }
+    close(jobs)
+
+    // 6. Collect results in background
+    go func() {
+        for range files {
+            result := <-results
+            if result.Success {
+                stats.RecordSuccess()
+            } else {
+                stats.RecordFailure()
             }
-        }()
-    }
+        }
+        close(results)
+    }()
 
-    // Send jobs
-    for _, j := range jobs {
-        jobChan <- j
-    }
-    close(jobChan)
-
+    // 7. Wait for all workers to complete
     wg.Wait()
+    stats.EndTime = time.Now()
+
+    return stats
 }
+
+func worker(id int, jobs <-chan string, results chan<- ProcessingResult, outputPath string, config ProcessingConfig, wg *sync.WaitGroup, bar *progressbar.ProgressBar) {
+    defer wg.Done()
+
+    for filePath := range jobs {
+        start := time.Now()
+        err := processImage(filePath, outputPath, config)
+
+        result := ProcessingResult{
+            FilePath:  filePath,
+            Success:   err == nil,
+            Error:     err,
+            StartTime: start,
+            Duration:  time.Since(start),
+        }
+
+        results <- result
+        bar.Add(1)  // Thread-safe progress update
+
+        if err != nil {
+            log.Printf("Error processing %s: %v", filepath.Base(filePath), err)
+        }
+    }
+}
+```
+
+**Key Principles**:
+- **Buffered channels**: Size = number of jobs prevents blocking
+- **WaitGroup**: Ensures all workers complete before returning
+- **Progress bar thread safety**: `bar.Add(1)` called from multiple goroutines safely
+- **Background result collection**: Doesn't block workers
+- **Error logging**: Immediate feedback in workers, summary at end
+- **Graceful cleanup**: Close channels after sending all jobs
+
+### Error Handling in Concurrent Context
+**Pattern**: Return errors, log immediately, collect statistics
+
+```go
+// Worker logs errors immediately for visibility
+if err != nil {
+    log.Printf("Error processing %s: %v", filepath.Base(filePath), err)
+}
+
+// But also records in result for statistics
+result := ProcessingResult{
+    Success: err == nil,
+    Error:   err,
+}
+results <- result
+```
+
+**Why both?**:
+- Immediate logging: User sees errors as they happen
+- Result collection: Enables statistics summary
+- No lost errors: Even if collection fails, error is logged
+
+### Progress Bar Integration Pattern
+**Location**: processBatchConcurrent() in framer.go:977-989
+
+**Standard Configuration**:
+```go
+bar := progressbar.NewOptions(totalItems,
+    progressbar.OptionSetDescription("Processing images"),
+    progressbar.OptionShowCount(),        // Shows "X/Y"
+    progressbar.OptionShowIts(),          // Shows "N it/s"
+    progressbar.OptionSetWidth(40),       // Bar width
+    progressbar.OptionSetTheme(progressbar.Theme{
+        Saucer:        "=",
+        SaucerPadding: "-",
+        BarStart:      "[",
+        BarEnd:        "]",
+    }),
+)
+```
+
+**Update Pattern**:
+```go
+// Thread-safe - can be called from multiple goroutines
+bar.Add(1)
+```
+
+**Key Features**:
+- Auto-updates ETA and rate
+- Thread-safe for concurrent updates
+- Clears properly on completion
+- Shows real-time progress
+
+### Statistics Collection Pattern
+**Location**: ProcessingStats type and methods in framer.go:88-162
+
+**Pattern**:
+```go
+// Define statistics struct
+type ProcessingStats struct {
+    Total     int
+    Succeeded int
+    Failed    int
+    StartTime time.Time
+    EndTime   time.Time
+}
+
+// Implement accumulation methods
+func (s *ProcessingStats) RecordSuccess() {
+    s.Succeeded++
+}
+
+func (s *ProcessingStats) RecordFailure() {
+    s.Failed++
+}
+
+// Implement computed properties
+func (s *ProcessingStats) Duration() time.Duration {
+    return s.EndTime.Sub(s.StartTime)
+}
+
+func (s *ProcessingStats) Rate() float64 {
+    return float64(s.Total) / s.Duration().Seconds()
+}
+
+// Implement formatted output
+func (s *ProcessingStats) PrintSummary() {
+    fmt.Printf("Total:     %d\n", s.Total)
+    fmt.Printf("Succeeded: %d\n", s.Succeeded)
+    fmt.Printf("Failed:    %d\n", s.Failed)
+    fmt.Printf("Rate:      %.2f files/sec\n", s.Rate())
+}
+```
+
+**Usage Pattern**:
+```go
+stats := &ProcessingStats{Total: len(files), StartTime: time.Now()}
+// ... process files ...
+stats.EndTime = time.Now()
+stats.PrintSummary()
 ```
 
 ## Documentation Patterns

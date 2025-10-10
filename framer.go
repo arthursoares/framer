@@ -12,14 +12,17 @@ import (
 	"log"
 	"os"
 	"path/filepath"
+	"runtime"
 	"strconv"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/disintegration/imaging"
 	"github.com/golang/freetype"
 	"github.com/golang/freetype/truetype"
 	"github.com/rwcarlsen/goexif/exif"
+	"github.com/schollz/progressbar/v3"
 	"golang.org/x/image/math/fixed"
 	"gopkg.in/yaml.v3"
 )
@@ -75,6 +78,25 @@ type ConfigFile struct {
 	OutputFormat    string `yaml:"output_format,omitempty"`
 }
 
+// ProcessingResult tracks the outcome of processing a single image
+type ProcessingResult struct {
+	FilePath   string
+	OutputPath string
+	Success    bool
+	Error      error
+	StartTime  time.Time
+	Duration   time.Duration
+}
+
+// ProcessingStats accumulates statistics for a batch operation
+type ProcessingStats struct {
+	Total     int
+	Succeeded int
+	Failed    int
+	StartTime time.Time
+	EndTime   time.Time
+}
+
 // Constants for image processing
 const (
 	// Instagram frame dimensions (4:5 aspect ratio)
@@ -99,6 +121,48 @@ const (
 	// Color values
 	AlphaOpaque = 255
 )
+
+// ProcessingStats methods
+
+// RecordSuccess increments the success counter
+func (s *ProcessingStats) RecordSuccess() {
+	s.Succeeded++
+}
+
+// RecordFailure increments the failure counter
+func (s *ProcessingStats) RecordFailure() {
+	s.Failed++
+}
+
+// Duration returns the total processing duration
+func (s *ProcessingStats) Duration() time.Duration {
+	if s.EndTime.IsZero() {
+		return time.Since(s.StartTime)
+	}
+	return s.EndTime.Sub(s.StartTime)
+}
+
+// Rate returns the processing rate in files per second
+func (s *ProcessingStats) Rate() float64 {
+	duration := s.Duration().Seconds()
+	if duration == 0 {
+		return 0
+	}
+	return float64(s.Total) / duration
+}
+
+// PrintSummary prints a formatted summary of the processing statistics
+func (s *ProcessingStats) PrintSummary() {
+	fmt.Println("\nProcessing Summary:")
+	fmt.Println("==================")
+	fmt.Printf("Total files:    %d\n", s.Total)
+	fmt.Printf("Succeeded:      %d\n", s.Succeeded)
+	fmt.Printf("Failed:         %d\n", s.Failed)
+	fmt.Printf("Duration:       %.3fs\n", s.Duration().Seconds())
+	if s.Total > 0 {
+		fmt.Printf("Rate:           %.2f files/sec\n", s.Rate())
+	}
+}
 
 // Helper functions
 func hexToRGB(hexColor string) (color.RGBA, error) {
@@ -742,20 +806,18 @@ func fallbackAddCaption(newImage *image.RGBA, captionText string, fontSize int, 
 	return newImage
 }
 
-func processImage(imagePath string, outputPath string, config ProcessingConfig) {
+func processImage(imagePath string, outputPath string, config ProcessingConfig) error {
 	// Open the image file
 	file, err := os.Open(imagePath)
 	if err != nil {
-		log.Printf("Error opening file %s: %v", imagePath, err)
-		return
+		return fmt.Errorf("opening file: %w", err)
 	}
 	defer file.Close()
 
 	// Decode image
 	img, err := jpeg.Decode(file)
 	if err != nil {
-		log.Printf("Error decoding JPEG %s: %v", imagePath, err)
-		return
+		return fmt.Errorf("decoding JPEG: %w", err)
 	}
 
 	// Determine caption text
@@ -764,22 +826,19 @@ func processImage(imagePath string, outputPath string, config ProcessingConfig) 
 	// Calculate border thickness in pixels
 	borderThickness, err := calculateBorderThickness(config.BorderThickness, img.Bounds().Size())
 	if err != nil {
-		log.Printf("Error: %v", err)
-		return
+		return err
 	}
 
 	// Parse padding value
 	padding, err := strconv.Atoi(config.Padding)
 	if err != nil {
-		log.Printf("Error: invalid padding value %q: must be a number", config.Padding)
-		return
+		return fmt.Errorf("invalid padding value %q: must be a number", config.Padding)
 	}
 
 	// Parse border color
 	borderColor, err := hexToRGB(config.BorderColor)
 	if err != nil {
-		log.Printf("Error: invalid border color %q: %v (use format #RRGGBB, e.g., #000000)", config.BorderColor, err)
-		return
+		return fmt.Errorf("invalid border color %q (use format #RRGGBB, e.g., #000000): %w", config.BorderColor, err)
 	}
 
 	// Apply border based on style
@@ -810,15 +869,13 @@ func processImage(imagePath string, outputPath string, config ProcessingConfig) 
 		// Calculate font size
 		fontSize, err := calculateFontSize(config.FontSize, borderThickness)
 		if err != nil {
-			log.Printf("Error: %v", err)
-			return
+			return err
 		}
 
 		// Parse font color
 		fontColor, err := hexToRGB(config.FontColor)
 		if err != nil {
-			log.Printf("Error: invalid font color %q: %v (use format #RRGGBB, e.g., #000000)", config.FontColor, err)
-			return
+			return fmt.Errorf("invalid font color %q (use format #RRGGBB, e.g., #000000): %w", config.FontColor, err)
 		}
 
 		// Add caption with appropriate positioning
@@ -848,8 +905,7 @@ func processImage(imagePath string, outputPath string, config ProcessingConfig) 
 	// Create output file
 	out, err := os.Create(outFile)
 	if err != nil {
-		log.Printf("Error creating output file %s: %v", outFile, err)
-		return
+		return fmt.Errorf("creating output file %s: %w", outFile, err)
 	}
 	defer out.Close()
 
@@ -858,8 +914,7 @@ func processImage(imagePath string, outputPath string, config ProcessingConfig) 
 	case "png":
 		err = png.Encode(out, newImage)
 		if err != nil {
-			log.Printf("Error encoding PNG %s: %v", outFile, err)
-			return
+			return fmt.Errorf("encoding PNG %s: %w", outFile, err)
 		}
 	case "jpeg", "jpg":
 		quality := config.JPEGQuality
@@ -868,8 +923,7 @@ func processImage(imagePath string, outputPath string, config ProcessingConfig) 
 		}
 		err = jpeg.Encode(out, newImage, &jpeg.Options{Quality: quality})
 		if err != nil {
-			log.Printf("Error encoding JPEG %s: %v", outFile, err)
-			return
+			return fmt.Errorf("encoding JPEG %s: %w", outFile, err)
 		}
 	default:
 		log.Printf("Unknown output format %q. Using JPEG.", config.OutputFormat)
@@ -879,12 +933,103 @@ func processImage(imagePath string, outputPath string, config ProcessingConfig) 
 		}
 		err = jpeg.Encode(out, newImage, &jpeg.Options{Quality: quality})
 		if err != nil {
-			log.Printf("Error encoding JPEG %s: %v", outFile, err)
-			return
+			return fmt.Errorf("encoding JPEG %s: %w", outFile, err)
 		}
 	}
 
+	// Success - keep this output message for visibility
 	fmt.Printf("Processed '%s' -> '%s'\n", imagePath, outFile)
+	return nil
+}
+
+// worker processes images from the jobs channel and sends results to the results channel
+func worker(id int, jobs <-chan string, results chan<- ProcessingResult, outputPath string, config ProcessingConfig, wg *sync.WaitGroup, bar *progressbar.ProgressBar) {
+	defer wg.Done()
+
+	for filePath := range jobs {
+		start := time.Now()
+		err := processImage(filePath, outputPath, config)
+
+		result := ProcessingResult{
+			FilePath:  filePath,
+			Success:   err == nil,
+			Error:     err,
+			StartTime: start,
+			Duration:  time.Since(start),
+		}
+
+		results <- result
+		bar.Add(1) // Thread-safe progress update
+
+		// Log errors immediately for visibility
+		if err != nil {
+			log.Printf("Error processing %s: %v", filepath.Base(filePath), err)
+		}
+	}
+}
+
+// processBatchConcurrent processes multiple images concurrently using a worker pool
+func processBatchConcurrent(files []string, outputPath string, config ProcessingConfig, numWorkers int) *ProcessingStats {
+	// Create channels
+	jobs := make(chan string, len(files))
+	results := make(chan ProcessingResult, len(files))
+
+	// Create progress bar
+	bar := progressbar.NewOptions(len(files),
+		progressbar.OptionSetDescription("Processing images"),
+		progressbar.OptionShowCount(),
+		progressbar.OptionShowIts(),
+		progressbar.OptionSetWidth(40),
+		progressbar.OptionSetTheme(progressbar.Theme{
+			Saucer:        "=",
+			SaucerPadding: "-",
+			BarStart:      "[",
+			BarEnd:        "]",
+		}),
+	)
+
+	// Initialize stats
+	stats := &ProcessingStats{
+		Total:     len(files),
+		StartTime: time.Now(),
+	}
+
+	// Start worker goroutines
+	var wg sync.WaitGroup
+	for i := 0; i < numWorkers; i++ {
+		wg.Add(1)
+		go worker(i, jobs, results, outputPath, config, &wg, bar)
+	}
+
+	// Send all jobs to workers
+	for _, file := range files {
+		jobs <- file
+	}
+	close(jobs)
+
+	// Collect results in background goroutine
+	go func() {
+		for range files {
+			result := <-results
+			if result.Success {
+				stats.RecordSuccess()
+			} else {
+				stats.RecordFailure()
+			}
+		}
+		close(results)
+	}()
+
+	// Wait for all workers to complete
+	wg.Wait()
+
+	// Wait briefly for result collection to finish
+	for len(results) > 0 {
+		time.Sleep(10 * time.Millisecond)
+	}
+
+	stats.EndTime = time.Now()
+	return stats
 }
 
 func main() {
@@ -916,6 +1061,8 @@ func main() {
 	flag.StringVar(outputFormat, "f", "jpeg", "Output image format (shorthand)")
 	configFile := flag.String("config", "", "Path to YAML config file")
 	preset := flag.String("preset", "", "Named preset from ~/.config/framer/presets/ (e.g., 'vintage', 'instagram', 'minimal')")
+	workers := flag.Int("workers", runtime.NumCPU(), fmt.Sprintf("Number of concurrent workers for batch processing (default: %d)", runtime.NumCPU()))
+	flag.IntVar(workers, "w", runtime.NumCPU(), "Number of concurrent workers (shorthand)")
 	listFonts := flag.Bool("list-fonts", false, "List available fonts and exit")
 
 	flag.Parse()
@@ -1111,11 +1258,22 @@ func main() {
 
 		// Now process the collected files
 		fmt.Printf("Found %d JPEG file(s) to process\n", len(filesToProcess))
-		for _, filePath := range filesToProcess {
-			processImage(filePath, absOutputPath, config)
+		if len(filesToProcess) == 0 {
+			return
 		}
+
+		// Process with worker pool and progress bar
+		stats := processBatchConcurrent(filesToProcess, absOutputPath, config, *workers)
+
+		// Print summary
+		fmt.Println() // Newline after progress bar
+		stats.PrintSummary()
 	} else {
 		// Single file
-		processImage(absInputPath, absOutputPath, config)
+		err := processImage(absInputPath, absOutputPath, config)
+		if err != nil {
+			log.Fatalf("Error processing image: %v", err)
+		}
+		fmt.Println("Processing completed successfully")
 	}
 }
