@@ -40,7 +40,33 @@ type ProcessingConfig struct {
 	FontSize         string
 	FontColor        string
 	InstagramMaxSize int
+	JPEGQuality      int
 }
+
+// Constants for image processing
+const (
+	// Instagram frame dimensions (4:5 aspect ratio)
+	InstagramFrameWidth  = 1080
+	InstagramFrameHeight = 1350
+
+	// Font size calculation thresholds and scaling factors
+	SmallBorderThreshold  = 40
+	MediumBorderThreshold = 80
+	SmallFontScale        = 0.5
+	MediumFontScale       = 0.7
+	LargeFontScale        = 0.9
+
+	// Image encoding
+	DefaultJPEGQuality = 100
+	MinJPEGQuality     = 60
+	MaxJPEGQuality     = 100
+
+	// Font rendering
+	DefaultDPI = 72
+
+	// Color values
+	AlphaOpaque = 255
+)
 
 // Helper functions
 func hexToRGB(hexColor string) (color.RGBA, error) {
@@ -62,7 +88,7 @@ func hexToRGB(hexColor string) (color.RGBA, error) {
 		return color.RGBA{}, err
 	}
 
-	return color.RGBA{R: uint8(r), G: uint8(g), B: uint8(b), A: 255}, nil
+	return color.RGBA{R: uint8(r), G: uint8(g), B: uint8(b), A: AlphaOpaque}, nil
 }
 
 func getExifDate(file *os.File) (time.Time, error) {
@@ -142,17 +168,17 @@ func calculateFontSize(fontSizeStr string, borderThickness int) (int, error) {
 	}
 
 	// Auto-calculate based on border thickness
-	if borderThickness < 40 {
-		return int(float64(borderThickness) * 0.5), nil
-	} else if borderThickness < 80 {
-		return int(float64(borderThickness) * 0.7), nil
+	if borderThickness < SmallBorderThreshold {
+		return int(float64(borderThickness) * SmallFontScale), nil
+	} else if borderThickness < MediumBorderThreshold {
+		return int(float64(borderThickness) * MediumFontScale), nil
 	}
-	return int(float64(borderThickness) * 0.9), nil
+	return int(float64(borderThickness) * LargeFontScale), nil
 }
 
 func createInstagramFrame(img image.Image, maxSize int, borderThickness int, borderColor color.RGBA, padding int) (image.Image, image.Point, image.Point) {
 	// Fixed dimensions for Instagram (4:5 ratio)
-	frameW, frameH := 1080, 1350
+	frameW, frameH := InstagramFrameWidth, InstagramFrameHeight
 
 	// Calculate scaling factor to fit image within max_size
 	origW, origH := img.Bounds().Dx(), img.Bounds().Dy()
@@ -173,7 +199,7 @@ func createInstagramFrame(img image.Image, maxSize int, borderThickness int, bor
 		paddedW := newW + 2*padding
 		paddedH := newH + 2*padding
 		paddedImg := image.NewRGBA(image.Rect(0, 0, paddedW, paddedH))
-		draw.Draw(paddedImg, paddedImg.Bounds(), &image.Uniform{color.RGBA{255, 255, 255, 255}}, image.Point{}, draw.Src)
+		draw.Draw(paddedImg, paddedImg.Bounds(), &image.Uniform{color.RGBA{AlphaOpaque, AlphaOpaque, AlphaOpaque, AlphaOpaque}}, image.Point{}, draw.Src)
 		draw.Draw(paddedImg, image.Rect(padding, padding, padding+newW, padding+newH), resizedImg, image.Point{}, draw.Src)
 
 		// Convert to Image interface to avoid type issues
@@ -184,7 +210,7 @@ func createInstagramFrame(img image.Image, maxSize int, borderThickness int, bor
 
 	// Create white background
 	newImage := image.NewRGBA(image.Rect(0, 0, frameW, frameH))
-	draw.Draw(newImage, newImage.Bounds(), &image.Uniform{color.RGBA{255, 255, 255, 255}}, image.Point{}, draw.Src)
+	draw.Draw(newImage, newImage.Bounds(), &image.Uniform{color.RGBA{AlphaOpaque, AlphaOpaque, AlphaOpaque, AlphaOpaque}}, image.Point{}, draw.Src)
 
 	// Create a new image with border
 	borderedW := resizedImg.Bounds().Dx() + 2*borderThickness
@@ -224,7 +250,7 @@ func createSolidBorder(img image.Image, borderThickness int, borderColor color.R
 		finalW := borderedW + 2*padding
 		finalH := borderedH + 2*padding
 		finalImg := image.NewRGBA(image.Rect(0, 0, finalW, finalH))
-		draw.Draw(finalImg, finalImg.Bounds(), &image.Uniform{color.RGBA{255, 255, 255, 255}}, image.Point{}, draw.Src)
+		draw.Draw(finalImg, finalImg.Bounds(), &image.Uniform{color.RGBA{AlphaOpaque, AlphaOpaque, AlphaOpaque, AlphaOpaque}}, image.Point{}, draw.Src)
 		draw.Draw(finalImg, image.Rect(padding, padding, padding+borderedW, padding+borderedH),
 			borderedImg, image.Point{}, draw.Src)
 		return finalImg
@@ -299,7 +325,7 @@ func addCaption(newImage *image.RGBA, captionText string, fontSize int, fontColo
 
 	// Create FreeType context
 	c := freetype.NewContext()
-	c.SetDPI(72)
+	c.SetDPI(DefaultDPI)
 	c.SetFont(font)
 	c.SetFontSize(float64(fontSize))
 	c.SetClip(newImage.Bounds())
@@ -309,7 +335,7 @@ func addCaption(newImage *image.RGBA, captionText string, fontSize int, fontColo
 	// Measure text size
 	opts := truetype.Options{
 		Size: float64(fontSize),
-		DPI:  72,
+		DPI:  DefaultDPI,
 	}
 	face := truetype.NewFace(font, &opts)
 
@@ -515,8 +541,12 @@ func processImage(imagePath string, outputPath string, config ProcessingConfig) 
 	}
 	defer out.Close()
 
-	// Encode as JPEG
-	err = jpeg.Encode(out, newImage, &jpeg.Options{Quality: 100})
+	// Encode as JPEG with configured quality
+	quality := config.JPEGQuality
+	if quality == 0 {
+		quality = DefaultJPEGQuality
+	}
+	err = jpeg.Encode(out, newImage, &jpeg.Options{Quality: quality})
 	if err != nil {
 		log.Printf("Error encoding JPEG %s: %v", outFile, err)
 		return
@@ -546,6 +576,8 @@ func main() {
 	fontColor := flag.String("font-color", "#000000", "Font color in hex (default: '#000000')")
 	instagramMaxSize := flag.Int("instagram-max-size", 0, "Maximum width/height for the image in Instagram style")
 	padding := flag.String("padding", "", "Additional padding around the image in pixels")
+	quality := flag.Int("quality", 0, fmt.Sprintf("JPEG output quality (%d-%d, default: %d)", MinJPEGQuality, MaxJPEGQuality, DefaultJPEGQuality))
+	flag.IntVar(quality, "q", 0, "JPEG output quality (shorthand)")
 	listFonts := flag.Bool("list-fonts", false, "List available fonts and exit")
 
 	flag.Parse()
@@ -566,6 +598,11 @@ func main() {
 		os.Exit(1)
 	}
 
+	// Validate quality if provided
+	if *quality != 0 && (*quality < MinJPEGQuality || *quality > MaxJPEGQuality) {
+		log.Fatalf("JPEG quality must be between %d and %d", MinJPEGQuality, MaxJPEGQuality)
+	}
+
 	// Set style-specific defaults if not provided
 	config := ProcessingConfig{
 		Caption:          *caption,
@@ -577,6 +614,7 @@ func main() {
 		FontSize:         *fontSize,
 		FontColor:        *fontColor,
 		InstagramMaxSize: *instagramMaxSize,
+		JPEGQuality:      *quality,
 	}
 
 	if *borderStyle == "instagram" {
