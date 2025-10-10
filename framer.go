@@ -7,6 +7,7 @@ import (
 	"image/color"
 	"image/draw"
 	"image/jpeg"
+	"image/png"
 	"io/fs"
 	"log"
 	"os"
@@ -41,6 +42,7 @@ type ProcessingConfig struct {
 	FontColor        string
 	InstagramMaxSize int
 	JPEGQuality      int
+	OutputFormat     string
 }
 
 // Constants for image processing
@@ -531,7 +533,17 @@ func processImage(imagePath string, outputPath string, config ProcessingConfig) 
 	if strings.ToLower(config.BorderStyle) != "instagram" {
 		suffix = "_solid"
 	}
-	outFile := filepath.Join(outputPath, fmt.Sprintf("%s%s.jpg", name, suffix))
+
+	// Determine output format and extension
+	outputFormat := strings.ToLower(config.OutputFormat)
+	if outputFormat == "" {
+		outputFormat = "jpeg"
+	}
+	outputExt := ".jpg"
+	if outputFormat == "png" {
+		outputExt = ".png"
+	}
+	outFile := filepath.Join(outputPath, fmt.Sprintf("%s%s%s", name, suffix, outputExt))
 
 	// Create output file
 	out, err := os.Create(outFile)
@@ -541,15 +553,35 @@ func processImage(imagePath string, outputPath string, config ProcessingConfig) 
 	}
 	defer out.Close()
 
-	// Encode as JPEG with configured quality
-	quality := config.JPEGQuality
-	if quality == 0 {
-		quality = DefaultJPEGQuality
-	}
-	err = jpeg.Encode(out, newImage, &jpeg.Options{Quality: quality})
-	if err != nil {
-		log.Printf("Error encoding JPEG %s: %v", outFile, err)
-		return
+	// Encode in the appropriate format
+	switch outputFormat {
+	case "png":
+		err = png.Encode(out, newImage)
+		if err != nil {
+			log.Printf("Error encoding PNG %s: %v", outFile, err)
+			return
+		}
+	case "jpeg", "jpg":
+		quality := config.JPEGQuality
+		if quality == 0 {
+			quality = DefaultJPEGQuality
+		}
+		err = jpeg.Encode(out, newImage, &jpeg.Options{Quality: quality})
+		if err != nil {
+			log.Printf("Error encoding JPEG %s: %v", outFile, err)
+			return
+		}
+	default:
+		log.Printf("Unknown output format %q. Using JPEG.", config.OutputFormat)
+		quality := config.JPEGQuality
+		if quality == 0 {
+			quality = DefaultJPEGQuality
+		}
+		err = jpeg.Encode(out, newImage, &jpeg.Options{Quality: quality})
+		if err != nil {
+			log.Printf("Error encoding JPEG %s: %v", outFile, err)
+			return
+		}
 	}
 
 	fmt.Printf("Processed '%s' -> '%s'\n", imagePath, outFile)
@@ -578,6 +610,8 @@ func main() {
 	padding := flag.String("padding", "", "Additional padding around the image in pixels")
 	quality := flag.Int("quality", 0, fmt.Sprintf("JPEG output quality (%d-%d, default: %d)", MinJPEGQuality, MaxJPEGQuality, DefaultJPEGQuality))
 	flag.IntVar(quality, "q", 0, "JPEG output quality (shorthand)")
+	outputFormat := flag.String("output-format", "jpeg", "Output image format: 'jpeg' or 'png' (default: 'jpeg')")
+	flag.StringVar(outputFormat, "f", "jpeg", "Output image format (shorthand)")
 	listFonts := flag.Bool("list-fonts", false, "List available fonts and exit")
 
 	flag.Parse()
@@ -603,6 +637,12 @@ func main() {
 		log.Fatalf("JPEG quality must be between %d and %d", MinJPEGQuality, MaxJPEGQuality)
 	}
 
+	// Validate output format
+	validFormats := map[string]bool{"jpeg": true, "jpg": true, "png": true}
+	if !validFormats[strings.ToLower(*outputFormat)] {
+		log.Fatalf("Invalid output format %q. Supported formats: jpeg, jpg, png", *outputFormat)
+	}
+
 	// Set style-specific defaults if not provided
 	config := ProcessingConfig{
 		Caption:          *caption,
@@ -615,6 +655,7 @@ func main() {
 		FontColor:        *fontColor,
 		InstagramMaxSize: *instagramMaxSize,
 		JPEGQuality:      *quality,
+		OutputFormat:     *outputFormat,
 	}
 
 	if *borderStyle == "instagram" {
