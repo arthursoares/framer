@@ -33,6 +33,8 @@ var availableFonts = []string{
 // ProcessingConfig holds all configuration options for image processing
 type ProcessingConfig struct {
 	Caption          string
+	CaptionTemplate  string
+	NoCaption        bool
 	BorderThickness  string
 	Padding          string
 	BorderStyle      string
@@ -43,6 +45,17 @@ type ProcessingConfig struct {
 	InstagramMaxSize int
 	JPEGQuality      int
 	OutputFormat     string
+}
+
+// ExifData holds extracted EXIF metadata
+type ExifData struct {
+	DateTime     time.Time
+	Camera       string
+	Lens         string
+	ISO          string
+	Aperture     string
+	ShutterSpeed string
+	FocalLength  string
 }
 
 // Constants for image processing
@@ -93,26 +106,87 @@ func hexToRGB(hexColor string) (color.RGBA, error) {
 	return color.RGBA{R: uint8(r), G: uint8(g), B: uint8(b), A: AlphaOpaque}, nil
 }
 
-func getExifDate(file *os.File) (time.Time, error) {
+// getExifData extracts comprehensive EXIF metadata from an image file
+func getExifData(file *os.File) (*ExifData, error) {
 	// Reset file pointer to the beginning
 	_, err := file.Seek(0, 0)
 	if err != nil {
-		return time.Time{}, err
+		return nil, err
 	}
 
 	// Decode exif
 	x, err := exif.Decode(file)
 	if err != nil {
-		return time.Time{}, err
+		return nil, err
 	}
 
-	// Get DateTimeOriginal
-	dt, err := x.DateTime()
+	data := &ExifData{}
+
+	// Get DateTime
+	if dt, err := x.DateTime(); err == nil {
+		data.DateTime = dt
+	}
+
+	// Get Camera (Make + Model)
+	make, _ := x.Get(exif.Make)
+	model, _ := x.Get(exif.Model)
+	if make != nil && model != nil {
+		makeStr, _ := make.StringVal()
+		modelStr, _ := model.StringVal()
+		data.Camera = strings.TrimSpace(makeStr + " " + modelStr)
+	} else if model != nil {
+		data.Camera, _ = model.StringVal()
+	}
+
+	// Get Lens
+	if lens, err := x.Get(exif.LensModel); err == nil {
+		data.Lens, _ = lens.StringVal()
+	}
+
+	// Get ISO
+	if iso, err := x.Get(exif.ISOSpeedRatings); err == nil {
+		if isoVal, err := iso.Int(0); err == nil {
+			data.ISO = fmt.Sprintf("ISO %d", isoVal)
+		}
+	}
+
+	// Get Aperture (F-Number)
+	if fnumber, err := x.Get(exif.FNumber); err == nil {
+		if num, denom, err := fnumber.Rat2(0); err == nil && denom != 0 {
+			fstop := float64(num) / float64(denom)
+			data.Aperture = fmt.Sprintf("f/%.1f", fstop)
+		}
+	}
+
+	// Get Shutter Speed
+	if expTime, err := x.Get(exif.ExposureTime); err == nil {
+		if num, denom, err := expTime.Rat2(0); err == nil && denom != 0 {
+			if num < denom {
+				data.ShutterSpeed = fmt.Sprintf("1/%d", denom/num)
+			} else {
+				data.ShutterSpeed = fmt.Sprintf("%.1fs", float64(num)/float64(denom))
+			}
+		}
+	}
+
+	// Get Focal Length
+	if focal, err := x.Get(exif.FocalLength); err == nil {
+		if num, denom, err := focal.Rat2(0); err == nil && denom != 0 {
+			fl := float64(num) / float64(denom)
+			data.FocalLength = fmt.Sprintf("%.0fmm", fl)
+		}
+	}
+
+	return data, nil
+}
+
+// Legacy function for backwards compatibility
+func getExifDate(file *os.File) (time.Time, error) {
+	data, err := getExifData(file)
 	if err != nil {
 		return time.Time{}, err
 	}
-
-	return dt, nil
+	return data.DateTime, nil
 }
 
 func generateCaptionFromDate(dt time.Time) string {
@@ -124,18 +198,72 @@ func generateCaptionFromDate(dt time.Time) string {
 	return fmt.Sprintf(" - %s '%s -", strings.ToUpper(month), year)
 }
 
+// applyTemplate replaces {{field}} placeholders with EXIF data values
+func applyTemplate(template string, data *ExifData) string {
+	result := template
+
+	// Date/time fields
+	if !data.DateTime.IsZero() {
+		result = strings.ReplaceAll(result, "{{year}}", data.DateTime.Format("2006"))
+		result = strings.ReplaceAll(result, "{{year2}}", data.DateTime.Format("06"))
+		result = strings.ReplaceAll(result, "{{month}}", data.DateTime.Format("January"))
+		result = strings.ReplaceAll(result, "{{mon}}", strings.ToUpper(data.DateTime.Format("Jan")))
+		result = strings.ReplaceAll(result, "{{day}}", data.DateTime.Format("02"))
+		result = strings.ReplaceAll(result, "{{date}}", data.DateTime.Format("2006-01-02"))
+	} else {
+		result = strings.ReplaceAll(result, "{{year}}", "")
+		result = strings.ReplaceAll(result, "{{year2}}", "")
+		result = strings.ReplaceAll(result, "{{month}}", "")
+		result = strings.ReplaceAll(result, "{{mon}}", "")
+		result = strings.ReplaceAll(result, "{{day}}", "")
+		result = strings.ReplaceAll(result, "{{date}}", "")
+	}
+
+	// Camera/lens fields
+	result = strings.ReplaceAll(result, "{{camera}}", data.Camera)
+	result = strings.ReplaceAll(result, "{{lens}}", data.Lens)
+
+	// Exposure fields
+	result = strings.ReplaceAll(result, "{{iso}}", data.ISO)
+	result = strings.ReplaceAll(result, "{{aperture}}", data.Aperture)
+	result = strings.ReplaceAll(result, "{{shutter}}", data.ShutterSpeed)
+	result = strings.ReplaceAll(result, "{{focal}}", data.FocalLength)
+
+	// Clean up extra spaces from empty fields
+	result = strings.Join(strings.Fields(result), " ")
+
+	return strings.TrimSpace(result)
+}
+
 // determineCaption extracts or generates caption text from config and file EXIF data
 func determineCaption(file *os.File, config ProcessingConfig) string {
+	// If no caption requested, return empty
+	if config.NoCaption {
+		return ""
+	}
+
+	// If explicit caption text provided, use it
 	if config.Caption != "" {
 		return config.Caption
 	}
 
-	dt, err := getExifDate(file)
+	// Extract EXIF data
+	exifData, err := getExifData(file)
 	if err != nil {
 		// Use placeholder if EXIF data not available
+		if config.CaptionTemplate != "" {
+			return ""  // Don't show caption if template requires EXIF but none available
+		}
 		return " - --- -"
 	}
-	return generateCaptionFromDate(dt)
+
+	// If template provided, apply it
+	if config.CaptionTemplate != "" {
+		return applyTemplate(config.CaptionTemplate, exifData)
+	}
+
+	// Default: use vintage date format
+	return generateCaptionFromDate(exifData.DateTime)
 }
 
 // calculateBorderThickness converts border thickness string to pixels
@@ -603,6 +731,8 @@ func main() {
 
 	borderColor := flag.String("border-color", "#000000", "Border color in hex (default: '#000000')")
 	caption := flag.String("caption", "", "Override the caption text (if empty, EXIF date is used)")
+	captionTemplate := flag.String("caption-template", "", "Caption template with {{field}} placeholders (e.g., '{{camera}} • {{iso}} {{aperture}} {{shutter}}')")
+	noCaption := flag.Bool("no-caption", false, "Disable caption entirely")
 	fontName := flag.String("font-name", "", "Name of the font to use for captions")
 	fontSize := flag.String("font-size", "", "Font size in pixels")
 	fontColor := flag.String("font-color", "#000000", "Font color in hex (default: '#000000')")
@@ -646,6 +776,8 @@ func main() {
 	// Set style-specific defaults if not provided
 	config := ProcessingConfig{
 		Caption:          *caption,
+		CaptionTemplate:  *captionTemplate,
+		NoCaption:        *noCaption,
 		BorderThickness:  *borderThickness,
 		Padding:          *padding,
 		BorderStyle:      *borderStyle,
