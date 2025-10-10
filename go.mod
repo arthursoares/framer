@@ -9,4 +9,7 @@ require (
 	golang.org/x/image v0.15.0
 )
 
-require github.com/go-bindata/go-bindata v3.1.2+incompatible // indirect
+require (
+	github.com/go-bindata/go-bindata v3.1.2+incompatible // indirect
+	gopkg.in/yaml.v3 v3.0.1 // indirect
+)

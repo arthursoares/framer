@@ -21,6 +21,7 @@ import (
 	"github.com/golang/freetype/truetype"
 	"github.com/rwcarlsen/goexif/exif"
 	"golang.org/x/image/math/fixed"
+	"gopkg.in/yaml.v3"
 )
 
 // Available fonts embedded in the binary
@@ -56,6 +57,22 @@ type ExifData struct {
 	Aperture     string
 	ShutterSpeed string
 	FocalLength  string
+}
+
+// ConfigFile represents a YAML configuration file
+type ConfigFile struct {
+	Caption         string `yaml:"caption,omitempty"`
+	CaptionTemplate string `yaml:"caption_template,omitempty"`
+	NoCaption       bool   `yaml:"no_caption,omitempty"`
+	BorderStyle     string `yaml:"border_style,omitempty"`
+	BorderThickness string `yaml:"border_thickness,omitempty"`
+	BorderColor     string `yaml:"border_color,omitempty"`
+	Padding         string `yaml:"padding,omitempty"`
+	FontName        string `yaml:"font_name,omitempty"`
+	FontSize        string `yaml:"font_size,omitempty"`
+	FontColor       string `yaml:"font_color,omitempty"`
+	JPEGQuality     int    `yaml:"jpeg_quality,omitempty"`
+	OutputFormat    string `yaml:"output_format,omitempty"`
 }
 
 // Constants for image processing
@@ -104,6 +121,161 @@ func hexToRGB(hexColor string) (color.RGBA, error) {
 	}
 
 	return color.RGBA{R: uint8(r), G: uint8(g), B: uint8(b), A: AlphaOpaque}, nil
+}
+
+// Config file management functions
+
+// loadConfigFile reads and parses a YAML config file
+func loadConfigFile(path string) (*ConfigFile, error) {
+	data, err := os.ReadFile(path)
+	if err != nil {
+		return nil, err
+	}
+
+	var config ConfigFile
+	if err := yaml.Unmarshal(data, &config); err != nil {
+		return nil, fmt.Errorf("parsing YAML: %w", err)
+	}
+
+	return &config, nil
+}
+
+// getConfigDir returns the user's config directory for framer
+func getConfigDir() (string, error) {
+	homeDir, err := os.UserHomeDir()
+	if err != nil {
+		return "", err
+	}
+	return filepath.Join(homeDir, ".config", "framer"), nil
+}
+
+// ensureConfigDir creates the config directory and presets subdirectory if they don't exist
+func ensureConfigDir() error {
+	configDir, err := getConfigDir()
+	if err != nil {
+		return err
+	}
+
+	presetsDir := filepath.Join(configDir, "presets")
+	return os.MkdirAll(presetsDir, 0755)
+}
+
+// initializeDefaultPresets creates default preset files if they don't exist
+func initializeDefaultPresets() error {
+	configDir, err := getConfigDir()
+	if err != nil {
+		return err
+	}
+
+	presetsDir := filepath.Join(configDir, "presets")
+
+	presets := map[string]string{
+		"vintage.yaml": `# Vintage film style with date stamp
+border_style: solid
+border_thickness: "20"
+border_color: "#000000"
+padding: "150"
+font_name: CourierPrime-Bold
+font_size: "50"
+font_color: "#000000"
+# Uses default vintage date format: " - MON 'YY -"
+`,
+		"instagram.yaml": `# Instagram 4:5 frame with date
+border_style: instagram
+border_thickness: "5"
+border_color: "#000000"
+padding: "0"
+font_size: "20"
+caption_template: "{{mon}} '{{year2}}"
+`,
+		"minimal.yaml": `# Minimal thin border, no caption
+border_style: solid
+border_thickness: "10"
+border_color: "#FFFFFF"
+padding: "0"
+no_caption: true
+`,
+	}
+
+	for filename, content := range presets {
+		path := filepath.Join(presetsDir, filename)
+		// Only create if doesn't exist
+		if _, err := os.Stat(path); os.IsNotExist(err) {
+			if err := os.WriteFile(path, []byte(content), 0644); err != nil {
+				return fmt.Errorf("writing preset %s: %w", filename, err)
+			}
+		}
+	}
+
+	return nil
+}
+
+// validateFontName checks if font exists in embedded fonts, returns default if not
+func validateFontName(fontName string) string {
+	if fontName == "" {
+		return availableFonts[0]
+	}
+
+	for _, available := range availableFonts {
+		if fontName == available {
+			return fontName
+		}
+	}
+
+	log.Printf("Warning: Font %q not found in embedded fonts, using default %q", fontName, availableFonts[0])
+	return availableFonts[0]
+}
+
+// mergeConfig merges config file with CLI flags (CLI flags take precedence)
+func mergeConfig(configFile *ConfigFile, cliConfig ProcessingConfig) ProcessingConfig {
+	result := cliConfig
+
+	// Only use config file values if CLI didn't provide them
+	if result.Caption == "" && configFile.Caption != "" {
+		result.Caption = configFile.Caption
+	}
+	if result.CaptionTemplate == "" && configFile.CaptionTemplate != "" {
+		result.CaptionTemplate = configFile.CaptionTemplate
+	}
+	if !result.NoCaption && configFile.NoCaption {
+		result.NoCaption = configFile.NoCaption
+	}
+	if result.BorderStyle == "solid" && configFile.BorderStyle != "" {
+		// "solid" is the default, so if it's still solid, use config
+		result.BorderStyle = configFile.BorderStyle
+	}
+	if result.BorderThickness == "" && configFile.BorderThickness != "" {
+		result.BorderThickness = configFile.BorderThickness
+	}
+	if result.BorderColor == "#000000" && configFile.BorderColor != "" {
+		// "#000000" is the default
+		result.BorderColor = configFile.BorderColor
+	}
+	if result.Padding == "" && configFile.Padding != "" {
+		result.Padding = configFile.Padding
+	}
+	if result.FontName == "" && configFile.FontName != "" {
+		result.FontName = validateFontName(configFile.FontName)
+	}
+	if result.FontSize == "" && configFile.FontSize != "" {
+		result.FontSize = configFile.FontSize
+	}
+	if result.FontColor == "#000000" && configFile.FontColor != "" {
+		result.FontColor = configFile.FontColor
+	}
+	if result.JPEGQuality == 0 && configFile.JPEGQuality != 0 {
+		result.JPEGQuality = configFile.JPEGQuality
+	}
+	if result.OutputFormat == "jpeg" && configFile.OutputFormat != "" {
+		result.OutputFormat = configFile.OutputFormat
+	}
+
+	// Validate font name
+	if result.FontName != "" {
+		result.FontName = validateFontName(result.FontName)
+	}
+
+	return result
 }
 
 // getExifData extracts comprehensive EXIF metadata from an image file
@@ -742,9 +914,67 @@ func main() {
 	flag.IntVar(quality, "q", 0, "JPEG output quality (shorthand)")
 	outputFormat := flag.String("output-format", "jpeg", "Output image format: 'jpeg' or 'png' (default: 'jpeg')")
 	flag.StringVar(outputFormat, "f", "jpeg", "Output image format (shorthand)")
+	configFile := flag.String("config", "", "Path to YAML config file")
+	preset := flag.String("preset", "", "Named preset from ~/.config/framer/presets/ (e.g., 'vintage', 'instagram', 'minimal')")
 	listFonts := flag.Bool("list-fonts", false, "List available fonts and exit")
 
 	flag.Parse()
+
+	// Initialize config directory and default presets
+	if err := ensureConfigDir(); err != nil {
+		log.Printf("Warning: Could not create config directory: %v", err)
+	} else {
+		if err := initializeDefaultPresets(); err != nil {
+			log.Printf("Warning: Could not initialize default presets: %v", err)
+		}
+	}
+
+	// Load config file based on priority order
+	var loadedConfig *ConfigFile
+
+	// Priority 1: --config flag
+	if *configFile != "" {
+		if cfg, err := loadConfigFile(*configFile); err == nil {
+			loadedConfig = cfg
+			log.Printf("Loaded config from: %s", *configFile)
+		} else {
+			log.Printf("Warning: Could not load config file %s: %v", *configFile, err)
+		}
+	}
+
+	// Priority 2: --preset flag
+	if loadedConfig == nil && *preset != "" {
+		configDir, err := getConfigDir()
+		if err == nil {
+			presetPath := filepath.Join(configDir, "presets", *preset+".yaml")
+			if cfg, err := loadConfigFile(presetPath); err == nil {
+				loadedConfig = cfg
+				log.Printf("Loaded preset: %s", *preset)
+			} else {
+				log.Printf("Warning: Could not load preset %s: %v", *preset, err)
+			}
+		}
+	}
+
+	// Priority 3: ./.framer.yaml in current directory
+	if loadedConfig == nil {
+		if cfg, err := loadConfigFile(".framer.yaml"); err == nil {
+			loadedConfig = cfg
+			log.Printf("Loaded config from: .framer.yaml")
+		}
+	}
+
+	// Priority 4: ~/.config/framer/default.yaml
+	if loadedConfig == nil {
+		configDir, err := getConfigDir()
+		if err == nil {
+			defaultPath := filepath.Join(configDir, "default.yaml")
+			if cfg, err := loadConfigFile(defaultPath); err == nil {
+				loadedConfig = cfg
+				log.Printf("Loaded default config from: %s", defaultPath)
+			}
+		}
+	}
 
 	// Check if user wants to list available fonts
 	if *listFonts {
@@ -773,7 +1003,7 @@ func main() {
 		log.Fatalf("Invalid output format %q. Supported formats: jpeg, jpg, png", *outputFormat)
 	}
 
-	// Set style-specific defaults if not provided
+	// Build initial config from CLI flags
 	config := ProcessingConfig{
 		Caption:          *caption,
 		CaptionTemplate:  *captionTemplate,
@@ -790,7 +1020,13 @@ func main() {
 		OutputFormat:     *outputFormat,
 	}
 
-	if *borderStyle == "instagram" {
+	// Merge with loaded config file (if any) - CLI flags take precedence
+	if loadedConfig != nil {
+		config = mergeConfig(loadedConfig, config)
+	}
+
+	// Set style-specific defaults if not provided
+	if config.BorderStyle == "instagram" {
 		if config.BorderThickness == "" {
 			config.BorderThickness = "5"
 		}
