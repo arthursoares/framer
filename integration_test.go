@@ -100,7 +100,7 @@ func TestProcessImageEndToEnd(t *testing.T) {
 		}
 
 		bounds := outputImg.Bounds()
-		expectedWidth := 800 + 2*50  // Original + 2 * border
+		expectedWidth := 800 + 2*50 // Original + 2 * border
 		expectedHeight := 600 + 2*50
 		if bounds.Dx() != expectedWidth || bounds.Dy() != expectedHeight {
 			t.Errorf("Expected dimensions %dx%d, got %dx%d",
@@ -291,7 +291,7 @@ func TestProcessImageEndToEnd(t *testing.T) {
 		}
 
 		bounds := outputImg.Bounds()
-		expectedWidth := 1000 + 2*40  // 5% of 800 = 40
+		expectedWidth := 1000 + 2*40 // 5% of 800 = 40
 		expectedHeight := 800 + 2*40
 		if bounds.Dx() != expectedWidth || bounds.Dy() != expectedHeight {
 			t.Errorf("Expected dimensions %dx%d, got %dx%d",
