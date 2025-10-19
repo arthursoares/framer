@@ -660,15 +660,9 @@ func createPrint10x15Frame(img image.Image, outerPadding int, backgroundColor co
 		origW, origH = origH, origW // Swap dimensions after rotation
 	}
 
-	// Calculate available space after outer padding and caption reservation
+	// Calculate available space after outer padding (caption will overlay bottom padding)
 	availableW := frameW - 2*outerPadding
-	captionSpace := 0
-	if hasCaption {
-		// Reserve space for caption: font height + caption padding
-		// Use fontSize * 1.3 as estimate (font metrics are typically ~130% of point size)
-		captionSpace = int(float64(fontSize)*1.3) + captionPadding
-	}
-	availableH := frameH - 2*outerPadding - captionSpace
+	availableH := frameH - 2*outerPadding
 
 	// Calculate scaling factor to fit image within available space (maintain aspect ratio)
 	scaleW := float64(availableW) / float64(origW)
@@ -687,9 +681,10 @@ func createPrint10x15Frame(img image.Image, outerPadding int, backgroundColor co
 	finalImg := image.NewRGBA(image.Rect(0, 0, frameW, frameH))
 	draw.Draw(finalImg, finalImg.Bounds(), &image.Uniform{backgroundColor}, image.Point{}, draw.Src)
 
-	// Calculate position: center horizontally, align to top with outer padding
+	// Calculate position: center horizontally and vertically
 	x := (frameW - newW) / 2
-	y := outerPadding // Position at top, leaving room for caption at bottom
+	// Center image vertically for equal top/bottom spacing (caption overlays bottom)
+	y := (frameH - newH) / 2
 
 	// Draw the resized image onto the background
 	draw.Draw(finalImg, image.Rect(x, y, x+newW, y+newH), resizedImg, image.Point{}, draw.Src)
