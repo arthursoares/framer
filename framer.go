@@ -8,7 +8,6 @@ import (
 	"image/draw"
 	"image/jpeg"
 	"image/png"
-	"io/fs"
 	"log"
 	"os"
 	"path/filepath"
@@ -1394,22 +1393,24 @@ func main() {
 			log.Printf("This may cause nested output directories. Collecting files before processing...")
 		}
 
-		// Collect all JPEG files first to avoid processing newly created files
+		// Collect all JPEG files in the root directory only (non-recursive)
 		var filesToProcess []string
-		err := filepath.WalkDir(absInputPath, func(path string, d fs.DirEntry, err error) error {
-			if err != nil {
-				return err
-			}
-			if !d.IsDir() {
-				ext := strings.ToLower(filepath.Ext(path))
-				if ext == ".jpg" || ext == ".jpeg" {
-					filesToProcess = append(filesToProcess, path)
-				}
-			}
-			return nil
-		})
+		entries, err := os.ReadDir(absInputPath)
 		if err != nil {
-			log.Fatalf("Error walking directory: %v", err)
+			log.Fatalf("Error reading directory: %v", err)
+		}
+
+		for _, entry := range entries {
+			// Skip subdirectories
+			if entry.IsDir() {
+				continue
+			}
+			// Check for JPEG files
+			ext := strings.ToLower(filepath.Ext(entry.Name()))
+			if ext == ".jpg" || ext == ".jpeg" {
+				fullPath := filepath.Join(absInputPath, entry.Name())
+				filesToProcess = append(filesToProcess, fullPath)
+			}
 		}
 
 		// Now process the collected files
