@@ -31,3 +31,6 @@ go.work
 
 # Output folders
 output/
+# Test output directories
+test_output/
+test_results.txt

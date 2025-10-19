@@ -43,12 +43,15 @@ type ProcessingConfig struct {
 	Padding          string
 	BorderStyle      string
 	BorderColor      string
+	BackgroundColor  string
 	FontName         string
 	FontSize         string
 	FontColor        string
 	InstagramMaxSize int
 	JPEGQuality      int
 	OutputFormat     string
+	OuterPadding     string
+	CaptionPadding   string
 }
 
 // ExifData holds extracted EXIF metadata
@@ -70,12 +73,15 @@ type ConfigFile struct {
 	BorderStyle     string `yaml:"border_style,omitempty"`
 	BorderThickness string `yaml:"border_thickness,omitempty"`
 	BorderColor     string `yaml:"border_color,omitempty"`
+	BackgroundColor string `yaml:"background_color,omitempty"`
 	Padding         string `yaml:"padding,omitempty"`
 	FontName        string `yaml:"font_name,omitempty"`
 	FontSize        string `yaml:"font_size,omitempty"`
 	FontColor       string `yaml:"font_color,omitempty"`
 	JPEGQuality     int    `yaml:"jpeg_quality,omitempty"`
 	OutputFormat    string `yaml:"output_format,omitempty"`
+	OuterPadding    string `yaml:"outer_padding,omitempty"`
+	CaptionPadding  string `yaml:"caption_padding,omitempty"`
 }
 
 // ProcessingResult tracks the outcome of processing a single image
@@ -102,6 +108,10 @@ const (
 	// Instagram frame dimensions (4:5 aspect ratio)
 	InstagramFrameWidth  = 1080
 	InstagramFrameHeight = 1350
+
+	// Print 10x15cm dimensions at 300 DPI (horizontal orientation: 148x100mm)
+	Print10x15Width  = 1748 // 148mm at 300 DPI
+	Print10x15Height = 1181 // 100mm at 300 DPI
 
 	// Font size calculation thresholds and scaling factors
 	SmallBorderThreshold  = 40
@@ -332,6 +342,16 @@ func mergeConfig(configFile *ConfigFile, cliConfig ProcessingConfig) ProcessingC
 	}
 	if result.OutputFormat == "jpeg" && configFile.OutputFormat != "" {
 		result.OutputFormat = configFile.OutputFormat
+	}
+	if result.BackgroundColor == "#FFFFFF" && configFile.BackgroundColor != "" {
+		// "#FFFFFF" is the default
+		result.BackgroundColor = configFile.BackgroundColor
+	}
+	if result.OuterPadding == "" && configFile.OuterPadding != "" {
+		result.OuterPadding = configFile.OuterPadding
+	}
+	if result.CaptionPadding == "" && configFile.CaptionPadding != "" {
+		result.CaptionPadding = configFile.CaptionPadding
 	}
 
 	// Validate font name
@@ -625,6 +645,73 @@ func createSolidBorder(img image.Image, borderThickness int, borderColor color.R
 	return borderedImg
 }
 
+// createPrint10x15Frame creates a fixed-size 10x15cm print frame (horizontal orientation)
+// with rotation for vertical images, custom background color, and configurable padding
+func createPrint10x15Frame(img image.Image, outerPadding int, backgroundColor color.RGBA, fontSize int, captionPadding int, hasCaption bool, borderThickness int, borderColor color.RGBA) (image.Image, image.Point, image.Point) {
+	// Fixed output dimensions (always horizontal: 148mm x 100mm at 300 DPI)
+	frameW, frameH := Print10x15Width, Print10x15Height
+
+	// Check if image is vertical and rotate if needed
+	origW, origH := img.Bounds().Dx(), img.Bounds().Dy()
+	var processedImg image.Image = img
+
+	if origH > origW {
+		// Vertical image - rotate 90 degrees clockwise to make it horizontal
+		processedImg = imaging.Rotate90(img)
+		origW, origH = origH, origW // Swap dimensions after rotation
+	}
+
+	// Calculate available space after outer padding and caption reservation
+	availableW := frameW - 2*outerPadding
+	captionSpace := 0
+	if hasCaption {
+		// Reserve space for caption: font height + caption padding
+		// Use fontSize * 1.3 as estimate (font metrics are typically ~130% of point size)
+		captionSpace = int(float64(fontSize)*1.3) + captionPadding
+	}
+	availableH := frameH - 2*outerPadding - captionSpace
+
+	// Calculate scaling factor to fit image within available space (maintain aspect ratio)
+	scaleW := float64(availableW) / float64(origW)
+	scaleH := float64(availableH) / float64(origH)
+	scale := scaleW
+	if scaleH < scaleW {
+		scale = scaleH
+	}
+
+	// Resize image while maintaining aspect ratio
+	newW := int(float64(origW) * scale)
+	newH := int(float64(origH) * scale)
+	resizedImg := imaging.Resize(processedImg, newW, newH, imaging.Lanczos)
+
+	// Create background with custom color
+	finalImg := image.NewRGBA(image.Rect(0, 0, frameW, frameH))
+	draw.Draw(finalImg, finalImg.Bounds(), &image.Uniform{backgroundColor}, image.Point{}, draw.Src)
+
+	// Calculate position: center horizontally, align to top with outer padding
+	x := (frameW - newW) / 2
+	y := outerPadding // Position at top, leaving room for caption at bottom
+
+	// Draw the resized image onto the background
+	draw.Draw(finalImg, image.Rect(x, y, x+newW, y+newH), resizedImg, image.Point{}, draw.Src)
+
+	// Draw border around image if specified
+	if borderThickness > 0 {
+		// Draw border as 4 rectangles overlaying the image edges
+		// Top border
+		draw.Draw(finalImg, image.Rect(x, y, x+newW, y+borderThickness), &image.Uniform{borderColor}, image.Point{}, draw.Src)
+		// Bottom border
+		draw.Draw(finalImg, image.Rect(x, y+newH-borderThickness, x+newW, y+newH), &image.Uniform{borderColor}, image.Point{}, draw.Src)
+		// Left border
+		draw.Draw(finalImg, image.Rect(x, y, x+borderThickness, y+newH), &image.Uniform{borderColor}, image.Point{}, draw.Src)
+		// Right border
+		draw.Draw(finalImg, image.Rect(x+newW-borderThickness, y, x+newW, y+newH), &image.Uniform{borderColor}, image.Point{}, draw.Src)
+	}
+
+	// Return: final image, scaled image dimensions, position where image starts
+	return finalImg, image.Point{newW, newH}, image.Point{x, y}
+}
+
 // loadFont loads and parses a font by name from embedded data
 func loadFont(fontName string) (*truetype.Font, error) {
 	if fontName == "" {
@@ -677,13 +764,13 @@ func getAvailableFonts() []string {
 	return availableFonts
 }
 
-func addCaption(newImage *image.RGBA, captionText string, fontSize int, fontColor color.RGBA, imageSize image.Point, borderThickness int, padding int, imagePos *image.Point, fontName string) *image.RGBA {
+func addCaption(newImage *image.RGBA, captionText string, fontSize int, fontColor color.RGBA, imageSize image.Point, borderThickness int, padding int, imagePos *image.Point, fontName string, captionPadding int, borderStyle string) *image.RGBA {
 	// Load the requested font
 	font, err := loadFont(fontName)
 	if err != nil {
 		// If we can't load the font, fall back to a simpler approach
 		log.Printf("Warning: Could not load font '%s': %v. Using fallback font.", fontName, err)
-		return fallbackAddCaption(newImage, captionText, fontSize, fontColor, imageSize, borderThickness, padding, imagePos)
+		return fallbackAddCaption(newImage, captionText, fontSize, fontColor, imageSize, borderThickness, padding, imagePos, captionPadding, borderStyle)
 	}
 
 	// Calculate position
@@ -720,7 +807,12 @@ func addCaption(newImage *image.RGBA, captionText string, fontSize int, fontColo
 
 	// Calculate position
 	var x, y int
-	if imagePos != nil { // Instagram style
+	if borderStyle == "print10x15" && imagePos != nil {
+		// Print10x15 style: caption centered horizontally in frame, positioned below image
+		x = (newImage.Bounds().Dx() - approxTextWidth) / 2
+		// Position caption relative to image: imageTop + imageHeight + captionPadding + fontHeight
+		y = imagePos.Y + imgH + captionPadding + fontHeight
+	} else if imagePos != nil { // Instagram style
 		x = imagePos.X + (imgW-approxTextWidth)/2
 		y = imagePos.Y + imgH + borderThickness + fontHeight // Center in border area
 	} else { // Other styles
@@ -734,14 +826,14 @@ func addCaption(newImage *image.RGBA, captionText string, fontSize int, fontColo
 	_, err = c.DrawString(captionText, pt)
 	if err != nil {
 		log.Printf("Warning: Error drawing text: %v", err)
-		return fallbackAddCaption(newImage, captionText, fontSize, fontColor, imageSize, borderThickness, padding, imagePos)
+		return fallbackAddCaption(newImage, captionText, fontSize, fontColor, imageSize, borderThickness, padding, imagePos, captionPadding, borderStyle)
 	}
 
 	return newImage
 }
 
 // fallbackAddCaption is a simplified version that works without freetype
-func fallbackAddCaption(newImage *image.RGBA, captionText string, fontSize int, fontColor color.RGBA, imageSize image.Point, borderThickness int, padding int, imagePos *image.Point) *image.RGBA {
+func fallbackAddCaption(newImage *image.RGBA, captionText string, fontSize int, fontColor color.RGBA, imageSize image.Point, borderThickness int, padding int, imagePos *image.Point, captionPadding int, borderStyle string) *image.RGBA {
 	// Basic settings - more enhanced fallback method
 	charWidth := fontSize / 2
 	textW := len(captionText) * charWidth
@@ -750,7 +842,12 @@ func fallbackAddCaption(newImage *image.RGBA, captionText string, fontSize int, 
 
 	// Calculate position
 	var x, y int
-	if imagePos != nil { // Instagram style
+	if borderStyle == "print10x15" && imagePos != nil {
+		// Print10x15 style: caption centered horizontally in frame, positioned below image
+		x = (newImage.Bounds().Dx() - textW) / 2
+		// Position caption relative to image: imageTop + imageHeight + captionPadding + textHeight
+		y = imagePos.Y + imgH + captionPadding + textH
+	} else if imagePos != nil { // Instagram style
 		x = imagePos.X + (imgW-textW)/2
 		y = imagePos.Y + imgH + borderThickness + textH // Center in border area
 	} else { // Other styles
@@ -841,15 +938,50 @@ func processImage(imagePath string, outputPath string, config ProcessingConfig) 
 		return fmt.Errorf("invalid border color %q (use format #RRGGBB, e.g., #000000): %w", config.BorderColor, err)
 	}
 
+	// Parse background color (for print10x15 style)
+	backgroundColor, err := hexToRGB(config.BackgroundColor)
+	if err != nil {
+		return fmt.Errorf("invalid background color %q (use format #RRGGBB, e.g., #FFFFFF): %w", config.BackgroundColor, err)
+	}
+
+	// Parse outer padding (for print10x15 style)
+	outerPadding := 0
+	if config.OuterPadding != "" {
+		outerPadding, err = strconv.Atoi(config.OuterPadding)
+		if err != nil {
+			return fmt.Errorf("invalid outer padding value %q: must be a number", config.OuterPadding)
+		}
+	}
+
+	// Parse caption padding (for print10x15 style)
+	captionPadding := 0
+	if config.CaptionPadding != "" {
+		captionPadding, err = strconv.Atoi(config.CaptionPadding)
+		if err != nil {
+			return fmt.Errorf("invalid caption padding value %q: must be a number", config.CaptionPadding)
+		}
+	}
+
+	// Calculate font size early (needed for print10x15 frame creation)
+	fontSize, err := calculateFontSize(config.FontSize, borderThickness)
+	if err != nil {
+		return err
+	}
+
 	// Apply border based on style
 	var newImage image.Image
 	var resizedSize image.Point
 	var imagePos *image.Point
+	hasCaption := captionText != ""
 
 	switch strings.ToLower(config.BorderStyle) {
 	case "instagram":
 		var imgPos image.Point
 		newImage, resizedSize, imgPos = createInstagramFrame(img, config.InstagramMaxSize, borderThickness, borderColor, padding)
+		imagePos = &imgPos
+	case "print10x15":
+		var imgPos image.Point
+		newImage, resizedSize, imgPos = createPrint10x15Frame(img, outerPadding, backgroundColor, fontSize, captionPadding, hasCaption, borderThickness, borderColor)
 		imagePos = &imgPos
 	case "solid":
 		newImage = createSolidBorder(img, borderThickness, borderColor, padding)
@@ -866,12 +998,6 @@ func processImage(imagePath string, outputPath string, config ProcessingConfig) 
 		rgba := image.NewRGBA(newImage.Bounds())
 		draw.Draw(rgba, rgba.Bounds(), newImage, image.Point{}, draw.Src)
 
-		// Calculate font size
-		fontSize, err := calculateFontSize(config.FontSize, borderThickness)
-		if err != nil {
-			return err
-		}
-
 		// Parse font color
 		fontColor, err := hexToRGB(config.FontColor)
 		if err != nil {
@@ -879,16 +1005,19 @@ func processImage(imagePath string, outputPath string, config ProcessingConfig) 
 		}
 
 		// Add caption with appropriate positioning
-		newImage = addCaption(rgba, captionText, fontSize, fontColor, resizedSize, borderThickness, padding, imagePos, config.FontName)
+		newImage = addCaption(rgba, captionText, fontSize, fontColor, resizedSize, borderThickness, padding, imagePos, config.FontName, captionPadding, config.BorderStyle)
 	}
 
 	// Save the result
 	baseName := filepath.Base(imagePath)
 	ext := filepath.Ext(baseName)
 	name := strings.TrimSuffix(baseName, ext)
-	suffix := "_instagram"
-	if strings.ToLower(config.BorderStyle) != "instagram" {
-		suffix = "_solid"
+	suffix := "_solid"
+	switch strings.ToLower(config.BorderStyle) {
+	case "instagram":
+		suffix = "_instagram"
+	case "print10x15":
+		suffix = "_print10x15"
 	}
 
 	// Determine output format and extension
@@ -1043,10 +1172,14 @@ func main() {
 	borderThickness := flag.String("border-thickness", "", "Border thickness in pixels or as a percentage (e.g. '10%')")
 	flag.StringVar(borderThickness, "t", "", "Border thickness in pixels or as a percentage (shorthand)")
 
-	borderStyle := flag.String("border-style", "solid", "Border style: 'solid' or 'instagram' (4:5 ratio, 1080x1350px)")
+	borderStyle := flag.String("border-style", "solid", "Border style: 'solid', 'instagram' (4:5 ratio, 1080x1350px), or 'print10x15' (10x15cm @ 300 DPI)")
 	flag.StringVar(borderStyle, "s", "solid", "Border style (shorthand)")
 
 	borderColor := flag.String("border-color", "#000000", "Border color in hex (default: '#000000')")
+	backgroundColor := flag.String("background-color", "#FFFFFF", "Background color in hex for print10x15 style (default: '#FFFFFF')")
+	flag.StringVar(backgroundColor, "bg-color", "#FFFFFF", "Background color (shorthand)")
+	outerPadding := flag.String("outer-padding", "", "Outer padding from image to edge in pixels (for print10x15 style)")
+	captionPadding := flag.String("caption-padding", "", "Padding between caption and image in pixels (for print10x15 style)")
 	caption := flag.String("caption", "", "Override the caption text (if empty, EXIF date is used)")
 	captionTemplate := flag.String("caption-template", "", "Caption template with {{field}} placeholders (e.g., '{{camera}} • {{iso}} {{aperture}} {{shutter}}')")
 	noCaption := flag.Bool("no-caption", false, "Disable caption entirely")
@@ -1159,12 +1292,15 @@ func main() {
 		Padding:          *padding,
 		BorderStyle:      *borderStyle,
 		BorderColor:      *borderColor,
+		BackgroundColor:  *backgroundColor,
 		FontName:         *fontName,
 		FontSize:         *fontSize,
 		FontColor:        *fontColor,
 		InstagramMaxSize: *instagramMaxSize,
 		JPEGQuality:      *quality,
 		OutputFormat:     *outputFormat,
+		OuterPadding:     *outerPadding,
+		CaptionPadding:   *captionPadding,
 	}
 
 	// Merge with loaded config file (if any) - CLI flags take precedence
@@ -1182,6 +1318,26 @@ func main() {
 		}
 		if config.FontSize == "" {
 			config.FontSize = "20"
+		}
+		if config.Padding == "" {
+			config.Padding = "0"
+		}
+	} else if config.BorderStyle == "print10x15" {
+		if config.OuterPadding == "" {
+			config.OuterPadding = "50"
+		}
+		if config.CaptionPadding == "" {
+			config.CaptionPadding = "20"
+		}
+		if config.FontSize == "" {
+			config.FontSize = "30"
+		}
+		if config.BackgroundColor == "" || config.BackgroundColor == "#FFFFFF" {
+			config.BackgroundColor = "#FFFFFF"
+		}
+		// Not used by print10x15, but set to avoid errors
+		if config.BorderThickness == "" {
+			config.BorderThickness = "0"
 		}
 		if config.Padding == "" {
 			config.Padding = "0"
