@@ -268,6 +268,18 @@ border_color: "#FFFFFF"
 padding: "0"
 no_caption: true
 `,
+		"print10x15.yaml": `# Print for Borderless 100x148 using Canon Selphy Printer
+border_style: print10x15
+border_thickness: "5"
+border_color: "#000000"
+outer_padding: "100"
+font_name: CourierPrime-Bold
+font_size: "20"
+quality: 100
+caption_padding: "-2"
+font_color: "#000000"
+# Uses default vintage date format: " - MON 'YY -"
+`,
 	}
 
 	for filename, content := range presets {
