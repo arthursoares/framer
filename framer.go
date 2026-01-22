@@ -1055,6 +1055,11 @@ func processImage(imagePath string, outputPath string, config ProcessingConfig) 
 		return fmt.Errorf("invalid padding value %q: must be a number", config.Padding)
 	}
 
+	// Set default background color if not specified
+	if config.BackgroundColor == "" {
+		config.BackgroundColor = "#FFFFFF"
+	}
+
 	// Parse border color
 	borderColor, err := hexToRGB(config.BorderColor)
 	if err != nil {
