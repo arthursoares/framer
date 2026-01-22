@@ -1,6 +1,7 @@
 package main
 
 import (
+	"bytes"
 	"flag"
 	"fmt"
 	"image"
@@ -17,7 +18,9 @@ import (
 	"sync"
 	"time"
 
+	"github.com/barasher/go-exiftool"
 	"github.com/disintegration/imaging"
+	jpegstructure "github.com/dsoprea/go-jpeg-image-structure/v2"
 	"github.com/golang/freetype"
 	"github.com/golang/freetype/truetype"
 	"github.com/rwcarlsen/goexif/exif"
@@ -38,6 +41,7 @@ type ProcessingConfig struct {
 	Caption          string
 	CaptionTemplate  string
 	NoCaption        bool
+	NoMetadata       bool
 	BorderThickness  string
 	Padding          string
 	BorderStyle      string
@@ -69,6 +73,7 @@ type ConfigFile struct {
 	Caption         string `yaml:"caption,omitempty"`
 	CaptionTemplate string `yaml:"caption_template,omitempty"`
 	NoCaption       bool   `yaml:"no_caption,omitempty"`
+	NoMetadata      bool   `yaml:"no_metadata,omitempty"`
 	BorderStyle     string `yaml:"border_style,omitempty"`
 	BorderThickness string `yaml:"border_thickness,omitempty"`
 	BorderColor     string `yaml:"border_color,omitempty"`
@@ -325,6 +330,9 @@ func mergeConfig(configFile *ConfigFile, cliConfig ProcessingConfig) ProcessingC
 	if !result.NoCaption && configFile.NoCaption {
 		result.NoCaption = configFile.NoCaption
 	}
+	if !result.NoMetadata && configFile.NoMetadata {
+		result.NoMetadata = configFile.NoMetadata
+	}
 	if result.BorderStyle == "solid" && configFile.BorderStyle != "" {
 		// "solid" is the default, so if it's still solid, use config
 		result.BorderStyle = configFile.BorderStyle
@@ -454,6 +462,115 @@ func getExifDate(file *os.File) (time.Time, error) {
 		return time.Time{}, err
 	}
 	return data.DateTime, nil
+}
+
+// copyAndUpdateExifMetadata copies EXIF from original image to output and adds framer metadata
+func copyAndUpdateExifMetadata(originalPath, outputPath, borderStyle string) error {
+	// Step 1: Copy EXIF data from original to output using dsoprea libraries
+	err := copyExifFromOriginal(originalPath, outputPath)
+	if err != nil {
+		// Log but don't fail - we can still add keywords
+		log.Printf("Could not copy EXIF from original: %v", err)
+	}
+
+	// Step 2: Add IPTC Keywords and XMP Subject using ExifTool
+	err = writeFramerKeywords(outputPath, borderStyle)
+	if err != nil {
+		return fmt.Errorf("writing framer keywords: %w", err)
+	}
+
+	return nil
+}
+
+// copyExifFromOriginal copies EXIF metadata from original image to output
+func copyExifFromOriginal(originalPath, outputPath string) error {
+	// Read original image to extract EXIF
+	originalData, err := os.ReadFile(originalPath)
+	if err != nil {
+		return fmt.Errorf("reading original image: %w", err)
+	}
+
+	// Parse original JPEG to get EXIF segment
+	jmp := jpegstructure.NewJpegMediaParser()
+	originalIntfc, err := jmp.ParseBytes(originalData)
+	if err != nil {
+		return fmt.Errorf("parsing original image: %w", err)
+	}
+	originalSl := originalIntfc.(*jpegstructure.SegmentList)
+
+	// Try to get EXIF builder from original
+	rootIb, err := originalSl.ConstructExifBuilder()
+	if err != nil {
+		return fmt.Errorf("original has no EXIF: %w", err)
+	}
+
+	// Read output image
+	outputData, err := os.ReadFile(outputPath)
+	if err != nil {
+		return fmt.Errorf("reading output image: %w", err)
+	}
+
+	// Parse output JPEG
+	outputIntfc, err := jmp.ParseBytes(outputData)
+	if err != nil {
+		return fmt.Errorf("parsing output image: %w", err)
+	}
+	outputSl := outputIntfc.(*jpegstructure.SegmentList)
+
+	// Set the EXIF data on output
+	err = outputSl.SetExif(rootIb)
+	if err != nil {
+		return fmt.Errorf("setting EXIF: %w", err)
+	}
+
+	// Write back to file
+	buf := new(bytes.Buffer)
+	err = outputSl.Write(buf)
+	if err != nil {
+		return fmt.Errorf("writing to buffer: %w", err)
+	}
+
+	err = os.WriteFile(outputPath, buf.Bytes(), 0644)
+	if err != nil {
+		return fmt.Errorf("writing output file: %w", err)
+	}
+
+	return nil
+}
+
+// writeFramerKeywords adds IPTC Keywords and XMP Subject tags using ExifTool
+func writeFramerKeywords(outputPath, borderStyle string) error {
+	// Normalize border style
+	if borderStyle == "" {
+		borderStyle = "solid"
+	}
+
+	// Create ExifTool instance
+	et, err := exiftool.NewExiftool()
+	if err != nil {
+		return fmt.Errorf("initializing exiftool: %w", err)
+	}
+	defer et.Close()
+
+	// Prepare the keywords: "framer" and "framer - {border_style}"
+	keywords := []string{"framer", fmt.Sprintf("framer - %s", borderStyle)}
+
+	// Create metadata to write
+	fm := exiftool.FileMetadata{
+		File:   outputPath,
+		Fields: make(map[string]interface{}),
+	}
+
+	// Set IPTC Keywords (written as Keywords)
+	fm.SetStrings("Keywords", keywords)
+
+	// Set XMP Subject (dc:subject) - ExifTool maps "Subject" to XMP
+	fm.SetStrings("Subject", keywords)
+
+	// Write metadata
+	et.WriteMetadata([]exiftool.FileMetadata{fm})
+
+	return nil
 }
 
 func generateCaptionFromDate(dt time.Time) string {
@@ -1045,6 +1162,7 @@ func processImage(imagePath string, outputPath string, config ProcessingConfig) 
 	defer out.Close()
 
 	// Encode in the appropriate format
+	isJPEG := false
 	switch outputFormat {
 	case "png":
 		err = png.Encode(out, newImage)
@@ -1052,6 +1170,7 @@ func processImage(imagePath string, outputPath string, config ProcessingConfig) 
 			return fmt.Errorf("encoding PNG %s: %w", outFile, err)
 		}
 	case "jpeg", "jpg":
+		isJPEG = true
 		quality := config.JPEGQuality
 		if quality == 0 {
 			quality = DefaultJPEGQuality
@@ -1061,6 +1180,7 @@ func processImage(imagePath string, outputPath string, config ProcessingConfig) 
 			return fmt.Errorf("encoding JPEG %s: %w", outFile, err)
 		}
 	default:
+		isJPEG = true
 		log.Printf("Unknown output format %q. Using JPEG.", config.OutputFormat)
 		quality := config.JPEGQuality
 		if quality == 0 {
@@ -1069,6 +1189,18 @@ func processImage(imagePath string, outputPath string, config ProcessingConfig) 
 		err = jpeg.Encode(out, newImage, &jpeg.Options{Quality: quality})
 		if err != nil {
 			return fmt.Errorf("encoding JPEG %s: %w", outFile, err)
+		}
+	}
+
+	// Close file before reading it back for EXIF manipulation
+	out.Close()
+
+	// Copy EXIF metadata from original and add framer tags (JPEG only)
+	if isJPEG && !config.NoMetadata {
+		err = copyAndUpdateExifMetadata(imagePath, outFile, config.BorderStyle)
+		if err != nil {
+			// Log warning but don't fail - image was saved successfully
+			log.Printf("Warning: could not add metadata to %s: %v", outFile, err)
 		}
 	}
 
@@ -1203,6 +1335,7 @@ func main() {
 	workers := flag.Int("workers", runtime.NumCPU(), fmt.Sprintf("Number of concurrent workers for batch processing (default: %d)", runtime.NumCPU()))
 	flag.IntVar(workers, "w", runtime.NumCPU(), "Number of concurrent workers (shorthand)")
 	listFonts := flag.Bool("list-fonts", false, "List available fonts and exit")
+	noMetadata := flag.Bool("no-metadata", false, "Skip adding EXIF metadata (Software and UserComment tags) to output files")
 
 	flag.Parse()
 
@@ -1294,6 +1427,7 @@ func main() {
 		Caption:          *caption,
 		CaptionTemplate:  *captionTemplate,
 		NoCaption:        *noCaption,
+		NoMetadata:       *noMetadata,
 		BorderThickness:  *borderThickness,
 		Padding:          *padding,
 		BorderStyle:      *borderStyle,
