@@ -1,0 +1,429 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Framer - Add elegant frames and captions to your photos</title>
+  <meta name="description" content="A powerful CLI tool for adding professional borders and EXIF-based captions to your photos. Perfect for photographers using Lightroom.">
+  <link rel="stylesheet" href="css/style.css">
+  <link rel="icon" type="image/x-icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🖼</text></svg>">
+</head>
+<body>
+  <!-- Navigation -->
+  <nav>
+    <div class="container">
+      <a href="#" class="logo">framer</a>
+      <ul class="nav-links">
+        <li><a href="#features">Features</a></li>
+        <li><a href="#examples">Examples</a></li>
+        <li><a href="#installation">Install</a></li>
+        <li><a href="#usage">Usage</a></li>
+        <li><a href="https://github.com/arthursoares/framer">GitHub</a></li>
+      </ul>
+    </div>
+  </nav>
+
+  <!-- Hero Section -->
+  <section class="hero">
+    <div class="container">
+      <h1>framer</h1>
+      <p class="tagline">Add elegant frames and captions to your photos. A CLI tool for photographers.</p>
+
+      <img src="sample_solid.jpg" alt="Framer example - photo with border and caption" class="hero-image">
+
+      <div class="install-command">
+        <code>brew install arthursoares/framer/framer</code>
+        <button class="copy-btn" onclick="copyCommand(this)">Copy</button>
+      </div>
+
+      <div class="hero-links">
+        <a href="https://github.com/arthursoares/framer" class="btn btn-primary">
+          View on GitHub
+        </a>
+        <a href="https://github.com/arthursoares/framer/releases" class="btn btn-secondary">
+          Download
+        </a>
+      </div>
+    </div>
+  </section>
+
+  <!-- Features Section -->
+  <section id="features">
+    <div class="container">
+      <h2>Features</h2>
+      <p class="section-desc">Everything you need to add professional borders and metadata captions to your photos.</p>
+
+      <div class="features-grid">
+        <div class="feature-card">
+          <h3><span class="feature-icon">🎨</span> Border Styles</h3>
+          <p>Choose from solid, instagram (4:5), print10x15, or vintage styles. Each optimized for different use cases.</p>
+        </div>
+
+        <div class="feature-card">
+          <h3><span class="feature-icon">📷</span> EXIF Captions</h3>
+          <p>Automatically extract date, camera, lens, and exposure info from your photos for dynamic captions.</p>
+        </div>
+
+        <div class="feature-card">
+          <h3><span class="feature-icon">⚡</span> Batch Processing</h3>
+          <p>Process hundreds of images efficiently with multi-core worker pools and progress tracking.</p>
+        </div>
+
+        <div class="feature-card">
+          <h3><span class="feature-icon">⚙️</span> YAML Config</h3>
+          <p>Save complex configurations in YAML files. Auto-loads .framer.yaml from your project directory.</p>
+        </div>
+
+        <div class="feature-card">
+          <h3><span class="feature-icon">🏷️</span> Metadata Tagging</h3>
+          <p>Automatically adds IPTC keywords and XMP metadata to processed images for better organization.</p>
+        </div>
+
+        <div class="feature-card">
+          <h3><span class="feature-icon">🎯</span> Presets</h3>
+          <p>Built-in presets for vintage, instagram, and minimal styles. Create your own custom presets.</p>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- Examples Section -->
+  <section id="examples">
+    <div class="container">
+      <h2>Examples</h2>
+      <p class="section-desc">See the different border styles and customization options in action.</p>
+
+      <!-- Border Styles -->
+      <h3 class="subsection-title">Border Styles</h3>
+      <div class="examples-grid">
+        <div class="example-card">
+          <img src="sample.jpg" alt="Original photo">
+          <div class="example-info">
+            <h3>Original</h3>
+            <p>Unprocessed photo straight from camera</p>
+          </div>
+        </div>
+
+        <div class="example-card">
+          <img src="examples/solid_black.jpg" alt="Solid black border">
+          <div class="example-info">
+            <h3>Solid (Default)</h3>
+            <p>Classic black border with date caption</p>
+            <code class="example-cmd">framer -i photo.jpg -o output/</code>
+          </div>
+        </div>
+
+        <div class="example-card">
+          <img src="examples/instagram_default.jpg" alt="Instagram format">
+          <div class="example-info">
+            <h3>Instagram</h3>
+            <p>4:5 ratio (1080x1350px) for Instagram</p>
+            <code class="example-cmd">framer -i photo.jpg -o output/ -s instagram</code>
+          </div>
+        </div>
+
+        <div class="example-card">
+          <img src="examples/print10x15.jpg" alt="Print 10x15 format">
+          <div class="example-info">
+            <h3>Print 10x15</h3>
+            <p>10x15cm @ 300 DPI for physical prints</p>
+            <code class="example-cmd">framer -i photo.jpg -o output/ -s print10x15</code>
+          </div>
+        </div>
+      </div>
+
+      <!-- Color Variations -->
+      <h3 class="subsection-title">Color Variations</h3>
+      <div class="examples-grid">
+        <div class="example-card">
+          <img src="examples/solid_white.jpg" alt="White border">
+          <div class="example-info">
+            <h3>White Border</h3>
+            <p>Clean white border with dark text</p>
+            <code class="example-cmd">--border-color "#FFFFFF" --font-color "#333333"</code>
+          </div>
+        </div>
+
+        <div class="example-card">
+          <img src="examples/solid_navy.jpg" alt="Navy border">
+          <div class="example-info">
+            <h3>Navy Border</h3>
+            <p>Deep navy with white caption text</p>
+            <code class="example-cmd">--border-color "#1a365d" --font-color "#FFFFFF"</code>
+          </div>
+        </div>
+
+        <div class="example-card">
+          <img src="examples/solid_vintage.jpg" alt="Vintage beige border">
+          <div class="example-info">
+            <h3>Vintage Beige</h3>
+            <p>Warm beige border with sepia caption</p>
+            <code class="example-cmd">--border-color "#f5f5dc" --font-color "#8B4513"</code>
+          </div>
+        </div>
+      </div>
+
+      <!-- Size Variations -->
+      <h3 class="subsection-title">Size &amp; Thickness</h3>
+      <div class="examples-grid">
+        <div class="example-card">
+          <img src="examples/solid_minimal.jpg" alt="Minimal thin border">
+          <div class="example-info">
+            <h3>Minimal</h3>
+            <p>Thin 2% border with small padding</p>
+            <code class="example-cmd">-t 2% --padding 30 --font-size 30</code>
+          </div>
+        </div>
+
+        <div class="example-card">
+          <img src="examples/solid_thick.jpg" alt="Thick border">
+          <div class="example-info">
+            <h3>Thick Border</h3>
+            <p>Bold 8% border with large padding</p>
+            <code class="example-cmd">-t 8% --padding 200 --font-size 60</code>
+          </div>
+        </div>
+      </div>
+
+      <!-- Caption Options -->
+      <h3 class="subsection-title">Caption Options</h3>
+      <div class="examples-grid">
+        <div class="example-card">
+          <img src="examples/custom_caption.jpg" alt="Custom caption">
+          <div class="example-info">
+            <h3>Custom Caption</h3>
+            <p>Camera model and exposure settings</p>
+            <code class="example-cmd">--caption-template "{{camera}} | {{aperture}} {{shutter}} ISO{{iso}}"</code>
+          </div>
+        </div>
+
+        <div class="example-card">
+          <img src="examples/no_caption.jpg" alt="No caption">
+          <div class="example-info">
+            <h3>No Caption</h3>
+            <p>Clean border without any text</p>
+            <code class="example-cmd">--no-caption</code>
+          </div>
+        </div>
+      </div>
+
+      <!-- Inspiration -->
+      <div class="inspiration mt-4" style="margin-top: 48px;">
+        <img src="inspiration.jpg" alt="Vintage photo inspiration">
+        <div class="inspiration-text">
+          <h3>Inspired by the Past</h3>
+          <blockquote>
+            The border format is inspired by an old box of photos from my grandfather, featuring white borders with machine-printed dates.
+          </blockquote>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- Installation Section -->
+  <section id="installation">
+    <div class="container">
+      <h2>Installation</h2>
+      <p class="section-desc">Get started with framer in seconds.</p>
+
+      <div class="install-methods">
+        <div class="install-method recommended">
+          <h3>Homebrew (macOS)</h3>
+          <pre><code><span class="comment"># Add tap and install</span>
+brew tap arthursoares/framer
+brew install framer
+
+<span class="comment"># Update to latest version</span>
+brew upgrade framer</code></pre>
+        </div>
+
+        <div class="install-method">
+          <h3>Binary Download</h3>
+          <p style="color: var(--text-secondary); margin-bottom: 12px;">Download from <a href="https://github.com/arthursoares/framer/releases">Releases</a>:</p>
+          <pre><code><span class="comment"># Make executable (Linux/macOS)</span>
+chmod +x framer-*
+sudo mv framer-* /usr/local/bin/framer</code></pre>
+        </div>
+
+        <div class="install-method">
+          <h3>From Source</h3>
+          <p style="color: var(--text-secondary); margin-bottom: 12px;">Requires Go 1.22+</p>
+          <pre><code><span class="comment"># Clone and build</span>
+git clone https://github.com/arthursoares/framer.git
+cd framer
+go build framer.go fonts.go</code></pre>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- Usage Section -->
+  <section id="usage">
+    <div class="container">
+      <h2>Usage</h2>
+      <p class="section-desc">Simple commands for powerful photo processing.</p>
+
+      <div class="usage-examples">
+        <div class="usage-block">
+          <h3>Basic Commands</h3>
+          <pre><code><span class="comment"># Process a single image</span>
+framer -i photo.jpg -o output/
+
+<span class="comment"># Process an entire folder</span>
+framer -i photos/ -o output/
+
+<span class="comment"># Use a preset</span>
+framer -i photo.jpg -o output/ --preset vintage
+
+<span class="comment"># Instagram format</span>
+framer -i photo.jpg -o output/ -s instagram</code></pre>
+        </div>
+
+        <div class="usage-block">
+          <h3>Custom Captions</h3>
+          <pre><code><span class="comment"># Camera and exposure info</span>
+framer -i photo.jpg -o output/ \
+  --caption-template "{{camera}} - {{iso}} {{aperture}} {{shutter}}"
+
+<span class="comment"># Date format</span>
+framer -i photo.jpg -o output/ \
+  --caption-template "{{mon}} '{{year2}}"
+
+<span class="comment"># Disable caption</span>
+framer -i photo.jpg -o output/ --no-caption</code></pre>
+        </div>
+      </div>
+
+      <!-- Placeholders -->
+      <details style="margin-top: 24px;">
+        <summary>Available Template Placeholders</summary>
+        <div class="content">
+          <div class="placeholders-grid">
+            <div class="placeholder-group">
+              <h4>Date/Time</h4>
+              <ul>
+                <li>{{year}} - Full year (2024)</li>
+                <li>{{year2}} - Short year (24)</li>
+                <li>{{month}} - Month name</li>
+                <li>{{mon}} - Short month (JAN)</li>
+                <li>{{day}} - Day number</li>
+                <li>{{date}} - Full date</li>
+              </ul>
+            </div>
+            <div class="placeholder-group">
+              <h4>Camera</h4>
+              <ul>
+                <li>{{camera}} - Camera model</li>
+                <li>{{lens}} - Lens name</li>
+              </ul>
+            </div>
+            <div class="placeholder-group">
+              <h4>Exposure</h4>
+              <ul>
+                <li>{{iso}} - ISO value</li>
+                <li>{{aperture}} - f-stop</li>
+                <li>{{shutter}} - Shutter speed</li>
+                <li>{{focal}} - Focal length</li>
+              </ul>
+            </div>
+          </div>
+        </div>
+      </details>
+
+      <!-- Config File -->
+      <details>
+        <summary>Configuration File Example</summary>
+        <div class="content">
+          <p style="color: var(--text-secondary); margin-bottom: 16px;">Create a <code>.framer.yaml</code> file in your project directory:</p>
+          <pre><code><span class="comment"># .framer.yaml</span>
+border_style: solid
+border_thickness: "5%"
+border_color: "#000000"
+padding: "150"
+
+<span class="comment"># Caption settings</span>
+caption_template: " - {{mon}} '{{year2}} -"
+font_name: CourierPrime-Bold
+font_size: "50"
+font_color: "#FFFFFF"
+
+<span class="comment"># Output settings</span>
+output_format: jpeg
+jpeg_quality: 100</code></pre>
+        </div>
+      </details>
+
+      <!-- CLI Arguments -->
+      <details>
+        <summary>All Command-line Arguments</summary>
+        <div class="content">
+          <pre><code><span class="comment"># Required</span>
+--input, -i           Path to image file or directory
+--output, -o          Output directory
+
+<span class="comment"># Border Style</span>
+--border-style, -s    solid | instagram | print10x15 (default: solid)
+--border-thickness,-t Thickness in pixels or % (e.g., "20" or "5%")
+--border-color        Hex color (default: #000000)
+--padding             Padding in pixels (default: 150)
+
+<span class="comment"># Caption</span>
+--caption             Override caption with custom text
+--caption-template    Template with {{placeholders}}
+--no-caption          Disable caption entirely
+--font-name           Font name (use --list-fonts to see options)
+--font-size           Font size in pixels (auto-calculated if omitted)
+--font-color          Hex color (default: #000000)
+
+<span class="comment"># Print 10x15 Specific</span>
+--background-color    Background color for print10x15 (default: #FFFFFF)
+--outer-padding       Outer padding from image to edge
+--caption-padding     Padding between caption and image
+
+<span class="comment"># Output</span>
+--output-format, -f   jpeg | png (default: jpeg)
+--quality, -q         JPEG quality 60-100 (default: 100)
+--no-metadata         Skip adding EXIF metadata to output
+
+<span class="comment"># Configuration</span>
+--config              Path to YAML config file
+--preset              Load preset (vintage, instagram, minimal)
+
+<span class="comment"># Performance</span>
+--workers, -w         Concurrent workers (default: CPU cores)
+
+<span class="comment"># Utility</span>
+--list-fonts          Show available fonts and exit</code></pre>
+        </div>
+      </details>
+    </div>
+  </section>
+
+  <!-- Footer -->
+  <footer>
+    <div class="container">
+      <p>MIT License</p>
+      <p>Built with <a href="https://docs.anthropic.com/en/docs/agents-and-tools/claude-code/overview">Claude Code</a></p>
+      <div class="footer-links">
+        <a href="https://github.com/arthursoares/framer">GitHub</a>
+        <a href="https://github.com/arthursoares/framer/releases">Releases</a>
+        <a href="https://github.com/arthursoares/framer/issues">Issues</a>
+      </div>
+    </div>
+  </footer>
+
+  <script>
+    function copyCommand(btn) {
+      const code = btn.previousElementSibling.textContent;
+      navigator.clipboard.writeText(code).then(() => {
+        btn.textContent = 'Copied!';
+        btn.classList.add('copied');
+        setTimeout(() => {
+          btn.textContent = 'Copy';
+          btn.classList.remove('copied');
+        }, 2000);
+      });
+    }
+  </script>
+</body>
+</html>
