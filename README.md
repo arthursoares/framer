@@ -49,6 +49,12 @@ The border format is inspired by an old box of photos from my grandfather, featu
 - **Font Selection**: Multiple embedded fonts included
 - **Responsive Sizing**: Percentage-based or pixel-based border thickness
 
+### Post-Processing
+- **External Tool Integration**: Run any command on processed images
+- **JPEGmini Pro Support**: Optimize images automatically after framing
+- **Custom Scripts**: Execute shell scripts for advanced workflows
+- **Auto-quoting**: File paths with spaces handled automatically
+
 ## 📦 Installation
 
 ### Homebrew (macOS ARM)
@@ -118,6 +124,12 @@ framer -i photo.jpg -o output/ -f png --quality 100
 
 # Process with 8 workers
 framer -i photos/ -o output/ --workers 8
+
+# Post-process with JPEGmini Pro (macOS)
+framer -i photo.jpg -o output/ --post-process "open -W -a 'JPEGmini Pro' {file}"
+
+# Post-process with jpegoptim
+framer -i photo.jpg -o output/ --post-process "jpegoptim --strip-all {file}"
 ```
 
 ## 📖 Usage
@@ -244,6 +256,7 @@ framer -i photo.jpg -o output/ --config my-settings.yaml
 | `--config` | | Path to YAML config file | |
 | `--preset` | | Load preset from `~/.config/framer/presets/` | |
 | `--workers` | `-w` | Number of concurrent workers for batch processing | CPU cores |
+| `--post-process` | | Command to run on each output file (`{file}` = path) | |
 | `--list-fonts` | | List all available fonts and exit | |
 
 ## 🎨 Available Fonts
@@ -289,7 +302,37 @@ font_color: "#000000"            # hex color
 # Output settings
 output_format: jpeg              # jpeg or png
 jpeg_quality: 100                # 60-100
+
+# Post-processing
+post_process: "jpegoptim {file}" # command to run on each output
 ```
+
+### Post-Processing Integration
+
+Run external tools on each processed image using the `--post-process` flag or `post_process` config option. The `{file}` placeholder is replaced with the output file path (automatically quoted for paths with spaces).
+
+**JPEGmini Pro (macOS):**
+```bash
+# Using open command (waits for completion with -W)
+framer -i photo.jpg -o output/ --post-process "open -W -a 'JPEGmini Pro' {file}"
+```
+
+**jpegoptim:**
+```bash
+framer -i photo.jpg -o output/ --post-process "jpegoptim --strip-all {file}"
+```
+
+**Custom script:**
+```bash
+framer -i photo.jpg -o output/ --post-process "/path/to/my-script.sh {file}"
+```
+
+**In config file (`~/.config/framer/default.yaml`):**
+```yaml
+post_process: "open -W -a 'JPEGmini Pro' {file}"
+```
+
+This runs the post-process command after each image is processed. If the command fails, a warning is logged but processing continues.
 
 ### Creating Custom Presets
 
