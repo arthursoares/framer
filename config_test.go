@@ -133,6 +133,56 @@ border_color: "#FF0000"
 			t.Errorf("Expected empty Padding, got %q", config.Padding)
 		}
 	})
+
+	t.Run("config with post_process", func(t *testing.T) {
+		tmpDir := t.TempDir()
+		configPath := filepath.Join(tmpDir, "post_process.yaml")
+
+		content := `border_style: solid
+post_process: "jpegoptim --strip-all {file}"
+`
+
+		err := os.WriteFile(configPath, []byte(content), 0644)
+		if err != nil {
+			t.Fatalf("Failed to create test config: %v", err)
+		}
+
+		config, err := loadConfigFile(configPath)
+		if err != nil {
+			t.Fatalf("loadConfigFile() error = %v", err)
+		}
+
+		if config.BorderStyle != "solid" {
+			t.Errorf("Expected BorderStyle 'solid', got %q", config.BorderStyle)
+		}
+		if config.PostProcess != "jpegoptim --strip-all {file}" {
+			t.Errorf("Expected PostProcess 'jpegoptim --strip-all {file}', got %q", config.PostProcess)
+		}
+	})
+
+	t.Run("config with JPEGmini Pro command", func(t *testing.T) {
+		tmpDir := t.TempDir()
+		configPath := filepath.Join(tmpDir, "jpegmini.yaml")
+
+		content := `border_style: instagram
+post_process: "open -W -a 'JPEGmini Pro' {file}"
+`
+
+		err := os.WriteFile(configPath, []byte(content), 0644)
+		if err != nil {
+			t.Fatalf("Failed to create test config: %v", err)
+		}
+
+		config, err := loadConfigFile(configPath)
+		if err != nil {
+			t.Fatalf("loadConfigFile() error = %v", err)
+		}
+
+		expected := "open -W -a 'JPEGmini Pro' {file}"
+		if config.PostProcess != expected {
+			t.Errorf("Expected PostProcess %q, got %q", expected, config.PostProcess)
+		}
+	})
 }
 
 func TestMergeConfig(t *testing.T) {
@@ -274,6 +324,36 @@ func TestMergeConfig(t *testing.T) {
 
 		if result.CaptionTemplate != "{{camera}} • {{iso}}" {
 			t.Errorf("Expected CaptionTemplate from config, got %q", result.CaptionTemplate)
+		}
+	})
+
+	t.Run("post_process merge from config", func(t *testing.T) {
+		configFile := &ConfigFile{
+			PostProcess: "jpegoptim {file}",
+		}
+		cliConfig := ProcessingConfig{
+			PostProcess: "", // Not set
+		}
+
+		result := mergeConfig(configFile, cliConfig)
+
+		if result.PostProcess != "jpegoptim {file}" {
+			t.Errorf("Expected PostProcess from config, got %q", result.PostProcess)
+		}
+	})
+
+	t.Run("post_process CLI takes precedence", func(t *testing.T) {
+		configFile := &ConfigFile{
+			PostProcess: "jpegoptim {file}",
+		}
+		cliConfig := ProcessingConfig{
+			PostProcess: "jpegmini {file}", // CLI override
+		}
+
+		result := mergeConfig(configFile, cliConfig)
+
+		if result.PostProcess != "jpegmini {file}" {
+			t.Errorf("Expected PostProcess from CLI, got %q", result.PostProcess)
 		}
 	})
 }

@@ -367,6 +367,184 @@ func TestBatchProcessing(t *testing.T) {
 	})
 }
 
+func TestPostProcessIntegration(t *testing.T) {
+	if testing.Short() {
+		t.Skip("Skipping integration test in short mode")
+	}
+
+	t.Run("post-process hook creates marker file", func(t *testing.T) {
+		tmpDir := t.TempDir()
+		inputPath := filepath.Join(tmpDir, "input.jpg")
+		outputDir := filepath.Join(tmpDir, "output")
+
+		img := createTestImage(t, 400, 300, color.RGBA{100, 150, 200, 255})
+		saveTestImage(t, img, inputPath, "jpeg")
+
+		if err := os.MkdirAll(outputDir, 0755); err != nil {
+			t.Fatalf("Failed to create output directory: %v", err)
+		}
+
+		config := ProcessingConfig{
+			BorderStyle:     "solid",
+			BorderColor:     "#000000",
+			BorderThickness: "20",
+			NoCaption:       true,
+			JPEGQuality:     95,
+			OutputFormat:    "jpeg",
+			Padding:         "0",
+			PostProcess:     "touch {file}.processed",
+		}
+
+		err := processImage(inputPath, outputDir, config)
+		if err != nil {
+			t.Fatalf("processImage() error = %v", err)
+		}
+
+		// Verify output file exists
+		expectedOutput := filepath.Join(outputDir, "input_solid.jpg")
+		if _, err := os.Stat(expectedOutput); os.IsNotExist(err) {
+			t.Errorf("Output file not created: %s", expectedOutput)
+		}
+
+		// Verify post-process marker file exists
+		markerFile := expectedOutput + ".processed"
+		if _, err := os.Stat(markerFile); os.IsNotExist(err) {
+			t.Errorf("Post-process marker file not created: %s", markerFile)
+		}
+	})
+
+	t.Run("post-process hook modifies file", func(t *testing.T) {
+		tmpDir := t.TempDir()
+		inputPath := filepath.Join(tmpDir, "input.jpg")
+		outputDir := filepath.Join(tmpDir, "output")
+		logFile := filepath.Join(tmpDir, "post_process.log")
+
+		img := createTestImage(t, 400, 300, color.RGBA{50, 100, 150, 255})
+		saveTestImage(t, img, inputPath, "jpeg")
+
+		if err := os.MkdirAll(outputDir, 0755); err != nil {
+			t.Fatalf("Failed to create output directory: %v", err)
+		}
+
+		// Post-process that writes the file path to a log
+		config := ProcessingConfig{
+			BorderStyle:     "solid",
+			BorderColor:     "#FFFFFF",
+			BorderThickness: "10",
+			NoCaption:       true,
+			JPEGQuality:     90,
+			OutputFormat:    "jpeg",
+			Padding:         "0",
+			PostProcess:     "echo {file} >> " + logFile,
+		}
+
+		err := processImage(inputPath, outputDir, config)
+		if err != nil {
+			t.Fatalf("processImage() error = %v", err)
+		}
+
+		// Verify log file contains the output path
+		logContent, err := os.ReadFile(logFile)
+		if err != nil {
+			t.Fatalf("Failed to read log file: %v", err)
+		}
+
+		expectedOutput := filepath.Join(outputDir, "input_solid.jpg")
+		if !strings.Contains(string(logContent), expectedOutput) {
+			t.Errorf("Log file should contain %q, got %q", expectedOutput, string(logContent))
+		}
+	})
+
+	t.Run("post-process failure logs warning but continues", func(t *testing.T) {
+		tmpDir := t.TempDir()
+		inputPath := filepath.Join(tmpDir, "input.jpg")
+		outputDir := filepath.Join(tmpDir, "output")
+
+		img := createTestImage(t, 400, 300, color.RGBA{200, 50, 100, 255})
+		saveTestImage(t, img, inputPath, "jpeg")
+
+		if err := os.MkdirAll(outputDir, 0755); err != nil {
+			t.Fatalf("Failed to create output directory: %v", err)
+		}
+
+		// Post-process command that will fail
+		config := ProcessingConfig{
+			BorderStyle:     "solid",
+			BorderColor:     "#000000",
+			BorderThickness: "15",
+			NoCaption:       true,
+			JPEGQuality:     85,
+			OutputFormat:    "jpeg",
+			Padding:         "0",
+			PostProcess:     "exit 1", // Command that fails
+		}
+
+		// Should not return an error even though post-process fails
+		err := processImage(inputPath, outputDir, config)
+		if err != nil {
+			t.Fatalf("processImage() should not fail when post-process fails, got error = %v", err)
+		}
+
+		// Output file should still exist
+		expectedOutput := filepath.Join(outputDir, "input_solid.jpg")
+		if _, err := os.Stat(expectedOutput); os.IsNotExist(err) {
+			t.Errorf("Output file not created despite post-process failure: %s", expectedOutput)
+		}
+	})
+
+	t.Run("batch processing with post-process", func(t *testing.T) {
+		tmpDir := t.TempDir()
+		outputDir := filepath.Join(tmpDir, "output")
+		logFile := filepath.Join(tmpDir, "batch.log")
+
+		if err := os.MkdirAll(outputDir, 0755); err != nil {
+			t.Fatalf("Failed to create output directory: %v", err)
+		}
+
+		// Create test images
+		imageNames := []string{"img1.jpg", "img2.jpg", "img3.jpg"}
+		for _, name := range imageNames {
+			img := createTestImage(t, 300, 200, color.RGBA{100, 100, 100, 255})
+			saveTestImage(t, img, filepath.Join(tmpDir, name), "jpeg")
+		}
+
+		// Post-process appends to log file
+		config := ProcessingConfig{
+			BorderStyle:     "solid",
+			BorderColor:     "#FFFFFF",
+			BorderThickness: "5",
+			NoCaption:       true,
+			JPEGQuality:     90,
+			OutputFormat:    "jpeg",
+			Padding:         "0",
+			PostProcess:     "echo {file} >> " + logFile,
+		}
+
+		// Process each image
+		for _, name := range imageNames {
+			inputPath := filepath.Join(tmpDir, name)
+			err := processImage(inputPath, outputDir, config)
+			if err != nil {
+				t.Errorf("processImage() error for %s = %v", name, err)
+			}
+		}
+
+		// Verify log file contains all output paths
+		logContent, err := os.ReadFile(logFile)
+		if err != nil {
+			t.Fatalf("Failed to read log file: %v", err)
+		}
+
+		for _, name := range imageNames {
+			baseName := strings.TrimSuffix(name, ".jpg")
+			expectedOutput := filepath.Join(outputDir, baseName+"_solid.jpg")
+			if !strings.Contains(string(logContent), expectedOutput) {
+				t.Errorf("Log file should contain %q", expectedOutput)
+			}
+		}
+	})
+}
+
 func TestErrorHandling(t *testing.T) {
 	if testing.Short() {
 		t.Skip("Skipping integration test in short mode")

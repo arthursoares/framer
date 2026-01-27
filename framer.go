@@ -11,6 +11,7 @@ import (
 	"image/png"
 	"log"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"runtime"
 	"strconv"
@@ -55,6 +56,7 @@ type ProcessingConfig struct {
 	OutputFormat     string
 	OuterPadding     string
 	CaptionPadding   string
+	PostProcess      string
 }
 
 // ExifData holds extracted EXIF metadata
@@ -86,6 +88,7 @@ type ConfigFile struct {
 	OutputFormat    string `yaml:"output_format,omitempty"`
 	OuterPadding    string `yaml:"outer_padding,omitempty"`
 	CaptionPadding  string `yaml:"caption_padding,omitempty"`
+	PostProcess     string `yaml:"post_process,omitempty"`
 }
 
 // ProcessingResult tracks the outcome of processing a single image
@@ -378,7 +381,27 @@ func mergeConfig(configFile *ConfigFile, cliConfig ProcessingConfig) ProcessingC
 		result.FontName = validateFontName(result.FontName)
 	}
 
+	// Merge post-process command
+	if result.PostProcess == "" && configFile.PostProcess != "" {
+		result.PostProcess = configFile.PostProcess
+	}
+
 	return result
+}
+
+// runPostProcess executes a post-processing command on the output file
+func runPostProcess(command, filePath string) error {
+	if command == "" {
+		return nil
+	}
+
+	// Replace {file} placeholder with quoted file path to handle spaces
+	// Use single quotes and escape any single quotes in the path
+	quotedPath := "'" + strings.ReplaceAll(filePath, "'", "'\"'\"'") + "'"
+	cmd := strings.ReplaceAll(command, "{file}", quotedPath)
+
+	// Execute via shell to support complex commands (pipes, redirects, etc.)
+	return exec.Command("sh", "-c", cmd).Run()
 }
 
 // getExifData extracts comprehensive EXIF metadata from an image file
@@ -1209,6 +1232,13 @@ func processImage(imagePath string, outputPath string, config ProcessingConfig) 
 		}
 	}
 
+	// Run post-process hook if configured
+	if config.PostProcess != "" {
+		if err := runPostProcess(config.PostProcess, outFile); err != nil {
+			log.Printf("Warning: post-process command failed for %s: %v", outFile, err)
+		}
+	}
+
 	// Success - keep this output message for visibility
 	fmt.Printf("Processed '%s' -> '%s'\n", imagePath, outFile)
 	return nil
@@ -1341,6 +1371,7 @@ func main() {
 	flag.IntVar(workers, "w", runtime.NumCPU(), "Number of concurrent workers (shorthand)")
 	listFonts := flag.Bool("list-fonts", false, "List available fonts and exit")
 	noMetadata := flag.Bool("no-metadata", false, "Skip adding EXIF metadata (Software and UserComment tags) to output files")
+	postProcess := flag.String("post-process", "", "Command to run on each output file ({file} = path)")
 
 	flag.Parse()
 
@@ -1446,6 +1477,7 @@ func main() {
 		OutputFormat:     *outputFormat,
 		OuterPadding:     *outerPadding,
 		CaptionPadding:   *captionPadding,
+		PostProcess:      *postProcess,
 	}
 
 	// Merge with loaded config file (if any) - CLI flags take precedence

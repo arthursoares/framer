@@ -3,6 +3,9 @@ package main
 import (
 	"image"
 	"image/color"
+	"os"
+	"path/filepath"
+	"strings"
 	"testing"
 	"time"
 )
@@ -535,4 +538,134 @@ func TestGetAvailableFonts(t *testing.T) {
 	if !found {
 		t.Error("Expected default font 'CourierPrime-Bold' in available fonts")
 	}
+}
+
+func TestRunPostProcess(t *testing.T) {
+	t.Run("empty command does nothing", func(t *testing.T) {
+		err := runPostProcess("", "/some/file.jpg")
+		if err != nil {
+			t.Errorf("Expected no error for empty command, got %v", err)
+		}
+	})
+
+	t.Run("placeholder replacement", func(t *testing.T) {
+		tmpDir := t.TempDir()
+		markerFile := filepath.Join(tmpDir, "marker.txt")
+		testFile := filepath.Join(tmpDir, "test.jpg")
+
+		// Create a test file
+		err := os.WriteFile(testFile, []byte("test"), 0644)
+		if err != nil {
+			t.Fatalf("Failed to create test file: %v", err)
+		}
+
+		// Run a command that creates a marker file with the path
+		// Note: {file} gets auto-quoted, so echo outputs the path correctly
+		cmd := "echo {file} > " + markerFile
+		err = runPostProcess(cmd, testFile)
+		if err != nil {
+			t.Fatalf("runPostProcess() error = %v", err)
+		}
+
+		// Verify marker file contains the correct path
+		content, err := os.ReadFile(markerFile)
+		if err != nil {
+			t.Fatalf("Failed to read marker file: %v", err)
+		}
+
+		got := strings.TrimSpace(string(content))
+		if got != testFile {
+			t.Errorf("Expected placeholder to be replaced with %q, got %q", testFile, got)
+		}
+	})
+
+	t.Run("command with touch creates file", func(t *testing.T) {
+		tmpDir := t.TempDir()
+		testFile := filepath.Join(tmpDir, "test.jpg")
+		markerFile := testFile + ".processed"
+
+		// Create a test file
+		err := os.WriteFile(testFile, []byte("test"), 0644)
+		if err != nil {
+			t.Fatalf("Failed to create test file: %v", err)
+		}
+
+		// Run touch command
+		err = runPostProcess("touch {file}.processed", testFile)
+		if err != nil {
+			t.Fatalf("runPostProcess() error = %v", err)
+		}
+
+		// Verify marker file was created
+		if _, err := os.Stat(markerFile); os.IsNotExist(err) {
+			t.Errorf("Expected marker file %s to exist", markerFile)
+		}
+	})
+
+	t.Run("command failure returns error", func(t *testing.T) {
+		err := runPostProcess("exit 1", "/some/file.jpg")
+		if err == nil {
+			t.Error("Expected error for failing command, got nil")
+		}
+	})
+
+	t.Run("nonexistent command returns error", func(t *testing.T) {
+		err := runPostProcess("nonexistent_command_12345 {file}", "/some/file.jpg")
+		if err == nil {
+			t.Error("Expected error for nonexistent command, got nil")
+		}
+	})
+
+	t.Run("complex shell command with pipes", func(t *testing.T) {
+		tmpDir := t.TempDir()
+		testFile := filepath.Join(tmpDir, "test.jpg")
+		outputFile := filepath.Join(tmpDir, "output.txt")
+
+		// Create a test file
+		err := os.WriteFile(testFile, []byte("test"), 0644)
+		if err != nil {
+			t.Fatalf("Failed to create test file: %v", err)
+		}
+
+		// Run a piped command
+		cmd := "echo {file} | tr '/' '-' > " + outputFile
+		err = runPostProcess(cmd, testFile)
+		if err != nil {
+			t.Fatalf("runPostProcess() error = %v", err)
+		}
+
+		// Verify output file was created
+		if _, err := os.Stat(outputFile); os.IsNotExist(err) {
+			t.Errorf("Expected output file %s to exist", outputFile)
+		}
+	})
+
+	t.Run("file path with spaces", func(t *testing.T) {
+		tmpDir := t.TempDir()
+		testFile := filepath.Join(tmpDir, "test file with spaces.jpg")
+		markerFile := filepath.Join(tmpDir, "spaces_test.done")
+
+		// Create a test file with spaces in name
+		err := os.WriteFile(testFile, []byte("test"), 0644)
+		if err != nil {
+			t.Fatalf("Failed to create test file: %v", err)
+		}
+
+		// Run a command that uses the file path - {file} is auto-quoted now
+		// so paths with spaces work without manual quoting
+		cmd := "cat {file} > " + markerFile
+		err = runPostProcess(cmd, testFile)
+		if err != nil {
+			t.Fatalf("runPostProcess() error = %v", err)
+		}
+
+		// Verify marker file was created with correct content
+		content, err := os.ReadFile(markerFile)
+		if err != nil {
+			t.Fatalf("Failed to read marker file: %v", err)
+		}
+		if string(content) != "test" {
+			t.Errorf("Expected content 'test', got %q", string(content))
+		}
+	})
 }
