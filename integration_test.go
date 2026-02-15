@@ -298,6 +298,125 @@ func TestProcessImageEndToEnd(t *testing.T) {
 				expectedWidth, expectedHeight, bounds.Dx(), bounds.Dy())
 		}
 	})
+
+	t.Run("explicit output file path", func(t *testing.T) {
+		tmpDir := t.TempDir()
+		inputPath := filepath.Join(tmpDir, "input.jpg")
+		outputDir := filepath.Join(tmpDir, "output")
+		explicitOutputPath := filepath.Join(outputDir, "custom_name.jpg")
+
+		img := createTestImage(t, 600, 400, color.RGBA{150, 75, 200, 255})
+		saveTestImage(t, img, inputPath, "jpeg")
+
+		if err := os.MkdirAll(outputDir, 0755); err != nil {
+			t.Fatalf("Failed to create output directory: %v", err)
+		}
+
+		config := ProcessingConfig{
+			BorderStyle:     "solid",
+			BorderColor:     "#FFFFFF",
+			BorderThickness: "25",
+			Caption:         "Explicit Path Test",
+			FontColor:       "#000000",
+			FontSize:        "30",
+			FontName:        "CourierPrime-Bold",
+			JPEGQuality:     95,
+			OutputFormat:    "jpeg",
+			Padding:         "0",
+		}
+
+		// Pass explicit output file path instead of directory
+		err := processImage(inputPath, explicitOutputPath, config)
+		if err != nil {
+			t.Fatalf("processImage() error = %v", err)
+		}
+
+		// Verify output file exists at the explicit path
+		if _, err := os.Stat(explicitOutputPath); os.IsNotExist(err) {
+			t.Errorf("Output file not created at explicit path: %s", explicitOutputPath)
+		}
+
+		// Verify default generated file was NOT created
+		defaultOutput := filepath.Join(outputDir, "input_solid.jpg")
+		if _, err := os.Stat(defaultOutput); !os.IsNotExist(err) {
+			t.Errorf("Default output file should not exist when using explicit path: %s", defaultOutput)
+		}
+
+		// Verify output dimensions
+		outputFile, err := os.Open(explicitOutputPath)
+		if err != nil {
+			t.Fatalf("Failed to open output file: %v", err)
+		}
+		defer outputFile.Close()
+
+		outputImg, _, err := image.Decode(outputFile)
+		if err != nil {
+			t.Fatalf("Failed to decode output image: %v", err)
+		}
+
+		bounds := outputImg.Bounds()
+		expectedWidth := 600 + 2*25
+		expectedHeight := 400 + 2*25
+		if bounds.Dx() != expectedWidth || bounds.Dy() != expectedHeight {
+			t.Errorf("Expected dimensions %dx%d, got %dx%d",
+				expectedWidth, expectedHeight, bounds.Dx(), bounds.Dy())
+		}
+	})
+
+	t.Run("explicit output file path with PNG", func(t *testing.T) {
+		tmpDir := t.TempDir()
+		inputPath := filepath.Join(tmpDir, "input.jpg")
+		outputDir := filepath.Join(tmpDir, "output")
+		explicitOutputPath := filepath.Join(outputDir, "output.png")
+
+		img := createTestImage(t, 500, 500, color.RGBA{255, 128, 0, 255})
+		saveTestImage(t, img, inputPath, "jpeg")
+
+		if err := os.MkdirAll(outputDir, 0755); err != nil {
+			t.Fatalf("Failed to create output directory: %v", err)
+		}
+
+		config := ProcessingConfig{
+			BorderStyle:     "instagram",
+			BorderColor:     "#000000",
+			BorderThickness: "30",
+			Caption:         "PNG Output Test",
+			FontColor:       "#FFFFFF",
+			FontSize:        "28",
+			FontName:        "CourierPrime-Bold",
+			InstagramMaxSize: 900,
+			// Note: OutputFormat is ignored when explicit path has .png extension
+			OutputFormat:    "jpeg",
+			Padding:         "0",
+		}
+
+		// Pass explicit output file path with .png extension
+		err := processImage(inputPath, explicitOutputPath, config)
+		if err != nil {
+			t.Fatalf("processImage() error = %v", err)
+		}
+
+		// Verify output file exists
+		if _, err := os.Stat(explicitOutputPath); os.IsNotExist(err) {
+			t.Errorf("Output file not created: %s", explicitOutputPath)
+		}
+
+		// Verify it's actually a PNG (format derived from file extension)
+		outputFile, err := os.Open(explicitOutputPath)
+		if err != nil {
+			t.Fatalf("Failed to open output file: %v", err)
+		}
+		defer outputFile.Close()
+
+		_, format, err := image.DecodeConfig(outputFile)
+		if err != nil {
+			t.Fatalf("Failed to decode output format: %v", err)
+		}
+
+		if format != "png" {
+			t.Errorf("Expected PNG format (derived from .png extension), got %s", format)
+		}
+	})
 }
 
 func TestBatchProcessing(t *testing.T) {

@@ -1159,28 +1159,48 @@ func processImage(imagePath string, outputPath string, config ProcessingConfig) 
 		newImage = addCaption(rgba, captionText, fontSize, fontColor, resizedSize, borderThickness, padding, imagePos, config.FontName, captionPadding, config.BorderStyle)
 	}
 
-	// Save the result
-	baseName := filepath.Base(imagePath)
-	ext := filepath.Ext(baseName)
-	name := strings.TrimSuffix(baseName, ext)
-	suffix := "_solid"
-	switch strings.ToLower(config.BorderStyle) {
-	case "instagram":
-		suffix = "_instagram"
-	case "print10x15":
-		suffix = "_print10x15"
-	}
+	// Determine output file path and format
+	var outFile string
+	var outputFormat string
 
-	// Determine output format and extension
-	outputFormat := strings.ToLower(config.OutputFormat)
-	if outputFormat == "" {
-		outputFormat = "jpeg"
+	// Check if outputPath is an explicit file (has extension) or a directory
+	outputPathExt := strings.ToLower(filepath.Ext(outputPath))
+	isExplicitFile := outputPathExt == ".jpg" || outputPathExt == ".jpeg" || outputPathExt == ".png"
+
+	if isExplicitFile {
+		// Use the explicit output file path
+		outFile = outputPath
+
+		// Determine format from file extension
+		if outputPathExt == ".png" {
+			outputFormat = "png"
+		} else {
+			outputFormat = "jpeg"
+		}
+	} else {
+		// Generate output filename based on border style
+		baseName := filepath.Base(imagePath)
+		ext := filepath.Ext(baseName)
+		name := strings.TrimSuffix(baseName, ext)
+		suffix := "_solid"
+		switch strings.ToLower(config.BorderStyle) {
+		case "instagram":
+			suffix = "_instagram"
+		case "print10x15":
+			suffix = "_print10x15"
+		}
+
+		// Determine output format and extension from config
+		outputFormat = strings.ToLower(config.OutputFormat)
+		if outputFormat == "" {
+			outputFormat = "jpeg"
+		}
+		outputExt := ".jpg"
+		if outputFormat == "png" {
+			outputExt = ".png"
+		}
+		outFile = filepath.Join(outputPath, fmt.Sprintf("%s%s%s", name, suffix, outputExt))
 	}
-	outputExt := ".jpg"
-	if outputFormat == "png" {
-		outputExt = ".png"
-	}
-	outFile := filepath.Join(outputPath, fmt.Sprintf("%s%s%s", name, suffix, outputExt))
 
 	// Create output file
 	out, err := os.Create(outFile)
@@ -1341,6 +1361,9 @@ func main() {
 
 	outputPath := flag.String("output", "", "Output folder where processed images will be saved")
 	flag.StringVar(outputPath, "o", "", "Output folder where processed images will be saved (shorthand)")
+
+	outputFile := flag.String("output-file", "", "Explicit output file path (overrides output folder and auto-generated filename)")
+	flag.StringVar(outputFile, "of", "", "Explicit output file path (shorthand)")
 
 	borderThickness := flag.String("border-thickness", "", "Border thickness in pixels or as a percentage (e.g. '10%')")
 	flag.StringVar(borderThickness, "t", "", "Border thickness in pixels or as a percentage (shorthand)")
@@ -1538,6 +1561,25 @@ func main() {
 		}
 	}
 
+	// Handle --output-file flag
+	var explicitOutputFile string
+	if *outputFile != "" {
+		absOutputFile, err := filepath.Abs(*outputFile)
+		if err != nil {
+			log.Fatalf("Error resolving output file path: %v", err)
+		}
+		explicitOutputFile = absOutputFile
+
+		// Create parent directory if it doesn't exist
+		outputDir := filepath.Dir(explicitOutputFile)
+		if _, err := os.Stat(outputDir); os.IsNotExist(err) {
+			err := os.MkdirAll(outputDir, 0755)
+			if err != nil {
+				log.Fatalf("Could not create output directory: %v", err)
+			}
+		}
+	}
+
 	// Convert to absolute paths for comparison
 	absInputPath, err := filepath.Abs(*inputPath)
 	if err != nil {
@@ -1548,11 +1590,13 @@ func main() {
 		log.Fatalf("Error resolving output path: %v", err)
 	}
 
-	// Verify output folder exists (or create it)
-	if _, err := os.Stat(absOutputPath); os.IsNotExist(err) {
-		err := os.MkdirAll(absOutputPath, 0755)
-		if err != nil {
-			log.Fatalf("Could not create output directory: %v", err)
+	// Verify output folder exists (or create it) only if --output-file not specified
+	if explicitOutputFile == "" {
+		if _, err := os.Stat(absOutputPath); os.IsNotExist(err) {
+			err := os.MkdirAll(absOutputPath, 0755)
+			if err != nil {
+				log.Fatalf("Could not create output directory: %v", err)
+			}
 		}
 	}
 
@@ -1563,6 +1607,11 @@ func main() {
 	}
 
 	if fileInfo.IsDir() {
+		// Batch processing
+		if explicitOutputFile != "" {
+			log.Printf("Warning: --output-file is ignored for batch processing (multiple input files)")
+		}
+
 		// Warn if output is a subdirectory of input
 		if strings.HasPrefix(absOutputPath+string(filepath.Separator), absInputPath+string(filepath.Separator)) {
 			log.Printf("Warning: Output directory is a subdirectory of input directory")
@@ -1604,8 +1653,13 @@ func main() {
 		fmt.Println() // Newline after progress bar
 		stats.PrintSummary()
 	} else {
-		// Single file
-		err := processImage(absInputPath, absOutputPath, config)
+		// Single file processing
+		outputPathOrFile := absOutputPath
+		if explicitOutputFile != "" {
+			outputPathOrFile = explicitOutputFile
+		}
+
+		err := processImage(absInputPath, outputPathOrFile, config)
 		if err != nil {
 			log.Fatalf("Error processing image: %v", err)
 		}
