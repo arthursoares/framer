@@ -107,6 +107,9 @@ sudo mv framer /usr/local/bin/
 # Process a single image with defaults
 framer -i photo.jpg -o output/
 
+# Specify exact output path (no auto-generated filename)
+framer -i photo.jpg --output-file /path/to/final.jpg
+
 # Process a folder with progress bar
 framer -i photos/ -o output/
 
@@ -121,6 +124,9 @@ framer -i photo.jpg -o output/ -s instagram --instagram-max-size 900
 
 # High-quality PNG output
 framer -i photo.jpg -o output/ -f png --quality 100
+
+# Output to specific file with format from extension
+framer -i photo.jpg --output-file result.png
 
 # Process with 8 workers
 framer -i photos/ -o output/ --workers 8
@@ -140,12 +146,17 @@ framer -i photo.jpg -o output/ --post-process "jpegoptim --strip-all {file}"
 # Single file processing
 framer -i /path/to/image.jpg -o /path/to/output/
 
+# Output to specific file path
+framer -i /path/to/image.jpg --output-file /exact/path/result.jpg
+
 # Directory processing (batch)
 framer -i /path/to/folder/ -o /path/to/output/
 
 # List available fonts
 framer --list-fonts
 ```
+
+**Note:** `--output-file` specifies the exact output path (including filename). When used, the style suffix (`_solid`, `_instagram`) is not appended. This is useful for integration with external tools. Only works with single file processing.
 
 ### Using Presets
 
