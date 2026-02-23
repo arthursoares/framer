@@ -21,6 +21,15 @@ vendor/
 # Go workspace file
 go.work
 
+# Swift build
+.build/
+.swiftpm/
+Package.resolved
+*.xcodeproj/xcuserdata/
+*.xcodeproj/project.xcworkspace/xcuserdata/
+DerivedData/
+xcuserdata/
+
 # macOS system files
 .DS_Store
 .AppleDouble
