@@ -1,0 +1,171 @@
+import ArgumentParser
+import Foundation
+import FramerCore
+
+struct ProcessCommand: AsyncParsableCommand {
+    static let configuration = CommandConfiguration(
+        commandName: "process",
+        abstract: "Process one or more images"
+    )
+
+    @Option(name: .shortAndLong, help: "Input image or directory") var input: String
+    @Option(name: .shortAndLong, help: "Output directory") var output: String?
+    @Option(name: [.long, .customShort("f")], help: "Output file path (single file only)") var outputFile: String?
+    @Option(help: "Border style: solid or instagram") var borderStyle: String?
+    @Option(name: [.long, .customShort("t")], help: "Border thickness (e.g. 20 or 5%%)") var borderThickness: String?
+    @Option(help: "Border color (hex, e.g. #FFFFFF)") var borderColor: String?
+    @Option(help: "Padding in pixels") var padding: Int?
+    @Option(help: "Caption text") var caption: String?
+    @Option(help: "Caption template with {{field}} placeholders") var captionTemplate: String?
+    @Flag(help: "Disable caption") var noCaption = false
+    @Option(help: "Font name") var fontName: String?
+    @Option(help: "Font size in pixels") var fontSize: Int?
+    @Option(help: "Font color (hex)") var fontColor: String?
+    @Option(name: [.long, .customShort("q")], help: "JPEG quality (60-100)") var quality: Int?
+    @Option(help: "Output format: jpeg or png") var outputFormat: String?
+    @Option(help: "Config YAML file path") var config: String?
+    @Option(help: "Preset name") var preset: String?
+    @Option(name: [.long, .customShort("w")], help: "Number of workers") var workers: Int?
+    @Option(help: "Post-process command ({file} = output path)") var postProcess: String?
+
+    mutating func run() async throws {
+        // Build config: CLI flags → config file → preset → .framer.yaml → defaults
+        let configURL = config.map { URL(fileURLWithPath: $0) }
+        var cfg = YAMLConfig.loadDefault(configPath: configURL, preset: preset)
+
+        // Apply CLI overrides
+        if let s = borderStyle { cfg.borderStyle = BorderStyle(rawValue: s) ?? cfg.borderStyle }
+        if let t = borderThickness { cfg.borderThickness = BorderSize(string: t) }
+        if let c = borderColor, let color = try? CodableColor(hex: c) { cfg.borderColor = color }
+        if let p = padding { cfg.padding = p }
+        if noCaption { cfg.captionMode = .none }
+        else if let t = captionTemplate { cfg.captionMode = .template(t) }
+        else if let c = caption { cfg.captionMode = .custom(c) }
+        if let fn = fontName { cfg.fontName = fn }
+        if let fs = fontSize { cfg.fontSize = .fixed(fs) }
+        if let fc = fontColor, let color = try? CodableColor(hex: fc) { cfg.fontColor = color }
+        if let q = quality { cfg.outputFormat = .jpeg(quality: q) }
+        if outputFormat == "png" { cfg.outputFormat = .png }
+        if let pp = postProcess { cfg.postProcess = pp }
+
+        let inputURL = URL(fileURLWithPath: input)
+        var isDir: ObjCBool = false
+        FileManager.default.fileExists(atPath: input, isDirectory: &isDir)
+
+        guard output != nil || outputFile != nil else {
+            throw ValidationError("Either --output or --output-file is required")
+        }
+
+        if isDir.boolValue {
+            guard let outputDir = output else {
+                throw ValidationError("--output is required for directory processing")
+            }
+            let workerCount = workers ?? ProcessInfo.processInfo.processorCount
+            try await batchProcess(directory: inputURL, outputDir: outputDir, config: cfg, workers: workerCount)
+        } else {
+            let outURL: URL
+            if let f = outputFile {
+                outURL = URL(fileURLWithPath: f)
+            } else {
+                let outDir = URL(fileURLWithPath: output!)
+                try FileManager.default.createDirectory(at: outDir, withIntermediateDirectories: true)
+                outURL = Self.outputName(for: inputURL, in: outDir, style: cfg.borderStyle, format: cfg.outputFormat)
+            }
+            let processor = FrameProcessor()
+            try await processor.process(input: inputURL, output: outURL, config: cfg)
+            Self.runPostProcess(cfg.postProcess, file: outURL)
+            print("Done: \(outURL.path)")
+        }
+    }
+
+    private func batchProcess(directory: URL, outputDir: String, config: ProcessingConfig, workers: Int) async throws {
+        let fm = FileManager.default
+        let outDir = URL(fileURLWithPath: outputDir)
+        try fm.createDirectory(at: outDir, withIntermediateDirectories: true)
+
+        let images = try fm.contentsOfDirectory(at: directory, includingPropertiesForKeys: nil)
+            .filter { ["jpg","jpeg","png","tiff","tif","heic"].contains($0.pathExtension.lowercased()) }
+
+        guard !images.isEmpty else {
+            print("No images found in \(directory.path)")
+            return
+        }
+
+        let total = images.count
+        print("Processing \(total) image\(total == 1 ? "" : "s") with \(workers) worker\(workers == 1 ? "" : "s")...")
+
+        let counter = Counter()
+
+        try await withThrowingTaskGroup(of: Void.self) { group in
+            var pending = images.makeIterator()
+
+            // Seed initial workers
+            for _ in 0..<min(workers, total) {
+                if let url = pending.next() {
+                    group.addTask {
+                        let outURL = Self.outputName(for: url, in: outDir, style: config.borderStyle, format: config.outputFormat)
+                        let processor = FrameProcessor()
+                        try await processor.process(input: url, output: outURL, config: config)
+                        Self.runPostProcess(config.postProcess, file: outURL)
+                        let d = await counter.increment()
+                        print("[\(d)/\(total)] \(url.lastPathComponent)")
+                    }
+                }
+            }
+
+            // As each finishes, schedule next
+            for try await _ in group {
+                if let url = pending.next() {
+                    group.addTask {
+                        let outURL = Self.outputName(for: url, in: outDir, style: config.borderStyle, format: config.outputFormat)
+                        let processor = FrameProcessor()
+                        try await processor.process(input: url, output: outURL, config: config)
+                        Self.runPostProcess(config.postProcess, file: outURL)
+                        let d = await counter.increment()
+                        print("[\(d)/\(total)] \(url.lastPathComponent)")
+                    }
+                }
+            }
+        }
+
+        print("Done: \(total) images processed to \(outDir.path)")
+    }
+
+    static func outputName(for input: URL, in dir: URL, style: BorderStyle, format: OutputFormat) -> URL {
+        let stem = input.deletingPathExtension().lastPathComponent
+        let ext: String
+        switch format {
+        case .png: ext = "png"
+        case .jpeg: ext = "jpg"
+        }
+        let suffix = style == .instagram ? "_instagram" : "_solid"
+        return dir.appendingPathComponent("\(stem)\(suffix).\(ext)")
+    }
+
+    static func runPostProcess(_ command: String?, file: URL) {
+        guard let cmd = command, !cmd.isEmpty else { return }
+        let quoted = file.path.contains(" ") ? "\"\(file.path)\"" : file.path
+        let resolved = cmd.replacingOccurrences(of: "{file}", with: quoted)
+        let proc = Process()
+        proc.launchPath = "/bin/sh"
+        proc.arguments = ["-c", resolved]
+        do {
+            try proc.run()
+            proc.waitUntilExit()
+            if proc.terminationStatus != 0 {
+                print("Warning: post-process exited with status \(proc.terminationStatus)")
+            }
+        } catch {
+            print("Warning: post-process failed: \(error.localizedDescription)")
+        }
+    }
+}
+
+// Thread-safe counter for batch progress
+private actor Counter {
+    private var value = 0
+    func increment() -> Int {
+        value += 1
+        return value
+    }
+}
