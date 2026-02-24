@@ -6,6 +6,7 @@ final class AppState {
     var library: [PhotoItem] = []
     var selectedItems: Set<PhotoItem.ID> = []
     var currentConfig: ProcessingConfig = .default
+    var activePresetName: String?
     var presets: [Preset] = []
     var presetStore = PresetStore()
     var exportQueue: [ExportJob] = []
@@ -39,13 +40,14 @@ final class AppState {
 
         let jobId = job.id
         let config = currentConfig
+        let suffix = Self.exportSuffix(presetName: activePresetName)
 
         Task {
             let processor = FrameProcessor()
             var failedCount = 0
             for (i, item) in items.enumerated() {
                 do {
-                    let outURL = Self.outputURL(for: item, config: config, directory: directory)
+                    let outURL = Self.outputURL(for: item, config: config, directory: directory, suffix: suffix)
                     try await processor.process(input: item.url, output: outURL, config: config)
                 } catch {
                     failedCount += 1
@@ -67,16 +69,21 @@ final class AppState {
         }
     }
 
-    static func outputURL(for item: PhotoItem, config: ProcessingConfig, directory: URL) -> URL {
+    static func outputURL(for item: PhotoItem, config: ProcessingConfig, directory: URL, suffix: String) -> URL {
         let ext = config.outputFormat == .png ? "png" : "jpg"
         let stem = item.url.deletingPathExtension().lastPathComponent
-        let suffix: String
-        switch config.borderStyle {
-        case .solid: suffix = "_solid"
-        case .instagram: suffix = "_instagram"
-        case .print: suffix = "_print"
-        }
-        return directory.appendingPathComponent("\(stem)\(suffix).\(ext)")
+        return directory.appendingPathComponent("\(stem)_\(suffix).\(ext)")
+    }
+
+    /// Sanitized filename suffix from preset name, falling back to "framed".
+    static func exportSuffix(presetName: String?) -> String {
+        guard let name = presetName, !name.isEmpty else { return "framed" }
+        // Replace non-alphanumeric characters with underscores, collapse runs
+        let sanitized = name
+            .lowercased()
+            .replacingOccurrences(of: "[^a-z0-9]+", with: "_", options: .regularExpression)
+            .trimmingCharacters(in: CharacterSet(charactersIn: "_"))
+        return sanitized.isEmpty ? "framed" : sanitized
     }
 }
 
