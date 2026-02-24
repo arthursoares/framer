@@ -6,9 +6,9 @@ import CoreGraphics
 
 public struct BorderResult {
     public let image: CGImage
-    /// Position where the photo was drawn on the canvas (nil for solid/instagram).
+    /// Position where the photo was drawn on the final canvas.
     public let imageOrigin: CGPoint?
-    /// Size of the photo as drawn on the canvas (nil for solid/instagram).
+    /// Size of the photo as drawn on the final canvas.
     public let imageSize: CGSize?
 }
 
@@ -32,112 +32,69 @@ public enum BorderRenderer {
         }
     }
 
-    // MARK: - Solid Border
+    // MARK: - Solid Border (matches Go createSolidBorder)
 
     private static func applySolidBorder(to image: CGImage, config: ProcessingConfig) throws -> BorderResult {
         let borderPx = config.borderThickness.resolved(relativeTo: min(image.width, image.height))
         let padding = config.padding
 
-        // Go layout: image → borderColor → white padding (outside)
-        // Inner layer: bordered image
-        let borderedW = image.width + 2 * borderPx
-        let borderedH = image.height + 2 * borderPx
-        // Outer layer: padding outside the border
-        let totalW = borderedW + 2 * padding
-        let totalH = borderedH + 2 * padding
+        // Step 1: Wrap image with border color
+        let bordered = try addBorder(to: image, thickness: borderPx, color: config.borderColor.cgColor)
 
-        guard let ctx = CGContext(data: nil,
-                                  width: totalW,
-                                  height: totalH,
-                                  bitsPerComponent: image.bitsPerComponent,
-                                  bytesPerRow: 0,
-                                  space: image.colorSpace ?? CGColorSpaceCreateDeviceRGB(),
-                                  bitmapInfo: image.bitmapInfo.rawValue) else {
-            throw FramerError.invalidImage(URL(fileURLWithPath: ""))
+        // Step 2: Wrap bordered image with padding (white / background)
+        let bgColor = resolveBackgroundColor(mode: config.backgroundMode, fallbackColor: .white, sourceImage: image)
+        let final: CGImage
+        if padding > 0 {
+            final = try addBorder(to: bordered, thickness: padding, color: bgColor)
+        } else {
+            final = bordered
         }
 
-        // 1. Fill entire canvas with padding color (white / background mode)
-        let bg = resolveBackground(mode: config.backgroundMode, fallbackColor: CGColor(red: 1, green: 1, blue: 1, alpha: 1), sourceImage: image)
-        fillBackground(bg, in: ctx, width: totalW, height: totalH)
-
-        // 2. Fill bordered area with border color (inside the padding)
-        ctx.setFillColor(config.borderColor.cgColor)
-        ctx.fill(CGRect(x: padding, y: padding, width: borderedW, height: borderedH))
-
-        // 3. Draw image centered inside the border
-        let imageX = padding + borderPx
-        let imageY = padding + borderPx
-        ctx.draw(image, in: CGRect(x: imageX, y: imageY, width: image.width, height: image.height))
-
-        guard let result = ctx.makeImage() else {
-            throw FramerError.invalidImage(URL(fileURLWithPath: ""))
-        }
-        return BorderResult(image: result, imageOrigin: nil, imageSize: nil)
+        return BorderResult(image: final, imageOrigin: nil, imageSize: nil)
     }
 
-    // MARK: - Instagram Border
+    // MARK: - Instagram Border (matches Go createInstagramFrame)
 
     private static func applyInstagramBorder(to image: CGImage, config: ProcessingConfig) throws -> BorderResult {
         let maxSize = config.instagramMaxSize
 
-        // 1. Scale image to fit within maxSize (aspect-ratio preserving)
+        // Step 1: Resize image to fit within maxSize (aspect-ratio preserving)
         let scale = min(Double(maxSize) / Double(image.width), Double(maxSize) / Double(image.height))
         let scaledW = Int(Double(image.width) * scale)
         let scaledH = Int(Double(image.height) * scale)
+        let resized = try resize(image, width: scaledW, height: scaledH)
 
-        // 2. Calculate layered dimensions: image → padding → border (additive)
+        // Step 2: Add padding (white) around resized image
         let padding = config.padding
-        let borderPx = config.borderThickness.resolved(relativeTo: min(scaledW, scaledH))
-        let borderedW = scaledW + 2 * padding + 2 * borderPx
-        let borderedH = scaledH + 2 * padding + 2 * borderPx
-
-        // 3. Fixed 4:5 canvas (matching Go implementation)
-        let canvasW = instagramWidth   // 1080
-        let canvasH = instagramHeight  // 1350
-
-        guard let ctx = CGContext(data: nil,
-                                  width: canvasW,
-                                  height: canvasH,
-                                  bitsPerComponent: image.bitsPerComponent,
-                                  bytesPerRow: 0,
-                                  space: image.colorSpace ?? CGColorSpaceCreateDeviceRGB(),
-                                  bitmapInfo: image.bitmapInfo.rawValue) else {
-            throw FramerError.invalidImage(URL(fileURLWithPath: ""))
-        }
-
-        // 4. Fill canvas with background
-        let bg = resolveBackground(mode: config.backgroundMode, fallbackColor: CGColor(red: 1, green: 1, blue: 1, alpha: 1), sourceImage: image)
-        fillBackground(bg, in: ctx, width: canvasW, height: canvasH)
-
-        // 5. Center bordered area on canvas, fill with border color
-        let bx = (canvasW - borderedW) / 2
-        let by = (canvasH - borderedH) / 2
-        ctx.setFillColor(config.borderColor.cgColor)
-        ctx.fill(CGRect(x: bx, y: by, width: borderedW, height: borderedH))
-
-        // 6. Fill padding area with white (inside border)
+        let padded: CGImage
         if padding > 0 {
-            ctx.setFillColor(CGColor(red: 1, green: 1, blue: 1, alpha: 1))
-            ctx.fill(CGRect(x: bx + borderPx, y: by + borderPx,
-                            width: borderedW - 2 * borderPx, height: borderedH - 2 * borderPx))
+            padded = try addBorder(to: resized, thickness: padding, color: .white)
+        } else {
+            padded = resized
         }
 
-        // 7. Draw image at correct aspect-ratio-preserving dimensions
-        let imageX = bx + borderPx + padding
-        let imageY = by + borderPx + padding
-        ctx.draw(image, in: CGRect(x: imageX, y: imageY, width: scaledW, height: scaledH))
+        // Step 3: Add border color around padded image
+        let borderPx = config.borderThickness.resolved(relativeTo: min(scaledW, scaledH))
+        let bordered = try addBorder(to: padded, thickness: borderPx, color: config.borderColor.cgColor)
 
-        guard let result = ctx.makeImage() else {
-            throw FramerError.invalidImage(URL(fileURLWithPath: ""))
-        }
+        // Step 4: Center on fixed 1080×1350 canvas
+        let bgFill = resolveBackground(mode: config.backgroundMode, fallbackColor: .white, sourceImage: image)
+        let (final, originX, originY) = try centerOnCanvas(
+            bordered, width: instagramWidth, height: instagramHeight, background: bgFill
+        )
+
+        // Calculate where the actual photo sits on the final canvas
+        let imageX = originX + borderPx + padding
+        let imageY = originY + borderPx + padding
+
         return BorderResult(
-            image: result,
+            image: final,
             imageOrigin: CGPoint(x: imageX, y: imageY),
             imageSize: CGSize(width: scaledW, height: scaledH)
         )
     }
 
-    // MARK: - Print Border
+    // MARK: - Print Border (matches Go createPrint10x15Frame)
 
     private static func applyPrintBorder(
         to image: CGImage,
@@ -159,56 +116,147 @@ public enum BorderRenderer {
         let availableW = frameW - 2 * config.outerPadding
         let availableH = frameH - 2 * config.outerPadding
 
-        // Scale image to fit available area, maintaining aspect ratio
+        // Step 1: Resize image to fit available area, maintaining aspect ratio
         let scale = min(
             Double(availableW) / Double(img.width),
             Double(availableH) / Double(img.height)
         )
         let scaledW = Int(Double(img.width) * scale)
         let scaledH = Int(Double(img.height) * scale)
+        let resized = try resize(img, width: scaledW, height: scaledH)
 
-        // Center image on canvas
-        let imageX = (frameW - scaledW) / 2
-        let imageY = (frameH - scaledH) / 2
+        // Step 2: Center resized image on fixed-size canvas with background
+        let bgFill = resolveBackground(mode: config.backgroundMode, fallbackColor: config.backgroundColor.cgColor, sourceImage: img)
+        let (canvas, imageX, imageY) = try centerOnCanvas(
+            resized, width: frameW, height: frameH, background: bgFill
+        )
 
-        guard let ctx = CGContext(data: nil,
-                                  width: frameW,
-                                  height: frameH,
-                                  bitsPerComponent: img.bitsPerComponent,
-                                  bytesPerRow: 0,
-                                  space: img.colorSpace ?? CGColorSpaceCreateDeviceRGB(),
-                                  bitmapInfo: img.bitmapInfo.rawValue) else {
-            throw FramerError.invalidImage(URL(fileURLWithPath: ""))
+        // Step 3: Draw border overlay rectangles on the image edges
+        let borderPx = config.borderThickness.resolved(relativeTo: min(scaledW, scaledH))
+        let final: CGImage
+        if borderPx > 0 {
+            final = try drawBorderOverlay(
+                on: canvas, at: CGPoint(x: imageX, y: imageY),
+                size: CGSize(width: scaledW, height: scaledH),
+                thickness: borderPx, color: config.borderColor.cgColor
+            )
+        } else {
+            final = canvas
         }
 
-        // Fill canvas with background
-        let bg = resolveBackground(mode: config.backgroundMode, fallbackColor: config.backgroundColor.cgColor, sourceImage: img)
-        fillBackground(bg, in: ctx, width: frameW, height: frameH)
+        return BorderResult(
+            image: final,
+            imageOrigin: CGPoint(x: imageX, y: imageY),
+            imageSize: CGSize(width: scaledW, height: scaledH)
+        )
+    }
 
-        // Draw the scaled image centered
-        ctx.draw(img, in: CGRect(x: imageX, y: imageY, width: scaledW, height: scaledH))
+    // MARK: - Image Primitives
 
-        // Draw border overlay rectangles on the image edges
-        let borderPx = config.borderThickness.resolved(relativeTo: min(scaledW, scaledH))
-        ctx.setFillColor(config.borderColor.cgColor)
+    /// Resize an image to exact dimensions (like Go's imaging.Resize).
+    private static func resize(_ image: CGImage, width: Int, height: Int) throws -> CGImage {
+        guard width > 0, height > 0 else { return image }
+        guard let ctx = createContext(width: width, height: height, template: image) else {
+            throw FramerError.invalidImage(URL(fileURLWithPath: ""))
+        }
+        ctx.interpolationQuality = .high
+        ctx.draw(image, in: CGRect(x: 0, y: 0, width: width, height: height))
+        guard let result = ctx.makeImage() else {
+            throw FramerError.invalidImage(URL(fileURLWithPath: ""))
+        }
+        return result
+    }
+
+    /// Wrap an image with a uniform-colored border of given thickness.
+    /// Creates a new image that is (w + 2*thickness) × (h + 2*thickness).
+    /// (Like Go's: newRGBA(bordered size) → fill with color → paste image at offset)
+    private static func addBorder(to image: CGImage, thickness: Int, color: CGColor) throws -> CGImage {
+        guard thickness > 0 else { return image }
+        let newW = image.width + 2 * thickness
+        let newH = image.height + 2 * thickness
+        guard let ctx = createContext(width: newW, height: newH, template: image) else {
+            throw FramerError.invalidImage(URL(fileURLWithPath: ""))
+        }
+        // Fill with border color
+        ctx.setFillColor(color)
+        ctx.fill(CGRect(x: 0, y: 0, width: newW, height: newH))
+        // Paste image centered
+        ctx.draw(image, in: CGRect(x: thickness, y: thickness, width: image.width, height: image.height))
+        guard let result = ctx.makeImage() else {
+            throw FramerError.invalidImage(URL(fileURLWithPath: ""))
+        }
+        return result
+    }
+
+    /// Center an image on a fixed-size canvas with a background fill.
+    /// Returns the final image and the (x, y) origin where the source image was placed.
+    private static func centerOnCanvas(
+        _ image: CGImage,
+        width: Int,
+        height: Int,
+        background: BackgroundFill
+    ) throws -> (CGImage, Int, Int) {
+        guard let ctx = createContext(width: width, height: height, template: image) else {
+            throw FramerError.invalidImage(URL(fileURLWithPath: ""))
+        }
+        // Fill background
+        fillBackground(background, in: ctx, width: width, height: height)
+        // Center image
+        let x = (width - image.width) / 2
+        let y = (height - image.height) / 2
+        ctx.draw(image, in: CGRect(x: x, y: y, width: image.width, height: image.height))
+        guard let result = ctx.makeImage() else {
+            throw FramerError.invalidImage(URL(fileURLWithPath: ""))
+        }
+        return (result, x, y)
+    }
+
+    /// Draw 4 border-overlay rectangles on the edges of an image region (for print style).
+    private static func drawBorderOverlay(
+        on canvas: CGImage,
+        at origin: CGPoint,
+        size: CGSize,
+        thickness: Int,
+        color: CGColor
+    ) throws -> CGImage {
+        guard let ctx = createContext(width: canvas.width, height: canvas.height, template: canvas) else {
+            throw FramerError.invalidImage(URL(fileURLWithPath: ""))
+        }
+        // Draw existing canvas
+        ctx.draw(canvas, in: CGRect(x: 0, y: 0, width: canvas.width, height: canvas.height))
+        ctx.setFillColor(color)
+
+        let x = Int(origin.x)
+        let y = Int(origin.y)
+        let w = Int(size.width)
+        let h = Int(size.height)
 
         // Bottom edge
-        ctx.fill(CGRect(x: imageX, y: imageY, width: scaledW, height: borderPx))
+        ctx.fill(CGRect(x: x, y: y, width: w, height: thickness))
         // Top edge
-        ctx.fill(CGRect(x: imageX, y: imageY + scaledH - borderPx, width: scaledW, height: borderPx))
+        ctx.fill(CGRect(x: x, y: y + h - thickness, width: w, height: thickness))
         // Left edge
-        ctx.fill(CGRect(x: imageX, y: imageY, width: borderPx, height: scaledH))
+        ctx.fill(CGRect(x: x, y: y, width: thickness, height: h))
         // Right edge
-        ctx.fill(CGRect(x: imageX + scaledW - borderPx, y: imageY, width: borderPx, height: scaledH))
+        ctx.fill(CGRect(x: x + w - thickness, y: y, width: thickness, height: h))
 
         guard let result = ctx.makeImage() else {
             throw FramerError.invalidImage(URL(fileURLWithPath: ""))
         }
+        return result
+    }
 
-        return BorderResult(
-            image: result,
-            imageOrigin: CGPoint(x: imageX, y: imageY),
-            imageSize: CGSize(width: scaledW, height: scaledH)
+    // MARK: - Context Helper
+
+    private static func createContext(width: Int, height: Int, template: CGImage) -> CGContext? {
+        CGContext(
+            data: nil,
+            width: width,
+            height: height,
+            bitsPerComponent: template.bitsPerComponent,
+            bytesPerRow: 0,
+            space: template.colorSpace ?? CGColorSpaceCreateDeviceRGB(),
+            bitmapInfo: template.bitmapInfo.rawValue
         )
     }
 
@@ -218,6 +266,23 @@ public enum BorderRenderer {
         case solid(CGColor)
         case linearGradient(start: CGColor, end: CGColor)
         case radialGradient(center: CGColor, edge: CGColor)
+    }
+
+    /// Resolve background mode to a single solid color (for addBorder/padding).
+    private static func resolveBackgroundColor(
+        mode: BackgroundMode,
+        fallbackColor: CGColor,
+        sourceImage: CGImage
+    ) -> CGColor {
+        switch mode {
+        case .color:
+            return fallbackColor
+        case .dominant:
+            return ColorExtractor.extractDominantColor(from: sourceImage).cgColor
+        case .gradientLinear, .gradientRadial:
+            // For wrapping borders, use dominant as solid fallback
+            return ColorExtractor.extractDominantColor(from: sourceImage).cgColor
+        }
     }
 
     private static func resolveBackground(
@@ -258,7 +323,7 @@ public enum BorderRenderer {
                 ctx.fill(rect)
                 return
             }
-            // Top-to-bottom (CGContext has flipped Y: 0 is bottom)
+            // Top-to-bottom (CGContext Y: 0 is bottom)
             ctx.drawLinearGradient(gradient,
                                    start: CGPoint(x: CGFloat(width) / 2, y: CGFloat(height)),
                                    end: CGPoint(x: CGFloat(width) / 2, y: 0),
@@ -289,21 +354,18 @@ public enum BorderRenderer {
         let newWidth = image.height
         let newHeight = image.width
 
-        guard let ctx = CGContext(data: nil,
-                                  width: newWidth,
-                                  height: newHeight,
-                                  bitsPerComponent: image.bitsPerComponent,
-                                  bytesPerRow: 0,
-                                  space: image.colorSpace ?? CGColorSpaceCreateDeviceRGB(),
-                                  bitmapInfo: image.bitmapInfo.rawValue) else {
+        guard let ctx = createContext(width: newWidth, height: newHeight, template: image) else {
             return image
         }
 
-        // Translate and rotate: move origin to bottom-right corner, then rotate -90°
         ctx.translateBy(x: CGFloat(newWidth), y: 0)
         ctx.rotate(by: .pi / 2)
         ctx.draw(image, in: CGRect(x: 0, y: 0, width: image.width, height: image.height))
 
         return ctx.makeImage() ?? image
     }
+
+    // MARK: - CGColor Constants
+
+    private static let white = CGColor(red: 1, green: 1, blue: 1, alpha: 1)
 }
