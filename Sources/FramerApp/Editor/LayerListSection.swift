@@ -333,8 +333,57 @@ struct CanvasLayerControls: View {
     var onChange: (CanvasLayerParams) -> Void
 
     @State private var presetIndex: Int = 99
+    @State private var sizeMode: SizeMode = .pixels
+    @State private var physicalUnit: PhysicalUnit = .cm
+    @State private var widthPhysical: Double = 10.0
+    @State private var heightPhysical: Double = 15.0
+    @State private var dpi: Int = 300
+
+    private enum SizeMode: String, CaseIterable {
+        case pixels = "Pixels"
+        case physical = "Physical"
+    }
+
+    enum PhysicalUnit: String, CaseIterable {
+        case cm = "cm"
+        case mm = "mm"
+
+        var toMM: Double {
+            switch self {
+            case .cm: return 10.0
+            case .mm: return 1.0
+            }
+        }
+    }
 
     var body: some View {
+        presetPicker
+
+        Picker("Size Mode", selection: $sizeMode) {
+            ForEach(SizeMode.allCases, id: \.self) { mode in
+                Text(mode.rawValue).tag(mode)
+            }
+        }
+        .pickerStyle(.segmented)
+
+        if sizeMode == .pixels {
+            pixelFields
+        } else {
+            physicalFields
+        }
+
+        pixelSummary
+
+        LayerFillPicker(fill: params.fill) { newFill in
+            var p = params
+            p.fill = newFill
+            onChange(p)
+        }
+    }
+
+    // MARK: - Subviews
+
+    private var presetPicker: some View {
         Picker("Preset", selection: $presetIndex) {
             Text("Instagram 4:5").tag(0)
             Text("10x15 cm (300dpi)").tag(1)
@@ -345,26 +394,86 @@ struct CanvasLayerControls: View {
         .onChange(of: presetIndex) { _, preset in
             applyPreset(preset)
         }
+    }
 
+    private var pixelFields: some View {
         HStack {
             LabeledContent("Width") {
                 TextField("", value: widthBinding, format: .number)
                     .frame(width: 60)
                     .textFieldStyle(.roundedBorder)
+                    .monospacedDigit()
             }
+            Text("px").foregroundStyle(.secondary).frame(width: 20)
             LabeledContent("Height") {
                 TextField("", value: heightBinding, format: .number)
                     .frame(width: 60)
                     .textFieldStyle(.roundedBorder)
+                    .monospacedDigit()
             }
-        }
-
-        LayerFillPicker(fill: params.fill) { newFill in
-            var p = params
-            p.fill = newFill
-            onChange(p)
+            Text("px").foregroundStyle(.secondary).frame(width: 20)
         }
     }
+
+    private var physicalFields: some View {
+        VStack(spacing: 8) {
+            HStack {
+                Picker("Unit", selection: $physicalUnit) {
+                    ForEach(PhysicalUnit.allCases, id: \.self) { u in
+                        Text(u.rawValue).tag(u)
+                    }
+                }
+                .pickerStyle(.segmented)
+                .frame(width: 100)
+                .onChange(of: physicalUnit) { oldUnit, newUnit in
+                    convertUnit(from: oldUnit, to: newUnit)
+                }
+
+                Spacer()
+
+                LabeledContent("DPI") {
+                    TextField("", value: $dpi, format: .number)
+                        .frame(width: 50)
+                        .textFieldStyle(.roundedBorder)
+                        .monospacedDigit()
+                        .onChange(of: dpi) { _, _ in syncPhysicalToPixels() }
+                }
+            }
+
+            HStack {
+                LabeledContent("Width") {
+                    TextField("", value: $widthPhysical, format: .number.precision(.fractionLength(1)))
+                        .frame(width: 60)
+                        .textFieldStyle(.roundedBorder)
+                        .monospacedDigit()
+                        .onChange(of: widthPhysical) { _, _ in syncPhysicalToPixels() }
+                }
+                Text(physicalUnit.rawValue).foregroundStyle(.secondary).frame(width: 24)
+                LabeledContent("Height") {
+                    TextField("", value: $heightPhysical, format: .number.precision(.fractionLength(1)))
+                        .frame(width: 60)
+                        .textFieldStyle(.roundedBorder)
+                        .monospacedDigit()
+                        .onChange(of: heightPhysical) { _, _ in syncPhysicalToPixels() }
+                }
+                Text(physicalUnit.rawValue).foregroundStyle(.secondary).frame(width: 24)
+            }
+        }
+    }
+
+    @ViewBuilder
+    private var pixelSummary: some View {
+        if sizeMode == .physical {
+            HStack {
+                Spacer()
+                Text("\(params.width) x \(params.height) px")
+                    .font(.caption.monospaced())
+                    .foregroundStyle(.tertiary)
+            }
+        }
+    }
+
+    // MARK: - Pixel Bindings
 
     private var widthBinding: Binding<Int> {
         Binding(
@@ -390,16 +499,70 @@ struct CanvasLayerControls: View {
         )
     }
 
+    // MARK: - Physical <-> Pixel Conversion
+
+    private func syncPhysicalToPixels() {
+        let wMM = widthPhysical * physicalUnit.toMM
+        let hMM = heightPhysical * physicalUnit.toMM
+        let safeDPI = max(dpi, 1)
+        var p = params
+        p.width = Int((wMM / 25.4) * Double(safeDPI))
+        p.height = Int((hMM / 25.4) * Double(safeDPI))
+        onChange(p)
+        presetIndex = 99
+    }
+
+    private func convertUnit(from oldUnit: PhysicalUnit, to newUnit: PhysicalUnit) {
+        // Convert current values to mm, then to new unit
+        let wMM = widthPhysical * oldUnit.toMM
+        let hMM = heightPhysical * oldUnit.toMM
+        widthPhysical = wMM / newUnit.toMM
+        heightPhysical = hMM / newUnit.toMM
+    }
+
+    // MARK: - Presets
+
     private func applyPreset(_ preset: Int) {
         var p = params
         switch preset {
-        case 0: p.width = 1080; p.height = 1350
-        case 1: p.width = 1748; p.height = 1181
-        case 2: p.width = 2126; p.height = 1535
-        case 3: p.width = 3508; p.height = 2480
-        default: return
+        case 0:
+            p.width = 1080; p.height = 1350
+            applyPixelPreset(p)
+        case 1:
+            applyPhysicalPreset(widthCM: 15, heightCM: 10, dpi: 300, params: &p)
+        case 2:
+            applyPhysicalPreset(widthCM: 18, heightCM: 13, dpi: 300, params: &p)
+        case 3:
+            applyPhysicalPreset(widthCM: 29.7, heightCM: 21.0, dpi: 300, params: &p)
+        default:
+            return
         }
         onChange(p)
+    }
+
+    private func applyPixelPreset(_ p: CanvasLayerParams) {
+        // When applying a pixel-only preset (Instagram), sync physical fields
+        let safeDPI = max(dpi, 1)
+        let wMM = Double(p.width) / Double(safeDPI) * 25.4
+        let hMM = Double(p.height) / Double(safeDPI) * 25.4
+        widthPhysical = wMM / physicalUnit.toMM
+        heightPhysical = hMM / physicalUnit.toMM
+    }
+
+    private func applyPhysicalPreset(widthCM: Double, heightCM: Double, dpi newDPI: Int, params p: inout CanvasLayerParams) {
+        dpi = newDPI
+        switch physicalUnit {
+        case .cm:
+            widthPhysical = widthCM
+            heightPhysical = heightCM
+        case .mm:
+            widthPhysical = widthCM * 10
+            heightPhysical = heightCM * 10
+        }
+        let wMM = widthCM * 10
+        let hMM = heightCM * 10
+        p.width = Int((wMM / 25.4) * Double(newDPI))
+        p.height = Int((hMM / 25.4) * Double(newDPI))
     }
 }
 
