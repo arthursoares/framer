@@ -84,7 +84,8 @@ public final class PresetStore {
                 borderColor: try! CodableColor(hex: "#F5F0E8"),
                 padding: 200,
                 captionMode: .template(" - {{mon}} '{{year2}} -"),
-                fontName: "Courier New Bold",
+                fontName: "Courier New",
+                fontStyle: .bold,
                 fontColor: try! CodableColor(hex: "#2C2C2C"),
                 outputFormat: .jpeg(quality: 95)
             )),
@@ -94,7 +95,8 @@ public final class PresetStore {
                 borderColor: try! CodableColor(hex: "#FFFFFF"),
                 padding: 150,
                 captionMode: .template("{{camera}} | {{focal}} | {{aperture}} | {{iso}}"),
-                fontName: "Courier New Bold",
+                fontName: "Courier New",
+                fontStyle: .bold,
                 fontColor: try! CodableColor(hex: "#000000")
             )),
             ("minimal", ProcessingConfig(
@@ -110,7 +112,8 @@ public final class PresetStore {
                 borderColor: try! CodableColor(hex: "#FFFFFF"),
                 padding: 100,
                 captionMode: .template(" - {{mon}} '{{year2}} -"),
-                fontName: "Courier New Bold",
+                fontName: "Courier New",
+                fontStyle: .bold,
                 fontColor: try! CodableColor(hex: "#333333"),
                 backgroundColor: try! CodableColor(hex: "#FFFFFF"),
                 outerPadding: 40,

@@ -20,6 +20,8 @@ struct ProcessCommand: AsyncParsableCommand {
     @Flag(help: "Disable caption") var noCaption = false
     @Option(help: "Font name") var fontName: String?
     @Option(help: "Font size in pixels") var fontSize: Int?
+    @Flag(help: "Use bold font style") var fontBold = false
+    @Flag(help: "Use italic font style") var fontItalic = false
     @Option(help: "Font color (hex)") var fontColor: String?
     @Option(name: [.long, .customShort("q")], help: "JPEG quality (60-100)") var quality: Int?
     @Option(help: "Output format: jpeg or png") var outputFormat: String?
@@ -74,6 +76,8 @@ struct ProcessCommand: AsyncParsableCommand {
         else if let c = caption { cfg.captionMode = .custom(c) }
         if let fn = fontName { cfg.fontName = fn }
         if let fs = fontSize { cfg.fontSize = .fixed(fs) }
+        if fontBold { cfg.fontStyle.insert(.bold) }
+        if fontItalic { cfg.fontStyle.insert(.italic) }
         if let fc = fontColor, let color = try? CodableColor(hex: fc) { cfg.fontColor = color }
         if let q = quality { cfg.outputFormat = .jpeg(quality: q) }
         if outputFormat == "png" { cfg.outputFormat = .png }

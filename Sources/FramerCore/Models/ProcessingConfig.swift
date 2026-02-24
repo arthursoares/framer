@@ -1,5 +1,6 @@
 import Foundation
 import CoreGraphics
+import AppKit
 
 // MARK: - PrintFormat
 
@@ -149,6 +150,14 @@ public enum CaptionPosition: String, Codable, Equatable, Sendable, CaseIterable 
     case top
 }
 
+public struct FontStyle: OptionSet, Codable, Equatable, Sendable {
+    public let rawValue: Int
+    public init(rawValue: Int) { self.rawValue = rawValue }
+
+    public static let bold   = FontStyle(rawValue: 1 << 0)
+    public static let italic = FontStyle(rawValue: 1 << 1)
+}
+
 public enum FontSize: Codable, Equatable, Sendable {
     case auto
     case fixed(Int)
@@ -178,6 +187,7 @@ public struct ProcessingConfig: Equatable, Sendable {
     public var captionMode: CaptionMode
     public var fontName: String
     public var fontSize: FontSize
+    public var fontStyle: FontStyle
     public var fontColor: CodableColor
     public var outputFormat: OutputFormat
     public var instagramMaxSize: Int
@@ -201,6 +211,7 @@ public struct ProcessingConfig: Equatable, Sendable {
         captionMode: CaptionMode = .template(" - {{mon}} '{{year2}} -"),
         fontName: String = "Courier New",
         fontSize: FontSize = .auto,
+        fontStyle: FontStyle = [],
         fontColor: CodableColor = try! CodableColor(hex: "#000000"),
         outputFormat: OutputFormat = .jpeg(quality: 100),
         instagramMaxSize: Int = 1000,
@@ -223,6 +234,7 @@ public struct ProcessingConfig: Equatable, Sendable {
         self.captionMode = captionMode
         self.fontName = fontName
         self.fontSize = fontSize
+        self.fontStyle = fontStyle
         self.fontColor = fontColor
         self.outputFormat = outputFormat
         self.instagramMaxSize = instagramMaxSize
@@ -246,7 +258,7 @@ public struct ProcessingConfig: Equatable, Sendable {
 extension ProcessingConfig: Codable {
     private enum CodingKeys: String, CodingKey {
         case borderStyle, borderThickness, borderColor, padding
-        case captionMode, fontName, fontSize, fontColor
+        case captionMode, fontName, fontSize, fontStyle, fontColor
         case outputFormat, instagramMaxSize, postProcess
         case backgroundColor, outerPadding, captionPadding, noMetadata
         case backgroundMode, layers
@@ -262,6 +274,17 @@ extension ProcessingConfig: Codable {
         captionMode = try container.decode(CaptionMode.self, forKey: .captionMode)
         fontName = try container.decode(String.self, forKey: .fontName)
         fontSize = try container.decode(FontSize.self, forKey: .fontSize)
+        var decodedStyle = (try? container.decodeIfPresent(FontStyle.self, forKey: .fontStyle)) ?? []
+        // Backward compat: detect bold/italic from variant font names (e.g. "Courier New Bold")
+        if decodedStyle.isEmpty, let font = NSFont(name: fontName, size: 12) {
+            let traits = NSFontManager.shared.traits(of: font)
+            if traits.contains(.boldFontMask) { decodedStyle.insert(.bold) }
+            if traits.contains(.italicFontMask) { decodedStyle.insert(.italic) }
+            if !decodedStyle.isEmpty, let family = font.familyName {
+                fontName = family
+            }
+        }
+        fontStyle = decodedStyle
         fontColor = try container.decode(CodableColor.self, forKey: .fontColor)
         outputFormat = try container.decode(OutputFormat.self, forKey: .outputFormat)
         instagramMaxSize = try container.decode(Int.self, forKey: .instagramMaxSize)

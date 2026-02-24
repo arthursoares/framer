@@ -23,6 +23,8 @@ public enum CaptionRenderer {
             text = exif.resolve(template: t)
         }
 
+        guard !text.trimmingCharacters(in: .whitespaces).isEmpty else { return image }
+
         guard let ctx = CGContext(data: nil,
                                   width: image.width,
                                   height: image.height,
@@ -47,8 +49,16 @@ public enum CaptionRenderer {
         }
 
         // Build attributed string
-        let font = NSFont(name: config.fontName, size: fontSize)
+        var font = NSFont(name: config.fontName, size: fontSize)
             ?? NSFont.monospacedSystemFont(ofSize: fontSize, weight: .regular)
+
+        // Apply bold/italic traits via NSFontManager
+        if config.fontStyle.contains(.bold) {
+            font = NSFontManager.shared.convert(font, toHaveTrait: .boldFontMask)
+        }
+        if config.fontStyle.contains(.italic) {
+            font = NSFontManager.shared.convert(font, toHaveTrait: .italicFontMask)
+        }
 
         let attrs: [NSAttributedString.Key: Any] = [
             .font: font,
@@ -58,25 +68,31 @@ public enum CaptionRenderer {
 
         // Measure text
         let line = CTLineCreateWithAttributedString(attrStr)
-        let bounds = CTLineGetBoundsWithOptions(line, [])
+        var ascent: CGFloat = 0, descent: CGFloat = 0, leading: CGFloat = 0
+        CTLineGetTypographicBounds(line, &ascent, &descent, &leading)
+        let textHeight = ascent + descent
 
-        // Position caption
+        // Position caption using CTLineGetPenOffsetForFlush for correct alignment
         let x: CGFloat
         let y: CGFloat
         let imageW = CGFloat(image.width)
         let imageH = CGFloat(image.height)
         let captionSpacing = CGFloat(config.captionPadding)
-        let textMargin: CGFloat = CGFloat(borderPx) * 0.3 // inset from edge for left/right alignment
+        // Small margin for left/right alignment (proportional to font size)
+        let textMargin: CGFloat = fontSize * 0.4
 
         if let origin = imageOrigin, let imgSize = imageSize {
             // Canvas style (print/instagram with origin): position relative to image region
+            let regionStart = origin.x
+            let regionWidth = Double(imgSize.width)
+
             switch config.captionAlignment {
             case .left:
-                x = origin.x + textMargin
+                x = regionStart + textMargin
             case .center:
-                x = (imageW - bounds.width) / 2
+                x = regionStart + CTLineGetPenOffsetForFlush(line, 0.5, regionWidth)
             case .right:
-                x = origin.x + imgSize.width - bounds.width - textMargin
+                x = regionStart + CTLineGetPenOffsetForFlush(line, 1.0, regionWidth) - textMargin
             }
 
             switch config.captionPosition {
@@ -91,16 +107,16 @@ public enum CaptionRenderer {
             case .left:
                 x = textMargin
             case .center:
-                x = (imageW - bounds.width) / 2
+                x = CTLineGetPenOffsetForFlush(line, 0.5, Double(imageW))
             case .right:
-                x = imageW - bounds.width - textMargin
+                x = CTLineGetPenOffsetForFlush(line, 1.0, Double(imageW)) - textMargin
             }
 
             switch config.captionPosition {
             case .bottom:
-                y = (CGFloat(borderPx) - bounds.height) / 2
+                y = (CGFloat(borderPx) - textHeight) / 2 + descent
             case .top:
-                y = imageH - CGFloat(borderPx) + (CGFloat(borderPx) - bounds.height) / 2
+                y = imageH - CGFloat(borderPx) + (CGFloat(borderPx) - textHeight) / 2 + descent
             }
         }
 

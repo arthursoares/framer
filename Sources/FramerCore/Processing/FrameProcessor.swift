@@ -10,8 +10,9 @@ public actor FrameProcessor {
 
     // MARK: - Preview (downscaled, no disk I/O)
 
-    public func previewImage(for url: URL, config: ProcessingConfig) throws -> NSImage {
-        let cgImage = try loadImage(from: url)
+    public func previewImage(for url: URL, config: ProcessingConfig) throws -> sending NSImage {
+        let fullImage = try loadImage(from: url)
+        let cgImage = downscale(fullImage, maxDimension: 1200)
         let exif = (try? EXIFReader.read(from: url)) ?? ExifData()
 
         let borderResult: BorderResult
@@ -27,9 +28,8 @@ public actor FrameProcessor {
             imageOrigin: borderResult.imageOrigin,
             imageSize: borderResult.imageSize
         )
-        let preview = downscale(captioned, maxDimension: 1200)
 
-        return NSImage(cgImage: preview, size: NSSize(width: preview.width, height: preview.height))
+        return NSImage(cgImage: captioned, size: NSSize(width: captioned.width, height: captioned.height))
     }
 
     // MARK: - Full Export
