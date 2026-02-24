@@ -12,24 +12,25 @@ This file is an entry point for AI coding assistants. All guidelines, workflows,
 
 ## Project Overview
 
-**framer** - CLI tool for adding frames, borders, and EXIF-based captions to photos
+**framer** - Swift macOS app and CLI for adding frames, borders, captions, and texture overlays to photos
 
 | Aspect | Value |
 |--------|-------|
-| Language | Go 1.22 |
-| Module | `github.com/arthursoares/framer` |
-| Test Framework | Go testing (built-in) |
-| CI/CD | GitHub Actions |
+| Language | Swift 5.10 |
+| Platforms | macOS 14+ |
+| Package Manager | Swift Package Manager |
+| Xcode Project | XcodeGen (`project.yml`) |
+| Targets | FramerCore (library), FramerCLI (executable), FramerApp (SwiftUI) |
+| Test Framework | XCTest |
 
 ## Quick Commands
 
 | Task | Command |
 |------|---------|
-| Build | `go build` |
-| Test | `go test -v ./...` |
-| Lint | `go vet ./...` |
-| Format | `gofmt -s -w .` |
-| Validate | `go vet ./... && go test -v -race ./...` |
+| Build | `swift build` |
+| Test | `swift test` |
+| Xcode Project | `xcodegen generate` |
+| Validate | `swift build && swift test` |
 
 ## Commit Style
 
