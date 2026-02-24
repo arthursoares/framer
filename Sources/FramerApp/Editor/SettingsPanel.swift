@@ -49,7 +49,7 @@ struct SettingsPanel: View {
                 case .template:
                     TextField("Template", text: captionTemplateText)
                         .font(.system(.body, design: .monospaced))
-                        .help("Use {{camera}}, {{lens}}, {{iso}}, {{aperture}}, {{shutter}}, {{focal}}, {{mon}}, {{month}}, {{date}}, {{year2}}")
+                    TemplateTokenBar(text: captionTemplateText)
                 case .custom:
                     TextField("Caption text", text: captionCustomText)
                 case .none:
@@ -361,6 +361,118 @@ struct SettingsPanel: View {
         panel.message = "Choose output folder"
         guard panel.runModal() == .OK, let dir = panel.url else { return }
         appState.exportItems(items, to: dir)
+    }
+}
+
+// MARK: - TemplateTokenBar
+
+private struct TemplateToken: Identifiable {
+    let id: String
+    let token: String
+    let label: String
+    let category: Category
+
+    enum Category: String, CaseIterable {
+        case camera = "Camera"
+        case date = "Date"
+    }
+
+    static let all: [TemplateToken] = [
+        // Camera
+        TemplateToken(id: "camera", token: "{{camera}}", label: "Camera", category: .camera),
+        TemplateToken(id: "lens", token: "{{lens}}", label: "Lens", category: .camera),
+        TemplateToken(id: "iso", token: "{{iso}}", label: "ISO", category: .camera),
+        TemplateToken(id: "aperture", token: "{{aperture}}", label: "Aperture", category: .camera),
+        TemplateToken(id: "shutter", token: "{{shutter}}", label: "Shutter", category: .camera),
+        TemplateToken(id: "focal", token: "{{focal}}", label: "Focal", category: .camera),
+        // Date
+        TemplateToken(id: "mon", token: "{{mon}}", label: "Mon", category: .date),
+        TemplateToken(id: "month", token: "{{month}}", label: "Month", category: .date),
+        TemplateToken(id: "day", token: "{{day}}", label: "Day", category: .date),
+        TemplateToken(id: "year", token: "{{year}}", label: "Year", category: .date),
+        TemplateToken(id: "year2", token: "{{year2}}", label: "YY", category: .date),
+        TemplateToken(id: "date", token: "{{date}}", label: "Date", category: .date),
+    ]
+}
+
+struct TemplateTokenBar: View {
+    @Binding var text: String
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 6) {
+            ForEach(TemplateToken.Category.allCases, id: \.rawValue) { category in
+                tokenRow(category)
+            }
+        }
+    }
+
+    private func tokenRow(_ category: TemplateToken.Category) -> some View {
+        HStack(spacing: 4) {
+            Text(category.rawValue)
+                .font(.caption2)
+                .foregroundStyle(.tertiary)
+                .frame(width: 48, alignment: .trailing)
+
+            FlowLayout(spacing: 4) {
+                ForEach(TemplateToken.all.filter { $0.category == category }) { token in
+                    Button {
+                        text.append(token.token)
+                    } label: {
+                        Text(token.label)
+                            .font(.caption)
+                            .padding(.horizontal, 6)
+                            .padding(.vertical, 2)
+                            .background(.quaternary, in: Capsule())
+                    }
+                    .buttonStyle(.plain)
+                    .help("Insert \(token.token)")
+                }
+            }
+        }
+    }
+}
+
+/// Simple horizontal flow layout for wrapping token chips.
+struct FlowLayout: Layout {
+    var spacing: CGFloat = 4
+
+    func sizeThatFits(proposal: ProposedViewSize, subviews: Subviews, cache: inout ()) -> CGSize {
+        let result = arrange(proposal: proposal, subviews: subviews)
+        return result.size
+    }
+
+    func placeSubviews(in bounds: CGRect, proposal: ProposedViewSize, subviews: Subviews, cache: inout ()) {
+        let result = arrange(proposal: proposal, subviews: subviews)
+        for (index, origin) in result.origins.enumerated() {
+            subviews[index].place(
+                at: CGPoint(x: bounds.minX + origin.x, y: bounds.minY + origin.y),
+                proposal: .unspecified
+            )
+        }
+    }
+
+    private func arrange(proposal: ProposedViewSize, subviews: Subviews) -> (size: CGSize, origins: [CGPoint]) {
+        let maxWidth = proposal.width ?? .infinity
+        var origins: [CGPoint] = []
+        var x: CGFloat = 0
+        var y: CGFloat = 0
+        var rowHeight: CGFloat = 0
+        var totalWidth: CGFloat = 0
+
+        for subview in subviews {
+            let size = subview.sizeThatFits(.unspecified)
+            if x + size.width > maxWidth, x > 0 {
+                x = 0
+                y += rowHeight + spacing
+                rowHeight = 0
+            }
+            origins.append(CGPoint(x: x, y: y))
+            rowHeight = max(rowHeight, size.height)
+            x += size.width + spacing
+            totalWidth = max(totalWidth, x - spacing)
+        }
+
+        return (CGSize(width: totalWidth, height: y + rowHeight), origins)
     }
 }
 
