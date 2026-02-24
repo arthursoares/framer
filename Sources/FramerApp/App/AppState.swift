@@ -1,6 +1,7 @@
 import SwiftUI
 import FramerCore
 
+@MainActor
 @Observable
 final class AppState {
     var library: [PhotoItem] = []
@@ -52,19 +53,15 @@ final class AppState {
                 } catch {
                     failedCount += 1
                 }
-                await MainActor.run {
-                    if let idx = exportQueue.firstIndex(where: { $0.id == jobId }) {
-                        exportQueue[idx].completedCount = i + 1
-                        exportQueue[idx].progress = Double(i + 1) / Double(items.count)
-                    }
+                if let idx = exportQueue.firstIndex(where: { $0.id == jobId }) {
+                    exportQueue[idx].completedCount = i + 1
+                    exportQueue[idx].progress = Double(i + 1) / Double(items.count)
                 }
             }
-            await MainActor.run {
-                if let idx = exportQueue.firstIndex(where: { $0.id == jobId }) {
-                    exportQueue[idx].status = failedCount > 0
-                        ? .failed("\(failedCount) of \(items.count) failed")
-                        : .done
-                }
+            if let idx = exportQueue.firstIndex(where: { $0.id == jobId }) {
+                exportQueue[idx].status = failedCount > 0
+                    ? .failed("\(failedCount) of \(items.count) failed")
+                    : .done
             }
         }
     }
@@ -87,7 +84,7 @@ final class AppState {
     }
 }
 
-struct PhotoItem: Identifiable, Hashable {
+struct PhotoItem: Identifiable, Hashable, @unchecked Sendable {
     let id = UUID()
     let url: URL
     var thumbnail: NSImage?

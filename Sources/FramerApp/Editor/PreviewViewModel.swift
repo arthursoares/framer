@@ -1,6 +1,7 @@
 import SwiftUI
 import FramerCore
 
+@MainActor
 @Observable
 final class PreviewViewModel {
     var previewImage: NSImage?
@@ -20,7 +21,7 @@ final class PreviewViewModel {
         }
 
         renderTask?.cancel()
-        renderTask = Task { @MainActor in
+        renderTask = Task {
             // Debounce: wait 150ms before rendering
             try? await Task.sleep(for: .milliseconds(150))
             guard !Task.isCancelled else { return }

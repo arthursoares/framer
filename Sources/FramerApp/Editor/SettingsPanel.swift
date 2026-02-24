@@ -98,6 +98,20 @@ struct SettingsPanel: View {
                     }
                 }
 
+                HStack(spacing: 8) {
+                    Text("Style")
+                    Spacer()
+                    Toggle(isOn: fontStyleBinding(.bold)) {
+                        Text("B").bold()
+                    }
+                    .toggleStyle(.button)
+
+                    Toggle(isOn: fontStyleBinding(.italic)) {
+                        Text("I").italic()
+                    }
+                    .toggleStyle(.button)
+                }
+
                 Picker("Size", selection: $fontSizeMode) {
                     ForEach(FontSizeMode.allCases, id: \.self) { mode in
                         Text(mode.rawValue).tag(mode)
@@ -212,6 +226,8 @@ struct SettingsPanel: View {
             case .auto: fontSizeMode = .auto
             case .fixed: fontSizeMode = .custom
             }
+            // Re-derive layers when a preset is applied that has no explicit layers
+            ensureLayersInitialized()
         }
         .onReceive(NotificationCenter.default.publisher(for: .framerExportSelected)) { _ in
             promptAndExport(appState.library.filter { appState.selectedItems.contains($0.id) })
@@ -318,6 +334,19 @@ struct SettingsPanel: View {
                 return ""
             },
             set: { appState.currentConfig.captionMode = .custom($0) }
+        )
+    }
+
+    private func fontStyleBinding(_ trait: FontStyle) -> Binding<Bool> {
+        Binding(
+            get: { appState.currentConfig.fontStyle.contains(trait) },
+            set: { enabled in
+                if enabled {
+                    appState.currentConfig.fontStyle.insert(trait)
+                } else {
+                    appState.currentConfig.fontStyle.remove(trait)
+                }
+            }
         )
     }
 
