@@ -40,12 +40,37 @@ final class BorderRendererTests: XCTestCase {
         let image = makeTestImage(width: 800, height: 600)
         let config = ProcessingConfig.default
         let borderResult = try BorderRenderer.applyBorder(to: image, config: config, style: .instagram)
-        // Instagram is 4:5 = 1080x1350 scaled
+        // Instagram canvas is always 1080×1350
+        XCTAssertEqual(borderResult.image.width, 1080)
+        XCTAssertEqual(borderResult.image.height, 1350)
         let ratio = Double(borderResult.image.width) / Double(borderResult.image.height)
         XCTAssertEqual(ratio, 1080.0 / 1350.0, accuracy: 0.01)
-        // Instagram style should not report image origin/size
-        XCTAssertNil(borderResult.imageOrigin)
-        XCTAssertNil(borderResult.imageSize)
+        // Instagram now reports image origin/size for caption positioning
+        XCTAssertNotNil(borderResult.imageOrigin)
+        XCTAssertNotNil(borderResult.imageSize)
+    }
+
+    func test_instagramBorder_preservesAspectRatio() throws {
+        // Non-square image: 3:2 ratio (300×200)
+        let image = makeTestImage(width: 300, height: 200)
+        var config = ProcessingConfig.default
+        config.borderThickness = .pixels(10)
+        config.padding = 5
+        let borderResult = try BorderRenderer.applyBorder(to: image, config: config, style: .instagram)
+
+        // Canvas must be 1080×1350
+        XCTAssertEqual(borderResult.image.width, 1080)
+        XCTAssertEqual(borderResult.image.height, 1350)
+
+        // The drawn image area should preserve the original 3:2 aspect ratio
+        guard let imageSize = borderResult.imageSize else {
+            XCTFail("Instagram border should report imageSize")
+            return
+        }
+        let originalRatio = 300.0 / 200.0 // 1.5
+        let drawnRatio = imageSize.width / imageSize.height
+        XCTAssertEqual(drawnRatio, originalRatio, accuracy: 0.01,
+            "Instagram border should preserve the original 3:2 aspect ratio, got \(drawnRatio)")
     }
 
     // MARK: - Print Border Tests

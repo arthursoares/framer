@@ -27,6 +27,7 @@ public enum YAMLConfig {
         var print_width_mm: Double?
         var print_height_mm: Double?
         var print_dpi: Int?
+        var background_mode: String?
     }
 
     public static func encode(_ config: ProcessingConfig) throws -> String {
@@ -72,6 +73,7 @@ public enum YAMLConfig {
         if config.outerPadding != 0 { schema.outer_padding = config.outerPadding }
         if config.captionPadding != 0 { schema.caption_padding = config.captionPadding }
         if config.noMetadata { schema.no_metadata = config.noMetadata }
+        if config.backgroundMode != .color { schema.background_mode = config.backgroundMode.rawValue }
         return try YAMLEncoder().encode(schema)
     }
 
@@ -115,6 +117,9 @@ public enum YAMLConfig {
         if let op = schema.outer_padding { config.outerPadding = op }
         if let cp = schema.caption_padding { config.captionPadding = cp }
         if let nm = schema.no_metadata { config.noMetadata = nm }
+        if let bm = schema.background_mode, let mode = BackgroundMode(rawValue: bm) {
+            config.backgroundMode = mode
+        }
 
         return config
     }
