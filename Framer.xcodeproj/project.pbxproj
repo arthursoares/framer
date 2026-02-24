@@ -9,6 +9,7 @@
 /* Begin PBXBuildFile section */
 		02AB8ECED2BAEEB2B7CC18BA /* PreviewViewModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8A6E6F60B12048759BD1E60C /* PreviewViewModel.swift */; };
 		355A4363ACBC6A2F1F32A042 /* ExportQueueView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0E0B6486256E0670295F5B6D /* ExportQueueView.swift */; };
+		469EBA583F3674764B8E843A /* LayerListSection.swift in Sources */ = {isa = PBXBuildFile; fileRef = 07CE80E5C2C968E54B507CD5 /* LayerListSection.swift */; };
 		8E694017A189A83A3A04EBEB /* PresetManagerView.swift in Sources */ = {isa = PBXBuildFile; fileRef = A26EF2B8DCC58AC9FECE1C1B /* PresetManagerView.swift */; };
 		99960FA45C14BE5AB62A06DE /* SettingsPanel.swift in Sources */ = {isa = PBXBuildFile; fileRef = 853BC2BF3CFA9B161007BBB9 /* SettingsPanel.swift */; };
 		B4A1B551F2C9370D7663CAEC /* FramerCommands.swift in Sources */ = {isa = PBXBuildFile; fileRef = C20010735E58CE243ED6744A /* FramerCommands.swift */; };
@@ -23,6 +24,7 @@
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
+		07CE80E5C2C968E54B507CD5 /* LayerListSection.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LayerListSection.swift; sourceTree = "<group>"; };
 		0E0B6486256E0670295F5B6D /* ExportQueueView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ExportQueueView.swift; sourceTree = "<group>"; };
 		2D489C640FED51CA24D6BF68 /* PhotoThumbnailView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PhotoThumbnailView.swift; sourceTree = "<group>"; };
 		4427E617D9D891A807030728 /* Framer.entitlements */ = {isa = PBXFileReference; lastKnownFileType = text.plist.entitlements; path = Framer.entitlements; sourceTree = "<group>"; };
@@ -63,6 +65,7 @@
 		1435E1AB35705AD546EE83ED /* Editor */ = {
 			isa = PBXGroup;
 			children = (
+				07CE80E5C2C968E54B507CD5 /* LayerListSection.swift */,
 				B69C29C8A7CF6558AEBA54C3 /* LivePreviewPanel.swift */,
 				8A6E6F60B12048759BD1E60C /* PreviewViewModel.swift */,
 				853BC2BF3CFA9B161007BBB9 /* SettingsPanel.swift */,
@@ -201,6 +204,7 @@
 				355A4363ACBC6A2F1F32A042 /* ExportQueueView.swift in Sources */,
 				DAF4447EF4E27C19DC3B3FF0 /* FramerApp.swift in Sources */,
 				B4A1B551F2C9370D7663CAEC /* FramerCommands.swift in Sources */,
+				469EBA583F3674764B8E843A /* LayerListSection.swift in Sources */,
 				FFCEF3247628BFE9E750D120 /* LibrarySidebar.swift in Sources */,
 				C9AFF874A9B65F3ED9C2D94A /* LivePreviewPanel.swift in Sources */,
 				B612CF13223D6DEE5BD0E19A /* PhotoThumbnailView.swift in Sources */,

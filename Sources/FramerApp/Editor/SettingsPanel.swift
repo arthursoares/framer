@@ -3,14 +3,7 @@ import FramerCore
 
 struct SettingsPanel: View {
     @Environment(AppState.self) var appState
-    @State private var thicknessMode: ThicknessMode = .pixels
     @State private var fontSizeMode: FontSizeMode = .auto
-    @State private var paperSizePreset: Int = 99
-
-    private enum ThicknessMode: String, CaseIterable {
-        case pixels = "px"
-        case percent = "%"
-    }
 
     private enum FontSizeMode: String, CaseIterable {
         case auto = "Auto"
@@ -40,119 +33,8 @@ struct SettingsPanel: View {
         @Bindable var state = appState
 
         Form {
-            // Border
-            Section("Border") {
-                Picker("Style", selection: borderStylePickerBinding) {
-                    Text("Solid").tag(0)
-                    Text("Instagram (4:5)").tag(1)
-                    Text("Print").tag(2)
-                }
-                .pickerStyle(.segmented)
-
-                LabeledContent("Thickness") {
-                    VStack(spacing: 4) {
-                        Picker("", selection: $thicknessMode) {
-                            ForEach(ThicknessMode.allCases, id: \.self) { mode in
-                                Text(mode.rawValue).tag(mode)
-                            }
-                        }
-                        .pickerStyle(.segmented)
-                        .frame(width: 80)
-                        .labelsHidden()
-
-                        if thicknessMode == .pixels {
-                            sliderWithInput(
-                                value: thicknessBinding,
-                                range: 0...300,
-                                step: 5,
-                                suffix: "px"
-                            )
-                        } else {
-                            sliderWithInput(
-                                value: thicknessBinding,
-                                range: 0...20,
-                                step: 0.5,
-                                suffix: "%"
-                            )
-                        }
-                    }
-                }
-
-                Picker("Background", selection: $state.currentConfig.backgroundMode) {
-                    Text("Solid Color").tag(BackgroundMode.color)
-                    Text("Dominant Color").tag(BackgroundMode.dominant)
-                    Text("Linear Gradient").tag(BackgroundMode.gradientLinear)
-                    Text("Radial Gradient").tag(BackgroundMode.gradientRadial)
-                }
-
-                ColorPicker("Border Color", selection: colorBinding(for: \.borderColor))
-
-                if appState.currentConfig.borderStyle == .solid {
-                    LabeledContent("Padding") {
-                        sliderWithInput(
-                            value: intBinding(\.padding),
-                            range: 0...400,
-                            step: 10,
-                            suffix: "px"
-                        )
-                    }
-                }
-            }
-
-            // Print-specific controls
-            if case .print = appState.currentConfig.borderStyle {
-                Section("Print Format") {
-                    Picker("Paper Size", selection: $paperSizePreset) {
-                        Text("10x15 cm").tag(0)
-                        Text("13x18 cm").tag(1)
-                        Text("20x30 cm").tag(2)
-                        Text("A4").tag(3)
-                        Text("Custom").tag(99)
-                    }
-                    .onChange(of: paperSizePreset) { _, preset in
-                        applyPaperSizePreset(preset)
-                    }
-
-                    HStack {
-                        LabeledContent("Width (mm)") {
-                            TextField("", value: printWidthBinding, format: .number)
-                                .frame(width: 60)
-                                .textFieldStyle(.roundedBorder)
-                        }
-                        LabeledContent("Height (mm)") {
-                            TextField("", value: printHeightBinding, format: .number)
-                                .frame(width: 60)
-                                .textFieldStyle(.roundedBorder)
-                        }
-                    }
-
-                    LabeledContent("DPI") {
-                        TextField("", value: printDPIBinding, format: .number)
-                            .frame(width: 60)
-                            .textFieldStyle(.roundedBorder)
-                    }
-
-                    ColorPicker("Background", selection: colorBinding(for: \.backgroundColor))
-
-                    LabeledContent("Outer Padding") {
-                        sliderWithInput(
-                            value: intBinding(\.outerPadding),
-                            range: 0...200,
-                            step: 5,
-                            suffix: "px"
-                        )
-                    }
-
-                    LabeledContent("Caption Padding") {
-                        sliderWithInput(
-                            value: intBinding(\.captionPadding),
-                            range: 0...100,
-                            step: 5,
-                            suffix: "px"
-                        )
-                    }
-                }
-            }
+            // Layer-based composition
+            LayerListSection(layers: layersBinding)
 
             // Caption
             Section("Caption") {
@@ -172,6 +54,39 @@ struct SettingsPanel: View {
                     TextField("Caption text", text: captionCustomText)
                 case .none:
                     EmptyView()
+                }
+
+                if captionEnabled {
+                    Picker("Position", selection: $state.currentConfig.captionPosition) {
+                        Text("Bottom").tag(CaptionPosition.bottom)
+                        Text("Top").tag(CaptionPosition.top)
+                    }
+                    .pickerStyle(.segmented)
+
+                    Picker("Alignment", selection: $state.currentConfig.captionAlignment) {
+                        Text("Left").tag(CaptionAlignment.left)
+                        Text("Center").tag(CaptionAlignment.center)
+                        Text("Right").tag(CaptionAlignment.right)
+                    }
+                    .pickerStyle(.segmented)
+
+                    LabeledContent("Offset X") {
+                        sliderWithInput(
+                            value: intBinding(\.captionOffsetX),
+                            range: -200...200,
+                            step: 5,
+                            suffix: "px"
+                        )
+                    }
+
+                    LabeledContent("Offset Y") {
+                        sliderWithInput(
+                            value: intBinding(\.captionOffsetY),
+                            range: -200...200,
+                            step: 5,
+                            suffix: "px"
+                        )
+                    }
                 }
             }
 
@@ -244,26 +159,55 @@ struct SettingsPanel: View {
         .formStyle(.grouped)
         .frame(minWidth: 260)
         .safeAreaInset(edge: .bottom) {
-            HStack {
-                Button("Export Selected") {
-                    promptAndExport(appState.library.filter { appState.selectedItems.contains($0.id) })
+            VStack(spacing: 0) {
+                Divider()
+                HStack(spacing: 12) {
+                    Button {
+                        promptAndExport(appState.library.filter { appState.selectedItems.contains($0.id) })
+                    } label: {
+                        HStack(spacing: 4) {
+                            Image(systemName: "square.and.arrow.up")
+                            Text("Export Selected")
+                            if !appState.selectedItems.isEmpty {
+                                Text("\(appState.selectedItems.count)")
+                                    .font(.caption2.bold())
+                                    .padding(.horizontal, 5)
+                                    .padding(.vertical, 1)
+                                    .background(.secondary.opacity(0.2), in: Capsule())
+                            }
+                        }
+                    }
+                    .disabled(appState.selectedItems.isEmpty)
+
+                    Spacer()
+
+                    Button {
+                        promptAndExport(appState.library)
+                    } label: {
+                        HStack(spacing: 4) {
+                            Image(systemName: "square.and.arrow.up.on.square")
+                            Text("Export All")
+                            if !appState.library.isEmpty {
+                                Text("\(appState.library.count)")
+                                    .font(.caption2.bold())
+                                    .padding(.horizontal, 5)
+                                    .padding(.vertical, 1)
+                                    .background(.white.opacity(0.2), in: Capsule())
+                            }
+                        }
+                    }
+                    .disabled(appState.library.isEmpty)
+                    .buttonStyle(.borderedProminent)
                 }
-                .disabled(appState.selectedItems.isEmpty)
-                Spacer()
-                Button("Export All") {
-                    promptAndExport(appState.library)
-                }
-                .disabled(appState.library.isEmpty)
-                .buttonStyle(.borderedProminent)
+                .padding(.horizontal)
+                .padding(.vertical, 10)
+                .background(.regularMaterial)
             }
-            .padding()
-            .background(.regularMaterial)
+        }
+        .onAppear {
+            ensureLayersInitialized()
         }
         .onChange(of: appState.currentConfig) { _, newConfig in
-            switch newConfig.borderThickness {
-            case .pixels: thicknessMode = .pixels
-            case .percent: thicknessMode = .percent
-            }
             switch newConfig.fontSize {
             case .auto: fontSizeMode = .auto
             case .fixed: fontSizeMode = .custom
@@ -275,6 +219,34 @@ struct SettingsPanel: View {
         .onReceive(NotificationCenter.default.publisher(for: .framerExportAll)) { _ in
             promptAndExport(appState.library)
         }
+    }
+
+    private var captionEnabled: Bool {
+        if case .none = appState.currentConfig.captionMode { return false }
+        return true
+    }
+
+    // MARK: - Layer Binding
+
+    private var layersBinding: Binding<[CompositionLayer]> {
+        Binding(
+            get: { appState.currentConfig.layers ?? CompositionLayer.defaultLayers() },
+            set: { appState.currentConfig.layers = $0 }
+        )
+    }
+
+    private func ensureLayersInitialized() {
+        if appState.currentConfig.layers == nil {
+            appState.currentConfig.layers = CompositionLayer.fromLegacyConfig(appState.currentConfig)
+        }
+    }
+
+    /// Convenience binding for Int config properties used with Double sliders/text fields.
+    private func intBinding(_ keyPath: WritableKeyPath<ProcessingConfig, Int>) -> Binding<Double> {
+        Binding(
+            get: { Double(appState.currentConfig[keyPath: keyPath]) },
+            set: { appState.currentConfig[keyPath: keyPath] = Int($0) }
+        )
     }
 
     // MARK: - Slider + TextField Helper
@@ -301,118 +273,6 @@ struct SettingsPanel: View {
                 .foregroundStyle(.secondary)
                 .frame(width: 20)
         }
-    }
-
-    /// Convenience binding for Int config properties used with Double sliders/text fields.
-    private func intBinding(_ keyPath: WritableKeyPath<ProcessingConfig, Int>) -> Binding<Double> {
-        Binding(
-            get: { Double(appState.currentConfig[keyPath: keyPath]) },
-            set: { appState.currentConfig[keyPath: keyPath] = Int($0) }
-        )
-    }
-
-    // MARK: - Border Style Binding
-
-    private var borderStylePickerBinding: Binding<Int> {
-        Binding(
-            get: {
-                switch appState.currentConfig.borderStyle {
-                case .solid: 0
-                case .instagram: 1
-                case .print: 2
-                }
-            },
-            set: { idx in
-                switch idx {
-                case 0: appState.currentConfig.borderStyle = .solid
-                case 1: appState.currentConfig.borderStyle = .instagram
-                case 2:
-                    if case .print = appState.currentConfig.borderStyle { return }
-                    appState.currentConfig.borderStyle = .print(.print10x15)
-                default: break
-                }
-            }
-        )
-    }
-
-    // MARK: - Print Format Bindings
-
-    private var printWidthBinding: Binding<Double> {
-        Binding(
-            get: {
-                if case .print(let f) = appState.currentConfig.borderStyle { return f.widthMM }
-                return 148
-            },
-            set: { val in
-                if case .print(var f) = appState.currentConfig.borderStyle {
-                    f.widthMM = val
-                    appState.currentConfig.borderStyle = .print(f)
-                }
-            }
-        )
-    }
-
-    private var printHeightBinding: Binding<Double> {
-        Binding(
-            get: {
-                if case .print(let f) = appState.currentConfig.borderStyle { return f.heightMM }
-                return 100
-            },
-            set: { val in
-                if case .print(var f) = appState.currentConfig.borderStyle {
-                    f.heightMM = val
-                    appState.currentConfig.borderStyle = .print(f)
-                }
-            }
-        )
-    }
-
-    private var printDPIBinding: Binding<Int> {
-        Binding(
-            get: {
-                if case .print(let f) = appState.currentConfig.borderStyle { return f.dpi }
-                return 300
-            },
-            set: { val in
-                if case .print(var f) = appState.currentConfig.borderStyle {
-                    f.dpi = val
-                    appState.currentConfig.borderStyle = .print(f)
-                }
-            }
-        )
-    }
-
-    private func applyPaperSizePreset(_ preset: Int) {
-        guard case .print(var f) = appState.currentConfig.borderStyle else { return }
-        switch preset {
-        case 0: f.widthMM = 150; f.heightMM = 100
-        case 1: f.widthMM = 180; f.heightMM = 130
-        case 2: f.widthMM = 300; f.heightMM = 200
-        case 3: f.widthMM = 297; f.heightMM = 210
-        default: return // Custom — leave as-is
-        }
-        appState.currentConfig.borderStyle = .print(f)
-    }
-
-    // MARK: - Thickness Bindings
-
-    private var thicknessBinding: Binding<Double> {
-        Binding(
-            get: {
-                switch appState.currentConfig.borderThickness {
-                case .pixels(let px): Double(px)
-                case .percent(let p): p
-                }
-            },
-            set: { val in
-                switch thicknessMode {
-                case .pixels:
-                    appState.currentConfig.borderThickness = .pixels(Int(val))
-                case .percent:
-                    appState.currentConfig.borderThickness = .percent(val)
-                }
-            }
-        )
     }
 
     // MARK: - Caption Bindings

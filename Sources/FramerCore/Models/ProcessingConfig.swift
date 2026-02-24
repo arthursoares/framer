@@ -138,6 +138,17 @@ public enum CaptionMode: Codable, Equatable, Sendable {
     case none
 }
 
+public enum CaptionAlignment: String, Codable, Equatable, Sendable, CaseIterable {
+    case left
+    case center
+    case right
+}
+
+public enum CaptionPosition: String, Codable, Equatable, Sendable, CaseIterable {
+    case bottom
+    case top
+}
+
 public enum FontSize: Codable, Equatable, Sendable {
     case auto
     case fixed(Int)
@@ -176,6 +187,11 @@ public struct ProcessingConfig: Equatable, Sendable {
     public var captionPadding: Int
     public var noMetadata: Bool
     public var backgroundMode: BackgroundMode
+    public var layers: [CompositionLayer]?
+    public var captionAlignment: CaptionAlignment
+    public var captionPosition: CaptionPosition
+    public var captionOffsetX: Int
+    public var captionOffsetY: Int
 
     public init(
         borderStyle: BorderStyle = .solid,
@@ -193,7 +209,12 @@ public struct ProcessingConfig: Equatable, Sendable {
         outerPadding: Int = 0,
         captionPadding: Int = 0,
         noMetadata: Bool = false,
-        backgroundMode: BackgroundMode = .color
+        backgroundMode: BackgroundMode = .color,
+        layers: [CompositionLayer]? = nil,
+        captionAlignment: CaptionAlignment = .center,
+        captionPosition: CaptionPosition = .bottom,
+        captionOffsetX: Int = 0,
+        captionOffsetY: Int = 0
     ) {
         self.borderStyle = borderStyle
         self.borderThickness = borderThickness
@@ -211,6 +232,11 @@ public struct ProcessingConfig: Equatable, Sendable {
         self.captionPadding = captionPadding
         self.noMetadata = noMetadata
         self.backgroundMode = backgroundMode
+        self.layers = layers
+        self.captionAlignment = captionAlignment
+        self.captionPosition = captionPosition
+        self.captionOffsetX = captionOffsetX
+        self.captionOffsetY = captionOffsetY
     }
 
     public static let `default` = ProcessingConfig()
@@ -223,7 +249,8 @@ extension ProcessingConfig: Codable {
         case captionMode, fontName, fontSize, fontColor
         case outputFormat, instagramMaxSize, postProcess
         case backgroundColor, outerPadding, captionPadding, noMetadata
-        case backgroundMode
+        case backgroundMode, layers
+        case captionAlignment, captionPosition, captionOffsetX, captionOffsetY
     }
 
     public init(from decoder: Decoder) throws {
@@ -245,6 +272,11 @@ extension ProcessingConfig: Codable {
         captionPadding = (try? container.decodeIfPresent(Int.self, forKey: .captionPadding)) ?? 0
         noMetadata = (try? container.decodeIfPresent(Bool.self, forKey: .noMetadata)) ?? false
         backgroundMode = (try? container.decodeIfPresent(BackgroundMode.self, forKey: .backgroundMode)) ?? .color
+        layers = try? container.decodeIfPresent([CompositionLayer].self, forKey: .layers)
+        captionAlignment = (try? container.decodeIfPresent(CaptionAlignment.self, forKey: .captionAlignment)) ?? .center
+        captionPosition = (try? container.decodeIfPresent(CaptionPosition.self, forKey: .captionPosition)) ?? .bottom
+        captionOffsetX = (try? container.decodeIfPresent(Int.self, forKey: .captionOffsetX)) ?? 0
+        captionOffsetY = (try? container.decodeIfPresent(Int.self, forKey: .captionOffsetY)) ?? 0
     }
 }
 

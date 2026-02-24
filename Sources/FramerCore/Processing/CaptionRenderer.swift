@@ -63,19 +63,52 @@ public enum CaptionRenderer {
         // Position caption
         let x: CGFloat
         let y: CGFloat
+        let imageW = CGFloat(image.width)
+        let imageH = CGFloat(image.height)
+        let captionSpacing = CGFloat(config.captionPadding)
+        let textMargin: CGFloat = CGFloat(borderPx) * 0.3 // inset from edge for left/right alignment
 
-        if let origin = imageOrigin, let _ = imageSize {
-            // Print style: center horizontally in full frame, position below image
-            x = (CGFloat(image.width) - bounds.width) / 2
-            let captionSpacing = CGFloat(config.captionPadding)
-            y = origin.y - captionSpacing - fontSize
+        if let origin = imageOrigin, let imgSize = imageSize {
+            // Canvas style (print/instagram with origin): position relative to image region
+            switch config.captionAlignment {
+            case .left:
+                x = origin.x + textMargin
+            case .center:
+                x = (imageW - bounds.width) / 2
+            case .right:
+                x = origin.x + imgSize.width - bounds.width - textMargin
+            }
+
+            switch config.captionPosition {
+            case .bottom:
+                y = origin.y - captionSpacing - fontSize
+            case .top:
+                y = origin.y + imgSize.height + captionSpacing
+            }
         } else {
-            // Solid/instagram: centered horizontally, in bottom border area
-            x = (CGFloat(image.width) - bounds.width) / 2
-            y = (CGFloat(borderPx) - bounds.height) / 2
+            // Solid/layer style: position in border area
+            switch config.captionAlignment {
+            case .left:
+                x = textMargin
+            case .center:
+                x = (imageW - bounds.width) / 2
+            case .right:
+                x = imageW - bounds.width - textMargin
+            }
+
+            switch config.captionPosition {
+            case .bottom:
+                y = (CGFloat(borderPx) - bounds.height) / 2
+            case .top:
+                y = imageH - CGFloat(borderPx) + (CGFloat(borderPx) - bounds.height) / 2
+            }
         }
 
-        ctx.textPosition = CGPoint(x: x, y: y)
+        // Apply user offsets
+        let finalX = x + CGFloat(config.captionOffsetX)
+        let finalY = y + CGFloat(config.captionOffsetY)
+
+        ctx.textPosition = CGPoint(x: finalX, y: finalY)
         CTLineDraw(line, ctx)
 
         guard let result = ctx.makeImage() else {

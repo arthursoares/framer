@@ -32,6 +32,88 @@ public enum BorderRenderer {
         }
     }
 
+    // MARK: - Layer-Based Composition
+
+    /// Evaluates a layer stack inside-out, folding each layer over the current image.
+    public static func applyLayers(
+        _ layers: [CompositionLayer],
+        to image: CGImage,
+        sourceImage: CGImage
+    ) throws -> BorderResult {
+        var current = image
+        var imageOrigin: CGPoint?
+        var imageSize: CGSize?
+
+        for layer in layers {
+            switch layer {
+            case .resize(let params):
+                let maxW = params.maxWidth
+                let maxH = params.maxHeight
+                guard maxW > 0, maxH > 0 else { continue }
+                let scale = min(Double(maxW) / Double(current.width), Double(maxH) / Double(current.height))
+                if scale < 1.0 {
+                    let newW = Int(Double(current.width) * scale)
+                    let newH = Int(Double(current.height) * scale)
+                    current = try resize(current, width: newW, height: newH)
+                }
+
+            case .border(let params):
+                let thickness = params.thickness.resolved(relativeTo: min(current.width, current.height))
+                guard thickness > 0 else { continue }
+                current = try addBorder(to: current, thickness: thickness, color: params.color.cgColor)
+
+            case .padding(let params):
+                guard params.thickness > 0 else { continue }
+                let fillColor = resolveLayerFillColor(params.fill, sourceImage: sourceImage)
+                current = try addBorder(to: current, thickness: params.thickness, color: fillColor)
+
+            case .canvas(let params):
+                guard params.width > 0, params.height > 0 else { continue }
+                let bgFill = resolveLayerFill(params.fill, sourceImage: sourceImage)
+                let (canvas, ox, oy) = try centerOnCanvas(
+                    current, width: params.width, height: params.height, background: bgFill
+                )
+                current = canvas
+                imageOrigin = CGPoint(x: ox, y: oy)
+                imageSize = CGSize(width: current.width, height: current.height)
+            }
+        }
+
+        return BorderResult(image: current, imageOrigin: imageOrigin, imageSize: imageSize)
+    }
+
+    // MARK: - Layer Fill Resolution
+
+    static func resolveLayerFillColor(_ fill: LayerFill, sourceImage: CGImage) -> CGColor {
+        switch fill {
+        case .color(let c):
+            return c.cgColor
+        case .dominantColor:
+            return ColorExtractor.extractDominantColor(from: sourceImage).cgColor
+        case .gradientLinear, .gradientRadial:
+            // For solid-color contexts (addBorder), fall back to dominant
+            return ColorExtractor.extractDominantColor(from: sourceImage).cgColor
+        }
+    }
+
+    static func resolveLayerFill(_ fill: LayerFill, sourceImage: CGImage) -> BackgroundFill {
+        switch fill {
+        case .color(let c):
+            return .solid(c.cgColor)
+        case .dominantColor:
+            let dominant = ColorExtractor.extractDominantColor(from: sourceImage)
+            return .solid(dominant.cgColor)
+        case .gradientLinear:
+            let dominant = ColorExtractor.extractDominantColor(from: sourceImage)
+            let (center, edge) = ColorExtractor.generateGradientColors(dominant: dominant)
+            return .linearGradient(start: center, end: edge)
+        case .gradientRadial:
+            let dominant = ColorExtractor.extractDominantColor(from: sourceImage)
+            let (center, edge) = ColorExtractor.generateGradientColors(dominant: dominant)
+            return .radialGradient(center: center, edge: edge)
+        }
+    }
+
     // MARK: - Solid Border (matches Go createSolidBorder)
 
     private static func applySolidBorder(to image: CGImage, config: ProcessingConfig) throws -> BorderResult {
@@ -262,7 +344,7 @@ public enum BorderRenderer {
 
     // MARK: - Background Resolution
 
-    private enum BackgroundFill {
+    enum BackgroundFill {
         case solid(CGColor)
         case linearGradient(start: CGColor, end: CGColor)
         case radialGradient(center: CGColor, edge: CGColor)
