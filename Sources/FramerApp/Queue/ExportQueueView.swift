@@ -81,6 +81,18 @@ struct ExportQueueView: View {
                     .font(.caption)
                     .foregroundStyle(.tertiary)
                     .lineLimit(1)
+
+                if job.status == .done {
+                    Spacer()
+                    Button {
+                        NSWorkspace.shared.open(job.outputDirectory)
+                    } label: {
+                        Label("Reveal", systemImage: "arrow.right.circle")
+                            .font(.caption)
+                    }
+                    .buttonStyle(.plain)
+                    .foregroundStyle(Color.accentColor)
+                }
             }
         }
         .padding(.vertical, 4)

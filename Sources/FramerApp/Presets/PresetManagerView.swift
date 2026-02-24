@@ -77,53 +77,74 @@ struct PresetManagerView: View {
     }
 
     private func presetCard(_ preset: Preset) -> some View {
-        VStack(alignment: .leading, spacing: 8) {
-            // Thumbnail or placeholder
-            ZStack {
-                RoundedRectangle(cornerRadius: 8)
-                    .fill(Color(nsColor: .controlBackgroundColor))
+        Button {
+            applyPreset(preset)
+        } label: {
+            VStack(alignment: .leading, spacing: 8) {
+                // Thumbnail or placeholder
+                ZStack {
+                    RoundedRectangle(cornerRadius: 8)
+                        .fill(Color(nsColor: .controlBackgroundColor))
 
-                if let data = preset.thumbnailData, let img = NSImage(data: data) {
-                    Image(nsImage: img)
-                        .resizable()
-                        .aspectRatio(contentMode: .fit)
-                        .padding(8)
-                } else {
-                    Image(systemName: "photo.artframe")
-                        .font(.system(size: 30))
-                        .foregroundStyle(.tertiary)
+                    if let data = preset.thumbnailData, let img = NSImage(data: data) {
+                        Image(nsImage: img)
+                            .resizable()
+                            .aspectRatio(contentMode: .fit)
+                            .padding(8)
+                    } else {
+                        Image(systemName: "photo.artframe")
+                            .font(.system(size: 30))
+                            .foregroundStyle(.tertiary)
+                    }
+                }
+                .frame(height: 120)
+                .clipShape(RoundedRectangle(cornerRadius: 8))
+
+                // Info
+                Text(preset.name)
+                    .font(.headline)
+                    .lineLimit(1)
+
+                HStack(spacing: 4) {
+                    configChip(presetLayerSummary(preset.config))
+                    configChip(presetOutputSummary(preset.config))
                 }
             }
-            .frame(height: 120)
-            .clipShape(RoundedRectangle(cornerRadius: 8))
-
-            // Info
-            Text(preset.name)
-                .font(.headline)
-                .lineLimit(1)
-
-            HStack(spacing: 4) {
-                configChip(styleLabel(for: preset.config.borderStyle))
-                if case .pixels(let px) = preset.config.borderThickness {
-                    configChip("\(px)px")
-                }
-            }
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .padding(12)
+            .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 12))
         }
-        .padding(12)
-        .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 12))
+        .buttonStyle(.plain)
         .contextMenu {
-            Button("Apply") { applyPreset(preset) }
+            Button {
+                applyPreset(preset)
+            } label: {
+                Label("Apply", systemImage: "checkmark.circle")
+            }
             Divider()
-            Button("Delete", role: .destructive) { presetToDelete = preset }
+            Button(role: .destructive) {
+                presetToDelete = preset
+            } label: {
+                Label("Delete", systemImage: "trash")
+            }
         }
-        .onTapGesture { applyPreset(preset) }
     }
 
-    private func styleLabel(for style: BorderStyle) -> String {
-        switch style {
-        case .solid: "Solid"
-        case .instagram: "IG"
-        case .print: "Print"
+    private func presetLayerSummary(_ config: ProcessingConfig) -> String {
+        if let layers = config.layers {
+            return "\(layers.count) layer\(layers.count == 1 ? "" : "s")"
+        }
+        switch config.borderStyle {
+        case .solid: return "Solid"
+        case .instagram: return "Instagram"
+        case .print: return "Print"
+        }
+    }
+
+    private func presetOutputSummary(_ config: ProcessingConfig) -> String {
+        switch config.outputFormat {
+        case .jpeg(let q): return "JPEG \(q)%"
+        case .png: return "PNG"
         }
     }
 

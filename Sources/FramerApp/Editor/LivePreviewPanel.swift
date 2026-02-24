@@ -9,7 +9,7 @@ struct LivePreviewPanel: View {
         VStack(spacing: 0) {
             // Preview image
             ZStack {
-                Color(nsColor: .controlBackgroundColor)
+                checkerboardBackground
 
                 if viewModel.isLoading {
                     ProgressView()
@@ -18,28 +18,29 @@ struct LivePreviewPanel: View {
                     Image(nsImage: img)
                         .resizable()
                         .aspectRatio(contentMode: .fit)
-                        .padding(20)
-                        .shadow(color: .black.opacity(0.2), radius: 8, y: 4)
+                        .padding(24)
+                        .shadow(color: .black.opacity(0.15), radius: 12, y: 6)
+                        .transition(.opacity)
                 } else {
-                    VStack(spacing: 12) {
+                    VStack(spacing: 16) {
                         Image(systemName: "photo.artframe")
-                            .font(.system(size: 60))
-                            .foregroundStyle(.secondary)
+                            .font(.system(size: 48))
+                            .foregroundStyle(.quaternary)
                         Text("No photo selected")
-                            .font(.headline)
+                            .font(.title3)
                             .foregroundStyle(.secondary)
-                        Text("Select a photo from the library, or drag images into the sidebar")
-                            .font(.caption)
+                        Text("Select a photo from the library,\nor drag images into the sidebar")
+                            .font(.callout)
                             .foregroundStyle(.tertiary)
                             .multilineTextAlignment(.center)
-                            .frame(maxWidth: 260)
                     }
                 }
 
                 if let err = viewModel.error {
                     VStack {
                         Spacer()
-                        Text(err)
+                        Label(err, systemImage: "exclamationmark.triangle")
+                            .font(.caption)
                             .foregroundStyle(.red)
                             .padding(8)
                             .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 6))
@@ -51,6 +52,7 @@ struct LivePreviewPanel: View {
 
             // EXIF + caption info bar
             if let exif = viewModel.exifData {
+                Divider()
                 ExifInfoBar(exif: exif, config: appState.currentConfig)
                     .padding(.horizontal, 16)
                     .padding(.vertical, 8)
@@ -60,6 +62,27 @@ struct LivePreviewPanel: View {
         .onChange(of: appState.selectedItems) { _, _ in updatePreview() }
         .onChange(of: appState.currentConfig) { _, _ in updatePreview() }
         .onAppear { updatePreview() }
+    }
+
+    /// Subtle checkerboard for transparency visibility
+    private var checkerboardBackground: some View {
+        Canvas { context, size in
+            let tileSize: CGFloat = 12
+            let lightColor = Color(nsColor: .controlBackgroundColor)
+            let darkColor = Color(nsColor: .controlBackgroundColor).opacity(0.92)
+            for row in 0..<Int(ceil(size.height / tileSize)) {
+                for col in 0..<Int(ceil(size.width / tileSize)) {
+                    let isLight = (row + col) % 2 == 0
+                    let rect = CGRect(
+                        x: CGFloat(col) * tileSize,
+                        y: CGFloat(row) * tileSize,
+                        width: tileSize,
+                        height: tileSize
+                    )
+                    context.fill(Path(rect), with: .color(isLight ? lightColor : darkColor))
+                }
+            }
+        }
     }
 
     private func updatePreview() {

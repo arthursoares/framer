@@ -22,11 +22,20 @@ struct LibrarySidebar: View {
         .listStyle(.sidebar)
         .navigationTitle("Library")
         .toolbar {
-            ToolbarItem {
+            ToolbarItemGroup {
+                if !appState.selectedItems.isEmpty {
+                    Button(action: removeSelected) {
+                        Label("Remove Selected", systemImage: "minus")
+                    }
+                    .help("Remove selected photos from library")
+                }
                 Button(action: openFilePicker) {
                     Label("Add Photos", systemImage: "plus")
                 }
             }
+        }
+        .safeAreaInset(edge: .bottom) {
+            libraryStatusBar
         }
         .onDrop(of: [.fileURL], isTargeted: $isTargeted) { providers in
             handleDrop(providers: providers)
@@ -40,6 +49,24 @@ struct LibrarySidebar: View {
         }
         .onReceive(NotificationCenter.default.publisher(for: .framerOpenPhotos)) { _ in
             openFilePicker()
+        }
+    }
+
+    @ViewBuilder
+    private var libraryStatusBar: some View {
+        if !appState.library.isEmpty {
+            HStack {
+                Text("\(appState.library.count) photo\(appState.library.count == 1 ? "" : "s")")
+                if !appState.selectedItems.isEmpty {
+                    Text("\(appState.selectedItems.count) selected")
+                        .foregroundStyle(Color.accentColor)
+                }
+            }
+            .font(.caption)
+            .foregroundStyle(.secondary)
+            .frame(maxWidth: .infinity)
+            .padding(.vertical, 6)
+            .background(.regularMaterial)
         }
     }
 
@@ -81,6 +108,13 @@ struct LibrarySidebar: View {
             }
         }
         return true
+    }
+
+    private func removeSelected() {
+        withAnimation {
+            appState.library.removeAll { appState.selectedItems.contains($0.id) }
+            appState.selectedItems.removeAll()
+        }
     }
 
     private func addURLs(_ urls: [URL]) {

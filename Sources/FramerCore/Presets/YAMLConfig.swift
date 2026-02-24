@@ -28,6 +28,23 @@ public enum YAMLConfig {
         var print_height_mm: Double?
         var print_dpi: Int?
         var background_mode: String?
+        var layers: [YAMLLayerSchema]?
+        var caption_alignment: String?
+        var caption_position: String?
+        var caption_offset_x: Int?
+        var caption_offset_y: Int?
+    }
+
+    struct YAMLLayerSchema: Codable {
+        var type: String
+        var thickness: String?
+        var color: String?
+        var fill: String?
+        var fill_color: String?
+        var width: Int?
+        var height: Int?
+        var max_width: Int?
+        var max_height: Int?
     }
 
     public static func encode(_ config: ProcessingConfig) throws -> String {
@@ -74,6 +91,13 @@ public enum YAMLConfig {
         if config.captionPadding != 0 { schema.caption_padding = config.captionPadding }
         if config.noMetadata { schema.no_metadata = config.noMetadata }
         if config.backgroundMode != .color { schema.background_mode = config.backgroundMode.rawValue }
+        if config.captionAlignment != .center { schema.caption_alignment = config.captionAlignment.rawValue }
+        if config.captionPosition != .bottom { schema.caption_position = config.captionPosition.rawValue }
+        if config.captionOffsetX != 0 { schema.caption_offset_x = config.captionOffsetX }
+        if config.captionOffsetY != 0 { schema.caption_offset_y = config.captionOffsetY }
+        if let layers = config.layers {
+            schema.layers = layers.map { encodeLayers($0) }
+        }
         return try YAMLEncoder().encode(schema)
     }
 
@@ -120,6 +144,17 @@ public enum YAMLConfig {
         if let bm = schema.background_mode, let mode = BackgroundMode(rawValue: bm) {
             config.backgroundMode = mode
         }
+        if let yamlLayers = schema.layers {
+            config.layers = yamlLayers.compactMap { decodeLayers($0) }
+        }
+        if let ca = schema.caption_alignment, let a = CaptionAlignment(rawValue: ca) {
+            config.captionAlignment = a
+        }
+        if let cp = schema.caption_position, let p = CaptionPosition(rawValue: cp) {
+            config.captionPosition = p
+        }
+        if let ox = schema.caption_offset_x { config.captionOffsetX = ox }
+        if let oy = schema.caption_offset_y { config.captionOffsetY = oy }
 
         return config
     }
@@ -153,5 +188,105 @@ public enum YAMLConfig {
         if let config = try? load(from: homeConfig) { return config }
 
         return .default
+    }
+
+    // MARK: - Layer YAML Helpers
+
+    private static func encodeLayers(_ layer: CompositionLayer) -> YAMLLayerSchema {
+        switch layer {
+        case .border(let p):
+            var schema = YAMLLayerSchema(type: "border")
+            switch p.thickness {
+            case .pixels(let px): schema.thickness = String(px)
+            case .percent(let pct): schema.thickness = "\(pct)%"
+            }
+            schema.color = p.color.hex
+            return schema
+
+        case .padding(let p):
+            var schema = YAMLLayerSchema(type: "padding")
+            schema.thickness = String(p.thickness)
+            encodeFill(p.fill, into: &schema)
+            return schema
+
+        case .canvas(let p):
+            var schema = YAMLLayerSchema(type: "canvas")
+            schema.width = p.width
+            schema.height = p.height
+            encodeFill(p.fill, into: &schema)
+            return schema
+
+        case .resize(let p):
+            var schema = YAMLLayerSchema(type: "resize")
+            schema.max_width = p.maxWidth
+            schema.max_height = p.maxHeight
+            return schema
+        }
+    }
+
+    private static func encodeFill(_ fill: LayerFill, into schema: inout YAMLLayerSchema) {
+        switch fill {
+        case .color(let c):
+            schema.fill = "color"
+            schema.fill_color = c.hex
+        case .dominantColor:
+            schema.fill = "dominant"
+        case .gradientLinear:
+            schema.fill = "gradient_linear"
+        case .gradientRadial:
+            schema.fill = "gradient_radial"
+        }
+    }
+
+    private static func decodeLayers(_ schema: YAMLLayerSchema) -> CompositionLayer? {
+        switch schema.type {
+        case "border":
+            let thickness = schema.thickness.map { BorderSize(string: $0) } ?? .pixels(20)
+            let color = schema.color.flatMap { try? CodableColor(hex: $0) } ?? (try! CodableColor(hex: "#FFFFFF"))
+            return .border(BorderLayerParams(thickness: thickness, color: color))
+
+        case "padding":
+            let thickness = schema.thickness.flatMap { Int($0) } ?? 150
+            let fill = decodeFill(schema)
+            return .padding(PaddingLayerParams(thickness: thickness, fill: fill))
+
+        case "canvas":
+            let fill = decodeFill(schema)
+            return .canvas(CanvasLayerParams(
+                width: schema.width ?? 1080,
+                height: schema.height ?? 1350,
+                fill: fill
+            ))
+
+        case "resize":
+            return .resize(ResizeLayerParams(
+                maxWidth: schema.max_width ?? 1000,
+                maxHeight: schema.max_height ?? 1000
+            ))
+
+        default:
+            return nil
+        }
+    }
+
+    private static func decodeFill(_ schema: YAMLLayerSchema) -> LayerFill {
+        switch schema.fill {
+        case "dominant":
+            return .dominantColor
+        case "gradient_linear":
+            return .gradientLinear
+        case "gradient_radial":
+            return .gradientRadial
+        case "color":
+            if let hex = schema.fill_color, let c = try? CodableColor(hex: hex) {
+                return .color(c)
+            }
+            return .color(try! CodableColor(hex: "#FFFFFF"))
+        default:
+            if let hex = schema.fill_color, let c = try? CodableColor(hex: hex) {
+                return .color(c)
+            }
+            return .color(try! CodableColor(hex: "#FFFFFF"))
+        }
     }
 }

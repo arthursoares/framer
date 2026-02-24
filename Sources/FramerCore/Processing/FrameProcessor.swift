@@ -14,7 +14,12 @@ public actor FrameProcessor {
         let cgImage = try loadImage(from: url)
         let exif = (try? EXIFReader.read(from: url)) ?? ExifData()
 
-        let borderResult = try BorderRenderer.applyBorder(to: cgImage, config: config, style: config.borderStyle)
+        let borderResult: BorderResult
+        if let layers = config.layers {
+            borderResult = try BorderRenderer.applyLayers(layers, to: cgImage, sourceImage: cgImage)
+        } else {
+            borderResult = try BorderRenderer.applyBorder(to: cgImage, config: config, style: config.borderStyle)
+        }
         let captioned = try CaptionRenderer.renderCaption(
             on: borderResult.image,
             config: config,
@@ -33,7 +38,12 @@ public actor FrameProcessor {
         let cgImage = try loadImage(from: input)
         let exif = (try? EXIFReader.read(from: input)) ?? ExifData()
 
-        let borderResult = try BorderRenderer.applyBorder(to: cgImage, config: config, style: config.borderStyle)
+        let borderResult: BorderResult
+        if let layers = config.layers {
+            borderResult = try BorderRenderer.applyLayers(layers, to: cgImage, sourceImage: cgImage)
+        } else {
+            borderResult = try BorderRenderer.applyBorder(to: cgImage, config: config, style: config.borderStyle)
+        }
         let captioned = try CaptionRenderer.renderCaption(
             on: borderResult.image,
             config: config,

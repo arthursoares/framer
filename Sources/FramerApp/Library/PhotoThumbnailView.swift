@@ -9,9 +9,14 @@ struct PhotoThumbnailView: View {
                 .frame(width: 40, height: 40)
                 .clipShape(RoundedRectangle(cornerRadius: 4))
 
-            Text(item.url.lastPathComponent)
-                .lineLimit(1)
-                .truncationMode(.middle)
+            VStack(alignment: .leading, spacing: 1) {
+                Text(item.url.deletingPathExtension().lastPathComponent)
+                    .lineLimit(1)
+                    .truncationMode(.middle)
+                Text(item.url.pathExtension.uppercased())
+                    .font(.caption2)
+                    .foregroundStyle(.tertiary)
+            }
         }
     }
 }
