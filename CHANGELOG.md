@@ -5,107 +5,83 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [Unreleased]
+## [2.0.0] - 2026-02-24
 
-### Added
-- GitHub Actions CI/CD pipeline for automated builds
-- Multi-platform binary releases (macOS ARM, Linux AMD64/ARM64, Windows AMD64)
-- Comprehensive README documentation
-- Homebrew installation support
-
-## [1.0.0] - TBD
-
-This is the first major release of Framer, incorporating all improvements from development branches.
+Complete rewrite from Go CLI to Swift macOS app + CLI.
 
 ### Added
 
-#### Branch 8: Batch Processing Improvements
-- **Concurrent Processing**: Multi-core batch processing with worker pool pattern
-- **Progress Bar**: Real-time progress indication using progressbar/v3
-- **Statistics Tracking**: Detailed batch processing statistics (success/failure counts, duration, rate)
-- **`--workers` Flag**: Configure number of concurrent workers (default: CPU cores)
-- **Performance**: 2-3x speedup for batch operations
+#### Swift Rewrite
+- **FramerCore library**: Standalone image processing library using CoreGraphics/CoreImage
+- **FramerCLI**: Command-line interface using Swift Argument Parser
+- **FramerApp**: SwiftUI macOS application with photo library integration and live preview
+- **102 unit tests** across 10 test classes
 
-#### Branch 7: Configuration Presets
-- **YAML Config Support**: Save and reuse configurations in YAML format
-- **Built-in Presets**: Three default presets (vintage, instagram, minimal)
-- **Priority System**: Config loading priority (--config → --preset → .framer.yaml → defaults)
-- **`--config` Flag**: Load custom configuration files
-- **`--preset` Flag**: Load named presets from ~/.config/framer/presets/
-- **Auto-discovery**: Automatically loads .framer.yaml from current directory
-- **Font Validation**: Automatic validation and fallback for invalid fonts
+#### Layer-Based Composition System
+- **Canvas Layer**: Set physical canvas dimensions (width/height)
+- **Border Layer**: Configurable thickness, color, padding, and fill modes (solid, dominant, gradient)
+- **Orientation Layer**: Force landscape or portrait via 90-degree rotation
+- **Caption Layer**: EXIF-based captions with template tokens and positioning
+- **Overlay Layer**: Texture overlays with blend modes and opacity control
+- **Resize Layer**: Output dimension constraints
 
-#### Branch 6: Caption Templates
-- **Template System**: `{{field}}` placeholder support for dynamic captions
-- **EXIF Data Extraction**: Comprehensive metadata extraction (camera, lens, exposure settings)
-- **`--caption-template` Flag**: Custom caption templates with EXIF placeholders
-- **Template Fields**: {{camera}}, {{lens}}, {{iso}}, {{aperture}}, {{shutter}}, {{focal}}, {{year}}, {{month}}, {{day}}, etc.
-- **`--no-caption` Flag**: Disable captions entirely
+#### Texture Overlay System
+- **168 bundled textures**: Dirt, film dust, light leaks, wet plate, and frame textures
+- **Blend modes**: Screen, multiply, overlay, softLight per texture kind
+- **Git LFS**: Large texture files tracked via Git LFS
 
-#### Branch 5: Input Format Support
-- **Format-Agnostic Decoding**: Support for multiple input formats
-- **PNG Input**: Process PNG images
-- **TIFF Input**: Process TIFF images
-- **Auto-detection**: Automatic format detection based on file content
+#### Font Styling
+- **Bold/Italic support**: FontStyle OptionSet with `--font-bold`/`--font-italic` CLI flags
+- **System fonts**: Uses macOS system fonts via CoreText
 
-#### Branch 4: Output Format Support
-- **PNG Output**: Lossless PNG output format
-- **`--output-format` Flag**: Choose between JPEG and PNG output
-- **Format Preservation**: Intelligent format handling
+#### Border Styles
+- **Solid**: Clean colored border with customizable padding
+- **Instagram**: Fixed 4:5 ratio frame
+- **Print**: Physical print format (10x15cm default) with custom dimensions and DPI
 
-#### Branch 3: Constants and Configuration
-- **Configurable Quality**: JPEG quality control (60-100 range)
-- **`--quality` Flag**: Set JPEG output quality
-- **Named Constants**: Extracted magic numbers to named constants
-- **Instagram Frame Constants**: Configurable Instagram dimensions
-- **Font Scaling Constants**: Configurable font size scaling factors
+#### Processing Features
+- **EXIF preservation**: Metadata carried through to output via MetadataWriter
+- **IPTC keywords**: "framer" keyword added to processed images
+- **Color extraction**: Dominant color and gradient generation for dynamic backgrounds
+- **Concurrent processing**: Batch processing with configurable worker count
 
-#### Branch 2: Code Refactoring
-- **Modular Functions**: Refactored processImage() into focused helper functions
-- **`determineCaption()`**: Extracted caption determination logic
-- **`calculateBorderThickness()`**: Extracted border thickness calculation
-- **`calculateFontSize()`**: Extracted font size calculation
-- **Improved Maintainability**: Cleaner, more testable code structure
+#### Preset System
+- **YAML presets**: Save/load from `~/.config/framer/presets/`
+- **Built-in presets**: Vintage, Instagram, Minimal, Print 10x15
+- **JSON preset support**: In-app preset management
 
-#### Branch 1: Cleanup and Error Handling
-- **Dead Code Removal**: Removed unused padWithBorder() function
-- **Error Handling**: Proper error handling for strconv.Atoi() and hexToRGB()
-- **ProcessingConfig Type**: Extracted anonymous struct to named type
-- **Font Cleanup**: Removed missing AmericanTypewriter reference
-
-### Core Features (Initial Release)
-- **Two Border Styles**: Solid and Instagram (4:5 ratio) borders
-- **EXIF Date Extraction**: Automatic date captions from EXIF metadata
-- **Custom Borders**: Percentage or pixel-based border thickness
-- **Color Customization**: Hex color support for borders and fonts
-- **Font Support**: Multiple embedded TrueType fonts
-- **Batch Processing**: Process entire directories of images
-- **`--font-color` Flag**: Customize caption color
+### Removed
+- Go source code and all Go dependencies
+- Legacy iOS companion app (Framer-iOS/)
+- Embedded font binaries (fonts.go, fonts_data/)
+- Go CI/CD workflows
+- Cross-platform support (now macOS-only)
 
 ### Changed
-- Updated error handling from logging to returning errors
-- Improved performance with concurrent processing
-- Enhanced configuration system with presets and YAML support
-- Better user feedback with progress bars and statistics
+- Architecture: single-file Go to multi-target Swift Package
+- Image processing: Go imaging library to CoreGraphics/CoreImage
+- Font rendering: FreeType to CoreText
+- EXIF reading: goexif to ImageIO
+- Configuration: flag package to Swift Argument Parser
+- Project build: `go build` to `swift build` / `xcodegen generate`
 
-### Fixed
-- Fixed recursive processing when output is subdirectory of input
-- Fixed percentage-based border thickness calculation
-- Improved font loading with better fallback handling
+---
 
-## Release Notes
+## [1.0.0] - 2025
 
-### Building from Source
+Original Go CLI implementation.
 
-```bash
-git clone https://github.com/arthursoares/framer.git
-cd framer
-go build framer.go fonts.go
-```
-
-### Installation
-
-See [README.md](README.md) for detailed installation instructions including Homebrew, binary downloads, and building from source.
+### Core Features
+- Two border styles: Solid and Instagram (4:5 ratio)
+- EXIF date extraction for automatic captions
+- Caption templates with `{{field}}` placeholders
+- YAML configuration and preset system
+- Batch processing with concurrent workers and progress bar
+- Multiple embedded TrueType fonts
+- PNG and JPEG output formats
+- Post-processing hook for external tools (JPEGmini Pro, jpegoptim)
+- Cross-platform builds (macOS, Linux, Windows)
+- Homebrew installation support
 
 ---
 
