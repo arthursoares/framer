@@ -14,8 +14,14 @@ public actor FrameProcessor {
         let cgImage = try loadImage(from: url)
         let exif = (try? EXIFReader.read(from: url)) ?? ExifData()
 
-        let framed = try BorderRenderer.applyBorder(to: cgImage, config: config, style: config.borderStyle)
-        let captioned = try CaptionRenderer.renderCaption(on: framed, config: config, exif: exif)
+        let borderResult = try BorderRenderer.applyBorder(to: cgImage, config: config, style: config.borderStyle)
+        let captioned = try CaptionRenderer.renderCaption(
+            on: borderResult.image,
+            config: config,
+            exif: exif,
+            imageOrigin: borderResult.imageOrigin,
+            imageSize: borderResult.imageSize
+        )
         let preview = downscale(captioned, maxDimension: 1200)
 
         return NSImage(cgImage: preview, size: NSSize(width: preview.width, height: preview.height))
@@ -27,10 +33,23 @@ public actor FrameProcessor {
         let cgImage = try loadImage(from: input)
         let exif = (try? EXIFReader.read(from: input)) ?? ExifData()
 
-        let framed = try BorderRenderer.applyBorder(to: cgImage, config: config, style: config.borderStyle)
-        let captioned = try CaptionRenderer.renderCaption(on: framed, config: config, exif: exif)
+        let borderResult = try BorderRenderer.applyBorder(to: cgImage, config: config, style: config.borderStyle)
+        let captioned = try CaptionRenderer.renderCaption(
+            on: borderResult.image,
+            config: config,
+            exif: exif,
+            imageOrigin: borderResult.imageOrigin,
+            imageSize: borderResult.imageSize
+        )
 
-        try encode(captioned, to: output, format: config.outputFormat)
+        try MetadataWriter.encode(
+            captioned,
+            to: output,
+            format: config.outputFormat,
+            sourceURL: input,
+            borderStyle: config.borderStyle,
+            preserveMetadata: !config.noMetadata
+        )
     }
 
     // MARK: - Helpers

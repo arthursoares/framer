@@ -37,13 +37,22 @@ public struct ExifData: Sendable {
         let day = cal.component(.day, from: date)
         let monthNames = ["JAN","FEB","MAR","APR","MAY","JUN",
                           "JUL","AUG","SEP","OCT","NOV","DEC"]
+        let fullMonthNames = ["January","February","March","April","May","June",
+                              "July","August","September","October","November","December"]
         let mon = month >= 1 && month <= 12 ? monthNames[month-1] : "???"
+        let fullMonth = month >= 1 && month <= 12 ? fullMonthNames[month-1] : "???"
+
+        let isoFormatter = DateFormatter()
+        isoFormatter.dateFormat = "yyyy-MM-dd"
+        isoFormatter.locale = Locale(identifier: "en_US_POSIX")
+        let isoDate = isoFormatter.string(from: date)
 
         result = result.replacingOccurrences(of: "{{year}}", with: String(year))
         result = result.replacingOccurrences(of: "{{year2}}", with: String(format: "%02d", year % 100))
-        result = result.replacingOccurrences(of: "{{month}}", with: String(format: "%02d", month))
+        result = result.replacingOccurrences(of: "{{month}}", with: fullMonth)
         result = result.replacingOccurrences(of: "{{mon}}", with: mon)
         result = result.replacingOccurrences(of: "{{day}}", with: String(format: "%02d", day))
+        result = result.replacingOccurrences(of: "{{date}}", with: isoDate)
         result = result.replacingOccurrences(of: "{{camera}}", with: camera ?? "")
         result = result.replacingOccurrences(of: "{{lens}}", with: lens ?? "")
         result = result.replacingOccurrences(of: "{{iso}}", with: iso.map { "ISO \($0)" } ?? "")

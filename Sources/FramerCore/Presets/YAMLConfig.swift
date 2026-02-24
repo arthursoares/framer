@@ -20,11 +20,28 @@ public enum YAMLConfig {
         var output_format: String?
         var instagram_max_size: Int?
         var post_process: String?
+        var background_color: String?
+        var outer_padding: Int?
+        var caption_padding: Int?
+        var no_metadata: Bool?
+        var print_width_mm: Double?
+        var print_height_mm: Double?
+        var print_dpi: Int?
     }
 
     public static func encode(_ config: ProcessingConfig) throws -> String {
         var schema = YAMLSchema()
-        schema.border_style = config.borderStyle.rawValue
+        switch config.borderStyle {
+        case .solid:
+            schema.border_style = "solid"
+        case .instagram:
+            schema.border_style = "instagram"
+        case .print(let format):
+            schema.border_style = "print"
+            schema.print_width_mm = format.widthMM
+            schema.print_height_mm = format.heightMM
+            schema.print_dpi = format.dpi
+        }
         switch config.borderThickness {
         case .pixels(let px): schema.border_thickness = String(px)
         case .percent(let pct): schema.border_thickness = "\(pct)%"
@@ -51,6 +68,10 @@ public enum YAMLConfig {
         }
         schema.instagram_max_size = config.instagramMaxSize
         schema.post_process = config.postProcess
+        schema.background_color = config.backgroundColor.hex
+        if config.outerPadding != 0 { schema.outer_padding = config.outerPadding }
+        if config.captionPadding != 0 { schema.caption_padding = config.captionPadding }
+        if config.noMetadata { schema.no_metadata = config.noMetadata }
         return try YAMLEncoder().encode(schema)
     }
 
@@ -58,7 +79,21 @@ public enum YAMLConfig {
         let schema = try YAMLDecoder().decode(YAMLSchema.self, from: yaml)
         var config = ProcessingConfig.default
 
-        if let s = schema.border_style { config.borderStyle = BorderStyle(rawValue: s) ?? .solid }
+        if let s = schema.border_style {
+            switch s {
+            case "solid": config.borderStyle = .solid
+            case "instagram": config.borderStyle = .instagram
+            case "print10x15": config.borderStyle = .print(.print10x15)
+            case "print":
+                let format = PrintFormat(
+                    widthMM: schema.print_width_mm ?? 148,
+                    heightMM: schema.print_height_mm ?? 100,
+                    dpi: schema.print_dpi ?? 300
+                )
+                config.borderStyle = .print(format)
+            default: config.borderStyle = .solid
+            }
+        }
         if let t = schema.border_thickness { config.borderThickness = BorderSize(string: t) }
         if let c = schema.border_color { config.borderColor = (try? CodableColor(hex: c)) ?? config.borderColor }
         if let p = schema.padding { config.padding = p }
@@ -76,6 +111,10 @@ public enum YAMLConfig {
         if schema.output_format == "png" { config.outputFormat = .png }
         if let m = schema.instagram_max_size { config.instagramMaxSize = m }
         config.postProcess = schema.post_process
+        if let bg = schema.background_color { config.backgroundColor = (try? CodableColor(hex: bg)) ?? config.backgroundColor }
+        if let op = schema.outer_padding { config.outerPadding = op }
+        if let cp = schema.caption_padding { config.captionPadding = cp }
+        if let nm = schema.no_metadata { config.noMetadata = nm }
 
         return config
     }
