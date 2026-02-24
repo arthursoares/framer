@@ -188,6 +188,7 @@ struct PresetManagerView: View {
 
     private func applyPreset(_ preset: Preset) {
         appState.currentConfig = preset.config
+        appState.activePresetName = preset.name
         appState.activeTab = .library
     }
 
