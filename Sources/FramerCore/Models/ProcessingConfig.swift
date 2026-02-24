@@ -148,6 +148,15 @@ public enum OutputFormat: Codable, Equatable, Sendable {
     case png
 }
 
+// MARK: - BackgroundMode
+
+public enum BackgroundMode: String, Codable, Equatable, Sendable, CaseIterable {
+    case color = "color"
+    case dominant = "dominant"
+    case gradientLinear = "gradient_linear"
+    case gradientRadial = "gradient_radial"
+}
+
 // MARK: - ProcessingConfig
 
 public struct ProcessingConfig: Equatable, Sendable {
@@ -166,6 +175,7 @@ public struct ProcessingConfig: Equatable, Sendable {
     public var outerPadding: Int
     public var captionPadding: Int
     public var noMetadata: Bool
+    public var backgroundMode: BackgroundMode
 
     public init(
         borderStyle: BorderStyle = .solid,
@@ -173,7 +183,7 @@ public struct ProcessingConfig: Equatable, Sendable {
         borderColor: CodableColor = try! CodableColor(hex: "#FFFFFF"),
         padding: Int = 150,
         captionMode: CaptionMode = .template(" - {{mon}} '{{year2}} -"),
-        fontName: String = "Courier New Bold",
+        fontName: String = "Courier New",
         fontSize: FontSize = .auto,
         fontColor: CodableColor = try! CodableColor(hex: "#000000"),
         outputFormat: OutputFormat = .jpeg(quality: 100),
@@ -182,7 +192,8 @@ public struct ProcessingConfig: Equatable, Sendable {
         backgroundColor: CodableColor = try! CodableColor(hex: "#FFFFFF"),
         outerPadding: Int = 0,
         captionPadding: Int = 0,
-        noMetadata: Bool = false
+        noMetadata: Bool = false,
+        backgroundMode: BackgroundMode = .color
     ) {
         self.borderStyle = borderStyle
         self.borderThickness = borderThickness
@@ -199,6 +210,7 @@ public struct ProcessingConfig: Equatable, Sendable {
         self.outerPadding = outerPadding
         self.captionPadding = captionPadding
         self.noMetadata = noMetadata
+        self.backgroundMode = backgroundMode
     }
 
     public static let `default` = ProcessingConfig()
@@ -211,6 +223,7 @@ extension ProcessingConfig: Codable {
         case captionMode, fontName, fontSize, fontColor
         case outputFormat, instagramMaxSize, postProcess
         case backgroundColor, outerPadding, captionPadding, noMetadata
+        case backgroundMode
     }
 
     public init(from decoder: Decoder) throws {
@@ -231,6 +244,7 @@ extension ProcessingConfig: Codable {
         outerPadding = (try? container.decodeIfPresent(Int.self, forKey: .outerPadding)) ?? 0
         captionPadding = (try? container.decodeIfPresent(Int.self, forKey: .captionPadding)) ?? 0
         noMetadata = (try? container.decodeIfPresent(Bool.self, forKey: .noMetadata)) ?? false
+        backgroundMode = (try? container.decodeIfPresent(BackgroundMode.self, forKey: .backgroundMode)) ?? .color
     }
 }
 

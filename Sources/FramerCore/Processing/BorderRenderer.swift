@@ -24,11 +24,9 @@ public enum BorderRenderer {
     ) throws -> BorderResult {
         switch style {
         case .solid:
-            let result = try applySolidBorder(to: image, config: config)
-            return BorderResult(image: result, imageOrigin: nil, imageSize: nil)
+            return try applySolidBorder(to: image, config: config)
         case .instagram:
-            let result = try applyInstagramBorder(to: image, config: config)
-            return BorderResult(image: result, imageOrigin: nil, imageSize: nil)
+            return try applyInstagramBorder(to: image, config: config)
         case .print(let format):
             return try applyPrintBorder(to: image, config: config, format: format)
         }
@@ -36,12 +34,10 @@ public enum BorderRenderer {
 
     // MARK: - Solid Border
 
-    private static func applySolidBorder(to image: CGImage, config: ProcessingConfig) throws -> CGImage {
+    private static func applySolidBorder(to image: CGImage, config: ProcessingConfig) throws -> BorderResult {
         let borderPx = config.borderThickness.resolved(relativeTo: min(image.width, image.height))
         let totalW = image.width + 2 * borderPx + 2 * config.padding
         let totalH = image.height + 2 * borderPx + 2 * config.padding
-
-        let bgColor = config.borderColor.cgColor
 
         guard let ctx = CGContext(data: nil,
                                   width: totalW,
@@ -53,9 +49,9 @@ public enum BorderRenderer {
             throw FramerError.invalidImage(URL(fileURLWithPath: ""))
         }
 
-        // Fill background
-        ctx.setFillColor(bgColor)
-        ctx.fill(CGRect(x: 0, y: 0, width: totalW, height: totalH))
+        // Fill background with resolved background
+        let bg = resolveBackground(mode: config.backgroundMode, fallbackColor: config.borderColor.cgColor, sourceImage: image)
+        fillBackground(bg, in: ctx, width: totalW, height: totalH)
 
         // Draw image centered
         let imageX = borderPx + config.padding
@@ -65,25 +61,28 @@ public enum BorderRenderer {
         guard let result = ctx.makeImage() else {
             throw FramerError.invalidImage(URL(fileURLWithPath: ""))
         }
-        return result
+        return BorderResult(image: result, imageOrigin: nil, imageSize: nil)
     }
 
     // MARK: - Instagram Border
 
-    private static func applyInstagramBorder(to image: CGImage, config: ProcessingConfig) throws -> CGImage {
+    private static func applyInstagramBorder(to image: CGImage, config: ProcessingConfig) throws -> BorderResult {
         let maxSize = config.instagramMaxSize
 
-        // Scale image to fit within maxSize
+        // 1. Scale image to fit within maxSize (aspect-ratio preserving)
         let scale = min(Double(maxSize) / Double(image.width), Double(maxSize) / Double(image.height))
         let scaledW = Int(Double(image.width) * scale)
         let scaledH = Int(Double(image.height) * scale)
 
-        // Canvas is Instagram 4:5 ratio, scaled to fit maxSize
-        let canvasScale = Double(maxSize) / Double(max(instagramWidth, instagramHeight))
-        let canvasW = Int(Double(instagramWidth) * canvasScale)
-        let canvasH = Int(Double(instagramHeight) * canvasScale)
+        // 2. Calculate layered dimensions: image → padding → border (additive)
+        let padding = config.padding
+        let borderPx = config.borderThickness.resolved(relativeTo: min(scaledW, scaledH))
+        let borderedW = scaledW + 2 * padding + 2 * borderPx
+        let borderedH = scaledH + 2 * padding + 2 * borderPx
 
-        let bgColor = config.borderColor.cgColor
+        // 3. Fixed 4:5 canvas (matching Go implementation)
+        let canvasW = instagramWidth   // 1080
+        let canvasH = instagramHeight  // 1350
 
         guard let ctx = CGContext(data: nil,
                                   width: canvasW,
@@ -95,23 +94,36 @@ public enum BorderRenderer {
             throw FramerError.invalidImage(URL(fileURLWithPath: ""))
         }
 
-        // Fill background
-        ctx.setFillColor(bgColor)
-        ctx.fill(CGRect(x: 0, y: 0, width: canvasW, height: canvasH))
+        // 4. Fill canvas with background
+        let bg = resolveBackground(mode: config.backgroundMode, fallbackColor: CGColor(red: 1, green: 1, blue: 1, alpha: 1), sourceImage: image)
+        fillBackground(bg, in: ctx, width: canvasW, height: canvasH)
 
-        // Center image with border inset
-        let borderPx = config.borderThickness.resolved(relativeTo: min(scaledW, scaledH))
-        let drawW = scaledW - 2 * borderPx
-        let drawH = scaledH - 2 * borderPx
-        let drawX = (canvasW - drawW) / 2
-        let drawY = (canvasH - drawH) / 2
+        // 5. Center bordered area on canvas, fill with border color
+        let bx = (canvasW - borderedW) / 2
+        let by = (canvasH - borderedH) / 2
+        ctx.setFillColor(config.borderColor.cgColor)
+        ctx.fill(CGRect(x: bx, y: by, width: borderedW, height: borderedH))
 
-        ctx.draw(image, in: CGRect(x: drawX, y: drawY, width: drawW, height: drawH))
+        // 6. Fill padding area with white (inside border)
+        if padding > 0 {
+            ctx.setFillColor(CGColor(red: 1, green: 1, blue: 1, alpha: 1))
+            ctx.fill(CGRect(x: bx + borderPx, y: by + borderPx,
+                            width: borderedW - 2 * borderPx, height: borderedH - 2 * borderPx))
+        }
+
+        // 7. Draw image at correct aspect-ratio-preserving dimensions
+        let imageX = bx + borderPx + padding
+        let imageY = by + borderPx + padding
+        ctx.draw(image, in: CGRect(x: imageX, y: imageY, width: scaledW, height: scaledH))
 
         guard let result = ctx.makeImage() else {
             throw FramerError.invalidImage(URL(fileURLWithPath: ""))
         }
-        return result
+        return BorderResult(
+            image: result,
+            imageOrigin: CGPoint(x: imageX, y: imageY),
+            imageSize: CGSize(width: scaledW, height: scaledH)
+        )
     }
 
     // MARK: - Print Border
@@ -158,9 +170,9 @@ public enum BorderRenderer {
             throw FramerError.invalidImage(URL(fileURLWithPath: ""))
         }
 
-        // Fill canvas with background color
-        ctx.setFillColor(config.backgroundColor.cgColor)
-        ctx.fill(CGRect(x: 0, y: 0, width: frameW, height: frameH))
+        // Fill canvas with background
+        let bg = resolveBackground(mode: config.backgroundMode, fallbackColor: config.backgroundColor.cgColor, sourceImage: img)
+        fillBackground(bg, in: ctx, width: frameW, height: frameH)
 
         // Draw the scaled image centered
         ctx.draw(img, in: CGRect(x: imageX, y: imageY, width: scaledW, height: scaledH))
@@ -187,6 +199,76 @@ public enum BorderRenderer {
             imageOrigin: CGPoint(x: imageX, y: imageY),
             imageSize: CGSize(width: scaledW, height: scaledH)
         )
+    }
+
+    // MARK: - Background Resolution
+
+    private enum BackgroundFill {
+        case solid(CGColor)
+        case linearGradient(start: CGColor, end: CGColor)
+        case radialGradient(center: CGColor, edge: CGColor)
+    }
+
+    private static func resolveBackground(
+        mode: BackgroundMode,
+        fallbackColor: CGColor,
+        sourceImage: CGImage
+    ) -> BackgroundFill {
+        switch mode {
+        case .color:
+            return .solid(fallbackColor)
+        case .dominant:
+            let dominant = ColorExtractor.extractDominantColor(from: sourceImage)
+            return .solid(dominant.cgColor)
+        case .gradientLinear:
+            let dominant = ColorExtractor.extractDominantColor(from: sourceImage)
+            let (center, edge) = ColorExtractor.generateGradientColors(dominant: dominant)
+            return .linearGradient(start: center, end: edge)
+        case .gradientRadial:
+            let dominant = ColorExtractor.extractDominantColor(from: sourceImage)
+            let (center, edge) = ColorExtractor.generateGradientColors(dominant: dominant)
+            return .radialGradient(center: center, edge: edge)
+        }
+    }
+
+    private static func fillBackground(_ fill: BackgroundFill, in ctx: CGContext, width: Int, height: Int) {
+        let rect = CGRect(x: 0, y: 0, width: width, height: height)
+        switch fill {
+        case .solid(let color):
+            ctx.setFillColor(color)
+            ctx.fill(rect)
+
+        case .linearGradient(let startColor, let endColor):
+            let colorSpace = CGColorSpaceCreateDeviceRGB()
+            guard let gradient = CGGradient(colorsSpace: colorSpace,
+                                            colors: [startColor, endColor] as CFArray,
+                                            locations: [0.0, 1.0]) else {
+                ctx.setFillColor(startColor)
+                ctx.fill(rect)
+                return
+            }
+            // Top-to-bottom (CGContext has flipped Y: 0 is bottom)
+            ctx.drawLinearGradient(gradient,
+                                   start: CGPoint(x: CGFloat(width) / 2, y: CGFloat(height)),
+                                   end: CGPoint(x: CGFloat(width) / 2, y: 0),
+                                   options: [.drawsBeforeStartLocation, .drawsAfterEndLocation])
+
+        case .radialGradient(let centerColor, let edgeColor):
+            let colorSpace = CGColorSpaceCreateDeviceRGB()
+            guard let gradient = CGGradient(colorsSpace: colorSpace,
+                                            colors: [centerColor, edgeColor] as CFArray,
+                                            locations: [0.0, 1.0]) else {
+                ctx.setFillColor(centerColor)
+                ctx.fill(rect)
+                return
+            }
+            let center = CGPoint(x: CGFloat(width) / 2, y: CGFloat(height) / 2)
+            let radius = sqrt(CGFloat(width * width + height * height)) / 2
+            ctx.drawRadialGradient(gradient,
+                                    startCenter: center, startRadius: 0,
+                                    endCenter: center, endRadius: radius,
+                                    options: [.drawsBeforeStartLocation, .drawsAfterEndLocation])
+        }
     }
 
     // MARK: - Rotation Helper
