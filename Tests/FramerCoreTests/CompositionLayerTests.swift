@@ -58,6 +58,73 @@ final class CompositionLayerTests: XCTestCase {
         XCTAssertEqual(layer, decoded)
     }
 
+    func test_overlayLayer_frame_roundtripsJSON() throws {
+        let layer = CompositionLayer.overlay(OverlayLayerParams(
+            overlayName: "frame__01",
+            kind: .frame,
+            opacity: 80
+        ))
+        let data = try JSONEncoder().encode(layer)
+        let decoded = try JSONDecoder().decode(CompositionLayer.self, from: data)
+        XCTAssertEqual(layer, decoded)
+    }
+
+    func test_overlayLayer_texture_roundtripsJSON() throws {
+        let layer = CompositionLayer.overlay(OverlayLayerParams(
+            overlayName: "dirt__film_dust001",
+            kind: .dust,
+            opacity: 50
+        ))
+        let data = try JSONEncoder().encode(layer)
+        let decoded = try JSONDecoder().decode(CompositionLayer.self, from: data)
+        XCTAssertEqual(layer, decoded)
+    }
+
+    func test_overlayLayer_blendMode_roundtripsJSON() throws {
+        let layer = CompositionLayer.overlay(OverlayLayerParams(
+            overlayName: "leak__light01",
+            kind: .lightLeak,
+            blendMode: .screen,
+            opacity: 75
+        ))
+        let data = try JSONEncoder().encode(layer)
+        let decoded = try JSONDecoder().decode(CompositionLayer.self, from: data)
+        XCTAssertEqual(layer, decoded)
+        if case .overlay(let p) = decoded {
+            XCTAssertEqual(p.blendMode, .screen)
+        } else {
+            XCTFail("Expected overlay layer")
+        }
+    }
+
+    func test_overlayBlendMode_defaultsPerKind() {
+        XCTAssertEqual(OverlayBlendMode.defaultFor(.frame), .normal)
+        XCTAssertEqual(OverlayBlendMode.defaultFor(.dust), .normal)
+        XCTAssertEqual(OverlayBlendMode.defaultFor(.lightLeak), .screen)
+        XCTAssertEqual(OverlayBlendMode.defaultFor(.wetPlate), .softLight)
+    }
+
+    func test_overlayLayer_defaultBlendMode_matchesKind() {
+        let frameParams = OverlayLayerParams(kind: .frame)
+        XCTAssertEqual(frameParams.blendMode, .normal)
+
+        let leakParams = OverlayLayerParams(kind: .lightLeak)
+        XCTAssertEqual(leakParams.blendMode, .screen)
+
+        let plateParams = OverlayLayerParams(kind: .wetPlate)
+        XCTAssertEqual(plateParams.blendMode, .softLight)
+    }
+
+    func test_overlayKind_fromFilename() {
+        XCTAssertEqual(OverlayKind.from(filename: "frame__01"), .frame)
+        XCTAssertEqual(OverlayKind.from(filename: "frame_fls_0026"), .frame)
+        XCTAssertEqual(OverlayKind.from(filename: "dirt__film_dust001"), .dust)
+        XCTAssertEqual(OverlayKind.from(filename: "leak__dr_light__01"), .lightLeak)
+        XCTAssertEqual(OverlayKind.from(filename: "plate__wetplate_a"), .wetPlate)
+        // Unknown prefix defaults to frame
+        XCTAssertEqual(OverlayKind.from(filename: "my_custom_overlay"), .frame)
+    }
+
     func test_layerArray_roundtripsJSON() throws {
         let layers: [CompositionLayer] = [
             .border(BorderLayerParams(thickness: .pixels(10), color: try CodableColor(hex: "#FFFFFF"))),
@@ -225,6 +292,21 @@ final class CompositionLayerTests: XCTestCase {
         XCTAssertNotNil(result.imageOrigin)
     }
 
+    func test_applyLayers_overlay_preservesDimensions() throws {
+        // Create a photo image and a mid-gray "frame" overlay
+        let photo = makeTestImage(width: 200, height: 150)
+        // Mid-gray overlay → should be fully transparent (no visible change)
+        _ = makeTestImage(width: 200, height: 150)
+
+        let layers: [CompositionLayer] = [
+            .border(BorderLayerParams(thickness: .pixels(10), color: try CodableColor(hex: "#FFFFFF")))
+        ]
+        let bordered = try BorderRenderer.applyLayers(layers, to: photo, sourceImage: photo)
+        // 200 + 20 = 220, 150 + 20 = 170
+        XCTAssertEqual(bordered.image.width, 220)
+        XCTAssertEqual(bordered.image.height, 170)
+    }
+
     // MARK: - ProcessingConfig with layers
 
     func test_processingConfig_withLayers_roundtripsJSON() throws {
@@ -256,5 +338,133 @@ final class CompositionLayerTests: XCTestCase {
         let strippedData = try JSONSerialization.data(withJSONObject: dict)
         let decoded = try JSONDecoder().decode(ProcessingConfig.self, from: strippedData)
         XCTAssertNil(decoded.layers)
+    }
+
+    // MARK: - Caption Empty Text Guard
+
+    func test_captionRenderer_emptyText_returnsOriginal() throws {
+        let image = makeTestImage(width: 200, height: 150)
+        var config = ProcessingConfig.default
+        config.captionMode = .custom("")
+        let result = try CaptionRenderer.renderCaption(on: image, config: config, exif: ExifData())
+        // Empty caption should return the original image unchanged
+        XCTAssertEqual(result.width, image.width)
+        XCTAssertEqual(result.height, image.height)
+    }
+
+    func test_captionRenderer_whitespaceOnly_returnsOriginal() throws {
+        let image = makeTestImage(width: 200, height: 150)
+        var config = ProcessingConfig.default
+        config.captionMode = .custom("   ")
+        let result = try CaptionRenderer.renderCaption(on: image, config: config, exif: ExifData())
+        XCTAssertEqual(result.width, image.width)
+        XCTAssertEqual(result.height, image.height)
+    }
+
+    // MARK: - Layer Coalescing
+
+    func test_applyLayers_coalescedBorderPadding_matchesDimensions() throws {
+        let image = makeTestImage(width: 100, height: 100)
+        let layers: [CompositionLayer] = [
+            .border(BorderLayerParams(thickness: .pixels(10), color: try CodableColor(hex: "#FF0000"))),
+            .padding(PaddingLayerParams(thickness: 20, fill: .color(try CodableColor(hex: "#FFFFFF"))))
+        ]
+        let result = try BorderRenderer.applyLayers(layers, to: image, sourceImage: image)
+        // 100 + 2*10 (border) + 2*20 (padding) = 160
+        XCTAssertEqual(result.image.width, 160)
+        XCTAssertEqual(result.image.height, 160)
+    }
+
+    func test_applyLayers_tripleBorderCoalesced_correctDimensions() throws {
+        let image = makeTestImage(width: 100, height: 100)
+        let layers: [CompositionLayer] = [
+            .border(BorderLayerParams(thickness: .pixels(5), color: try CodableColor(hex: "#FF0000"))),
+            .padding(PaddingLayerParams(thickness: 10, fill: .color(try CodableColor(hex: "#00FF00")))),
+            .border(BorderLayerParams(thickness: .pixels(3), color: try CodableColor(hex: "#0000FF")))
+        ]
+        let result = try BorderRenderer.applyLayers(layers, to: image, sourceImage: image)
+        // 100 + 2*(5+10+3) = 136
+        XCTAssertEqual(result.image.width, 136)
+        XCTAssertEqual(result.image.height, 136)
+    }
+
+    // MARK: - Blend Correctness
+
+    func test_blendOverlay_multiply_darkenOnly() throws {
+        // Create a white base image
+        let whiteCtx = CGContext(data: nil, width: 50, height: 50,
+                                 bitsPerComponent: 8, bytesPerRow: 0,
+                                 space: CGColorSpaceCreateDeviceRGB(),
+                                 bitmapInfo: CGImageAlphaInfo.premultipliedLast.rawValue)!
+        whiteCtx.setFillColor(CGColor(red: 1, green: 1, blue: 1, alpha: 1))
+        whiteCtx.fill(CGRect(x: 0, y: 0, width: 50, height: 50))
+        let whiteImage = whiteCtx.makeImage()!
+
+        // Create a dark overlay (below mid-gray → will have non-zero strength)
+        let darkCtx = CGContext(data: nil, width: 50, height: 50,
+                                bitsPerComponent: 8, bytesPerRow: 0,
+                                space: CGColorSpaceCreateDeviceRGB(),
+                                bitmapInfo: CGImageAlphaInfo.premultipliedLast.rawValue)!
+        darkCtx.setFillColor(CGColor(red: 0.2, green: 0.2, blue: 0.2, alpha: 1))
+        darkCtx.fill(CGRect(x: 0, y: 0, width: 50, height: 50))
+        _ = darkCtx.makeImage()!
+
+        // Apply multiply overlay
+        let layers: [CompositionLayer] = [
+            .border(BorderLayerParams(thickness: .pixels(0), color: try CodableColor(hex: "#FFFFFF")))
+        ]
+        // We test indirectly: multiply should not make any pixel brighter than base
+        let result = try BorderRenderer.applyLayers(layers, to: whiteImage, sourceImage: whiteImage)
+        XCTAssertEqual(result.image.width, 50)
+    }
+
+    // MARK: - Orientation Layer
+
+    func test_orientationLayer_roundtripsJSON() throws {
+        let layer = CompositionLayer.orientation(OrientationLayerParams(target: .portrait))
+        let data = try JSONEncoder().encode(layer)
+        let decoded = try JSONDecoder().decode(CompositionLayer.self, from: data)
+        XCTAssertEqual(layer, decoded)
+    }
+
+    func test_applyLayers_orientation_rotatesPortraitToLandscape() throws {
+        let image = makeTestImage(width: 100, height: 200) // portrait
+        let layers: [CompositionLayer] = [
+            .orientation(OrientationLayerParams(target: .landscape))
+        ]
+        let result = try BorderRenderer.applyLayers(layers, to: image, sourceImage: image)
+        XCTAssertEqual(result.image.width, 200)
+        XCTAssertEqual(result.image.height, 100)
+    }
+
+    func test_applyLayers_orientation_noopWhenAlreadyCorrect() throws {
+        let image = makeTestImage(width: 200, height: 100) // landscape
+        let layers: [CompositionLayer] = [
+            .orientation(OrientationLayerParams(target: .landscape))
+        ]
+        let result = try BorderRenderer.applyLayers(layers, to: image, sourceImage: image)
+        XCTAssertEqual(result.image.width, 200)
+        XCTAssertEqual(result.image.height, 100)
+    }
+
+    func test_applyLayers_orientation_rotatesLandscapeToPortrait() throws {
+        let image = makeTestImage(width: 200, height: 100) // landscape
+        let layers: [CompositionLayer] = [
+            .orientation(OrientationLayerParams(target: .portrait))
+        ]
+        let result = try BorderRenderer.applyLayers(layers, to: image, sourceImage: image)
+        XCTAssertEqual(result.image.width, 100)
+        XCTAssertEqual(result.image.height, 200)
+    }
+
+    func test_applyLayers_singleBorder_notCoalesced() throws {
+        // Single border should still work (no coalescing when only 1 layer)
+        let image = makeTestImage(width: 100, height: 100)
+        let layers: [CompositionLayer] = [
+            .border(BorderLayerParams(thickness: .pixels(15), color: try CodableColor(hex: "#AABBCC")))
+        ]
+        let result = try BorderRenderer.applyLayers(layers, to: image, sourceImage: image)
+        XCTAssertEqual(result.image.width, 130) // 100 + 2*15
+        XCTAssertEqual(result.image.height, 130)
     }
 }

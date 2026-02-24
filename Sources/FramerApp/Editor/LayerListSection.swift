@@ -62,13 +62,39 @@ struct LayerListSection: View {
             } label: {
                 Label("Resize", systemImage: "arrow.down.right.and.arrow.up.left")
             }
+            Button {
+                addLayer(.orientation(OrientationLayerParams()))
+            } label: {
+                Label("Orientation", systemImage: "rotate.right")
+            }
+            Divider()
+            Button {
+                addLayer(.overlay(OverlayLayerParams(kind: .frame)))
+            } label: {
+                Label("Frame Overlay", systemImage: "photo.artframe")
+            }
+            Button {
+                addLayer(.overlay(OverlayLayerParams(kind: .dust)))
+            } label: {
+                Label("Dust & Scratches", systemImage: "sparkles")
+            }
+            Button {
+                addLayer(.overlay(OverlayLayerParams(kind: .lightLeak)))
+            } label: {
+                Label("Light Leak", systemImage: "sun.max.trianglebadge.exclamationmark")
+            }
+            Button {
+                addLayer(.overlay(OverlayLayerParams(kind: .wetPlate)))
+            } label: {
+                Label("Wet Plate", systemImage: "drop.halffull")
+            }
         } label: {
             Label("Add Layer", systemImage: "plus.circle")
         }
     }
 
     private func removeLayer(at index: Int) {
-        withAnimation(.easeInOut(duration: 0.2)) {
+        _ = withAnimation(.easeInOut(duration: 0.2)) {
             layers.remove(at: index)
         }
     }
@@ -187,6 +213,10 @@ struct LayerRow: View {
             CanvasLayerControls(params: params) { layer = .canvas($0) }
         case .resize(let params):
             ResizeLayerControls(params: params) { layer = .resize($0) }
+        case .overlay(let params):
+            OverlayLayerControls(params: params) { layer = .overlay($0) }
+        case .orientation(let params):
+            OrientationLayerControls(params: params) { layer = .orientation($0) }
         }
     }
 
@@ -203,6 +233,11 @@ struct LayerRow: View {
             return "\(p.width)x\(p.height)"
         case .resize(let p):
             return "max \(p.maxWidth)x\(p.maxHeight)"
+        case .overlay(let p):
+            if p.overlayName.isEmpty { return "None" }
+            return "\(p.kind.label) \(Int(p.opacity))%"
+        case .orientation(let p):
+            return p.target.rawValue.capitalized
         }
     }
 }
@@ -607,6 +642,252 @@ struct ResizeLayerControls: View {
                 onChange(p)
             }
         )
+    }
+}
+
+// MARK: - OrientationLayerControls
+
+struct OrientationLayerControls: View {
+    var params: OrientationLayerParams
+    var onChange: (OrientationLayerParams) -> Void
+
+    var body: some View {
+        Picker("Target", selection: targetBinding) {
+            ForEach(OrientationTarget.allCases, id: \.self) { target in
+                Text(target.rawValue.capitalized).tag(target)
+            }
+        }
+        .pickerStyle(.segmented)
+    }
+
+    private var targetBinding: Binding<OrientationTarget> {
+        Binding(
+            get: { params.target },
+            set: {
+                var p = params
+                p.target = $0
+                onChange(p)
+            }
+        )
+    }
+}
+
+// MARK: - OverlayLayerControls
+
+struct OverlayLayerControls: View {
+    var params: OverlayLayerParams
+    var onChange: (OverlayLayerParams) -> Void
+
+    @State private var availableOverlays: [TextureFrameProvider.OverlayInfo] = []
+    @State private var selectedKind: OverlayKind = .frame
+
+    var body: some View {
+        kindPicker
+        overlayPicker
+        overlayThumbnailStrip
+        blendModePicker
+        opacityControl
+        openFolderButton
+    }
+
+    // MARK: - Subviews
+
+    private var kindPicker: some View {
+        Picker("Category", selection: $selectedKind) {
+            Text("Frames").tag(OverlayKind.frame)
+            Text("Dust").tag(OverlayKind.dust)
+            Text("Light Leaks").tag(OverlayKind.lightLeak)
+            Text("Wet Plate").tag(OverlayKind.wetPlate)
+        }
+        .pickerStyle(.segmented)
+        .onAppear {
+            selectedKind = params.kind
+            loadOverlays()
+        }
+        .onChange(of: selectedKind) { _, newKind in
+            var p = params
+            p.kind = newKind
+            p.blendMode = OverlayBlendMode.defaultFor(newKind)
+            if !filteredOverlays.contains(where: { $0.id == p.overlayName }) {
+                p.overlayName = ""
+            }
+            onChange(p)
+        }
+    }
+
+    private var overlayPicker: some View {
+        Picker("Overlay", selection: overlayNameBinding) {
+            Text("None").tag("")
+            ForEach(filteredOverlays) { overlay in
+                Text(overlay.displayName).tag(overlay.id)
+            }
+        }
+    }
+
+    @ViewBuilder
+    private var overlayThumbnailStrip: some View {
+        if !filteredOverlays.isEmpty {
+            ScrollView(.horizontal, showsIndicators: false) {
+                HStack(spacing: 6) {
+                    ForEach(filteredOverlays) { overlay in
+                        overlayThumb(overlay)
+                    }
+                }
+                .padding(.vertical, 4)
+            }
+        }
+    }
+
+    private var blendModePicker: some View {
+        Picker("Blend Mode", selection: blendModeBinding) {
+            ForEach(OverlayBlendMode.allCases, id: \.self) { mode in
+                Text(mode.label).tag(mode)
+            }
+        }
+    }
+
+    private var opacityControl: some View {
+        LabeledContent("Opacity") {
+            HStack {
+                Slider(value: opacityBinding, in: 0...100)
+                TextField("", value: opacityBinding, format: .number)
+                    .textFieldStyle(.roundedBorder)
+                    .frame(width: 55)
+                    .multilineTextAlignment(.trailing)
+                    .monospacedDigit()
+                Text("%")
+                    .foregroundStyle(.secondary)
+                    .frame(width: 20)
+            }
+        }
+    }
+
+    private var openFolderButton: some View {
+        Button {
+            if let dir = TextureFrameProvider.ensureUserOverlayDirectory() {
+                NSWorkspace.shared.open(dir)
+            }
+        } label: {
+            Label("Open Overlays Folder", systemImage: "folder")
+                .font(.caption)
+        }
+        .buttonStyle(.plain)
+        .foregroundStyle(.secondary)
+    }
+
+    // MARK: - Thumbnail
+
+    private func overlayThumb(_ overlay: TextureFrameProvider.OverlayInfo) -> some View {
+        Button {
+            var p = params
+            p.overlayName = overlay.id
+            p.kind = overlay.kind
+            onChange(p)
+        } label: {
+            AsyncOverlayThumbnail(overlay: overlay, isSelected: params.overlayName == overlay.id)
+        }
+        .buttonStyle(.plain)
+        .help(overlay.displayName)
+    }
+
+    // MARK: - Bindings
+
+    private var overlayNameBinding: Binding<String> {
+        Binding(
+            get: { params.overlayName },
+            set: { name in
+                var p = params
+                p.overlayName = name
+                if let info = availableOverlays.first(where: { $0.id == name }) {
+                    p.kind = info.kind
+                }
+                onChange(p)
+            }
+        )
+    }
+
+    private var blendModeBinding: Binding<OverlayBlendMode> {
+        Binding(
+            get: { params.blendMode },
+            set: {
+                var p = params
+                p.blendMode = $0
+                onChange(p)
+            }
+        )
+    }
+
+    private var opacityBinding: Binding<Double> {
+        Binding(
+            get: { params.opacity },
+            set: {
+                var p = params
+                p.opacity = $0
+                onChange(p)
+            }
+        )
+    }
+
+    // MARK: - Data
+
+    private var filteredOverlays: [TextureFrameProvider.OverlayInfo] {
+        availableOverlays.filter { $0.kind == selectedKind }
+    }
+
+    private func loadOverlays() {
+        // Load on background to avoid blocking the UI
+        Task.detached {
+            let overlays = TextureFrameProvider.availableOverlays()
+            await MainActor.run {
+                availableOverlays = overlays
+            }
+        }
+    }
+}
+
+// MARK: - AsyncOverlayThumbnail
+
+/// Loads overlay thumbnail asynchronously with caching — avoids blocking the main thread.
+private struct AsyncOverlayThumbnail: View {
+    let overlay: TextureFrameProvider.OverlayInfo
+    let isSelected: Bool
+
+    @State private var thumbnail: NSImage?
+
+    var body: some View {
+        ZStack {
+            RoundedRectangle(cornerRadius: 4)
+                .fill(Color(nsColor: .controlBackgroundColor))
+
+            if let thumbnail {
+                Image(nsImage: thumbnail)
+                    .resizable()
+                    .aspectRatio(contentMode: .fill)
+                    .frame(width: 58, height: 42)
+                    .clipShape(RoundedRectangle(cornerRadius: 3))
+            } else {
+                ProgressView()
+                    .controlSize(.small)
+            }
+        }
+        .frame(width: 60, height: 44)
+        .overlay(
+            RoundedRectangle(cornerRadius: 4)
+                .stroke(isSelected ? Color.accentColor : .clear, lineWidth: 2)
+        )
+        .task(id: overlay.id) {
+            guard thumbnail == nil else { return }
+            let info = overlay
+            let image = await Task.detached {
+                TextureFrameProvider.cachedThumbnail(for: info)
+            }.value
+            if let cgImage = image {
+                thumbnail = NSImage(
+                    cgImage: cgImage,
+                    size: NSSize(width: cgImage.width, height: cgImage.height)
+                )
+            }
+        }
     }
 }
 

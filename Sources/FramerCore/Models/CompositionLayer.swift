@@ -116,6 +116,111 @@ public struct ResizeLayerParams: Identifiable, Codable, Equatable, Sendable {
     }
 }
 
+/// Categories for texture overlays, distinguishing border frames from surface textures.
+public enum OverlayKind: String, Codable, CaseIterable, Sendable {
+    case frame      // Film edges, Polaroid borders, darkroom frames
+    case dust       // Scratches, film dust, surface grime
+    case lightLeak  // Light leak effects
+    case wetPlate   // Tintype / wet plate collodion
+
+    public var label: String {
+        switch self {
+        case .frame: return "Frame"
+        case .dust: return "Dust & Scratches"
+        case .lightLeak: return "Light Leak"
+        case .wetPlate: return "Wet Plate"
+        }
+    }
+
+    /// File name prefix used to auto-categorize discovered overlays.
+    public var filePrefix: String {
+        switch self {
+        case .frame: return "frame"
+        case .dust: return "dirt"
+        case .lightLeak: return "leak"
+        case .wetPlate: return "plate"
+        }
+    }
+
+    /// Categorize a filename stem into an overlay kind.
+    public static func from(filename: String) -> OverlayKind {
+        let lower = filename.lowercased()
+        if lower.hasPrefix("dirt") { return .dust }
+        if lower.hasPrefix("leak") { return .lightLeak }
+        if lower.hasPrefix("plate") { return .wetPlate }
+        return .frame
+    }
+}
+
+/// Blend mode for compositing overlays onto the photo.
+public enum OverlayBlendMode: String, Codable, CaseIterable, Sendable {
+    case normal     // Luminance-deviation alpha composite (default for frames, dust)
+    case screen     // Additive: 1-(1-base)(1-overlay) — only lightens (light leaks)
+    case softLight  // Subtle contrast shift (wet plate, film grain)
+    case multiply   // Darkening: base × overlay (vignettes, burn edges)
+
+    public var label: String {
+        switch self {
+        case .normal: return "Normal"
+        case .screen: return "Screen"
+        case .softLight: return "Soft Light"
+        case .multiply: return "Multiply"
+        }
+    }
+
+    /// Recommended default blend mode for each overlay kind.
+    public static func defaultFor(_ kind: OverlayKind) -> OverlayBlendMode {
+        switch kind {
+        case .frame: return .normal
+        case .dust: return .normal
+        case .lightLeak: return .screen
+        case .wetPlate: return .softLight
+        }
+    }
+}
+
+public struct OverlayLayerParams: Identifiable, Codable, Equatable, Sendable {
+    public let id: UUID
+    public var overlayName: String
+    public var kind: OverlayKind
+    public var blendMode: OverlayBlendMode
+    public var opacity: Double
+
+    public init(
+        id: UUID = UUID(),
+        overlayName: String = "",
+        kind: OverlayKind = .frame,
+        blendMode: OverlayBlendMode? = nil,
+        opacity: Double = 100
+    ) {
+        self.id = id
+        self.overlayName = overlayName
+        self.kind = kind
+        self.blendMode = blendMode ?? OverlayBlendMode.defaultFor(kind)
+        self.opacity = opacity
+    }
+}
+
+// MARK: - Orientation
+
+public enum OrientationTarget: String, Codable, CaseIterable, Sendable {
+    case landscape
+    case portrait
+}
+
+public struct OrientationLayerParams: Identifiable, Codable, Equatable, Sendable {
+    public let id: UUID
+    public var target: OrientationTarget
+
+    public init(
+        id: UUID = UUID(),
+        target: OrientationTarget = .landscape
+    ) {
+        self.id = id
+        self.target = target
+    }
+}
+
 // MARK: - CompositionLayer
 
 public enum CompositionLayer: Identifiable, Codable, Equatable, Sendable {
@@ -123,6 +228,8 @@ public enum CompositionLayer: Identifiable, Codable, Equatable, Sendable {
     case padding(PaddingLayerParams)
     case canvas(CanvasLayerParams)
     case resize(ResizeLayerParams)
+    case overlay(OverlayLayerParams)
+    case orientation(OrientationLayerParams)
 
     public var id: UUID {
         switch self {
@@ -130,6 +237,8 @@ public enum CompositionLayer: Identifiable, Codable, Equatable, Sendable {
         case .padding(let p): return p.id
         case .canvas(let p): return p.id
         case .resize(let p): return p.id
+        case .overlay(let p): return p.id
+        case .orientation(let p): return p.id
         }
     }
 
@@ -139,6 +248,8 @@ public enum CompositionLayer: Identifiable, Codable, Equatable, Sendable {
         case .padding: return "Padding"
         case .canvas: return "Canvas"
         case .resize: return "Resize"
+        case .overlay(let p): return p.kind == .frame ? "Frame" : "Texture"
+        case .orientation: return "Orientation"
         }
     }
 
@@ -148,6 +259,8 @@ public enum CompositionLayer: Identifiable, Codable, Equatable, Sendable {
         case .padding: return "arrow.up.left.and.arrow.down.right"
         case .canvas: return "rectangle.on.rectangle"
         case .resize: return "arrow.down.right.and.arrow.up.left"
+        case .overlay(let p): return p.kind == .frame ? "photo.artframe" : "sparkles"
+        case .orientation: return "rotate.right"
         }
     }
 
@@ -169,6 +282,10 @@ public enum CompositionLayer: Identifiable, Codable, Equatable, Sendable {
             self = .canvas(try container.decode(CanvasLayerParams.self, forKey: .params))
         case "resize":
             self = .resize(try container.decode(ResizeLayerParams.self, forKey: .params))
+        case "overlay":
+            self = .overlay(try container.decode(OverlayLayerParams.self, forKey: .params))
+        case "orientation":
+            self = .orientation(try container.decode(OrientationLayerParams.self, forKey: .params))
         default:
             throw DecodingError.dataCorruptedError(
                 forKey: .type, in: container,
@@ -191,6 +308,12 @@ public enum CompositionLayer: Identifiable, Codable, Equatable, Sendable {
             try container.encode(p, forKey: .params)
         case .resize(let p):
             try container.encode("resize", forKey: .type)
+            try container.encode(p, forKey: .params)
+        case .overlay(let p):
+            try container.encode("overlay", forKey: .type)
+            try container.encode(p, forKey: .params)
+        case .orientation(let p):
+            try container.encode("orientation", forKey: .type)
             try container.encode(p, forKey: .params)
         }
     }
