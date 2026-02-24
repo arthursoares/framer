@@ -1,6 +1,7 @@
 // Sources/FramerCore/Presets/YAMLConfig.swift
 // Stub — full implementation by presets-agent
 import Foundation
+import AppKit
 import Yams
 
 /// Reads and writes .framer.yaml config files — compatible with the Go CLI schema.
@@ -15,6 +16,8 @@ public enum YAMLConfig {
         var no_caption: Bool?
         var font_name: String?
         var font_size: String?
+        var font_bold: Bool?
+        var font_italic: Bool?
         var font_color: String?
         var jpeg_quality: Int?
         var output_format: String?
@@ -45,6 +48,11 @@ public enum YAMLConfig {
         var height: Int?
         var max_width: Int?
         var max_height: Int?
+        var overlay_name: String?
+        var overlay_kind: String?
+        var blend_mode: String?
+        var opacity: Double?
+        var orientation: String?
     }
 
     public static func encode(_ config: ProcessingConfig) throws -> String {
@@ -76,6 +84,8 @@ public enum YAMLConfig {
         case .auto: break
         case .fixed(let s): schema.font_size = String(s)
         }
+        if config.fontStyle.contains(.bold) { schema.font_bold = true }
+        if config.fontStyle.contains(.italic) { schema.font_italic = true }
         schema.font_color = config.fontColor.hex
         switch config.outputFormat {
         case .jpeg(let q):
@@ -132,6 +142,21 @@ public enum YAMLConfig {
         }
         if let fn = schema.font_name { config.fontName = fn }
         if let fs = schema.font_size, let i = Int(fs) { config.fontSize = .fixed(i) }
+        var fontStyle: FontStyle = []
+        if schema.font_bold == true { fontStyle.insert(.bold) }
+        if schema.font_italic == true { fontStyle.insert(.italic) }
+        // Backward compat: detect bold/italic from variant font names (e.g. "Courier New Bold")
+        // when no explicit font_bold/font_italic was set in the YAML.
+        if fontStyle.isEmpty, schema.font_bold == nil, schema.font_italic == nil,
+           let font = NSFont(name: config.fontName, size: 12) {
+            let traits = NSFontManager.shared.traits(of: font)
+            if traits.contains(.boldFontMask) { fontStyle.insert(.bold) }
+            if traits.contains(.italicFontMask) { fontStyle.insert(.italic) }
+            if !fontStyle.isEmpty, let family = font.familyName {
+                config.fontName = family
+            }
+        }
+        config.fontStyle = fontStyle
         if let fc = schema.font_color { config.fontColor = (try? CodableColor(hex: fc)) ?? config.fontColor }
         if let q = schema.jpeg_quality { config.outputFormat = .jpeg(quality: q) }
         if schema.output_format == "png" { config.outputFormat = .png }
@@ -221,6 +246,19 @@ public enum YAMLConfig {
             schema.max_width = p.maxWidth
             schema.max_height = p.maxHeight
             return schema
+
+        case .overlay(let p):
+            var schema = YAMLLayerSchema(type: "overlay")
+            schema.overlay_name = p.overlayName
+            schema.overlay_kind = p.kind.rawValue
+            schema.blend_mode = p.blendMode.rawValue
+            schema.opacity = p.opacity
+            return schema
+
+        case .orientation(let p):
+            var schema = YAMLLayerSchema(type: "orientation")
+            schema.orientation = p.target.rawValue
+            return schema
         }
     }
 
@@ -263,6 +301,35 @@ public enum YAMLConfig {
                 maxWidth: schema.max_width ?? 1000,
                 maxHeight: schema.max_height ?? 1000
             ))
+
+        case "overlay":
+            let kind: OverlayKind
+            if let kindStr = schema.overlay_kind, let k = OverlayKind(rawValue: kindStr) {
+                kind = k
+            } else {
+                kind = .frame
+            }
+            let blendMode: OverlayBlendMode?
+            if let modeStr = schema.blend_mode, let m = OverlayBlendMode(rawValue: modeStr) {
+                blendMode = m
+            } else {
+                blendMode = nil
+            }
+            return .overlay(OverlayLayerParams(
+                overlayName: schema.overlay_name ?? "",
+                kind: kind,
+                blendMode: blendMode,
+                opacity: schema.opacity ?? 100
+            ))
+
+        case "orientation":
+            let target: OrientationTarget
+            if let str = schema.orientation, let t = OrientationTarget(rawValue: str) {
+                target = t
+            } else {
+                target = .landscape
+            }
+            return .orientation(OrientationLayerParams(target: target))
 
         default:
             return nil
