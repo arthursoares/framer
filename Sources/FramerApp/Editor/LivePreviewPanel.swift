@@ -21,12 +21,18 @@ struct LivePreviewPanel: View {
                         .padding(20)
                         .shadow(color: .black.opacity(0.2), radius: 8, y: 4)
                 } else {
-                    VStack(spacing: 8) {
+                    VStack(spacing: 12) {
                         Image(systemName: "photo.artframe")
                             .font(.system(size: 60))
                             .foregroundStyle(.secondary)
-                        Text("Select a photo to preview")
+                        Text("No photo selected")
+                            .font(.headline)
                             .foregroundStyle(.secondary)
+                        Text("Select a photo from the library, or drag images into the sidebar")
+                            .font(.caption)
+                            .foregroundStyle(.tertiary)
+                            .multilineTextAlignment(.center)
+                            .frame(maxWidth: 260)
                     }
                 }
 

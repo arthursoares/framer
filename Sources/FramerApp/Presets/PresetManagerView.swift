@@ -103,14 +103,7 @@ struct PresetManagerView: View {
                 .lineLimit(1)
 
             HStack(spacing: 4) {
-                let styleLabel: String = {
-                    switch preset.config.borderStyle {
-                    case .solid: return "Solid"
-                    case .instagram: return "IG"
-                    case .print: return "Print"
-                    }
-                }()
-                configChip(styleLabel)
+                configChip(styleLabel(for: preset.config.borderStyle))
                 if case .pixels(let px) = preset.config.borderThickness {
                     configChip("\(px)px")
                 }
@@ -124,6 +117,14 @@ struct PresetManagerView: View {
             Button("Delete", role: .destructive) { presetToDelete = preset }
         }
         .onTapGesture { applyPreset(preset) }
+    }
+
+    private func styleLabel(for style: BorderStyle) -> String {
+        switch style {
+        case .solid: "Solid"
+        case .instagram: "IG"
+        case .print: "Print"
+        }
     }
 
     @ViewBuilder

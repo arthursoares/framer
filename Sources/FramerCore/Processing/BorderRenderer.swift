@@ -36,8 +36,15 @@ public enum BorderRenderer {
 
     private static func applySolidBorder(to image: CGImage, config: ProcessingConfig) throws -> BorderResult {
         let borderPx = config.borderThickness.resolved(relativeTo: min(image.width, image.height))
-        let totalW = image.width + 2 * borderPx + 2 * config.padding
-        let totalH = image.height + 2 * borderPx + 2 * config.padding
+        let padding = config.padding
+
+        // Go layout: image → borderColor → white padding (outside)
+        // Inner layer: bordered image
+        let borderedW = image.width + 2 * borderPx
+        let borderedH = image.height + 2 * borderPx
+        // Outer layer: padding outside the border
+        let totalW = borderedW + 2 * padding
+        let totalH = borderedH + 2 * padding
 
         guard let ctx = CGContext(data: nil,
                                   width: totalW,
@@ -49,13 +56,17 @@ public enum BorderRenderer {
             throw FramerError.invalidImage(URL(fileURLWithPath: ""))
         }
 
-        // Fill background with resolved background
-        let bg = resolveBackground(mode: config.backgroundMode, fallbackColor: config.borderColor.cgColor, sourceImage: image)
+        // 1. Fill entire canvas with padding color (white / background mode)
+        let bg = resolveBackground(mode: config.backgroundMode, fallbackColor: CGColor(red: 1, green: 1, blue: 1, alpha: 1), sourceImage: image)
         fillBackground(bg, in: ctx, width: totalW, height: totalH)
 
-        // Draw image centered
-        let imageX = borderPx + config.padding
-        let imageY = borderPx + config.padding
+        // 2. Fill bordered area with border color (inside the padding)
+        ctx.setFillColor(config.borderColor.cgColor)
+        ctx.fill(CGRect(x: padding, y: padding, width: borderedW, height: borderedH))
+
+        // 3. Draw image centered inside the border
+        let imageX = padding + borderPx
+        let imageY = padding + borderPx
         ctx.draw(image, in: CGRect(x: imageX, y: imageY, width: image.width, height: image.height))
 
         guard let result = ctx.makeImage() else {
