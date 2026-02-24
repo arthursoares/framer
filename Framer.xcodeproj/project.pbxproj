@@ -10,6 +10,7 @@
 		02AB8ECED2BAEEB2B7CC18BA /* PreviewViewModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8A6E6F60B12048759BD1E60C /* PreviewViewModel.swift */; };
 		355A4363ACBC6A2F1F32A042 /* ExportQueueView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0E0B6486256E0670295F5B6D /* ExportQueueView.swift */; };
 		469EBA583F3674764B8E843A /* LayerListSection.swift in Sources */ = {isa = PBXBuildFile; fileRef = 07CE80E5C2C968E54B507CD5 /* LayerListSection.swift */; };
+		8B4266040896BBED84762794 /* textures in Resources */ = {isa = PBXBuildFile; fileRef = B1EC2164F8A3DF317311D2C8 /* textures */; };
 		8E694017A189A83A3A04EBEB /* PresetManagerView.swift in Sources */ = {isa = PBXBuildFile; fileRef = A26EF2B8DCC58AC9FECE1C1B /* PresetManagerView.swift */; };
 		99960FA45C14BE5AB62A06DE /* SettingsPanel.swift in Sources */ = {isa = PBXBuildFile; fileRef = 853BC2BF3CFA9B161007BBB9 /* SettingsPanel.swift */; };
 		B4A1B551F2C9370D7663CAEC /* FramerCommands.swift in Sources */ = {isa = PBXBuildFile; fileRef = C20010735E58CE243ED6744A /* FramerCommands.swift */; };
@@ -35,6 +36,7 @@
 		9B9A4BC738FB9F539C9A7AFB /* Framer.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = Framer.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		A26EF2B8DCC58AC9FECE1C1B /* PresetManagerView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PresetManagerView.swift; sourceTree = "<group>"; };
 		A9D4D6D84523CC9466E3CF9D /* framer */ = {isa = PBXFileReference; lastKnownFileType = folder; name = framer; path = .; sourceTree = SOURCE_ROOT; };
+		B1EC2164F8A3DF317311D2C8 /* textures */ = {isa = PBXFileReference; lastKnownFileType = folder; name = textures; path = assets/textures; sourceTree = SOURCE_ROOT; };
 		B69C29C8A7CF6558AEBA54C3 /* LivePreviewPanel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LivePreviewPanel.swift; sourceTree = "<group>"; };
 		B7A795F9CA0BC01E3F2251A9 /* PreferencesView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PreferencesView.swift; sourceTree = "<group>"; };
 		C20010735E58CE243ED6744A /* FramerCommands.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FramerCommands.swift; sourceTree = "<group>"; };
@@ -115,6 +117,7 @@
 		C63F9FF810251FA7EBE3B6F1 = {
 			isa = PBXGroup;
 			children = (
+				B1EC2164F8A3DF317311D2C8 /* textures */,
 				296068F0A3104E65E2A4BB22 /* FramerApp */,
 				BF7EB4914AD9DF4212A2FFEA /* Packages */,
 				B5A0391E294805ACCD5427AD /* Products */,
@@ -149,6 +152,7 @@
 			buildConfigurationList = 6208556A4027EAE804ADCFAB /* Build configuration list for PBXNativeTarget "Framer" */;
 			buildPhases = (
 				8468BE8C916A4C463E92FD05 /* Sources */,
+				10E0643B1D9AEB42276D8C55 /* Resources */,
 				B5AF77CC600ED9C9D876D282 /* Frameworks */,
 			);
 			buildRules = (
@@ -193,6 +197,17 @@
 			);
 		};
 /* End PBXProject section */
+
+/* Begin PBXResourcesBuildPhase section */
+		10E0643B1D9AEB42276D8C55 /* Resources */ = {
+			isa = PBXResourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				8B4266040896BBED84762794 /* textures in Resources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXResourcesBuildPhase section */
 
 /* Begin PBXSourcesBuildPhase section */
 		8468BE8C916A4C463E92FD05 /* Sources */ = {
