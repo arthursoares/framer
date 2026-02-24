@@ -78,4 +78,121 @@ final class ProcessingConfigTests: XCTestCase {
         let result = exif.resolve(template: "{{camera}} {{lens}}")
         XCTAssertEqual(result, " ")
     }
+
+    // MARK: - PrintFormat Tests
+
+    func test_printFormat_defaultPixelCalculation() {
+        let format = PrintFormat.print10x15
+        // 148mm / 25.4 * 300 = 1748.03... → 1748
+        XCTAssertEqual(format.widthPixels, 1748)
+        // 100mm / 25.4 * 300 = 1181.10... → 1181
+        XCTAssertEqual(format.heightPixels, 1181)
+    }
+
+    func test_printFormat_customDimensions() {
+        let format = PrintFormat(widthMM: 200, heightMM: 150, dpi: 600)
+        let expectedW = Int((200.0 / 25.4) * 600.0)
+        let expectedH = Int((150.0 / 25.4) * 600.0)
+        XCTAssertEqual(format.widthPixels, expectedW)
+        XCTAssertEqual(format.heightPixels, expectedH)
+    }
+
+    // MARK: - BorderStyle JSON Round-trip
+
+    func test_borderStyle_solid_roundtripsJSON() throws {
+        let style = BorderStyle.solid
+        let data = try JSONEncoder().encode(style)
+        let decoded = try JSONDecoder().decode(BorderStyle.self, from: data)
+        XCTAssertEqual(decoded, .solid)
+    }
+
+    func test_borderStyle_instagram_roundtripsJSON() throws {
+        let style = BorderStyle.instagram
+        let data = try JSONEncoder().encode(style)
+        let decoded = try JSONDecoder().decode(BorderStyle.self, from: data)
+        XCTAssertEqual(decoded, .instagram)
+    }
+
+    func test_borderStyle_print_roundtripsJSON() throws {
+        let format = PrintFormat(widthMM: 200, heightMM: 150, dpi: 600)
+        let style = BorderStyle.print(format)
+        let data = try JSONEncoder().encode(style)
+        let decoded = try JSONDecoder().decode(BorderStyle.self, from: data)
+        XCTAssertEqual(decoded, style)
+    }
+
+    func test_borderStyle_print10x15_stringBackwardCompat() throws {
+        // Simulate a JSON string "print10x15" being decoded
+        let json = "\"print10x15\""
+        let data = json.data(using: .utf8)!
+        let decoded = try JSONDecoder().decode(BorderStyle.self, from: data)
+        XCTAssertEqual(decoded, .print(.print10x15))
+    }
+
+    // MARK: - ProcessingConfig backward compat
+
+    func test_processingConfig_decodesWithMissingNewFields() throws {
+        // Encode a config, then strip the new fields to simulate old data
+        var config = ProcessingConfig.default
+        config.borderStyle = .instagram
+        let data = try JSONEncoder().encode(config)
+
+        // Decode a JSON that has all the old fields
+        var dict = try JSONSerialization.jsonObject(with: data) as! [String: Any]
+        // Remove new fields
+        dict.removeValue(forKey: "backgroundColor")
+        dict.removeValue(forKey: "outerPadding")
+        dict.removeValue(forKey: "captionPadding")
+        dict.removeValue(forKey: "noMetadata")
+
+        let strippedData = try JSONSerialization.data(withJSONObject: dict)
+        let decoded = try JSONDecoder().decode(ProcessingConfig.self, from: strippedData)
+
+        // Should use defaults for missing fields
+        XCTAssertEqual(decoded.borderStyle, .instagram)
+        XCTAssertEqual(decoded.backgroundColor.hex, "#FFFFFF")
+        XCTAssertEqual(decoded.outerPadding, 0)
+        XCTAssertEqual(decoded.captionPadding, 0)
+        XCTAssertEqual(decoded.noMetadata, false)
+    }
+
+    // MARK: - Template Placeholder Tests
+
+    func test_exifData_monthPlaceholder_fullName() {
+        var exif = ExifData()
+        // January 15, 2024
+        let cal = Calendar.current
+        exif.dateTime = cal.date(from: DateComponents(year: 2024, month: 1, day: 15))
+
+        let result = exif.resolve(template: "{{month}}")
+        XCTAssertEqual(result, "January")
+    }
+
+    func test_exifData_datePlaceholder_isoFormat() {
+        var exif = ExifData()
+        let cal = Calendar.current
+        exif.dateTime = cal.date(from: DateComponents(year: 2024, month: 3, day: 5))
+
+        let result = exif.resolve(template: "{{date}}")
+        XCTAssertEqual(result, "2024-03-05")
+    }
+
+    func test_exifData_monthPlaceholder_december() {
+        var exif = ExifData()
+        let cal = Calendar.current
+        exif.dateTime = cal.date(from: DateComponents(year: 2024, month: 12, day: 25))
+
+        let result = exif.resolve(template: "{{month}}")
+        XCTAssertEqual(result, "December")
+    }
+
+    // MARK: - New config fields
+
+    func test_defaultConfig_newFieldDefaults() {
+        let config = ProcessingConfig.default
+        XCTAssertEqual(config.backgroundColor.hex, "#FFFFFF")
+        XCTAssertEqual(config.outerPadding, 0)
+        XCTAssertEqual(config.captionPadding, 0)
+        XCTAssertEqual(config.noMetadata, false)
+    }
 }

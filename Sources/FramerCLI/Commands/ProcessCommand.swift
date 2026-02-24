@@ -11,7 +11,7 @@ struct ProcessCommand: AsyncParsableCommand {
     @Option(name: .shortAndLong, help: "Input image or directory") var input: String
     @Option(name: .shortAndLong, help: "Output directory") var output: String?
     @Option(name: [.long, .customShort("f")], help: "Output file path (single file only)") var outputFile: String?
-    @Option(help: "Border style: solid or instagram") var borderStyle: String?
+    @Option(help: "Border style: solid, instagram, print, or print10x15") var borderStyle: String?
     @Option(name: [.long, .customShort("t")], help: "Border thickness (e.g. 20 or 5%%)") var borderThickness: String?
     @Option(help: "Border color (hex, e.g. #FFFFFF)") var borderColor: String?
     @Option(help: "Padding in pixels") var padding: Int?
@@ -27,14 +27,45 @@ struct ProcessCommand: AsyncParsableCommand {
     @Option(help: "Preset name") var preset: String?
     @Option(name: [.long, .customShort("w")], help: "Number of workers") var workers: Int?
     @Option(help: "Post-process command ({file} = output path)") var postProcess: String?
+    @Option(help: "Background color (hex, e.g. #FFFFFF)") var backgroundColor: String?
+    @Option(help: "Outer padding in pixels (print style)") var outerPadding: Int?
+    @Option(help: "Caption padding in pixels (print style)") var captionPadding: Int?
+    @Flag(help: "Do not preserve EXIF metadata") var noMetadata = false
+    @Option(help: "Print width in mm (default 148)") var printWidth: Double?
+    @Option(help: "Print height in mm (default 100)") var printHeight: Double?
+    @Option(help: "Print DPI (default 300)") var printDpi: Int?
 
     mutating func run() async throws {
+        // Initialize default presets if needed
+        PresetStore().initializeDefaults()
+
         // Build config: CLI flags → config file → preset → .framer.yaml → defaults
         let configURL = config.map { URL(fileURLWithPath: $0) }
         var cfg = YAMLConfig.loadDefault(configPath: configURL, preset: preset)
 
         // Apply CLI overrides
-        if let s = borderStyle { cfg.borderStyle = BorderStyle(rawValue: s) ?? cfg.borderStyle }
+        if let s = borderStyle {
+            switch s {
+            case "solid": cfg.borderStyle = .solid
+            case "instagram": cfg.borderStyle = .instagram
+            case "print10x15": cfg.borderStyle = .print(.print10x15)
+            case "print":
+                let format = PrintFormat(
+                    widthMM: printWidth ?? 148,
+                    heightMM: printHeight ?? 100,
+                    dpi: printDpi ?? 300
+                )
+                cfg.borderStyle = .print(format)
+            default: break
+            }
+        }
+        // Apply print dimensions even without --border-style if already in print mode
+        if case .print(var format) = cfg.borderStyle {
+            if let w = printWidth { format.widthMM = w }
+            if let h = printHeight { format.heightMM = h }
+            if let d = printDpi { format.dpi = d }
+            cfg.borderStyle = .print(format)
+        }
         if let t = borderThickness { cfg.borderThickness = BorderSize(string: t) }
         if let c = borderColor, let color = try? CodableColor(hex: c) { cfg.borderColor = color }
         if let p = padding { cfg.padding = p }
@@ -47,6 +78,10 @@ struct ProcessCommand: AsyncParsableCommand {
         if let q = quality { cfg.outputFormat = .jpeg(quality: q) }
         if outputFormat == "png" { cfg.outputFormat = .png }
         if let pp = postProcess { cfg.postProcess = pp }
+        if let bg = backgroundColor, let color = try? CodableColor(hex: bg) { cfg.backgroundColor = color }
+        if let op = outerPadding { cfg.outerPadding = op }
+        if let cp = captionPadding { cfg.captionPadding = cp }
+        if noMetadata { cfg.noMetadata = true }
 
         let inputURL = URL(fileURLWithPath: input)
         var isDir: ObjCBool = false
@@ -138,7 +173,12 @@ struct ProcessCommand: AsyncParsableCommand {
         case .png: ext = "png"
         case .jpeg: ext = "jpg"
         }
-        let suffix = style == .instagram ? "_instagram" : "_solid"
+        let suffix: String
+        switch style {
+        case .solid: suffix = "_solid"
+        case .instagram: suffix = "_instagram"
+        case .print: suffix = "_print"
+        }
         return dir.appendingPathComponent("\(stem)\(suffix).\(ext)")
     }
 

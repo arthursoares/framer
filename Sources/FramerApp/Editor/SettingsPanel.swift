@@ -3,6 +3,18 @@ import FramerCore
 
 struct SettingsPanel: View {
     @Environment(AppState.self) var appState
+    @State private var thicknessMode: ThicknessMode = .pixels
+    @State private var fontSizeMode: FontSizeMode = .auto
+
+    private enum ThicknessMode: String, CaseIterable {
+        case pixels = "px"
+        case percent = "%"
+    }
+
+    private enum FontSizeMode: String, CaseIterable {
+        case auto = "Auto"
+        case custom = "Custom"
+    }
 
     var body: some View {
         @Bindable var state = appState
@@ -10,22 +22,34 @@ struct SettingsPanel: View {
         Form {
             // Border
             Section("Border") {
-                Picker("Style", selection: $state.currentConfig.borderStyle) {
-                    Text("Solid").tag(BorderStyle.solid)
-                    Text("Instagram (4:5)").tag(BorderStyle.instagram)
+                Picker("Style", selection: borderStylePickerBinding) {
+                    Text("Solid").tag(0)
+                    Text("Instagram (4:5)").tag(1)
+                    Text("Print").tag(2)
                 }
                 .pickerStyle(.segmented)
 
                 LabeledContent("Thickness") {
-                    HStack {
-                        Slider(
-                            value: thicknessBinding,
-                            in: 0...300,
-                            step: 5
-                        )
-                        Text(thicknessLabel)
-                            .monospacedDigit()
-                            .frame(width: 55)
+                    VStack(spacing: 4) {
+                        Picker("", selection: $thicknessMode) {
+                            ForEach(ThicknessMode.allCases, id: \.self) { mode in
+                                Text(mode.rawValue).tag(mode)
+                            }
+                        }
+                        .pickerStyle(.segmented)
+                        .frame(width: 80)
+                        .labelsHidden()
+
+                        HStack {
+                            Slider(
+                                value: thicknessBinding,
+                                in: thicknessMode == .pixels ? 0...300 : 0...20,
+                                step: thicknessMode == .pixels ? 5 : 0.5
+                            )
+                            Text(thicknessLabel)
+                                .monospacedDigit()
+                                .frame(width: 55)
+                        }
                     }
                 }
 
@@ -50,6 +74,64 @@ struct SettingsPanel: View {
                 }
             }
 
+            // Print-specific controls
+            if case .print = appState.currentConfig.borderStyle {
+                Section("Print Format") {
+                    HStack {
+                        LabeledContent("Width (mm)") {
+                            TextField("", value: printWidthBinding, format: .number)
+                                .frame(width: 60)
+                                .textFieldStyle(.roundedBorder)
+                        }
+                        LabeledContent("Height (mm)") {
+                            TextField("", value: printHeightBinding, format: .number)
+                                .frame(width: 60)
+                                .textFieldStyle(.roundedBorder)
+                        }
+                    }
+
+                    LabeledContent("DPI") {
+                        TextField("", value: printDPIBinding, format: .number)
+                            .frame(width: 60)
+                            .textFieldStyle(.roundedBorder)
+                    }
+
+                    ColorPicker("Background", selection: colorBinding(for: \.backgroundColor))
+
+                    LabeledContent("Outer Padding") {
+                        HStack {
+                            Slider(
+                                value: Binding(
+                                    get: { Double(appState.currentConfig.outerPadding) },
+                                    set: { appState.currentConfig.outerPadding = Int($0) }
+                                ),
+                                in: 0...200,
+                                step: 5
+                            )
+                            Text("\(appState.currentConfig.outerPadding)px")
+                                .monospacedDigit()
+                                .frame(width: 55)
+                        }
+                    }
+
+                    LabeledContent("Caption Padding") {
+                        HStack {
+                            Slider(
+                                value: Binding(
+                                    get: { Double(appState.currentConfig.captionPadding) },
+                                    set: { appState.currentConfig.captionPadding = Int($0) }
+                                ),
+                                in: 0...100,
+                                step: 5
+                            )
+                            Text("\(appState.currentConfig.captionPadding)px")
+                                .monospacedDigit()
+                                .frame(width: 55)
+                        }
+                    }
+                }
+            }
+
             // Caption
             Section("Caption") {
                 Picker("Mode", selection: captionModeIndex) {
@@ -63,7 +145,7 @@ struct SettingsPanel: View {
                 case .template:
                     TextField("Template", text: captionTemplateText)
                         .font(.system(.body, design: .monospaced))
-                        .help("Use {{camera}}, {{lens}}, {{iso}}, {{aperture}}, {{shutter}}, {{focal}}, {{mon}}, {{year2}}")
+                        .help("Use {{camera}}, {{lens}}, {{iso}}, {{aperture}}, {{shutter}}, {{focal}}, {{mon}}, {{month}}, {{date}}, {{year2}}")
                 case .custom:
                     TextField("Caption text", text: captionCustomText)
                 case .none:
@@ -76,6 +158,41 @@ struct SettingsPanel: View {
                 Picker("Font", selection: $state.currentConfig.fontName) {
                     ForEach(availableMonospacedFonts(), id: \.self) { name in
                         Text(name).tag(name)
+                    }
+                }
+
+                Picker("Size", selection: $fontSizeMode) {
+                    ForEach(FontSizeMode.allCases, id: \.self) { mode in
+                        Text(mode.rawValue).tag(mode)
+                    }
+                }
+                .pickerStyle(.segmented)
+                .onChange(of: fontSizeMode) { _, newValue in
+                    switch newValue {
+                    case .auto:
+                        appState.currentConfig.fontSize = .auto
+                    case .custom:
+                        if case .auto = appState.currentConfig.fontSize {
+                            appState.currentConfig.fontSize = .fixed(24)
+                        }
+                    }
+                }
+
+                if case .fixed(let pts) = appState.currentConfig.fontSize {
+                    LabeledContent("Font Size") {
+                        HStack {
+                            Slider(
+                                value: Binding(
+                                    get: { Double(pts) },
+                                    set: { appState.currentConfig.fontSize = .fixed(Int($0)) }
+                                ),
+                                in: 8...120,
+                                step: 1
+                            )
+                            Text("\(pts)pt")
+                                .monospacedDigit()
+                                .frame(width: 45)
+                        }
                     }
                 }
 
@@ -126,6 +243,17 @@ struct SettingsPanel: View {
         }
         .formStyle(.grouped)
         .frame(minWidth: 260)
+        .onAppear {
+            // Sync local state with config
+            switch appState.currentConfig.borderThickness {
+            case .pixels: thicknessMode = .pixels
+            case .percent: thicknessMode = .percent
+            }
+            switch appState.currentConfig.fontSize {
+            case .auto: fontSizeMode = .auto
+            case .fixed: fontSizeMode = .custom
+            }
+        }
         .onReceive(NotificationCenter.default.publisher(for: .framerExportSelected)) { _ in
             let items = appState.library.filter { appState.selectedItems.contains($0.id) }
             exportItems(items)
@@ -135,17 +263,95 @@ struct SettingsPanel: View {
         }
     }
 
-    // MARK: - Bindings
+    // MARK: - Border Style Binding
+
+    private var borderStylePickerBinding: Binding<Int> {
+        Binding(
+            get: {
+                switch appState.currentConfig.borderStyle {
+                case .solid: 0
+                case .instagram: 1
+                case .print: 2
+                }
+            },
+            set: { idx in
+                switch idx {
+                case 0: appState.currentConfig.borderStyle = .solid
+                case 1: appState.currentConfig.borderStyle = .instagram
+                case 2:
+                    if case .print = appState.currentConfig.borderStyle { return }
+                    appState.currentConfig.borderStyle = .print(.print10x15)
+                default: break
+                }
+            }
+        )
+    }
+
+    // MARK: - Print Format Bindings
+
+    private var printWidthBinding: Binding<Double> {
+        Binding(
+            get: {
+                if case .print(let f) = appState.currentConfig.borderStyle { return f.widthMM }
+                return 148
+            },
+            set: { val in
+                if case .print(var f) = appState.currentConfig.borderStyle {
+                    f.widthMM = val
+                    appState.currentConfig.borderStyle = .print(f)
+                }
+            }
+        )
+    }
+
+    private var printHeightBinding: Binding<Double> {
+        Binding(
+            get: {
+                if case .print(let f) = appState.currentConfig.borderStyle { return f.heightMM }
+                return 100
+            },
+            set: { val in
+                if case .print(var f) = appState.currentConfig.borderStyle {
+                    f.heightMM = val
+                    appState.currentConfig.borderStyle = .print(f)
+                }
+            }
+        )
+    }
+
+    private var printDPIBinding: Binding<Int> {
+        Binding(
+            get: {
+                if case .print(let f) = appState.currentConfig.borderStyle { return f.dpi }
+                return 300
+            },
+            set: { val in
+                if case .print(var f) = appState.currentConfig.borderStyle {
+                    f.dpi = val
+                    appState.currentConfig.borderStyle = .print(f)
+                }
+            }
+        )
+    }
+
+    // MARK: - Thickness Bindings
 
     private var thicknessBinding: Binding<Double> {
         Binding(
             get: {
                 switch appState.currentConfig.borderThickness {
                 case .pixels(let px): Double(px)
-                case .percent(let p): p * 10
+                case .percent(let p): p
                 }
             },
-            set: { appState.currentConfig.borderThickness = .pixels(Int($0)) }
+            set: { val in
+                switch thicknessMode {
+                case .pixels:
+                    appState.currentConfig.borderThickness = .pixels(Int(val))
+                case .percent:
+                    appState.currentConfig.borderThickness = .percent(val)
+                }
+            }
         )
     }
 
@@ -155,6 +361,8 @@ struct SettingsPanel: View {
         case .percent(let p): "\(String(format: "%.1f", p))%"
         }
     }
+
+    // MARK: - Caption Bindings
 
     private var captionModeIndex: Binding<Int> {
         Binding(
@@ -262,7 +470,12 @@ struct SettingsPanel: View {
             for (i, item) in items.enumerated() {
                 let ext: String = config.outputFormat == .png ? "png" : "jpg"
                 let stem = item.url.deletingPathExtension().lastPathComponent
-                let suffix = config.borderStyle == .instagram ? "_instagram" : "_solid"
+                let suffix: String
+                switch config.borderStyle {
+                case .solid: suffix = "_solid"
+                case .instagram: suffix = "_instagram"
+                case .print: suffix = "_print"
+                }
                 let outURL = dir.appendingPathComponent("\(stem)\(suffix).\(ext)")
                 try? await processor.process(input: item.url, output: outURL, config: config)
 

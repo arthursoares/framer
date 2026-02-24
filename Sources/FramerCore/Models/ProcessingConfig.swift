@@ -1,10 +1,88 @@
 import Foundation
 import CoreGraphics
 
-public enum BorderStyle: String, Codable, Equatable, Sendable {
+// MARK: - PrintFormat
+
+public struct PrintFormat: Codable, Equatable, Sendable {
+    public var widthMM: Double
+    public var heightMM: Double
+    public var dpi: Int
+
+    public var widthPixels: Int {
+        Int((widthMM / 25.4) * Double(dpi))
+    }
+
+    public var heightPixels: Int {
+        Int((heightMM / 25.4) * Double(dpi))
+    }
+
+    public init(widthMM: Double = 148, heightMM: Double = 100, dpi: Int = 300) {
+        self.widthMM = widthMM
+        self.heightMM = heightMM
+        self.dpi = dpi
+    }
+
+    public static let print10x15 = PrintFormat()
+}
+
+// MARK: - BorderStyle
+
+public enum BorderStyle: Equatable, Sendable {
     case solid
     case instagram
+    case print(PrintFormat)
 }
+
+extension BorderStyle: Codable {
+    private enum CodingKeys: String, CodingKey {
+        case type, print
+    }
+
+    public init(from decoder: Decoder) throws {
+        // Try decoding as a simple string first (solid, instagram, print10x15)
+        if let container = try? decoder.singleValueContainer(),
+           let str = try? container.decode(String.self) {
+            switch str {
+            case "solid": self = .solid
+            case "instagram": self = .instagram
+            case "print10x15", "print": self = .print(.print10x15)
+            default: self = .solid
+            }
+            return
+        }
+
+        // Try decoding as keyed container: {"print": {...}}
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        if let format = try container.decodeIfPresent(PrintFormat.self, forKey: .print) {
+            self = .print(format)
+            return
+        }
+
+        let type = try container.decode(String.self, forKey: .type)
+        switch type {
+        case "solid": self = .solid
+        case "instagram": self = .instagram
+        case "print10x15": self = .print(.print10x15)
+        default: self = .solid
+        }
+    }
+
+    public func encode(to encoder: Encoder) throws {
+        switch self {
+        case .solid:
+            var container = encoder.singleValueContainer()
+            try container.encode("solid")
+        case .instagram:
+            var container = encoder.singleValueContainer()
+            try container.encode("instagram")
+        case .print(let format):
+            var container = encoder.container(keyedBy: CodingKeys.self)
+            try container.encode(format, forKey: .print)
+        }
+    }
+}
+
+// MARK: - BorderSize
 
 public enum BorderSize: Codable, Equatable, Sendable {
     case pixels(Int)
@@ -29,6 +107,8 @@ public enum BorderSize: Codable, Equatable, Sendable {
     }
 }
 
+// MARK: - CodableColor
+
 public struct CodableColor: Codable, Equatable, Sendable {
     public let hex: String
 
@@ -50,6 +130,8 @@ public struct CodableColor: Codable, Equatable, Sendable {
     }
 }
 
+// MARK: - Other Enums
+
 public enum CaptionMode: Codable, Equatable, Sendable {
     case template(String)
     case custom(String)
@@ -66,7 +148,9 @@ public enum OutputFormat: Codable, Equatable, Sendable {
     case png
 }
 
-public struct ProcessingConfig: Codable, Equatable, Sendable {
+// MARK: - ProcessingConfig
+
+public struct ProcessingConfig: Equatable, Sendable {
     public var borderStyle: BorderStyle
     public var borderThickness: BorderSize
     public var borderColor: CodableColor
@@ -78,6 +162,10 @@ public struct ProcessingConfig: Codable, Equatable, Sendable {
     public var outputFormat: OutputFormat
     public var instagramMaxSize: Int
     public var postProcess: String?
+    public var backgroundColor: CodableColor
+    public var outerPadding: Int
+    public var captionPadding: Int
+    public var noMetadata: Bool
 
     public init(
         borderStyle: BorderStyle = .solid,
@@ -90,7 +178,11 @@ public struct ProcessingConfig: Codable, Equatable, Sendable {
         fontColor: CodableColor = try! CodableColor(hex: "#000000"),
         outputFormat: OutputFormat = .jpeg(quality: 100),
         instagramMaxSize: Int = 1000,
-        postProcess: String? = nil
+        postProcess: String? = nil,
+        backgroundColor: CodableColor = try! CodableColor(hex: "#FFFFFF"),
+        outerPadding: Int = 0,
+        captionPadding: Int = 0,
+        noMetadata: Bool = false
     ) {
         self.borderStyle = borderStyle
         self.borderThickness = borderThickness
@@ -103,10 +195,46 @@ public struct ProcessingConfig: Codable, Equatable, Sendable {
         self.outputFormat = outputFormat
         self.instagramMaxSize = instagramMaxSize
         self.postProcess = postProcess
+        self.backgroundColor = backgroundColor
+        self.outerPadding = outerPadding
+        self.captionPadding = captionPadding
+        self.noMetadata = noMetadata
     }
 
     public static let `default` = ProcessingConfig()
 }
+
+// Manual Codable for backward compatibility with saved presets missing new fields
+extension ProcessingConfig: Codable {
+    private enum CodingKeys: String, CodingKey {
+        case borderStyle, borderThickness, borderColor, padding
+        case captionMode, fontName, fontSize, fontColor
+        case outputFormat, instagramMaxSize, postProcess
+        case backgroundColor, outerPadding, captionPadding, noMetadata
+    }
+
+    public init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        borderStyle = try container.decode(BorderStyle.self, forKey: .borderStyle)
+        borderThickness = try container.decode(BorderSize.self, forKey: .borderThickness)
+        borderColor = try container.decode(CodableColor.self, forKey: .borderColor)
+        padding = try container.decode(Int.self, forKey: .padding)
+        captionMode = try container.decode(CaptionMode.self, forKey: .captionMode)
+        fontName = try container.decode(String.self, forKey: .fontName)
+        fontSize = try container.decode(FontSize.self, forKey: .fontSize)
+        fontColor = try container.decode(CodableColor.self, forKey: .fontColor)
+        outputFormat = try container.decode(OutputFormat.self, forKey: .outputFormat)
+        instagramMaxSize = try container.decode(Int.self, forKey: .instagramMaxSize)
+        postProcess = try container.decodeIfPresent(String.self, forKey: .postProcess)
+        // New fields with defaults for backward compat
+        backgroundColor = (try? container.decodeIfPresent(CodableColor.self, forKey: .backgroundColor)) ?? (try! CodableColor(hex: "#FFFFFF"))
+        outerPadding = (try? container.decodeIfPresent(Int.self, forKey: .outerPadding)) ?? 0
+        captionPadding = (try? container.decodeIfPresent(Int.self, forKey: .captionPadding)) ?? 0
+        noMetadata = (try? container.decodeIfPresent(Bool.self, forKey: .noMetadata)) ?? false
+    }
+}
+
+// MARK: - Errors
 
 public enum FramerError: LocalizedError {
     case invalidColor(String)

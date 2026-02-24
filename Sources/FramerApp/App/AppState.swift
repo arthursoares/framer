@@ -15,6 +15,7 @@ final class AppState {
     var activeTab: Tab = .library
 
     init() {
+        presetStore.initializeDefaults()
         loadPresets()
     }
 

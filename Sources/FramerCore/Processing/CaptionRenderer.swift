@@ -8,7 +8,9 @@ public enum CaptionRenderer {
     public static func renderCaption(
         on image: CGImage,
         config: ProcessingConfig,
-        exif: ExifData
+        exif: ExifData,
+        imageOrigin: CGPoint? = nil,
+        imageSize: CGSize? = nil
     ) throws -> CGImage {
         // Resolve caption text
         let text: String
@@ -58,9 +60,20 @@ public enum CaptionRenderer {
         let line = CTLineCreateWithAttributedString(attrStr)
         let bounds = CTLineGetBoundsWithOptions(line, [])
 
-        // Position: centered horizontally, in bottom border area
-        let x = (CGFloat(image.width) - bounds.width) / 2
-        let y = (CGFloat(borderPx) - bounds.height) / 2
+        // Position caption
+        let x: CGFloat
+        let y: CGFloat
+
+        if let origin = imageOrigin, let _ = imageSize {
+            // Print style: center horizontally in full frame, position below image
+            x = (CGFloat(image.width) - bounds.width) / 2
+            let captionSpacing = CGFloat(config.captionPadding)
+            y = origin.y - captionSpacing - fontSize
+        } else {
+            // Solid/instagram: centered horizontally, in bottom border area
+            x = (CGFloat(image.width) - bounds.width) / 2
+            y = (CGFloat(borderPx) - bounds.height) / 2
+        }
 
         ctx.textPosition = CGPoint(x: x, y: y)
         CTLineDraw(line, ctx)

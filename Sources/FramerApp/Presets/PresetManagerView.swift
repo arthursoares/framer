@@ -103,7 +103,14 @@ struct PresetManagerView: View {
                 .lineLimit(1)
 
             HStack(spacing: 4) {
-                configChip(preset.config.borderStyle == .instagram ? "IG" : "Solid")
+                let styleLabel: String = {
+                    switch preset.config.borderStyle {
+                    case .solid: return "Solid"
+                    case .instagram: return "IG"
+                    case .print: return "Print"
+                    }
+                }()
+                configChip(styleLabel)
                 if case .pixels(let px) = preset.config.borderThickness {
                     configChip("\(px)px")
                 }
