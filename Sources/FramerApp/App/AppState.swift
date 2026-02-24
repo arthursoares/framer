@@ -72,6 +72,30 @@ final class AppState {
         return directory.appendingPathComponent("\(stem)_\(suffix).\(ext)")
     }
 
+    // MARK: - Photo Import
+
+    func addPhotos(from urls: [URL]) {
+        let imageExts: Set<String> = ["jpg", "jpeg", "png", "tiff", "tif", "heic"]
+        var allFiles: [URL] = []
+        for url in urls {
+            var isDir: ObjCBool = false
+            FileManager.default.fileExists(atPath: url.path, isDirectory: &isDir)
+            if isDir.boolValue {
+                let files = (try? FileManager.default.contentsOfDirectory(
+                    at: url, includingPropertiesForKeys: nil)
+                ) ?? []
+                allFiles += files.filter { imageExts.contains($0.pathExtension.lowercased()) }
+            } else if imageExts.contains(url.pathExtension.lowercased()) {
+                allFiles.append(url)
+            }
+        }
+        let existing = Set(library.map(\.url))
+        let newItems = allFiles
+            .filter { !existing.contains($0) }
+            .map { PhotoItem(url: $0) }
+        library.append(contentsOf: newItems)
+    }
+
     /// Sanitized filename suffix from preset name, falling back to "framed".
     static func exportSuffix(presetName: String?) -> String {
         guard let name = presetName, !name.isEmpty else { return "framed" }

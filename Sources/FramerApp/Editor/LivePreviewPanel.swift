@@ -1,9 +1,12 @@
 import SwiftUI
+import UniformTypeIdentifiers
 import FramerCore
 
 struct LivePreviewPanel: View {
     @Environment(AppState.self) var appState
     @State private var viewModel = PreviewViewModel()
+    @State private var showOriginal = false
+    @State private var isDropTargeted = false
 
     var body: some View {
         VStack(spacing: 0) {
@@ -14,7 +17,7 @@ struct LivePreviewPanel: View {
                 if viewModel.isLoading {
                     ProgressView()
                         .scaleEffect(1.5)
-                } else if let img = viewModel.previewImage {
+                } else if let img = showOriginal ? viewModel.originalImage : viewModel.previewImage {
                     Image(nsImage: img)
                         .resizable()
                         .aspectRatio(contentMode: .fit)
@@ -29,7 +32,7 @@ struct LivePreviewPanel: View {
                         Text("No photo selected")
                             .font(.title3)
                             .foregroundStyle(.secondary)
-                        Text("Select a photo from the library,\nor drag images into the sidebar")
+                        Text("Select a photo from the library,\nor drag images here")
                             .font(.callout)
                             .foregroundStyle(.tertiary)
                             .multilineTextAlignment(.center)
@@ -47,8 +50,46 @@ struct LivePreviewPanel: View {
                             .padding()
                     }
                 }
+
+                // Before/After toggle
+                if viewModel.previewImage != nil {
+                    VStack {
+                        Spacer()
+                        HStack {
+                            Button {
+                                withAnimation(.easeInOut(duration: 0.15)) {
+                                    showOriginal.toggle()
+                                }
+                            } label: {
+                                HStack(spacing: 4) {
+                                    Image(systemName: showOriginal ? "photo" : "photo.artframe")
+                                        .font(.caption)
+                                    Text(showOriginal ? "Original" : "Processed")
+                                        .font(.caption)
+                                }
+                                .padding(.horizontal, 10)
+                                .padding(.vertical, 5)
+                                .background(.regularMaterial, in: Capsule())
+                            }
+                            .buttonStyle(.plain)
+                            Spacer()
+                        }
+                        .padding(.leading, 16)
+                        .padding(.bottom, 8)
+                    }
+                }
             }
             .frame(maxWidth: .infinity, maxHeight: .infinity)
+            .overlay {
+                if isDropTargeted {
+                    RoundedRectangle(cornerRadius: 8)
+                        .stroke(Color.accentColor, lineWidth: 2)
+                        .padding(4)
+                }
+            }
+            .onDrop(of: [.fileURL], isTargeted: $isDropTargeted) { providers in
+                handleDrop(providers: providers)
+            }
 
             // EXIF + caption info bar
             if let exif = viewModel.exifData {
@@ -59,7 +100,10 @@ struct LivePreviewPanel: View {
                     .background(.regularMaterial)
             }
         }
-        .onChange(of: appState.selectedItems) { _, _ in updatePreview() }
+        .onChange(of: appState.selectedItems) { _, _ in
+            showOriginal = false
+            updatePreview()
+        }
         .onChange(of: appState.currentConfig) { _, _ in updatePreview() }
         .onAppear { updatePreview() }
     }
@@ -87,6 +131,20 @@ struct LivePreviewPanel: View {
 
     private func updatePreview() {
         viewModel.updatePreview(for: appState.selectedPhoto, config: appState.currentConfig)
+    }
+
+    private func handleDrop(providers: [NSItemProvider]) -> Bool {
+        for provider in providers {
+            provider.loadItem(forTypeIdentifier: UTType.fileURL.identifier) { item, _ in
+                if let data = item as? Data,
+                   let url = URL(dataRepresentation: data, relativeTo: nil) {
+                    DispatchQueue.main.async {
+                        appState.addPhotos(from: [url])
+                    }
+                }
+            }
+        }
+        return true
     }
 }
 

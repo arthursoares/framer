@@ -92,7 +92,7 @@ struct LibrarySidebar: View {
         panel.canChooseDirectories = true
         panel.allowedContentTypes = [.jpeg, .png, .tiff, .heic]
         if panel.runModal() == .OK {
-            addURLs(panel.urls)
+            appState.addPhotos(from: panel.urls)
         }
     }
 
@@ -102,7 +102,7 @@ struct LibrarySidebar: View {
                 if let data = item as? Data,
                    let url = URL(dataRepresentation: data, relativeTo: nil) {
                     DispatchQueue.main.async {
-                        addURLs([url])
+                        appState.addPhotos(from: [url])
                     }
                 }
             }
@@ -115,27 +115,5 @@ struct LibrarySidebar: View {
             appState.library.removeAll { appState.selectedItems.contains($0.id) }
             appState.selectedItems.removeAll()
         }
-    }
-
-    private func addURLs(_ urls: [URL]) {
-        let imageExts = Set(["jpg", "jpeg", "png", "tiff", "tif", "heic"])
-        var allFiles: [URL] = []
-        for url in urls {
-            var isDir: ObjCBool = false
-            FileManager.default.fileExists(atPath: url.path, isDirectory: &isDir)
-            if isDir.boolValue {
-                let files = (try? FileManager.default.contentsOfDirectory(
-                    at: url, includingPropertiesForKeys: nil)
-                ) ?? []
-                allFiles += files.filter { imageExts.contains($0.pathExtension.lowercased()) }
-            } else if imageExts.contains(url.pathExtension.lowercased()) {
-                allFiles.append(url)
-            }
-        }
-        let existing = Set(appState.library.map(\.url))
-        let newItems = allFiles
-            .filter { !existing.contains($0) }
-            .map { PhotoItem(url: $0) }
-        appState.library.append(contentsOf: newItems)
     }
 }
