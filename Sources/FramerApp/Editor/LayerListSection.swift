@@ -281,7 +281,7 @@ struct BorderLayerControls: View {
             }
         }
 
-        ColorPicker("Color", selection: colorBinding)
+        ColorPickerWithHex("Color", selection: colorBinding)
     }
 
     private var thicknessValue: Binding<Double> {
@@ -906,7 +906,7 @@ struct LayerFillPicker: View {
         }
 
         if case .color(let c) = fill {
-            ColorPicker("Fill Color", selection: Binding(
+            ColorPickerWithHex("Fill Color", selection: Binding(
                 get: { Color(nsColor: NSColor(cgColor: c.cgColor) ?? .white) },
                 set: { newColor in
                     guard let hex = newColor.hexString else { return }
@@ -942,7 +942,7 @@ struct LayerFillPicker: View {
 
 // MARK: - Color Helper
 
-private extension Color {
+extension Color {
     var hexString: String? {
         guard let cgColor = NSColor(self).cgColor.converted(
             to: CGColorSpaceCreateDeviceRGB(), intent: .defaultIntent, options: nil),
