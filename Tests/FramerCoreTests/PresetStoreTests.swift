@@ -102,6 +102,30 @@ final class PresetStoreTests: XCTestCase {
         }
     }
 
+    func test_listPresets_includesYAMLPresets() throws {
+        let store = PresetStore(directory: tempDir)
+        store.initializeDefaults()
+
+        let all = try store.list()
+        XCTAssertEqual(all.count, 4)
+        let names = Set(all.map(\.name))
+        XCTAssertTrue(names.contains("vintage"))
+        XCTAssertTrue(names.contains("instagram"))
+        XCTAssertTrue(names.contains("minimal"))
+        XCTAssertTrue(names.contains("print10x15"))
+    }
+
+    func test_listPresets_mixedJSONAndYAML() throws {
+        let store = PresetStore(directory: tempDir)
+        store.initializeDefaults()
+        // Also save a JSON preset
+        let jsonPreset = Preset(name: "Custom", config: .default)
+        try store.save(jsonPreset)
+
+        let all = try store.list()
+        XCTAssertEqual(all.count, 5)
+    }
+
     func test_initializeDefaults_creates4Files() throws {
         let store = PresetStore(directory: tempDir)
         store.initializeDefaults()

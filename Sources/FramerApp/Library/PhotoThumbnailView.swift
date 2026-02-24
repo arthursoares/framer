@@ -39,14 +39,21 @@ struct AsyncThumbnail: View {
     private func loadThumbnail() async -> NSImage? {
         await Task.detached {
             guard let nsImage = NSImage(contentsOf: url) else { return nil }
+            let orig = nsImage.size
+            // Center-crop to square (cover)
+            let side = min(orig.width, orig.height)
+            let cropRect = NSRect(
+                x: (orig.width - side) / 2,
+                y: (orig.height - side) / 2,
+                width: side,
+                height: side
+            )
             let size = NSSize(width: 80, height: 80)
-            let thumb = NSImage(size: size)
-            thumb.lockFocus()
-            nsImage.draw(in: NSRect(origin: .zero, size: size),
-                        from: NSRect(origin: .zero, size: nsImage.size),
-                        operation: .copy, fraction: 1.0)
-            thumb.unlockFocus()
-            return thumb
+            return NSImage(size: size, flipped: false) { rect in
+                nsImage.draw(in: rect, from: cropRect,
+                             operation: .copy, fraction: 1.0)
+                return true
+            }
         }.value
     }
 }

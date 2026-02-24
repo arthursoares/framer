@@ -28,6 +28,56 @@ final class AppState {
             library.first { $0.id == id }
         }
     }
+
+    // MARK: - Export
+
+    func exportItems(_ items: [PhotoItem], to directory: URL) {
+        var job = ExportJob(items: items, config: currentConfig, outputDirectory: directory)
+        job.status = .running
+        exportQueue.append(job)
+        activeTab = .queue
+
+        let jobId = job.id
+        let config = currentConfig
+
+        Task {
+            let processor = FrameProcessor()
+            var failedCount = 0
+            for (i, item) in items.enumerated() {
+                do {
+                    let outURL = Self.outputURL(for: item, config: config, directory: directory)
+                    try await processor.process(input: item.url, output: outURL, config: config)
+                } catch {
+                    failedCount += 1
+                }
+                await MainActor.run {
+                    if let idx = exportQueue.firstIndex(where: { $0.id == jobId }) {
+                        exportQueue[idx].completedCount = i + 1
+                        exportQueue[idx].progress = Double(i + 1) / Double(items.count)
+                    }
+                }
+            }
+            await MainActor.run {
+                if let idx = exportQueue.firstIndex(where: { $0.id == jobId }) {
+                    exportQueue[idx].status = failedCount > 0
+                        ? .failed("\(failedCount) of \(items.count) failed")
+                        : .done
+                }
+            }
+        }
+    }
+
+    static func outputURL(for item: PhotoItem, config: ProcessingConfig, directory: URL) -> URL {
+        let ext = config.outputFormat == .png ? "png" : "jpg"
+        let stem = item.url.deletingPathExtension().lastPathComponent
+        let suffix: String
+        switch config.borderStyle {
+        case .solid: suffix = "_solid"
+        case .instagram: suffix = "_instagram"
+        case .print: suffix = "_print"
+        }
+        return directory.appendingPathComponent("\(stem)\(suffix).\(ext)")
+    }
 }
 
 struct PhotoItem: Identifiable, Hashable {
