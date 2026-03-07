@@ -142,7 +142,6 @@ final class ProcessingConfigTests: XCTestCase {
         // Remove new fields
         dict.removeValue(forKey: "backgroundColor")
         dict.removeValue(forKey: "outerPadding")
-        dict.removeValue(forKey: "captionPadding")
         dict.removeValue(forKey: "noMetadata")
 
         let strippedData = try JSONSerialization.data(withJSONObject: dict)
@@ -152,7 +151,6 @@ final class ProcessingConfigTests: XCTestCase {
         XCTAssertEqual(decoded.borderStyle, .instagram)
         XCTAssertEqual(decoded.backgroundColor.hex, "#FFFFFF")
         XCTAssertEqual(decoded.outerPadding, 0)
-        XCTAssertEqual(decoded.captionPadding, 0)
         XCTAssertEqual(decoded.noMetadata, false)
     }
 
@@ -192,7 +190,6 @@ final class ProcessingConfigTests: XCTestCase {
         let config = ProcessingConfig.default
         XCTAssertEqual(config.backgroundColor.hex, "#FFFFFF")
         XCTAssertEqual(config.outerPadding, 0)
-        XCTAssertEqual(config.captionPadding, 0)
         XCTAssertEqual(config.noMetadata, false)
     }
 }
