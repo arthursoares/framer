@@ -116,24 +116,4 @@ public actor FrameProcessor {
         return ctx.makeImage() ?? image
     }
 
-    private func encode(_ image: CGImage, to url: URL, format: OutputFormat) throws {
-        let utType: CFString
-        var options: [CFString: Any] = [:]
-
-        switch format {
-        case .jpeg(let quality):
-            utType = "public.jpeg" as CFString
-            options[kCGImageDestinationLossyCompressionQuality] = Double(quality) / 100.0
-        case .png:
-            utType = "public.png" as CFString
-        }
-
-        guard let dest = CGImageDestinationCreateWithURL(url as CFURL, utType, 1, nil) else {
-            throw FramerError.encodingFailed(url)
-        }
-        CGImageDestinationAddImage(dest, image, options as CFDictionary)
-        guard CGImageDestinationFinalize(dest) else {
-            throw FramerError.encodingFailed(url)
-        }
-    }
 }

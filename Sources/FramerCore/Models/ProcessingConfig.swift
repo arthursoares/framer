@@ -130,6 +130,17 @@ public struct CodableColor: Codable, Equatable, Sendable {
     }
 }
 
+public extension CodableColor {
+    /// Pre-validated color constants — no throwing needed.
+    static let white = CodableColor(unchecked: "#FFFFFF")
+    static let black = CodableColor(unchecked: "#000000")
+
+    /// Internal initializer for compile-time-known hex values.
+    init(unchecked hex: String) {
+        self.hex = hex.hasPrefix("#") ? hex.uppercased() : "#" + hex.uppercased()
+    }
+}
+
 // MARK: - Other Enums
 
 public enum CaptionMode: Codable, Equatable, Sendable {
@@ -195,12 +206,12 @@ public struct ProcessingConfig: Equatable, Sendable {
     public init(
         borderStyle: BorderStyle = .solid,
         borderThickness: BorderSize = .pixels(20),
-        borderColor: CodableColor = try! CodableColor(hex: "#FFFFFF"),
+        borderColor: CodableColor = .white,
         padding: Int = 150,
         outputFormat: OutputFormat = .jpeg(quality: 100),
         instagramMaxSize: Int = 1000,
         postProcess: String? = nil,
-        backgroundColor: CodableColor = try! CodableColor(hex: "#FFFFFF"),
+        backgroundColor: CodableColor = .white,
         outerPadding: Int = 0,
         noMetadata: Bool = false,
         backgroundMode: BackgroundMode = .color,
@@ -242,7 +253,7 @@ extension ProcessingConfig: Codable {
         instagramMaxSize = try container.decode(Int.self, forKey: .instagramMaxSize)
         postProcess = try container.decodeIfPresent(String.self, forKey: .postProcess)
         // Fields with defaults for backward compat
-        backgroundColor = (try? container.decodeIfPresent(CodableColor.self, forKey: .backgroundColor)) ?? (try! CodableColor(hex: "#FFFFFF"))
+        backgroundColor = (try? container.decodeIfPresent(CodableColor.self, forKey: .backgroundColor)) ?? .white
         outerPadding = (try? container.decodeIfPresent(Int.self, forKey: .outerPadding)) ?? 0
         noMetadata = (try? container.decodeIfPresent(Bool.self, forKey: .noMetadata)) ?? false
         backgroundMode = (try? container.decodeIfPresent(BackgroundMode.self, forKey: .backgroundMode)) ?? .color

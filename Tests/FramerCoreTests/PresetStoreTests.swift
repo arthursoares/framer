@@ -57,7 +57,7 @@ final class PresetStoreTests: XCTestCase {
 
     func test_yamlConfig_decodesNewFields() throws {
         let config = ProcessingConfig(
-            backgroundColor: try! CodableColor(hex: "#FF0000"),
+            backgroundColor: CodableColor(unchecked: "#FF0000"),
             outerPadding: 42,
             noMetadata: true
         )

@@ -93,7 +93,7 @@ struct ProcessCommand: AsyncParsableCommand {
             fontName: fontName ?? "Courier New",
             fontSize: fontSize.map { .fixed($0) } ?? .auto,
             fontStyle: captionFontStyle,
-            fontColor: (fontColor.flatMap { try? CodableColor(hex: $0) }) ?? (try! CodableColor(hex: "#000000"))
+            fontColor: (fontColor.flatMap { try? CodableColor(hex: $0) }) ?? .black
         )
 
         // Ensure layers exist and add caption

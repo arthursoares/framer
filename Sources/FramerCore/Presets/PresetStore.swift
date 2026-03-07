@@ -1,4 +1,5 @@
 import Foundation
+import CryptoKit
 
 public final class PresetStore {
     private let directory: URL
@@ -81,8 +82,8 @@ public final class PresetStore {
 
     /// Creates a deterministic UUID from a name string (for stable YAML preset identity).
     private static func deterministicUUID(from name: String) -> UUID {
-        var bytes = Array(name.utf8.prefix(16))
-        while bytes.count < 16 { bytes.append(0) }
+        let hash = Insecure.MD5.hash(data: Data(name.utf8))
+        let bytes = Array(hash)
         return UUID(uuid: (bytes[0], bytes[1], bytes[2], bytes[3],
                            bytes[4], bytes[5], bytes[6], bytes[7],
                            bytes[8], bytes[9], bytes[10], bytes[11],
@@ -104,13 +105,13 @@ public final class PresetStore {
             ("film", ProcessingConfig(
                 outputFormat: .jpeg(quality: 95),
                 layers: [
-                    .border(BorderLayerParams(thickness: .pixels(8), color: try! CodableColor(hex: "#FFFFFF"))),
-                    .padding(PaddingLayerParams(thickness: 160, fill: .color(try! CodableColor(hex: "#FFFFFF")))),
+                    .border(BorderLayerParams(thickness: .pixels(8), color: .white)),
+                    .padding(PaddingLayerParams(thickness: 160, fill: .color(.white))),
                     .caption(CaptionLayerParams(
                         mode: .template("{{camera}}  {{focal}}  {{aperture}}  {{shutter}}  {{iso}}"),
                         fontName: "Courier New",
                         fontSize: .auto,
-                        fontColor: try! CodableColor(hex: "#444444"),
+                        fontColor: CodableColor(unchecked: "#444444"),
                         alignment: .center,
                         position: .bottom
                     ))
@@ -120,13 +121,13 @@ public final class PresetStore {
             ("instagram", ProcessingConfig(
                 outputFormat: .jpeg(quality: 95),
                 layers: [
-                    .border(BorderLayerParams(thickness: .pixels(4), color: try! CodableColor(hex: "#FFFFFF"))),
+                    .border(BorderLayerParams(thickness: .pixels(4), color: .white)),
                     .canvas(CanvasLayerParams(width: 1080, height: 1350, fill: .dominantColor)),
                     .caption(CaptionLayerParams(
                         mode: .template("{{camera}} | {{lens}}"),
                         fontName: "Courier New",
                         fontSize: .auto,
-                        fontColor: try! CodableColor(hex: "#FFFFFF"),
+                        fontColor: .white,
                         alignment: .center,
                         position: .bottom
                     ))
@@ -135,21 +136,21 @@ public final class PresetStore {
             // Thin border, no caption
             ("minimal", ProcessingConfig(
                 layers: [
-                    .border(BorderLayerParams(thickness: .pixels(12), color: try! CodableColor(hex: "#FFFFFF"))),
+                    .border(BorderLayerParams(thickness: .pixels(12), color: .white)),
                 ]
             )),
             // Print-ready 10x15cm at 300dpi with date caption
             ("print 10x15", ProcessingConfig(
                 outputFormat: .jpeg(quality: 100),
                 layers: [
-                    .border(BorderLayerParams(thickness: .pixels(20), color: try! CodableColor(hex: "#FFFFFF"))),
-                    .canvas(CanvasLayerParams(width: 1772, height: 1181, fill: .color(try! CodableColor(hex: "#FFFFFF")))),
+                    .border(BorderLayerParams(thickness: .pixels(20), color: .white)),
+                    .canvas(CanvasLayerParams(width: 1772, height: 1181, fill: .color(.white))),
                     .caption(CaptionLayerParams(
                         mode: .template(" - {{mon}} '{{year2}} -"),
                         fontName: "Courier New",
                         fontSize: .auto,
                         fontStyle: .bold,
-                        fontColor: try! CodableColor(hex: "#333333"),
+                        fontColor: CodableColor(unchecked: "#333333"),
                         alignment: .center,
                         position: .bottom
                     ))
@@ -159,13 +160,13 @@ public final class PresetStore {
             ("dark gradient", ProcessingConfig(
                 outputFormat: .jpeg(quality: 95),
                 layers: [
-                    .border(BorderLayerParams(thickness: .pixels(4), color: try! CodableColor(hex: "#000000"))),
+                    .border(BorderLayerParams(thickness: .pixels(4), color: .black)),
                     .padding(PaddingLayerParams(thickness: 180, fill: .gradientRadial())),
                     .caption(CaptionLayerParams(
                         mode: .template("{{camera}}  {{focal}}"),
                         fontName: "Courier New",
                         fontSize: .auto,
-                        fontColor: try! CodableColor(hex: "#CCCCCC"),
+                        fontColor: CodableColor(unchecked: "#CCCCCC"),
                         alignment: .center,
                         position: .bottom
                     ))

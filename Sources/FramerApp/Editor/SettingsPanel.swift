@@ -3,6 +3,7 @@ import FramerCore
 
 struct SettingsPanel: View {
     @Environment(AppState.self) var appState
+    @AppStorage("lastExportDirectory") private var lastExportDirectory: String = ""
     @State private var showingExportSheet = false
     @State private var pendingExportItems: [PhotoItem] = []
     @State private var selectedPresetIDs: Set<UUID> = []
@@ -211,7 +212,11 @@ struct SettingsPanel: View {
         panel.canChooseDirectories = true
         panel.canCreateDirectories = true
         panel.message = "Choose output folder"
+        if !lastExportDirectory.isEmpty, let url = URL(string: lastExportDirectory) {
+            panel.directoryURL = url
+        }
         guard panel.runModal() == .OK, let dir = panel.url else { return }
+        lastExportDirectory = dir.absoluteString
 
         // Export with current settings
         if includeCurrentSettings {
@@ -282,8 +287,28 @@ struct SettingsPanel: View {
 
     private func promptAndExport(_ items: [PhotoItem]) {
         guard !items.isEmpty else { return }
-        pendingExportItems = items
-        showingExportSheet = true
+        if appState.presets.isEmpty {
+            directExport(items)
+        } else {
+            pendingExportItems = items
+            showingExportSheet = true
+        }
+    }
+
+    /// Opens the folder picker immediately and exports using current settings, bypassing the
+    /// preset-selection sheet. Used when no presets are saved.
+    private func directExport(_ items: [PhotoItem]) {
+        let panel = NSOpenPanel()
+        panel.canChooseFiles = false
+        panel.canChooseDirectories = true
+        panel.canCreateDirectories = true
+        panel.message = "Choose output folder"
+        if !lastExportDirectory.isEmpty, let url = URL(string: lastExportDirectory) {
+            panel.directoryURL = url
+        }
+        guard panel.runModal() == .OK, let dir = panel.url else { return }
+        lastExportDirectory = dir.absoluteString
+        appState.exportItems(items, to: dir)
     }
 }
 
