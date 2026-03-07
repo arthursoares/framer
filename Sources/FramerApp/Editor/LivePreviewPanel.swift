@@ -153,10 +153,15 @@ struct ExifInfoBar: View {
     @State private var showingInspector = false
 
     var captionText: String {
-        switch config.captionMode {
-        case .template(let t): exif.resolve(template: t)
-        case .custom(let s): s
-        case .none: "(no caption)"
+        guard let layers = config.layers,
+              let captionLayer = layers.first(where: { if case .caption = $0 { return true }; return false }),
+              case .caption(let params) = captionLayer else {
+            return "(no caption)"
+        }
+        switch params.mode {
+        case .template(let t): return exif.resolve(template: t)
+        case .custom(let s): return s
+        case .none: return "(no caption)"
         }
     }
 
