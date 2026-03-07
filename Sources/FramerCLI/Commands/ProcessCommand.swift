@@ -71,21 +71,40 @@ struct ProcessCommand: AsyncParsableCommand {
         if let t = borderThickness { cfg.borderThickness = BorderSize(string: t) }
         if let c = borderColor, let color = try? CodableColor(hex: c) { cfg.borderColor = color }
         if let p = padding { cfg.padding = p }
-        if noCaption { cfg.captionMode = .none }
-        else if let t = captionTemplate { cfg.captionMode = .template(t) }
-        else if let c = caption { cfg.captionMode = .custom(c) }
-        if let fn = fontName { cfg.fontName = fn }
-        if let fs = fontSize { cfg.fontSize = .fixed(fs) }
-        if fontBold { cfg.fontStyle.insert(.bold) }
-        if fontItalic { cfg.fontStyle.insert(.italic) }
-        if let fc = fontColor, let color = try? CodableColor(hex: fc) { cfg.fontColor = color }
         if let q = quality { cfg.outputFormat = .jpeg(quality: q) }
         if outputFormat == "png" { cfg.outputFormat = .png }
         if let pp = postProcess { cfg.postProcess = pp }
         if let bg = backgroundColor, let color = try? CodableColor(hex: bg) { cfg.backgroundColor = color }
         if let op = outerPadding { cfg.outerPadding = op }
-        if let cp = captionPadding { cfg.captionPadding = cp }
         if noMetadata { cfg.noMetadata = true }
+
+        // Build caption layer from CLI flags
+        var captionMode: CaptionMode = .template(" - {{mon}} '{{year2}} -")
+        if noCaption { captionMode = .none }
+        else if let t = captionTemplate { captionMode = .template(t) }
+        else if let c = caption { captionMode = .custom(c) }
+
+        var captionFontStyle: FontStyle = []
+        if fontBold { captionFontStyle.insert(.bold) }
+        if fontItalic { captionFontStyle.insert(.italic) }
+
+        let captionParams = CaptionLayerParams(
+            mode: captionMode,
+            fontName: fontName ?? "Courier New",
+            fontSize: fontSize.map { .fixed($0) } ?? .auto,
+            fontStyle: captionFontStyle,
+            fontColor: (fontColor.flatMap { try? CodableColor(hex: $0) }) ?? (try! CodableColor(hex: "#000000"))
+        )
+
+        // Ensure layers exist and add caption
+        if cfg.layers == nil {
+            cfg.layers = CompositionLayer.defaultLayers()
+        }
+        // Remove any existing caption layers, then append
+        cfg.layers?.removeAll { if case .caption = $0 { return true }; return false }
+        if case .none = captionMode {} else {
+            cfg.layers?.append(.caption(captionParams))
+        }
 
         let inputURL = URL(fileURLWithPath: input)
         var isDir: ObjCBool = false
