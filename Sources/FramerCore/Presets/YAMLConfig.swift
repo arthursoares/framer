@@ -258,7 +258,7 @@ public enum YAMLConfig {
         switch schema.type {
         case "border":
             let thickness = schema.thickness.map { BorderSize(string: $0) } ?? .pixels(20)
-            let color = schema.color.flatMap { try? CodableColor(hex: $0) } ?? (try! CodableColor(hex: "#FFFFFF"))
+            let color = schema.color.flatMap { try? CodableColor(hex: $0) } ?? .white
             return .border(BorderLayerParams(thickness: thickness, color: color))
 
         case "padding":
@@ -330,7 +330,7 @@ public enum YAMLConfig {
                 fontName: schema.font_name ?? "Courier New",
                 fontSize: fontSize,
                 fontStyle: fontStyle,
-                fontColor: (schema.font_color.flatMap { try? CodableColor(hex: $0) }) ?? (try! CodableColor(hex: "#000000")),
+                fontColor: (schema.font_color.flatMap { try? CodableColor(hex: $0) }) ?? .black,
                 alignment: schema.caption_alignment.flatMap { CaptionAlignment(rawValue: $0) } ?? .center,
                 position: schema.caption_position.flatMap { CaptionPosition(rawValue: $0) } ?? .bottom,
                 offsetX: schema.caption_offset_x ?? 0,
@@ -360,12 +360,12 @@ public enum YAMLConfig {
             if let hex = schema.fill_color, let c = try? CodableColor(hex: hex) {
                 return .color(c)
             }
-            return .color(try! CodableColor(hex: "#FFFFFF"))
+            return .color(.white)
         default:
             if let hex = schema.fill_color, let c = try? CodableColor(hex: hex) {
                 return .color(c)
             }
-            return .color(try! CodableColor(hex: "#FFFFFF"))
+            return .color(.white)
         }
     }
 }

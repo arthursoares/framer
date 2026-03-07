@@ -190,6 +190,7 @@ struct LayerRow: View {
                     .buttonStyle(.plain)
                     .disabled(onMoveUp == nil)
                     .opacity(onMoveUp == nil ? 0.25 : 0.6)
+                    .accessibilityLabel("Move layer up")
 
                     Button {
                         withAnimation(.easeInOut(duration: 0.2)) { onMoveDown?() }
@@ -202,6 +203,7 @@ struct LayerRow: View {
                     .buttonStyle(.plain)
                     .disabled(onMoveDown == nil)
                     .opacity(onMoveDown == nil ? 0.25 : 0.6)
+                    .accessibilityLabel("Move layer down")
                 }
 
                 Image(systemName: layer.iconName)
@@ -231,6 +233,7 @@ struct LayerRow: View {
                 .buttonStyle(.plain)
                 .opacity(isHovering ? 1 : 0.4)
                 .animation(.easeInOut(duration: 0.15), value: isHovering)
+                .accessibilityLabel("Delete layer")
             }
             .padding(.vertical, 2)
             .onHover { isHovering = $0 }
@@ -1022,7 +1025,7 @@ struct LayerFillPicker: View {
                 // Preserve existing gradient params when switching between gradient types
                 let existingParams = fill.gradientParams ?? GradientParams()
                 switch idx {
-                case 0: onChange(.color(try! CodableColor(hex: "#FFFFFF")))
+                case 0: onChange(.color(.white))
                 case 1: onChange(.dominantColor)
                 case 2: onChange(.gradientLinear(existingParams))
                 case 3: onChange(.gradientRadial(existingParams))

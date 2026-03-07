@@ -39,7 +39,7 @@ public enum LayerFill: Codable, Equatable, Sendable {
             let params = try container.decodeIfPresent(GradientParams.self, forKey: .gradientParams) ?? GradientParams()
             self = .gradientRadial(params)
         default:
-            self = .color(try! CodableColor(hex: "#FFFFFF"))
+            self = .color(.white)
         }
     }
 
@@ -87,7 +87,7 @@ public struct BorderLayerParams: Identifiable, Codable, Equatable, Sendable {
     public init(
         id: UUID = UUID(),
         thickness: BorderSize = .pixels(20),
-        color: CodableColor = try! CodableColor(hex: "#FFFFFF")
+        color: CodableColor = .white
     ) {
         self.id = id
         self.thickness = thickness
@@ -103,7 +103,7 @@ public struct PaddingLayerParams: Identifiable, Codable, Equatable, Sendable {
     public init(
         id: UUID = UUID(),
         thickness: Int = 150,
-        fill: LayerFill = .color(try! CodableColor(hex: "#FFFFFF"))
+        fill: LayerFill = .color(.white)
     ) {
         self.id = id
         self.thickness = thickness
@@ -121,7 +121,7 @@ public struct CanvasLayerParams: Identifiable, Codable, Equatable, Sendable {
         id: UUID = UUID(),
         width: Int = 1080,
         height: Int = 1350,
-        fill: LayerFill = .color(try! CodableColor(hex: "#FFFFFF"))
+        fill: LayerFill = .color(.white)
     ) {
         self.id = id
         self.width = width
@@ -271,7 +271,7 @@ public struct CaptionLayerParams: Identifiable, Codable, Equatable, Sendable {
         fontName: String = "Courier New",
         fontSize: FontSize = .auto,
         fontStyle: FontStyle = [],
-        fontColor: CodableColor = try! CodableColor(hex: "#000000"),
+        fontColor: CodableColor = .black,
         alignment: CaptionAlignment = .center,
         position: CaptionPosition = .bottom,
         offsetX: Int = 0,
@@ -398,8 +398,8 @@ public enum CompositionLayer: Identifiable, Codable, Equatable, Sendable {
 
     public static func defaultLayers() -> [CompositionLayer] {
         [
-            .border(BorderLayerParams(thickness: .pixels(20), color: try! CodableColor(hex: "#FFFFFF"))),
-            .padding(PaddingLayerParams(thickness: 150, fill: .color(try! CodableColor(hex: "#FFFFFF")))),
+            .border(BorderLayerParams(thickness: .pixels(20), color: .white)),
+            .padding(PaddingLayerParams(thickness: 150, fill: .color(.white))),
             .caption(CaptionLayerParams())
         ]
     }

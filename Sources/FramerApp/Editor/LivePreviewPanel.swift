@@ -12,7 +12,7 @@ struct LivePreviewPanel: View {
         VStack(spacing: 0) {
             // Preview image
             ZStack {
-                checkerboardBackground
+                Color(nsColor: .windowBackgroundColor)
 
                 if viewModel.isLoading {
                     ProgressView()
@@ -106,27 +106,6 @@ struct LivePreviewPanel: View {
         .onChange(of: appState.currentConfig) { _, _ in updatePreview() }
         .onChange(of: appState.selectedPhoto?.rotation) { _, _ in updatePreview() }
         .onAppear { updatePreview() }
-    }
-
-    /// Subtle checkerboard for transparency visibility
-    private var checkerboardBackground: some View {
-        Canvas { context, size in
-            let tileSize: CGFloat = 12
-            let lightColor = Color(white: 0.878) // #E0E0E0
-            let darkColor = Color(white: 0.784)  // #C8C8C8
-            for row in 0..<Int(ceil(size.height / tileSize)) {
-                for col in 0..<Int(ceil(size.width / tileSize)) {
-                    let isLight = (row + col) % 2 == 0
-                    let rect = CGRect(
-                        x: CGFloat(col) * tileSize,
-                        y: CGFloat(row) * tileSize,
-                        width: tileSize,
-                        height: tileSize
-                    )
-                    context.fill(Path(rect), with: .color(isLight ? lightColor : darkColor))
-                }
-            }
-        }
     }
 
     private func updatePreview() {

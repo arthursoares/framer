@@ -65,6 +65,12 @@ struct LibrarySidebar: View {
         .onReceive(NotificationCenter.default.publisher(for: .framerOpenPhotos)) { _ in
             openFilePicker()
         }
+        .onReceive(NotificationCenter.default.publisher(for: .framerSelectAll)) { _ in
+            appState.selectedItems = Set(appState.library.map(\.id))
+        }
+        .onReceive(NotificationCenter.default.publisher(for: .framerDeleteSelected)) { _ in
+            removeSelected()
+        }
     }
 
     private var emptyState: some View {

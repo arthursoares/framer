@@ -130,10 +130,9 @@ final class AppState {
     }
 }
 
-struct PhotoItem: Identifiable, Hashable, @unchecked Sendable {
+struct PhotoItem: Identifiable, Hashable, Sendable {
     let id = UUID()
     let url: URL
-    var thumbnail: NSImage?
     /// Manual rotation in degrees (0, 90, 180, 270).
     var rotation: Int = 0
 
