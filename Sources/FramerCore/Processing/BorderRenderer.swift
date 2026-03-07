@@ -114,8 +114,23 @@ public enum BorderRenderer {
 
             case .padding(let params):
                 guard params.thickness > 0 else { i += 1; continue }
-                let fillColor = resolveLayerFillColor(params.fill, sourceImage: sourceImage, cachedDominant: cachedDominant)
-                current = try addBorder(to: current, thickness: params.thickness, color: fillColor)
+                let fill = resolveLayerFill(params.fill, sourceImage: sourceImage, cachedDominant: cachedDominant)
+                if case .solid(let color) = fill {
+                    current = try addBorder(to: current, thickness: params.thickness, color: color)
+                } else {
+                    // Gradient fills: create a larger canvas with gradient background
+                    let newW = current.width + params.thickness * 2
+                    let newH = current.height + params.thickness * 2
+                    guard let ctx = createContext(width: newW, height: newH, template: current) else {
+                        i += 1; continue
+                    }
+                    fillBackground(fill, in: ctx, width: newW, height: newH)
+                    ctx.draw(current, in: CGRect(x: params.thickness, y: params.thickness,
+                                                  width: current.width, height: current.height))
+                    if let result = ctx.makeImage() {
+                        current = result
+                    }
+                }
 
             case .canvas(let params):
                 guard params.width > 0, params.height > 0 else { i += 1; continue }
@@ -195,12 +210,17 @@ public enum BorderRenderer {
 
     // MARK: - Layer Coalescing
 
-    /// Returns true if there are ≥2 consecutive border/padding layers starting at `from`.
+    /// Returns true if there are ≥2 consecutive border/padding layers starting at `from`,
+    /// and none of them use gradient fills (which need per-layer rendering).
     private static func canCoalesce(_ layers: [CompositionLayer], from start: Int) -> Bool {
         guard start + 1 < layers.count else { return false }
         for j in start..<min(start + 2, layers.count) {
             switch layers[j] {
-            case .border, .padding: continue
+            case .border: continue
+            case .padding(let p):
+                if case .gradientLinear = p.fill { return false }
+                if case .gradientRadial = p.fill { return false }
+                continue
             default: return false
             }
         }
