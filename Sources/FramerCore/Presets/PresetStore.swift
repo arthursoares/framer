@@ -78,64 +78,74 @@ public final class PresetStore {
         if hasYAML { return false }
 
         let defaults: [(String, ProcessingConfig)] = [
-            ("vintage", ProcessingConfig(
-                borderStyle: .solid,
-                borderThickness: .pixels(50),
-                borderColor: try! CodableColor(hex: "#F5F0E8"),
-                padding: 200,
+            // Clean white border with EXIF caption
+            ("film", ProcessingConfig(
                 outputFormat: .jpeg(quality: 95),
                 layers: [
-                    .border(BorderLayerParams(thickness: .pixels(50), color: try! CodableColor(hex: "#F5F0E8"))),
-                    .padding(PaddingLayerParams(thickness: 200, fill: .color(try! CodableColor(hex: "#F5F0E8")))),
+                    .border(BorderLayerParams(thickness: .pixels(8), color: try! CodableColor(hex: "#FFFFFF"))),
+                    .padding(PaddingLayerParams(thickness: 160, fill: .color(try! CodableColor(hex: "#FFFFFF")))),
                     .caption(CaptionLayerParams(
-                        mode: .template(" - {{mon}} '{{year2}} -"),
+                        mode: .template("{{camera}}  {{focal}}  {{aperture}}  {{shutter}}  {{iso}}"),
                         fontName: "Courier New",
-                        fontStyle: .bold,
-                        fontColor: try! CodableColor(hex: "#2C2C2C")
+                        fontSize: .auto,
+                        fontColor: try! CodableColor(hex: "#444444"),
+                        alignment: .center,
+                        position: .bottom
                     ))
                 ]
             )),
+            // 4:5 canvas with dominant color fill, gear caption
             ("instagram", ProcessingConfig(
-                borderStyle: .instagram,
-                borderThickness: .pixels(20),
-                borderColor: try! CodableColor(hex: "#FFFFFF"),
-                padding: 150,
+                outputFormat: .jpeg(quality: 95),
+                layers: [
+                    .border(BorderLayerParams(thickness: .pixels(4), color: try! CodableColor(hex: "#FFFFFF"))),
+                    .canvas(CanvasLayerParams(width: 1080, height: 1350, fill: .dominantColor)),
+                    .caption(CaptionLayerParams(
+                        mode: .template("{{camera}} | {{lens}}"),
+                        fontName: "Courier New",
+                        fontSize: .auto,
+                        fontColor: try! CodableColor(hex: "#FFFFFF"),
+                        alignment: .center,
+                        position: .bottom
+                    ))
+                ]
+            )),
+            // Thin border, no caption
+            ("minimal", ProcessingConfig(
+                layers: [
+                    .border(BorderLayerParams(thickness: .pixels(12), color: try! CodableColor(hex: "#FFFFFF"))),
+                ]
+            )),
+            // Print-ready 10x15cm at 300dpi with date caption
+            ("print 10x15", ProcessingConfig(
+                outputFormat: .jpeg(quality: 100),
                 layers: [
                     .border(BorderLayerParams(thickness: .pixels(20), color: try! CodableColor(hex: "#FFFFFF"))),
-                    .padding(PaddingLayerParams(thickness: 150, fill: .color(try! CodableColor(hex: "#FFFFFF")))),
-                    .caption(CaptionLayerParams(
-                        mode: .template("{{camera}} | {{focal}} | {{aperture}} | {{iso}}"),
-                        fontName: "Courier New",
-                        fontStyle: .bold,
-                        fontColor: try! CodableColor(hex: "#000000")
-                    ))
-                ]
-            )),
-            ("minimal", ProcessingConfig(
-                borderStyle: .solid,
-                borderThickness: .pixels(10),
-                borderColor: try! CodableColor(hex: "#FFFFFF"),
-                padding: 50,
-                layers: [
-                    .border(BorderLayerParams(thickness: .pixels(10), color: try! CodableColor(hex: "#FFFFFF"))),
-                    .padding(PaddingLayerParams(thickness: 50, fill: .color(try! CodableColor(hex: "#FFFFFF")))),
-                ]
-            )),
-            ("print10x15", ProcessingConfig(
-                borderStyle: .print(.print10x15),
-                borderThickness: .pixels(30),
-                borderColor: try! CodableColor(hex: "#FFFFFF"),
-                padding: 100,
-                backgroundColor: try! CodableColor(hex: "#FFFFFF"),
-                outerPadding: 40,
-                layers: [
-                    .border(BorderLayerParams(thickness: .pixels(30), color: try! CodableColor(hex: "#FFFFFF"))),
-                    .padding(PaddingLayerParams(thickness: 100, fill: .color(try! CodableColor(hex: "#FFFFFF")))),
+                    .canvas(CanvasLayerParams(width: 1772, height: 1181, fill: .color(try! CodableColor(hex: "#FFFFFF")))),
                     .caption(CaptionLayerParams(
                         mode: .template(" - {{mon}} '{{year2}} -"),
                         fontName: "Courier New",
+                        fontSize: .auto,
                         fontStyle: .bold,
-                        fontColor: try! CodableColor(hex: "#333333")
+                        fontColor: try! CodableColor(hex: "#333333"),
+                        alignment: .center,
+                        position: .bottom
+                    ))
+                ]
+            )),
+            // Dark background with gradient fill
+            ("dark gradient", ProcessingConfig(
+                outputFormat: .jpeg(quality: 95),
+                layers: [
+                    .border(BorderLayerParams(thickness: .pixels(4), color: try! CodableColor(hex: "#000000"))),
+                    .padding(PaddingLayerParams(thickness: 180, fill: .gradientRadial())),
+                    .caption(CaptionLayerParams(
+                        mode: .template("{{camera}}  {{focal}}"),
+                        fontName: "Courier New",
+                        fontSize: .auto,
+                        fontColor: try! CodableColor(hex: "#CCCCCC"),
+                        alignment: .center,
+                        position: .bottom
                     ))
                 ]
             )),
