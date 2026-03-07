@@ -31,6 +31,8 @@ public enum YAMLConfig {
         var color: String?
         var fill: String?
         var fill_color: String?
+        var gradient_saturation: Double?
+        var gradient_lightness: Double?
         var width: Int?
         var height: Int?
         var max_width: Int?
@@ -241,10 +243,14 @@ public enum YAMLConfig {
             schema.fill_color = c.hex
         case .dominantColor:
             schema.fill = "dominant"
-        case .gradientLinear:
+        case .gradientLinear(let p):
             schema.fill = "gradient_linear"
-        case .gradientRadial:
+            if p.saturationShift != 0 { schema.gradient_saturation = p.saturationShift }
+            if p.lightnessShift != 0 { schema.gradient_lightness = p.lightnessShift }
+        case .gradientRadial(let p):
             schema.fill = "gradient_radial"
+            if p.saturationShift != 0 { schema.gradient_saturation = p.saturationShift }
+            if p.lightnessShift != 0 { schema.gradient_lightness = p.lightnessShift }
         }
     }
 
@@ -341,9 +347,15 @@ public enum YAMLConfig {
         case "dominant":
             return .dominantColor
         case "gradient_linear":
-            return .gradientLinear
+            return .gradientLinear(GradientParams(
+                saturationShift: schema.gradient_saturation ?? 0,
+                lightnessShift: schema.gradient_lightness ?? 0
+            ))
         case "gradient_radial":
-            return .gradientRadial
+            return .gradientRadial(GradientParams(
+                saturationShift: schema.gradient_saturation ?? 0,
+                lightnessShift: schema.gradient_lightness ?? 0
+            ))
         case "color":
             if let hex = schema.fill_color, let c = try? CodableColor(hex: hex) {
                 return .color(c)

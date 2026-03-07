@@ -41,7 +41,7 @@ final class CompositionLayerTests: XCTestCase {
         let layer = CompositionLayer.canvas(CanvasLayerParams(
             width: 1080,
             height: 1350,
-            fill: .gradientLinear
+            fill: .gradientLinear()
         ))
         let data = try JSONEncoder().encode(layer)
         let decoded = try JSONDecoder().decode(CompositionLayer.self, from: data)
@@ -129,7 +129,7 @@ final class CompositionLayerTests: XCTestCase {
         let layers: [CompositionLayer] = [
             .border(BorderLayerParams(thickness: .pixels(10), color: try CodableColor(hex: "#FFFFFF"))),
             .padding(PaddingLayerParams(thickness: 100, fill: .color(try CodableColor(hex: "#000000")))),
-            .canvas(CanvasLayerParams(width: 1080, height: 1350, fill: .gradientRadial))
+            .canvas(CanvasLayerParams(width: 1080, height: 1350, fill: .gradientRadial()))
         ]
         let data = try JSONEncoder().encode(layers)
         let decoded = try JSONDecoder().decode([CompositionLayer].self, from: data)
@@ -153,7 +153,7 @@ final class CompositionLayerTests: XCTestCase {
     }
 
     func test_layerFill_gradientLinear_roundtripsJSON() throws {
-        let fill = LayerFill.gradientLinear
+        let fill = LayerFill.gradientLinear()
         let data = try JSONEncoder().encode(fill)
         let decoded = try JSONDecoder().decode(LayerFill.self, from: data)
         XCTAssertEqual(fill, decoded)

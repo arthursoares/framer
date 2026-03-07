@@ -3,14 +3,24 @@ import CoreGraphics
 
 // MARK: - LayerFill
 
+public struct GradientParams: Codable, Equatable, Sendable {
+    public var saturationShift: Double  // -50...+50, default 0
+    public var lightnessShift: Double   // -50...+50, default 0
+
+    public init(saturationShift: Double = 0, lightnessShift: Double = 0) {
+        self.saturationShift = saturationShift
+        self.lightnessShift = lightnessShift
+    }
+}
+
 public enum LayerFill: Codable, Equatable, Sendable {
     case color(CodableColor)
     case dominantColor
-    case gradientLinear
-    case gradientRadial
+    case gradientLinear(GradientParams = GradientParams())
+    case gradientRadial(GradientParams = GradientParams())
 
     private enum CodingKeys: String, CodingKey {
-        case type, color
+        case type, color, gradientParams
     }
 
     public init(from decoder: Decoder) throws {
@@ -23,9 +33,11 @@ public enum LayerFill: Codable, Equatable, Sendable {
         case "dominant":
             self = .dominantColor
         case "gradient_linear":
-            self = .gradientLinear
+            let params = try container.decodeIfPresent(GradientParams.self, forKey: .gradientParams) ?? GradientParams()
+            self = .gradientLinear(params)
         case "gradient_radial":
-            self = .gradientRadial
+            let params = try container.decodeIfPresent(GradientParams.self, forKey: .gradientParams) ?? GradientParams()
+            self = .gradientRadial(params)
         default:
             self = .color(try! CodableColor(hex: "#FFFFFF"))
         }
@@ -39,10 +51,28 @@ public enum LayerFill: Codable, Equatable, Sendable {
             try container.encode(c, forKey: .color)
         case .dominantColor:
             try container.encode("dominant", forKey: .type)
-        case .gradientLinear:
+        case .gradientLinear(let params):
             try container.encode("gradient_linear", forKey: .type)
-        case .gradientRadial:
+            try container.encode(params, forKey: .gradientParams)
+        case .gradientRadial(let params):
             try container.encode("gradient_radial", forKey: .type)
+            try container.encode(params, forKey: .gradientParams)
+        }
+    }
+
+    /// Whether this fill is a gradient variant (linear or radial).
+    public var isGradient: Bool {
+        switch self {
+        case .gradientLinear, .gradientRadial: return true
+        default: return false
+        }
+    }
+
+    /// The gradient parameters, if this is a gradient fill.
+    public var gradientParams: GradientParams? {
+        switch self {
+        case .gradientLinear(let p), .gradientRadial(let p): return p
+        default: return nil
         }
     }
 }

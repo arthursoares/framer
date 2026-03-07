@@ -159,23 +159,37 @@ public enum ColorExtractor {
 
     /// Generate gradient colors from a dominant color.
     /// Returns (center, edge) CGColors for gradient stops.
-    public static func generateGradientColors(dominant: HSLColor) -> (center: CGColor, edge: CGColor) {
+    /// `saturationShift` and `lightnessShift` adjust the generated values (-50...+50).
+    public static func generateGradientColors(
+        dominant: HSLColor,
+        saturationShift: Double = 0,
+        lightnessShift: Double = 0
+    ) -> (center: CGColor, edge: CGColor) {
         let isDark = dominant.l < 50
 
-        let centerS = max(dominant.s * 0.85, 50)
-        let centerL = isDark
-            ? max(25, min(40, dominant.l * 0.8))
-            : min(75, max(60, dominant.l * 0.9))
+        let centerS = clamp(max(dominant.s * 0.85, 50) + saturationShift, 0, 100)
+        let centerL = clamp(
+            (isDark
+                ? max(25, min(40, dominant.l * 0.8))
+                : min(75, max(60, dominant.l * 0.9))
+            ) + lightnessShift,
+            0, 100
+        )
 
-        let edgeS = min(centerS + 15, 95)
-        let edgeL = isDark
-            ? max(5, centerL - 20)
-            : max(40, centerL - 25)
+        let edgeS = clamp(centerS + 15, 0, 100)
+        let edgeL = clamp(
+            isDark ? centerL - 20 : centerL - 25,
+            0, 100
+        )
 
         let centerColor = HSLColor(h: dominant.h, s: centerS, l: centerL)
         let edgeColor = HSLColor(h: dominant.h, s: edgeS, l: edgeL)
 
         return (centerColor.cgColor, edgeColor.cgColor)
+    }
+
+    private static func clamp(_ value: Double, _ lo: Double, _ hi: Double) -> Double {
+        min(hi, max(lo, value))
     }
 
     // MARK: - Pixel Sampling
