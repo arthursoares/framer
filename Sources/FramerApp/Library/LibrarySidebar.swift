@@ -206,6 +206,14 @@ struct SidebarPresetsSection: View {
             } label: {
                 Label("Apply", systemImage: "checkmark.circle")
             }
+            Button {
+                let updated = Preset(id: preset.id, name: preset.name, config: appState.currentConfig)
+                try? appState.presetStore.save(updated)
+                appState.loadPresets()
+                appState.activePresetName = preset.name
+            } label: {
+                Label("Update with Current Settings", systemImage: "arrow.triangle.2.circlepath")
+            }
             Divider()
             Button(role: .destructive) {
                 presetToDelete = preset
