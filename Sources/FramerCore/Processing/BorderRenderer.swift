@@ -62,9 +62,9 @@ public enum BorderRenderer {
         let needsDominant = layers.contains { layer in
             switch layer {
             case .padding(let p):
-                return p.fill == .dominantColor || p.fill == .gradientLinear || p.fill == .gradientRadial
+                return p.fill == .dominantColor || p.fill.isGradient
             case .canvas(let p):
-                return p.fill == .dominantColor || p.fill == .gradientLinear || p.fill == .gradientRadial
+                return p.fill == .dominantColor || p.fill.isGradient
             default:
                 return false
             }
@@ -180,11 +180,7 @@ public enum BorderRenderer {
         switch fill {
         case .color(let c):
             return c.cgColor
-        case .dominantColor:
-            let dominant = cachedDominant ?? ColorExtractor.extractDominantColor(from: sourceImage)
-            return dominant.cgColor
-        case .gradientLinear, .gradientRadial:
-            // For solid-color contexts (addBorder), fall back to dominant
+        case .dominantColor, .gradientLinear, .gradientRadial:
             let dominant = cachedDominant ?? ColorExtractor.extractDominantColor(from: sourceImage)
             return dominant.cgColor
         }
@@ -197,13 +193,21 @@ public enum BorderRenderer {
         case .dominantColor:
             let dominant = cachedDominant ?? ColorExtractor.extractDominantColor(from: sourceImage)
             return .solid(dominant.cgColor)
-        case .gradientLinear:
+        case .gradientLinear(let params):
             let dominant = cachedDominant ?? ColorExtractor.extractDominantColor(from: sourceImage)
-            let (center, edge) = ColorExtractor.generateGradientColors(dominant: dominant)
+            let (center, edge) = ColorExtractor.generateGradientColors(
+                dominant: dominant,
+                saturationShift: params.saturationShift,
+                lightnessShift: params.lightnessShift
+            )
             return .linearGradient(start: center, end: edge)
-        case .gradientRadial:
+        case .gradientRadial(let params):
             let dominant = cachedDominant ?? ColorExtractor.extractDominantColor(from: sourceImage)
-            let (center, edge) = ColorExtractor.generateGradientColors(dominant: dominant)
+            let (center, edge) = ColorExtractor.generateGradientColors(
+                dominant: dominant,
+                saturationShift: params.saturationShift,
+                lightnessShift: params.lightnessShift
+            )
             return .radialGradient(center: center, edge: edge)
         }
     }
@@ -218,8 +222,7 @@ public enum BorderRenderer {
             switch layers[j] {
             case .border: continue
             case .padding(let p):
-                if case .gradientLinear = p.fill { return false }
-                if case .gradientRadial = p.fill { return false }
+                if p.fill.isGradient { return false }
                 continue
             default: return false
             }

@@ -174,8 +174,9 @@ struct LayerRow: View {
     var body: some View {
         DisclosureGroup {
             layerControls
+                .padding(.top, 4)
         } label: {
-            HStack(spacing: 4) {
+            HStack(spacing: 6) {
                 // Reorder buttons
                 VStack(spacing: 0) {
                     Button {
@@ -183,7 +184,8 @@ struct LayerRow: View {
                     } label: {
                         Image(systemName: "chevron.up")
                             .font(.caption2)
-                            .frame(width: 16, height: 12)
+                            .frame(width: 20, height: 16)
+                            .contentShape(Rectangle())
                     }
                     .buttonStyle(.plain)
                     .disabled(onMoveUp == nil)
@@ -194,7 +196,8 @@ struct LayerRow: View {
                     } label: {
                         Image(systemName: "chevron.down")
                             .font(.caption2)
-                            .frame(width: 16, height: 12)
+                            .frame(width: 20, height: 16)
+                            .contentShape(Rectangle())
                     }
                     .buttonStyle(.plain)
                     .disabled(onMoveDown == nil)
@@ -203,7 +206,7 @@ struct LayerRow: View {
 
                 Image(systemName: layer.iconName)
                     .foregroundStyle(.secondary)
-                    .frame(width: 18)
+                    .frame(width: 20)
 
                 Text(layer.label)
 
@@ -222,12 +225,14 @@ struct LayerRow: View {
                     Image(systemName: "xmark")
                         .font(.caption2)
                         .foregroundStyle(.secondary)
-                        .frame(width: 16, height: 16)
+                        .frame(width: 20, height: 20)
+                        .contentShape(Rectangle())
                 }
                 .buttonStyle(.plain)
                 .opacity(isHovering ? 1 : 0.4)
                 .animation(.easeInOut(duration: 0.15), value: isHovering)
             }
+            .padding(.vertical, 2)
             .onHover { isHovering = $0 }
         }
         .contextMenu {
@@ -971,6 +976,29 @@ struct LayerFillPicker: View {
                 }
             ))
         }
+
+        if let params = fill.gradientParams {
+            LabeledContent("Saturation") {
+                HStack {
+                    Slider(value: saturationBinding(params), in: -50...50)
+                    TextField("", value: saturationBinding(params), format: .number)
+                        .textFieldStyle(.roundedBorder)
+                        .frame(width: 50)
+                        .multilineTextAlignment(.trailing)
+                        .monospacedDigit()
+                }
+            }
+            LabeledContent("Lightness") {
+                HStack {
+                    Slider(value: lightnessBinding(params), in: -50...50)
+                    TextField("", value: lightnessBinding(params), format: .number)
+                        .textFieldStyle(.roundedBorder)
+                        .frame(width: 50)
+                        .multilineTextAlignment(.trailing)
+                        .monospacedDigit()
+                }
+            }
+        }
     }
 
     private var fillModeBinding: Binding<Int> {
@@ -984,11 +1012,41 @@ struct LayerFillPicker: View {
                 }
             },
             set: { idx in
+                // Preserve existing gradient params when switching between gradient types
+                let existingParams = fill.gradientParams ?? GradientParams()
                 switch idx {
                 case 0: onChange(.color(try! CodableColor(hex: "#FFFFFF")))
                 case 1: onChange(.dominantColor)
-                case 2: onChange(.gradientLinear)
-                case 3: onChange(.gradientRadial)
+                case 2: onChange(.gradientLinear(existingParams))
+                case 3: onChange(.gradientRadial(existingParams))
+                default: break
+                }
+            }
+        )
+    }
+
+    private func saturationBinding(_ params: GradientParams) -> Binding<Double> {
+        Binding(
+            get: { params.saturationShift },
+            set: { val in
+                let newParams = GradientParams(saturationShift: val, lightnessShift: params.lightnessShift)
+                switch fill {
+                case .gradientLinear: onChange(.gradientLinear(newParams))
+                case .gradientRadial: onChange(.gradientRadial(newParams))
+                default: break
+                }
+            }
+        )
+    }
+
+    private func lightnessBinding(_ params: GradientParams) -> Binding<Double> {
+        Binding(
+            get: { params.lightnessShift },
+            set: { val in
+                let newParams = GradientParams(saturationShift: params.saturationShift, lightnessShift: val)
+                switch fill {
+                case .gradientLinear: onChange(.gradientLinear(newParams))
+                case .gradientRadial: onChange(.gradientRadial(newParams))
                 default: break
                 }
             }
