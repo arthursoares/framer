@@ -104,6 +104,7 @@ struct LivePreviewPanel: View {
             updatePreview()
         }
         .onChange(of: appState.currentConfig) { _, _ in updatePreview() }
+        .onChange(of: appState.selectedPhoto?.rotation) { _, _ in updatePreview() }
         .onAppear { updatePreview() }
     }
 

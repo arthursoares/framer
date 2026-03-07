@@ -54,7 +54,7 @@ final class AppState {
             for (i, item) in items.enumerated() {
                 do {
                     let outURL = Self.outputURL(for: item, config: config, directory: directory, suffix: suffix)
-                    try await processor.process(input: item.url, output: outURL, config: config)
+                    try await processor.process(input: item.url, output: outURL, config: config, rotation: item.rotation)
                 } catch {
                     failedCount += 1
                 }
@@ -106,6 +106,12 @@ final class AppState {
         }
     }
 
+    func rotateItem(_ id: PhotoItem.ID, clockwise: Bool) {
+        guard let idx = library.firstIndex(where: { $0.id == id }) else { return }
+        let delta = clockwise ? 90 : -90
+        library[idx].rotation = (library[idx].rotation + delta + 360) % 360
+    }
+
     func retryJob(_ job: ExportJob) {
         guard case .failed = job.status else { return }
         exportQueue.removeAll { $0.id == job.id }
@@ -128,6 +134,8 @@ struct PhotoItem: Identifiable, Hashable, @unchecked Sendable {
     let id = UUID()
     let url: URL
     var thumbnail: NSImage?
+    /// Manual rotation in degrees (0, 90, 180, 270).
+    var rotation: Int = 0
 
     static func == (lhs: PhotoItem, rhs: PhotoItem) -> Bool { lhs.id == rhs.id }
     func hash(into hasher: inout Hasher) { hasher.combine(id) }

@@ -38,7 +38,7 @@ final class PreviewViewModel {
                 // Load original at preview resolution for before/after comparison
                 originalImage = Self.loadOriginal(from: item.url, maxDimension: 1200)
 
-                let image = try await processor.previewImage(for: item.url, config: config)
+                let image = try await processor.previewImage(for: item.url, config: config, rotation: item.rotation)
                 guard !Task.isCancelled else { return }
                 previewImage = image
             } catch {
