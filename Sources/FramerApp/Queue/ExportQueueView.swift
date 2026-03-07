@@ -8,7 +8,7 @@ struct ExportQueueView: View {
             // Header
             HStack {
                 Text("Export Queue")
-                    .font(.title2.bold())
+                    .font(.headline)
                 Spacer()
                 if !appState.exportQueue.isEmpty {
                     Button("Clear Completed") {
@@ -17,7 +17,8 @@ struct ExportQueueView: View {
                     .disabled(!hasCompleted)
                 }
             }
-            .padding()
+            .padding(.horizontal, 16)
+            .padding(.vertical, 10)
 
             Divider()
 

@@ -12,13 +12,14 @@ struct PresetManagerView: View {
             // Header
             HStack {
                 Text("Presets")
-                    .font(.title2.bold())
+                    .font(.headline)
                 Spacer()
                 Button(action: { showingSaveSheet = true }) {
                     Label("Save Current", systemImage: "plus.circle")
                 }
             }
-            .padding()
+            .padding(.horizontal, 16)
+            .padding(.vertical, 10)
 
             Divider()
 

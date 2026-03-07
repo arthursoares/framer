@@ -56,22 +56,21 @@ struct LivePreviewPanel: View {
                     VStack {
                         Spacer()
                         HStack {
-                            Button {
-                                withAnimation(.easeInOut(duration: 0.15)) {
-                                    showOriginal.toggle()
+                            Picker("", selection: Binding(
+                                get: { showOriginal },
+                                set: { newValue in
+                                    withAnimation(.easeInOut(duration: 0.15)) {
+                                        showOriginal = newValue
+                                    }
                                 }
-                            } label: {
-                                HStack(spacing: 4) {
-                                    Image(systemName: showOriginal ? "photo" : "photo.artframe")
-                                        .font(.caption)
-                                    Text(showOriginal ? "Original" : "Processed")
-                                        .font(.caption)
-                                }
-                                .padding(.horizontal, 10)
-                                .padding(.vertical, 5)
-                                .background(.regularMaterial, in: Capsule())
+                            )) {
+                                Text("Before").tag(true)
+                                Text("After").tag(false)
                             }
-                            .buttonStyle(.plain)
+                            .pickerStyle(.segmented)
+                            .frame(width: 140)
+                            .labelsHidden()
+                            .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 6))
                             Spacer()
                         }
                         .padding(.leading, 16)
@@ -112,8 +111,8 @@ struct LivePreviewPanel: View {
     private var checkerboardBackground: some View {
         Canvas { context, size in
             let tileSize: CGFloat = 12
-            let lightColor = Color(nsColor: .controlBackgroundColor)
-            let darkColor = Color(nsColor: .controlBackgroundColor).opacity(0.92)
+            let lightColor = Color(white: 0.878) // #E0E0E0
+            let darkColor = Color(white: 0.784)  // #C8C8C8
             for row in 0..<Int(ceil(size.height / tileSize)) {
                 for col in 0..<Int(ceil(size.width / tileSize)) {
                     let isLight = (row + col) % 2 == 0

@@ -177,7 +177,7 @@ struct LayerRow: View {
                         .frame(width: 16, height: 16)
                 }
                 .buttonStyle(.plain)
-                .opacity(isHovering ? 1 : 0)
+                .opacity(isHovering ? 1 : 0.4)
                 .animation(.easeInOut(duration: 0.15), value: isHovering)
             }
             .onHover { isHovering = $0 }

@@ -33,6 +33,29 @@ struct SettingsPanel: View {
         @Bindable var state = appState
 
         Form {
+            // Active preset indicator
+            if let presetName = appState.activePresetName {
+                HStack(spacing: 6) {
+                    Image(systemName: "slider.horizontal.3")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                    Text(presetName)
+                        .font(.caption.bold())
+                    Spacer()
+                    Button {
+                        appState.activePresetName = nil
+                    } label: {
+                        Image(systemName: "xmark")
+                            .font(.caption2)
+                            .foregroundStyle(.secondary)
+                    }
+                    .buttonStyle(.plain)
+                }
+                .padding(.horizontal, 12)
+                .padding(.vertical, 6)
+                .background(.tint.opacity(0.1), in: RoundedRectangle(cornerRadius: 6))
+            }
+
             // Layer-based composition
             LayerListSection(layers: layersBinding)
 
@@ -206,7 +229,7 @@ struct SettingsPanel: View {
                                     .font(.caption2.bold())
                                     .padding(.horizontal, 5)
                                     .padding(.vertical, 1)
-                                    .background(.white.opacity(0.2), in: Capsule())
+                                    .background(.secondary.opacity(0.2), in: Capsule())
                             }
                         }
                     }
