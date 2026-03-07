@@ -83,41 +83,61 @@ public final class PresetStore {
                 borderThickness: .pixels(50),
                 borderColor: try! CodableColor(hex: "#F5F0E8"),
                 padding: 200,
-                captionMode: .template(" - {{mon}} '{{year2}} -"),
-                fontName: "Courier New",
-                fontStyle: .bold,
-                fontColor: try! CodableColor(hex: "#2C2C2C"),
-                outputFormat: .jpeg(quality: 95)
+                outputFormat: .jpeg(quality: 95),
+                layers: [
+                    .border(BorderLayerParams(thickness: .pixels(50), color: try! CodableColor(hex: "#F5F0E8"))),
+                    .padding(PaddingLayerParams(thickness: 200, fill: .color(try! CodableColor(hex: "#F5F0E8")))),
+                    .caption(CaptionLayerParams(
+                        mode: .template(" - {{mon}} '{{year2}} -"),
+                        fontName: "Courier New",
+                        fontStyle: .bold,
+                        fontColor: try! CodableColor(hex: "#2C2C2C")
+                    ))
+                ]
             )),
             ("instagram", ProcessingConfig(
                 borderStyle: .instagram,
                 borderThickness: .pixels(20),
                 borderColor: try! CodableColor(hex: "#FFFFFF"),
                 padding: 150,
-                captionMode: .template("{{camera}} | {{focal}} | {{aperture}} | {{iso}}"),
-                fontName: "Courier New",
-                fontStyle: .bold,
-                fontColor: try! CodableColor(hex: "#000000")
+                layers: [
+                    .border(BorderLayerParams(thickness: .pixels(20), color: try! CodableColor(hex: "#FFFFFF"))),
+                    .padding(PaddingLayerParams(thickness: 150, fill: .color(try! CodableColor(hex: "#FFFFFF")))),
+                    .caption(CaptionLayerParams(
+                        mode: .template("{{camera}} | {{focal}} | {{aperture}} | {{iso}}"),
+                        fontName: "Courier New",
+                        fontStyle: .bold,
+                        fontColor: try! CodableColor(hex: "#000000")
+                    ))
+                ]
             )),
             ("minimal", ProcessingConfig(
                 borderStyle: .solid,
                 borderThickness: .pixels(10),
                 borderColor: try! CodableColor(hex: "#FFFFFF"),
                 padding: 50,
-                captionMode: .none
+                layers: [
+                    .border(BorderLayerParams(thickness: .pixels(10), color: try! CodableColor(hex: "#FFFFFF"))),
+                    .padding(PaddingLayerParams(thickness: 50, fill: .color(try! CodableColor(hex: "#FFFFFF")))),
+                ]
             )),
             ("print10x15", ProcessingConfig(
                 borderStyle: .print(.print10x15),
                 borderThickness: .pixels(30),
                 borderColor: try! CodableColor(hex: "#FFFFFF"),
                 padding: 100,
-                captionMode: .template(" - {{mon}} '{{year2}} -"),
-                fontName: "Courier New",
-                fontStyle: .bold,
-                fontColor: try! CodableColor(hex: "#333333"),
                 backgroundColor: try! CodableColor(hex: "#FFFFFF"),
                 outerPadding: 40,
-                captionPadding: 20
+                layers: [
+                    .border(BorderLayerParams(thickness: .pixels(30), color: try! CodableColor(hex: "#FFFFFF"))),
+                    .padding(PaddingLayerParams(thickness: 100, fill: .color(try! CodableColor(hex: "#FFFFFF")))),
+                    .caption(CaptionLayerParams(
+                        mode: .template(" - {{mon}} '{{year2}} -"),
+                        fontName: "Courier New",
+                        fontStyle: .bold,
+                        fontColor: try! CodableColor(hex: "#333333")
+                    ))
+                ]
             )),
         ]
 
