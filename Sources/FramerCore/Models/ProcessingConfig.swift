@@ -1,6 +1,5 @@
 import Foundation
 import CoreGraphics
-import AppKit
 
 // MARK: - PrintFormat
 
@@ -184,71 +183,41 @@ public struct ProcessingConfig: Equatable, Sendable {
     public var borderThickness: BorderSize
     public var borderColor: CodableColor
     public var padding: Int
-    public var captionMode: CaptionMode
-    public var fontName: String
-    public var fontSize: FontSize
-    public var fontStyle: FontStyle
-    public var fontColor: CodableColor
     public var outputFormat: OutputFormat
     public var instagramMaxSize: Int
     public var postProcess: String?
     public var backgroundColor: CodableColor
     public var outerPadding: Int
-    public var captionPadding: Int
     public var noMetadata: Bool
     public var backgroundMode: BackgroundMode
     public var layers: [CompositionLayer]?
-    public var captionAlignment: CaptionAlignment
-    public var captionPosition: CaptionPosition
-    public var captionOffsetX: Int
-    public var captionOffsetY: Int
 
     public init(
         borderStyle: BorderStyle = .solid,
         borderThickness: BorderSize = .pixels(20),
         borderColor: CodableColor = try! CodableColor(hex: "#FFFFFF"),
         padding: Int = 150,
-        captionMode: CaptionMode = .template(" - {{mon}} '{{year2}} -"),
-        fontName: String = "Courier New",
-        fontSize: FontSize = .auto,
-        fontStyle: FontStyle = [],
-        fontColor: CodableColor = try! CodableColor(hex: "#000000"),
         outputFormat: OutputFormat = .jpeg(quality: 100),
         instagramMaxSize: Int = 1000,
         postProcess: String? = nil,
         backgroundColor: CodableColor = try! CodableColor(hex: "#FFFFFF"),
         outerPadding: Int = 0,
-        captionPadding: Int = 0,
         noMetadata: Bool = false,
         backgroundMode: BackgroundMode = .color,
-        layers: [CompositionLayer]? = nil,
-        captionAlignment: CaptionAlignment = .center,
-        captionPosition: CaptionPosition = .bottom,
-        captionOffsetX: Int = 0,
-        captionOffsetY: Int = 0
+        layers: [CompositionLayer]? = nil
     ) {
         self.borderStyle = borderStyle
         self.borderThickness = borderThickness
         self.borderColor = borderColor
         self.padding = padding
-        self.captionMode = captionMode
-        self.fontName = fontName
-        self.fontSize = fontSize
-        self.fontStyle = fontStyle
-        self.fontColor = fontColor
         self.outputFormat = outputFormat
         self.instagramMaxSize = instagramMaxSize
         self.postProcess = postProcess
         self.backgroundColor = backgroundColor
         self.outerPadding = outerPadding
-        self.captionPadding = captionPadding
         self.noMetadata = noMetadata
         self.backgroundMode = backgroundMode
         self.layers = layers
-        self.captionAlignment = captionAlignment
-        self.captionPosition = captionPosition
-        self.captionOffsetX = captionOffsetX
-        self.captionOffsetY = captionOffsetY
     }
 
     public static let `default` = ProcessingConfig()
@@ -258,11 +227,9 @@ public struct ProcessingConfig: Equatable, Sendable {
 extension ProcessingConfig: Codable {
     private enum CodingKeys: String, CodingKey {
         case borderStyle, borderThickness, borderColor, padding
-        case captionMode, fontName, fontSize, fontStyle, fontColor
         case outputFormat, instagramMaxSize, postProcess
-        case backgroundColor, outerPadding, captionPadding, noMetadata
+        case backgroundColor, outerPadding, noMetadata
         case backgroundMode, layers
-        case captionAlignment, captionPosition, captionOffsetX, captionOffsetY
     }
 
     public init(from decoder: Decoder) throws {
@@ -271,35 +238,15 @@ extension ProcessingConfig: Codable {
         borderThickness = try container.decode(BorderSize.self, forKey: .borderThickness)
         borderColor = try container.decode(CodableColor.self, forKey: .borderColor)
         padding = try container.decode(Int.self, forKey: .padding)
-        captionMode = try container.decode(CaptionMode.self, forKey: .captionMode)
-        fontName = try container.decode(String.self, forKey: .fontName)
-        fontSize = try container.decode(FontSize.self, forKey: .fontSize)
-        var decodedStyle = (try? container.decodeIfPresent(FontStyle.self, forKey: .fontStyle)) ?? []
-        // Backward compat: detect bold/italic from variant font names (e.g. "Courier New Bold")
-        if decodedStyle.isEmpty, let font = NSFont(name: fontName, size: 12) {
-            let traits = NSFontManager.shared.traits(of: font)
-            if traits.contains(.boldFontMask) { decodedStyle.insert(.bold) }
-            if traits.contains(.italicFontMask) { decodedStyle.insert(.italic) }
-            if !decodedStyle.isEmpty, let family = font.familyName {
-                fontName = family
-            }
-        }
-        fontStyle = decodedStyle
-        fontColor = try container.decode(CodableColor.self, forKey: .fontColor)
         outputFormat = try container.decode(OutputFormat.self, forKey: .outputFormat)
         instagramMaxSize = try container.decode(Int.self, forKey: .instagramMaxSize)
         postProcess = try container.decodeIfPresent(String.self, forKey: .postProcess)
-        // New fields with defaults for backward compat
+        // Fields with defaults for backward compat
         backgroundColor = (try? container.decodeIfPresent(CodableColor.self, forKey: .backgroundColor)) ?? (try! CodableColor(hex: "#FFFFFF"))
         outerPadding = (try? container.decodeIfPresent(Int.self, forKey: .outerPadding)) ?? 0
-        captionPadding = (try? container.decodeIfPresent(Int.self, forKey: .captionPadding)) ?? 0
         noMetadata = (try? container.decodeIfPresent(Bool.self, forKey: .noMetadata)) ?? false
         backgroundMode = (try? container.decodeIfPresent(BackgroundMode.self, forKey: .backgroundMode)) ?? .color
         layers = try? container.decodeIfPresent([CompositionLayer].self, forKey: .layers)
-        captionAlignment = (try? container.decodeIfPresent(CaptionAlignment.self, forKey: .captionAlignment)) ?? .center
-        captionPosition = (try? container.decodeIfPresent(CaptionPosition.self, forKey: .captionPosition)) ?? .bottom
-        captionOffsetX = (try? container.decodeIfPresent(Int.self, forKey: .captionOffsetX)) ?? 0
-        captionOffsetY = (try? container.decodeIfPresent(Int.self, forKey: .captionOffsetY)) ?? 0
     }
 }
 
