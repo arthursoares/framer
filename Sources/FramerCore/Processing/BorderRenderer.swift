@@ -51,7 +51,8 @@ public enum BorderRenderer {
     public static func applyLayers(
         _ layers: [CompositionLayer],
         to image: CGImage,
-        sourceImage: CGImage
+        sourceImage: CGImage,
+        exif: ExifData
     ) throws -> BorderResult {
         var current = image
         var imageOrigin: CGPoint?
@@ -148,6 +149,9 @@ public enum BorderRenderer {
                 if isLandscape != wantsLandscape {
                     current = rotate90Clockwise(current)
                 }
+
+            case .caption(let params):
+                current = try CaptionRenderer.renderCaption(on: current, params: params, exif: exif)
             }
             i += 1
         }

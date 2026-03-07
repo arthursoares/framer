@@ -17,19 +17,12 @@ public actor FrameProcessor {
 
         let borderResult: BorderResult
         if let layers = config.layers {
-            borderResult = try BorderRenderer.applyLayers(layers, to: cgImage, sourceImage: cgImage)
+            borderResult = try BorderRenderer.applyLayers(layers, to: cgImage, sourceImage: cgImage, exif: exif)
         } else {
             borderResult = try BorderRenderer.applyBorder(to: cgImage, config: config, style: config.borderStyle)
         }
-        let captioned = try CaptionRenderer.renderCaption(
-            on: borderResult.image,
-            config: config,
-            exif: exif,
-            imageOrigin: borderResult.imageOrigin,
-            imageSize: borderResult.imageSize
-        )
 
-        return NSImage(cgImage: captioned, size: NSSize(width: captioned.width, height: captioned.height))
+        return NSImage(cgImage: borderResult.image, size: NSSize(width: borderResult.image.width, height: borderResult.image.height))
     }
 
     // MARK: - Full Export
@@ -40,20 +33,13 @@ public actor FrameProcessor {
 
         let borderResult: BorderResult
         if let layers = config.layers {
-            borderResult = try BorderRenderer.applyLayers(layers, to: cgImage, sourceImage: cgImage)
+            borderResult = try BorderRenderer.applyLayers(layers, to: cgImage, sourceImage: cgImage, exif: exif)
         } else {
             borderResult = try BorderRenderer.applyBorder(to: cgImage, config: config, style: config.borderStyle)
         }
-        let captioned = try CaptionRenderer.renderCaption(
-            on: borderResult.image,
-            config: config,
-            exif: exif,
-            imageOrigin: borderResult.imageOrigin,
-            imageSize: borderResult.imageSize
-        )
 
         try MetadataWriter.encode(
-            captioned,
+            borderResult.image,
             to: output,
             format: config.outputFormat,
             sourceURL: input,
