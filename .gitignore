@@ -23,6 +23,7 @@ test_results.txt
 # Build artifacts
 Framer.app/
 releases/
+framer
 
 # Legacy
 *.lrdevplugin/
