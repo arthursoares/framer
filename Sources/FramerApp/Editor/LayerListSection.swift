@@ -5,6 +5,7 @@ import FramerCore
 
 struct LayerListSection: View {
     @Binding var layers: [CompositionLayer]
+    @Environment(\.undoManager) private var undoManager
     @State private var draggingLayerID: UUID?
 
     var body: some View {
@@ -13,8 +14,8 @@ struct LayerListSection: View {
                 LayerRow(
                     layer: binding(for: index),
                     onDelete: { removeLayer(at: index) },
-                    onMoveUp: index > 0 ? { layers.swapAt(index, index - 1) } : nil,
-                    onMoveDown: index < layers.count - 1 ? { layers.swapAt(index, index + 1) } : nil
+                    onMoveUp: index > 0 ? { moveLayer(from: index, to: index - 1) } : nil,
+                    onMoveDown: index < layers.count - 1 ? { moveLayer(from: index, to: index + 1) } : nil
                 )
                 .draggable(layer.id.uuidString) {
                     Label(layer.label, systemImage: layer.iconName)
@@ -26,10 +27,17 @@ struct LayerListSection: View {
                           let droppedID = UUID(uuidString: droppedIDString),
                           let fromIndex = layers.firstIndex(where: { $0.id == droppedID }),
                           fromIndex != index else { return false }
+                    let toOffset = index > fromIndex ? index + 1 : index
+                    let snapshot = layers
                     withAnimation(.easeInOut(duration: 0.2)) {
-                        layers.move(fromOffsets: IndexSet(integer: fromIndex),
-                                    toOffset: index > fromIndex ? index + 1 : index)
+                        layers.move(fromOffsets: IndexSet(integer: fromIndex), toOffset: toOffset)
                     }
+                    undoManager?.registerUndo(withTarget: UndoProxy.shared) { _ in
+                        withAnimation(.easeInOut(duration: 0.2)) {
+                            layers = snapshot
+                        }
+                    }
+                    undoManager?.setActionName("Move Layer")
                     return true
                 }
             }
@@ -94,15 +102,44 @@ struct LayerListSection: View {
     }
 
     private func removeLayer(at index: Int) {
-        _ = withAnimation(.easeInOut(duration: 0.2)) {
+        let removed = layers[index]
+        withAnimation(.easeInOut(duration: 0.2)) {
             layers.remove(at: index)
         }
+        undoManager?.registerUndo(withTarget: UndoProxy.shared) { _ in
+            withAnimation(.easeInOut(duration: 0.2)) {
+                let insertAt = min(index, layers.count)
+                layers.insert(removed, at: insertAt)
+            }
+        }
+        undoManager?.setActionName("Delete Layer")
     }
 
     private func addLayer(_ layer: CompositionLayer) {
         withAnimation(.easeInOut(duration: 0.2)) {
             layers.append(layer)
         }
+        let addedIndex = layers.count - 1
+        undoManager?.registerUndo(withTarget: UndoProxy.shared) { _ in
+            withAnimation(.easeInOut(duration: 0.2)) {
+                if addedIndex < layers.count {
+                    layers.remove(at: addedIndex)
+                }
+            }
+        }
+        undoManager?.setActionName("Add Layer")
+    }
+
+    private func moveLayer(from source: Int, to destination: Int) {
+        withAnimation(.easeInOut(duration: 0.2)) {
+            layers.swapAt(source, destination)
+        }
+        undoManager?.registerUndo(withTarget: UndoProxy.shared) { _ in
+            withAnimation(.easeInOut(duration: 0.2)) {
+                layers.swapAt(destination, source)
+            }
+        }
+        undoManager?.setActionName("Move Layer")
     }
 
     private func binding(for index: Int) -> Binding<CompositionLayer> {
@@ -111,6 +148,11 @@ struct LayerListSection: View {
             set: { layers[index] = $0 }
         )
     }
+}
+
+/// Proxy target for UndoManager since it requires NSObject.
+private final class UndoProxy: NSObject {
+    static let shared = UndoProxy()
 }
 
 // MARK: - LayerRow
