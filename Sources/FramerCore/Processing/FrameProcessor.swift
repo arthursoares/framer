@@ -12,7 +12,8 @@ public actor FrameProcessor {
 
     public func previewImage(for url: URL, config: ProcessingConfig) throws -> sending NSImage {
         let fullImage = try loadImage(from: url)
-        let cgImage = downscale(fullImage, maxDimension: 1200)
+        let previewMax = previewMaxDimension(for: config, imageWidth: fullImage.width, imageHeight: fullImage.height)
+        let cgImage = downscale(fullImage, maxDimension: previewMax)
         let exif = (try? EXIFReader.read(from: url)) ?? ExifData()
 
         let borderResult: BorderResult
@@ -56,6 +57,28 @@ public actor FrameProcessor {
             throw FramerError.invalidImage(url)
         }
         return image
+    }
+
+    /// Compute preview downscale target based on layer requirements.
+    /// If a canvas layer specifies large dimensions, the preview photo needs to be
+    /// proportionally larger so it fills the canvas properly.
+    private func previewMaxDimension(for config: ProcessingConfig, imageWidth: Int, imageHeight: Int) -> Int {
+        let baseDimension = 1200
+        let layers = config.layers ?? CompositionLayer.defaultLayers()
+
+        // Find the largest canvas dimension in the layer stack
+        var maxCanvasDim = 0
+        for layer in layers {
+            if case .canvas(let p) = layer {
+                maxCanvasDim = max(maxCanvasDim, p.width, p.height)
+            }
+        }
+
+        guard maxCanvasDim > baseDimension else { return baseDimension }
+
+        // Scale up the preview so the photo proportionally fills the canvas.
+        // Cap at 3000 to keep preview responsive.
+        return min(maxCanvasDim, 3000)
     }
 
     private func downscale(_ image: CGImage, maxDimension: Int) -> CGImage {

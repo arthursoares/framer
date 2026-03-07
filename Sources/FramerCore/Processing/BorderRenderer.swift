@@ -101,9 +101,9 @@ public enum BorderRenderer {
                 let maxH = params.maxHeight
                 guard maxW > 0, maxH > 0 else { i += 1; continue }
                 let scale = min(Double(maxW) / Double(current.width), Double(maxH) / Double(current.height))
-                if scale < 1.0 {
-                    let newW = Int(Double(current.width) * scale)
-                    let newH = Int(Double(current.height) * scale)
+                if abs(scale - 1.0) > 0.001 {
+                    let newW = max(1, Int(Double(current.width) * scale))
+                    let newH = max(1, Int(Double(current.height) * scale))
                     current = try resize(current, width: newW, height: newH)
                 }
 
