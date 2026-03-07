@@ -17,6 +17,12 @@ public final class PresetStore {
     }
 
     public func save(_ preset: Preset) throws {
+        // Remove any YAML file for this preset name (e.g. upgrading a default preset)
+        let yamlURL = directory.appendingPathComponent("\(preset.name).yaml")
+        if FileManager.default.fileExists(atPath: yamlURL.path) {
+            try? FileManager.default.removeItem(at: yamlURL)
+        }
+
         let url = directory.appendingPathComponent("\(preset.id.uuidString).json")
         let data = try JSONEncoder().encode(preset)
         try data.write(to: url)
@@ -31,30 +37,46 @@ public final class PresetStore {
     public func list() throws -> [Preset] {
         let files = try FileManager.default.contentsOfDirectory(at: directory,
                                                                 includingPropertiesForKeys: nil)
-        var presets: [Preset] = []
+        var presetsById: [UUID: Preset] = [:]
 
-        // Load JSON presets
-        presets += files
-            .filter { $0.pathExtension == "json" }
-            .compactMap { try? JSONDecoder().decode(Preset.self, from: Data(contentsOf: $0)) }
+        // Load YAML presets first (lower priority)
+        for url in files where url.pathExtension == "yaml" {
+            guard let yaml = try? String(contentsOf: url, encoding: .utf8),
+                  let config = try? YAMLConfig.decode(yaml) else { continue }
+            let name = url.deletingPathExtension().lastPathComponent
+            let id = Self.deterministicUUID(from: name)
+            presetsById[id] = Preset(id: id, name: name, config: config)
+        }
 
-        // Load YAML presets
-        presets += files
-            .filter { $0.pathExtension == "yaml" }
-            .compactMap { url -> Preset? in
-                guard let yaml = try? String(contentsOf: url, encoding: .utf8),
-                      let config = try? YAMLConfig.decode(yaml) else { return nil }
-                let name = url.deletingPathExtension().lastPathComponent
-                let id = Self.deterministicUUID(from: name)
-                return Preset(id: id, name: name, config: config)
-            }
+        // Load JSON presets second (override YAML if same ID)
+        for url in files where url.pathExtension == "json" {
+            guard let preset = try? JSONDecoder().decode(Preset.self, from: Data(contentsOf: url)) else { continue }
+            presetsById[preset.id] = preset
+        }
 
-        return presets.sorted { $0.name < $1.name }
+        return presetsById.values.sorted { $0.name < $1.name }
     }
 
     public func delete(id: UUID) throws {
-        let url = directory.appendingPathComponent("\(id.uuidString).json")
-        try FileManager.default.removeItem(at: url)
+        let jsonURL = directory.appendingPathComponent("\(id.uuidString).json")
+        var deleted = false
+        if FileManager.default.fileExists(atPath: jsonURL.path) {
+            try FileManager.default.removeItem(at: jsonURL)
+            deleted = true
+        }
+        // Also check for YAML files with matching deterministic UUID
+        if let files = try? FileManager.default.contentsOfDirectory(at: directory, includingPropertiesForKeys: nil) {
+            for url in files where url.pathExtension == "yaml" {
+                let name = url.deletingPathExtension().lastPathComponent
+                if Self.deterministicUUID(from: name) == id {
+                    try FileManager.default.removeItem(at: url)
+                    deleted = true
+                }
+            }
+        }
+        if !deleted {
+            throw CocoaError(.fileNoSuchFile)
+        }
     }
 
     /// Creates a deterministic UUID from a name string (for stable YAML preset identity).
