@@ -221,6 +221,45 @@ public struct OrientationLayerParams: Identifiable, Codable, Equatable, Sendable
     }
 }
 
+// MARK: - Caption
+
+public struct CaptionLayerParams: Identifiable, Codable, Equatable, Sendable {
+    public let id: UUID
+    public var mode: CaptionMode
+    public var fontName: String
+    public var fontSize: FontSize
+    public var fontStyle: FontStyle
+    public var fontColor: CodableColor
+    public var alignment: CaptionAlignment
+    public var position: CaptionPosition
+    public var offsetX: Int
+    public var offsetY: Int
+
+    public init(
+        id: UUID = UUID(),
+        mode: CaptionMode = .template(" - {{mon}} '{{year2}} -"),
+        fontName: String = "Courier New",
+        fontSize: FontSize = .auto,
+        fontStyle: FontStyle = [],
+        fontColor: CodableColor = try! CodableColor(hex: "#000000"),
+        alignment: CaptionAlignment = .center,
+        position: CaptionPosition = .bottom,
+        offsetX: Int = 0,
+        offsetY: Int = 0
+    ) {
+        self.id = id
+        self.mode = mode
+        self.fontName = fontName
+        self.fontSize = fontSize
+        self.fontStyle = fontStyle
+        self.fontColor = fontColor
+        self.alignment = alignment
+        self.position = position
+        self.offsetX = offsetX
+        self.offsetY = offsetY
+    }
+}
+
 // MARK: - CompositionLayer
 
 public enum CompositionLayer: Identifiable, Codable, Equatable, Sendable {
@@ -230,6 +269,7 @@ public enum CompositionLayer: Identifiable, Codable, Equatable, Sendable {
     case resize(ResizeLayerParams)
     case overlay(OverlayLayerParams)
     case orientation(OrientationLayerParams)
+    case caption(CaptionLayerParams)
 
     public var id: UUID {
         switch self {
@@ -239,6 +279,7 @@ public enum CompositionLayer: Identifiable, Codable, Equatable, Sendable {
         case .resize(let p): return p.id
         case .overlay(let p): return p.id
         case .orientation(let p): return p.id
+        case .caption(let p): return p.id
         }
     }
 
@@ -250,6 +291,7 @@ public enum CompositionLayer: Identifiable, Codable, Equatable, Sendable {
         case .resize: return "Resize"
         case .overlay(let p): return p.kind == .frame ? "Frame" : "Texture"
         case .orientation: return "Orientation"
+        case .caption: return "Caption"
         }
     }
 
@@ -261,6 +303,7 @@ public enum CompositionLayer: Identifiable, Codable, Equatable, Sendable {
         case .resize: return "arrow.down.right.and.arrow.up.left"
         case .overlay(let p): return p.kind == .frame ? "photo.artframe" : "sparkles"
         case .orientation: return "rotate.right"
+        case .caption: return "textformat"
         }
     }
 
@@ -286,6 +329,8 @@ public enum CompositionLayer: Identifiable, Codable, Equatable, Sendable {
             self = .overlay(try container.decode(OverlayLayerParams.self, forKey: .params))
         case "orientation":
             self = .orientation(try container.decode(OrientationLayerParams.self, forKey: .params))
+        case "caption":
+            self = .caption(try container.decode(CaptionLayerParams.self, forKey: .params))
         default:
             throw DecodingError.dataCorruptedError(
                 forKey: .type, in: container,
@@ -315,67 +360,18 @@ public enum CompositionLayer: Identifiable, Codable, Equatable, Sendable {
         case .orientation(let p):
             try container.encode("orientation", forKey: .type)
             try container.encode(p, forKey: .params)
-        }
-    }
-
-    // MARK: - Legacy Conversion
-
-    public static func fromLegacyConfig(_ config: ProcessingConfig) -> [CompositionLayer] {
-        switch config.borderStyle {
-        case .solid:
-            return solidLayers(config)
-        case .instagram:
-            return instagramLayers(config)
-        case .print(let format):
-            return printLayers(config, format: format)
+        case .caption(let p):
+            try container.encode("caption", forKey: .type)
+            try container.encode(p, forKey: .params)
         }
     }
 
     public static func defaultLayers() -> [CompositionLayer] {
         [
             .border(BorderLayerParams(thickness: .pixels(20), color: try! CodableColor(hex: "#FFFFFF"))),
-            .padding(PaddingLayerParams(thickness: 150, fill: .color(try! CodableColor(hex: "#FFFFFF"))))
+            .padding(PaddingLayerParams(thickness: 150, fill: .color(try! CodableColor(hex: "#FFFFFF")))),
+            .caption(CaptionLayerParams())
         ]
     }
 
-    // MARK: - Legacy Helpers
-
-    private static func fillFromBackgroundMode(_ mode: BackgroundMode, color: CodableColor) -> LayerFill {
-        switch mode {
-        case .color: return .color(color)
-        case .dominant: return .dominantColor
-        case .gradientLinear: return .gradientLinear
-        case .gradientRadial: return .gradientRadial
-        }
-    }
-
-    private static func solidLayers(_ config: ProcessingConfig) -> [CompositionLayer] {
-        let bgFill = fillFromBackgroundMode(config.backgroundMode, color: config.backgroundColor)
-        return [
-            .border(BorderLayerParams(thickness: config.borderThickness, color: config.borderColor)),
-            .padding(PaddingLayerParams(thickness: config.padding, fill: bgFill))
-        ]
-    }
-
-    private static func instagramLayers(_ config: ProcessingConfig) -> [CompositionLayer] {
-        let bgFill = fillFromBackgroundMode(config.backgroundMode, color: config.backgroundColor)
-        return [
-            .resize(ResizeLayerParams(maxWidth: config.instagramMaxSize, maxHeight: config.instagramMaxSize)),
-            .padding(PaddingLayerParams(thickness: config.padding, fill: .color(try! CodableColor(hex: "#FFFFFF")))),
-            .border(BorderLayerParams(thickness: config.borderThickness, color: config.borderColor)),
-            .canvas(CanvasLayerParams(width: 1080, height: 1350, fill: bgFill))
-        ]
-    }
-
-    private static func printLayers(_ config: ProcessingConfig, format: PrintFormat) -> [CompositionLayer] {
-        let bgFill = fillFromBackgroundMode(config.backgroundMode, color: config.backgroundColor)
-        return [
-            .resize(ResizeLayerParams(
-                maxWidth: format.widthPixels - 2 * config.outerPadding,
-                maxHeight: format.heightPixels - 2 * config.outerPadding
-            )),
-            .border(BorderLayerParams(thickness: config.borderThickness, color: config.borderColor)),
-            .canvas(CanvasLayerParams(width: format.widthPixels, height: format.heightPixels, fill: bgFill))
-        ]
-    }
 }
