@@ -11,31 +11,18 @@ public enum YAMLConfig {
         var border_thickness: String?
         var border_color: String?
         var padding: Int?
-        var caption: String?
-        var caption_template: String?
-        var no_caption: Bool?
-        var font_name: String?
-        var font_size: String?
-        var font_bold: Bool?
-        var font_italic: Bool?
-        var font_color: String?
         var jpeg_quality: Int?
         var output_format: String?
         var instagram_max_size: Int?
         var post_process: String?
         var background_color: String?
         var outer_padding: Int?
-        var caption_padding: Int?
         var no_metadata: Bool?
         var print_width_mm: Double?
         var print_height_mm: Double?
         var print_dpi: Int?
         var background_mode: String?
         var layers: [YAMLLayerSchema]?
-        var caption_alignment: String?
-        var caption_position: String?
-        var caption_offset_x: Int?
-        var caption_offset_y: Int?
     }
 
     struct YAMLLayerSchema: Codable {
@@ -53,6 +40,17 @@ public enum YAMLConfig {
         var blend_mode: String?
         var opacity: Double?
         var orientation: String?
+        var caption_mode: String?
+        var caption_text: String?
+        var font_name: String?
+        var font_size: String?
+        var font_bold: Bool?
+        var font_italic: Bool?
+        var font_color: String?
+        var caption_alignment: String?
+        var caption_position: String?
+        var caption_offset_x: Int?
+        var caption_offset_y: Int?
     }
 
     public static func encode(_ config: ProcessingConfig) throws -> String {
@@ -74,19 +72,6 @@ public enum YAMLConfig {
         }
         schema.border_color = config.borderColor.hex
         schema.padding = config.padding
-        switch config.captionMode {
-        case .template(let t): schema.caption_template = t
-        case .custom(let s): schema.caption = s
-        case .none: schema.no_caption = true
-        }
-        schema.font_name = config.fontName
-        switch config.fontSize {
-        case .auto: break
-        case .fixed(let s): schema.font_size = String(s)
-        }
-        if config.fontStyle.contains(.bold) { schema.font_bold = true }
-        if config.fontStyle.contains(.italic) { schema.font_italic = true }
-        schema.font_color = config.fontColor.hex
         switch config.outputFormat {
         case .jpeg(let q):
             schema.output_format = "jpeg"
@@ -98,13 +83,8 @@ public enum YAMLConfig {
         schema.post_process = config.postProcess
         schema.background_color = config.backgroundColor.hex
         if config.outerPadding != 0 { schema.outer_padding = config.outerPadding }
-        if config.captionPadding != 0 { schema.caption_padding = config.captionPadding }
         if config.noMetadata { schema.no_metadata = config.noMetadata }
         if config.backgroundMode != .color { schema.background_mode = config.backgroundMode.rawValue }
-        if config.captionAlignment != .center { schema.caption_alignment = config.captionAlignment.rawValue }
-        if config.captionPosition != .bottom { schema.caption_position = config.captionPosition.rawValue }
-        if config.captionOffsetX != 0 { schema.caption_offset_x = config.captionOffsetX }
-        if config.captionOffsetY != 0 { schema.caption_offset_y = config.captionOffsetY }
         if let layers = config.layers {
             schema.layers = layers.map { encodeLayers($0) }
         }
@@ -133,38 +113,12 @@ public enum YAMLConfig {
         if let t = schema.border_thickness { config.borderThickness = BorderSize(string: t) }
         if let c = schema.border_color { config.borderColor = (try? CodableColor(hex: c)) ?? config.borderColor }
         if let p = schema.padding { config.padding = p }
-        if schema.no_caption == true {
-            config.captionMode = .none
-        } else if let t = schema.caption_template {
-            config.captionMode = .template(t)
-        } else if let s = schema.caption {
-            config.captionMode = .custom(s)
-        }
-        if let fn = schema.font_name { config.fontName = fn }
-        if let fs = schema.font_size, let i = Int(fs) { config.fontSize = .fixed(i) }
-        var fontStyle: FontStyle = []
-        if schema.font_bold == true { fontStyle.insert(.bold) }
-        if schema.font_italic == true { fontStyle.insert(.italic) }
-        // Backward compat: detect bold/italic from variant font names (e.g. "Courier New Bold")
-        // when no explicit font_bold/font_italic was set in the YAML.
-        if fontStyle.isEmpty, schema.font_bold == nil, schema.font_italic == nil,
-           let font = NSFont(name: config.fontName, size: 12) {
-            let traits = NSFontManager.shared.traits(of: font)
-            if traits.contains(.boldFontMask) { fontStyle.insert(.bold) }
-            if traits.contains(.italicFontMask) { fontStyle.insert(.italic) }
-            if !fontStyle.isEmpty, let family = font.familyName {
-                config.fontName = family
-            }
-        }
-        config.fontStyle = fontStyle
-        if let fc = schema.font_color { config.fontColor = (try? CodableColor(hex: fc)) ?? config.fontColor }
         if let q = schema.jpeg_quality { config.outputFormat = .jpeg(quality: q) }
         if schema.output_format == "png" { config.outputFormat = .png }
         if let m = schema.instagram_max_size { config.instagramMaxSize = m }
         config.postProcess = schema.post_process
         if let bg = schema.background_color { config.backgroundColor = (try? CodableColor(hex: bg)) ?? config.backgroundColor }
         if let op = schema.outer_padding { config.outerPadding = op }
-        if let cp = schema.caption_padding { config.captionPadding = cp }
         if let nm = schema.no_metadata { config.noMetadata = nm }
         if let bm = schema.background_mode, let mode = BackgroundMode(rawValue: bm) {
             config.backgroundMode = mode
@@ -172,14 +126,6 @@ public enum YAMLConfig {
         if let yamlLayers = schema.layers {
             config.layers = yamlLayers.compactMap { decodeLayers($0) }
         }
-        if let ca = schema.caption_alignment, let a = CaptionAlignment(rawValue: ca) {
-            config.captionAlignment = a
-        }
-        if let cp = schema.caption_position, let p = CaptionPosition(rawValue: cp) {
-            config.captionPosition = p
-        }
-        if let ox = schema.caption_offset_x { config.captionOffsetX = ox }
-        if let oy = schema.caption_offset_y { config.captionOffsetY = oy }
 
         return config
     }
@@ -259,6 +205,32 @@ public enum YAMLConfig {
             var schema = YAMLLayerSchema(type: "orientation")
             schema.orientation = p.target.rawValue
             return schema
+
+        case .caption(let p):
+            var schema = YAMLLayerSchema(type: "caption")
+            switch p.mode {
+            case .template(let t):
+                schema.caption_mode = "template"
+                schema.caption_text = t
+            case .custom(let s):
+                schema.caption_mode = "custom"
+                schema.caption_text = s
+            case .none:
+                schema.caption_mode = "none"
+            }
+            schema.font_name = p.fontName
+            switch p.fontSize {
+            case .auto: schema.font_size = "auto"
+            case .fixed(let s): schema.font_size = String(s)
+            }
+            if p.fontStyle.contains(.bold) { schema.font_bold = true }
+            if p.fontStyle.contains(.italic) { schema.font_italic = true }
+            schema.font_color = p.fontColor.hex
+            schema.caption_alignment = p.alignment.rawValue
+            schema.caption_position = p.position.rawValue
+            if p.offsetX != 0 { schema.caption_offset_x = p.offsetX }
+            if p.offsetY != 0 { schema.caption_offset_y = p.offsetY }
+            return schema
         }
     }
 
@@ -330,6 +302,34 @@ public enum YAMLConfig {
                 target = .landscape
             }
             return .orientation(OrientationLayerParams(target: target))
+
+        case "caption":
+            let mode: CaptionMode
+            switch schema.caption_mode {
+            case "custom": mode = .custom(schema.caption_text ?? "")
+            case "none": mode = .none
+            default: mode = .template(schema.caption_text ?? " - {{mon}} '{{year2}} -")
+            }
+            var fontStyle: FontStyle = []
+            if schema.font_bold == true { fontStyle.insert(.bold) }
+            if schema.font_italic == true { fontStyle.insert(.italic) }
+            let fontSize: FontSize
+            if let fs = schema.font_size, let i = Int(fs) {
+                fontSize = .fixed(i)
+            } else {
+                fontSize = .auto
+            }
+            return .caption(CaptionLayerParams(
+                mode: mode,
+                fontName: schema.font_name ?? "Courier New",
+                fontSize: fontSize,
+                fontStyle: fontStyle,
+                fontColor: (schema.font_color.flatMap { try? CodableColor(hex: $0) }) ?? (try! CodableColor(hex: "#000000")),
+                alignment: schema.caption_alignment.flatMap { CaptionAlignment(rawValue: $0) } ?? .center,
+                position: schema.caption_position.flatMap { CaptionPosition(rawValue: $0) } ?? .bottom,
+                offsetX: schema.caption_offset_x ?? 0,
+                offsetY: schema.caption_offset_y ?? 0
+            ))
 
         default:
             return nil
