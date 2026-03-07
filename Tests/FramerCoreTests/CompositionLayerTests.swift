@@ -159,74 +159,18 @@ final class CompositionLayerTests: XCTestCase {
         XCTAssertEqual(fill, decoded)
     }
 
-    // MARK: - fromLegacyConfig
+    // MARK: - Caption Layer
 
-    func test_fromLegacyConfig_solid() {
-        var config = ProcessingConfig.default
-        config.borderStyle = .solid
-        config.borderThickness = .pixels(10)
-        config.padding = 50
-        let layers = CompositionLayer.fromLegacyConfig(config)
-
-        XCTAssertEqual(layers.count, 2)
-        if case .border(let p) = layers[0] {
-            XCTAssertEqual(p.thickness, .pixels(10))
-        } else {
-            XCTFail("First layer should be border")
-        }
-        if case .padding(let p) = layers[1] {
-            XCTAssertEqual(p.thickness, 50)
-        } else {
-            XCTFail("Second layer should be padding")
-        }
-    }
-
-    func test_fromLegacyConfig_instagram() {
-        var config = ProcessingConfig.default
-        config.borderStyle = .instagram
-        config.instagramMaxSize = 800
-        let layers = CompositionLayer.fromLegacyConfig(config)
-
-        XCTAssertEqual(layers.count, 4)
-        if case .resize(let p) = layers[0] {
-            XCTAssertEqual(p.maxWidth, 800)
-            XCTAssertEqual(p.maxHeight, 800)
-        } else {
-            XCTFail("First layer should be resize")
-        }
-        if case .padding = layers[1] {} else {
-            XCTFail("Second layer should be padding")
-        }
-        if case .border = layers[2] {} else {
-            XCTFail("Third layer should be border")
-        }
-        if case .canvas(let p) = layers[3] {
-            XCTAssertEqual(p.width, 1080)
-            XCTAssertEqual(p.height, 1350)
-        } else {
-            XCTFail("Fourth layer should be canvas")
-        }
-    }
-
-    func test_fromLegacyConfig_print() {
-        var config = ProcessingConfig.default
-        let format = PrintFormat(widthMM: 148, heightMM: 100, dpi: 300)
-        config.borderStyle = .print(format)
-        let layers = CompositionLayer.fromLegacyConfig(config)
-
-        XCTAssertEqual(layers.count, 3)
-        if case .resize = layers[0] {} else {
-            XCTFail("First layer should be resize")
-        }
-        if case .border = layers[1] {} else {
-            XCTFail("Second layer should be border")
-        }
-        if case .canvas(let p) = layers[2] {
-            XCTAssertEqual(p.width, format.widthPixels)
-            XCTAssertEqual(p.height, format.heightPixels)
-        } else {
-            XCTFail("Third layer should be canvas")
-        }
+    func test_captionLayer_roundtripsJSON() throws {
+        let layer = CompositionLayer.caption(CaptionLayerParams(
+            mode: .template("{{camera}} - {{mon}} '{{year2}}"),
+            fontName: "Courier New",
+            fontSize: .fixed(24),
+            fontColor: try CodableColor(hex: "#FF0000")
+        ))
+        let data = try JSONEncoder().encode(layer)
+        let decoded = try JSONDecoder().decode(CompositionLayer.self, from: data)
+        XCTAssertEqual(layer, decoded)
     }
 
     // MARK: - applyLayers
@@ -236,7 +180,7 @@ final class CompositionLayerTests: XCTestCase {
         let layers: [CompositionLayer] = [
             .border(BorderLayerParams(thickness: .pixels(10), color: try CodableColor(hex: "#FFFFFF")))
         ]
-        let result = try BorderRenderer.applyLayers(layers, to: image, sourceImage: image)
+        let result = try BorderRenderer.applyLayers(layers, to: image, sourceImage: image, exif: ExifData())
         XCTAssertEqual(result.image.width, 120) // 100 + 2*10
         XCTAssertEqual(result.image.height, 120)
     }
@@ -247,7 +191,7 @@ final class CompositionLayerTests: XCTestCase {
             .border(BorderLayerParams(thickness: .pixels(10), color: try CodableColor(hex: "#FF0000"))),
             .padding(PaddingLayerParams(thickness: 20, fill: .color(try CodableColor(hex: "#FFFFFF"))))
         ]
-        let result = try BorderRenderer.applyLayers(layers, to: image, sourceImage: image)
+        let result = try BorderRenderer.applyLayers(layers, to: image, sourceImage: image, exif: ExifData())
         // 100 + 2*10 (border) + 2*20 (padding) = 160
         XCTAssertEqual(result.image.width, 160)
         XCTAssertEqual(result.image.height, 160)
@@ -258,7 +202,7 @@ final class CompositionLayerTests: XCTestCase {
         let layers: [CompositionLayer] = [
             .canvas(CanvasLayerParams(width: 400, height: 300, fill: .color(try CodableColor(hex: "#FFFFFF"))))
         ]
-        let result = try BorderRenderer.applyLayers(layers, to: image, sourceImage: image)
+        let result = try BorderRenderer.applyLayers(layers, to: image, sourceImage: image, exif: ExifData())
         XCTAssertEqual(result.image.width, 400)
         XCTAssertEqual(result.image.height, 300)
         XCTAssertNotNil(result.imageOrigin)
@@ -269,7 +213,7 @@ final class CompositionLayerTests: XCTestCase {
         let layers: [CompositionLayer] = [
             .resize(ResizeLayerParams(maxWidth: 500, maxHeight: 500))
         ]
-        let result = try BorderRenderer.applyLayers(layers, to: image, sourceImage: image)
+        let result = try BorderRenderer.applyLayers(layers, to: image, sourceImage: image, exif: ExifData())
         XCTAssertLessThanOrEqual(result.image.width, 500)
         XCTAssertLessThanOrEqual(result.image.height, 500)
         // Check aspect ratio preserved
@@ -286,7 +230,7 @@ final class CompositionLayerTests: XCTestCase {
             .border(BorderLayerParams(thickness: .pixels(5), color: try CodableColor(hex: "#000000"))),
             .canvas(CanvasLayerParams(width: 1080, height: 1350, fill: .color(try CodableColor(hex: "#FFFFFF"))))
         ]
-        let result = try BorderRenderer.applyLayers(layers, to: image, sourceImage: image)
+        let result = try BorderRenderer.applyLayers(layers, to: image, sourceImage: image, exif: ExifData())
         XCTAssertEqual(result.image.width, 1080)
         XCTAssertEqual(result.image.height, 1350)
         XCTAssertNotNil(result.imageOrigin)
@@ -301,7 +245,7 @@ final class CompositionLayerTests: XCTestCase {
         let layers: [CompositionLayer] = [
             .border(BorderLayerParams(thickness: .pixels(10), color: try CodableColor(hex: "#FFFFFF")))
         ]
-        let bordered = try BorderRenderer.applyLayers(layers, to: photo, sourceImage: photo)
+        let bordered = try BorderRenderer.applyLayers(layers, to: photo, sourceImage: photo, exif: ExifData())
         // 200 + 20 = 220, 150 + 20 = 170
         XCTAssertEqual(bordered.image.width, 220)
         XCTAssertEqual(bordered.image.height, 170)
@@ -344,9 +288,8 @@ final class CompositionLayerTests: XCTestCase {
 
     func test_captionRenderer_emptyText_returnsOriginal() throws {
         let image = makeTestImage(width: 200, height: 150)
-        var config = ProcessingConfig.default
-        config.captionMode = .custom("")
-        let result = try CaptionRenderer.renderCaption(on: image, config: config, exif: ExifData())
+        let params = CaptionLayerParams(mode: .custom(""))
+        let result = try CaptionRenderer.renderCaption(on: image, params: params, exif: ExifData())
         // Empty caption should return the original image unchanged
         XCTAssertEqual(result.width, image.width)
         XCTAssertEqual(result.height, image.height)
@@ -354,9 +297,8 @@ final class CompositionLayerTests: XCTestCase {
 
     func test_captionRenderer_whitespaceOnly_returnsOriginal() throws {
         let image = makeTestImage(width: 200, height: 150)
-        var config = ProcessingConfig.default
-        config.captionMode = .custom("   ")
-        let result = try CaptionRenderer.renderCaption(on: image, config: config, exif: ExifData())
+        let params = CaptionLayerParams(mode: .custom("   "))
+        let result = try CaptionRenderer.renderCaption(on: image, params: params, exif: ExifData())
         XCTAssertEqual(result.width, image.width)
         XCTAssertEqual(result.height, image.height)
     }
@@ -369,7 +311,7 @@ final class CompositionLayerTests: XCTestCase {
             .border(BorderLayerParams(thickness: .pixels(10), color: try CodableColor(hex: "#FF0000"))),
             .padding(PaddingLayerParams(thickness: 20, fill: .color(try CodableColor(hex: "#FFFFFF"))))
         ]
-        let result = try BorderRenderer.applyLayers(layers, to: image, sourceImage: image)
+        let result = try BorderRenderer.applyLayers(layers, to: image, sourceImage: image, exif: ExifData())
         // 100 + 2*10 (border) + 2*20 (padding) = 160
         XCTAssertEqual(result.image.width, 160)
         XCTAssertEqual(result.image.height, 160)
@@ -382,7 +324,7 @@ final class CompositionLayerTests: XCTestCase {
             .padding(PaddingLayerParams(thickness: 10, fill: .color(try CodableColor(hex: "#00FF00")))),
             .border(BorderLayerParams(thickness: .pixels(3), color: try CodableColor(hex: "#0000FF")))
         ]
-        let result = try BorderRenderer.applyLayers(layers, to: image, sourceImage: image)
+        let result = try BorderRenderer.applyLayers(layers, to: image, sourceImage: image, exif: ExifData())
         // 100 + 2*(5+10+3) = 136
         XCTAssertEqual(result.image.width, 136)
         XCTAssertEqual(result.image.height, 136)
@@ -414,7 +356,7 @@ final class CompositionLayerTests: XCTestCase {
             .border(BorderLayerParams(thickness: .pixels(0), color: try CodableColor(hex: "#FFFFFF")))
         ]
         // We test indirectly: multiply should not make any pixel brighter than base
-        let result = try BorderRenderer.applyLayers(layers, to: whiteImage, sourceImage: whiteImage)
+        let result = try BorderRenderer.applyLayers(layers, to: whiteImage, sourceImage: whiteImage, exif: ExifData())
         XCTAssertEqual(result.image.width, 50)
     }
 
@@ -432,7 +374,7 @@ final class CompositionLayerTests: XCTestCase {
         let layers: [CompositionLayer] = [
             .orientation(OrientationLayerParams(target: .landscape))
         ]
-        let result = try BorderRenderer.applyLayers(layers, to: image, sourceImage: image)
+        let result = try BorderRenderer.applyLayers(layers, to: image, sourceImage: image, exif: ExifData())
         XCTAssertEqual(result.image.width, 200)
         XCTAssertEqual(result.image.height, 100)
     }
@@ -442,7 +384,7 @@ final class CompositionLayerTests: XCTestCase {
         let layers: [CompositionLayer] = [
             .orientation(OrientationLayerParams(target: .landscape))
         ]
-        let result = try BorderRenderer.applyLayers(layers, to: image, sourceImage: image)
+        let result = try BorderRenderer.applyLayers(layers, to: image, sourceImage: image, exif: ExifData())
         XCTAssertEqual(result.image.width, 200)
         XCTAssertEqual(result.image.height, 100)
     }
@@ -452,7 +394,7 @@ final class CompositionLayerTests: XCTestCase {
         let layers: [CompositionLayer] = [
             .orientation(OrientationLayerParams(target: .portrait))
         ]
-        let result = try BorderRenderer.applyLayers(layers, to: image, sourceImage: image)
+        let result = try BorderRenderer.applyLayers(layers, to: image, sourceImage: image, exif: ExifData())
         XCTAssertEqual(result.image.width, 100)
         XCTAssertEqual(result.image.height, 200)
     }
@@ -463,7 +405,7 @@ final class CompositionLayerTests: XCTestCase {
         let layers: [CompositionLayer] = [
             .border(BorderLayerParams(thickness: .pixels(15), color: try CodableColor(hex: "#AABBCC")))
         ]
-        let result = try BorderRenderer.applyLayers(layers, to: image, sourceImage: image)
+        let result = try BorderRenderer.applyLayers(layers, to: image, sourceImage: image, exif: ExifData())
         XCTAssertEqual(result.image.width, 130) // 100 + 2*15
         XCTAssertEqual(result.image.height, 130)
     }

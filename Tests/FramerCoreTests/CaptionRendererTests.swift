@@ -14,16 +14,15 @@ final class CaptionRendererTests: XCTestCase {
         return ctx.makeImage()!
     }
 
-    // Solid style: imageOrigin/imageSize are nil (default)
     func test_renderCaption_doesNotChangeImageSize() throws {
         let image = makeTestImage()
-        var config = ProcessingConfig.default
-        config.captionMode = .custom("TEST CAPTION")
-        config.fontName = "Courier New"
-        config.fontSize = .fixed(20)
+        let params = CaptionLayerParams(
+            mode: .custom("TEST CAPTION"),
+            fontName: "Courier New",
+            fontSize: .fixed(20)
+        )
         let result = try CaptionRenderer.renderCaption(
-            on: image, config: config, exif: ExifData(),
-            imageOrigin: nil, imageSize: nil
+            on: image, params: params, exif: ExifData()
         )
         XCTAssertEqual(result.width, image.width)
         XCTAssertEqual(result.height, image.height)
@@ -31,30 +30,11 @@ final class CaptionRendererTests: XCTestCase {
 
     func test_renderCaption_noneMode_returnsOriginal() throws {
         let image = makeTestImage()
-        var config = ProcessingConfig.default
-        config.captionMode = .none
+        let params = CaptionLayerParams(mode: .none)
         let result = try CaptionRenderer.renderCaption(
-            on: image, config: config, exif: ExifData(),
-            imageOrigin: nil, imageSize: nil
+            on: image, params: params, exif: ExifData()
         )
         // Same dimensions
-        XCTAssertEqual(result.width, image.width)
-        XCTAssertEqual(result.height, image.height)
-    }
-
-    // Print style: imageOrigin/imageSize are provided
-    func test_renderCaption_printStyle_doesNotChangeImageSize() throws {
-        let image = makeTestImage(width: 1748, height: 1181)
-        var config = ProcessingConfig.default
-        config.captionMode = .custom("PRINT CAPTION")
-        config.fontName = "Courier New"
-        config.fontSize = .fixed(30)
-        config.captionPadding = 20
-        let result = try CaptionRenderer.renderCaption(
-            on: image, config: config, exif: ExifData(),
-            imageOrigin: CGPoint(x: 100, y: 100),
-            imageSize: CGSize(width: 1548, height: 981)
-        )
         XCTAssertEqual(result.width, image.width)
         XCTAssertEqual(result.height, image.height)
     }

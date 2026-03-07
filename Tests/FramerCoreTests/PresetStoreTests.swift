@@ -52,7 +52,6 @@ final class PresetStoreTests: XCTestCase {
         XCTAssertEqual(config.padding, decoded.padding)
         XCTAssertEqual(config.backgroundColor, decoded.backgroundColor)
         XCTAssertEqual(config.outerPadding, decoded.outerPadding)
-        XCTAssertEqual(config.captionPadding, decoded.captionPadding)
         XCTAssertEqual(config.noMetadata, decoded.noMetadata)
     }
 
@@ -60,14 +59,12 @@ final class PresetStoreTests: XCTestCase {
         let config = ProcessingConfig(
             backgroundColor: try! CodableColor(hex: "#FF0000"),
             outerPadding: 42,
-            captionPadding: 15,
             noMetadata: true
         )
         let yaml = try YAMLConfig.encode(config)
         let decoded = try YAMLConfig.decode(yaml)
         XCTAssertEqual(decoded.backgroundColor.hex, "#FF0000")
         XCTAssertEqual(decoded.outerPadding, 42)
-        XCTAssertEqual(decoded.captionPadding, 15)
         XCTAssertEqual(decoded.noMetadata, true)
     }
 
