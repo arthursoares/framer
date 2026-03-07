@@ -12,9 +12,6 @@ final class AppState {
     var presetStore = PresetStore()
     var exportQueue: [ExportJob] = []
 
-    // Navigation
-    enum Tab { case library, presets, queue }
-    var activeTab: Tab = .library
 
     init() {
         presetStore.initializeDefaults()
@@ -37,7 +34,6 @@ final class AppState {
         var job = ExportJob(items: items, config: currentConfig, outputDirectory: directory)
         job.status = .running
         exportQueue.append(job)
-        activeTab = .queue
 
         let jobId = job.id
         let config = currentConfig
@@ -93,7 +89,18 @@ final class AppState {
         let newItems = allFiles
             .filter { !existing.contains($0) }
             .map { PhotoItem(url: $0) }
+        let wasEmpty = library.isEmpty
         library.append(contentsOf: newItems)
+        // Auto-select first photo when adding to empty library
+        if wasEmpty, let first = newItems.first {
+            selectedItems = [first.id]
+        }
+    }
+
+    func retryJob(_ job: ExportJob) {
+        guard case .failed = job.status else { return }
+        exportQueue.removeAll { $0.id == job.id }
+        exportItems(job.items, to: job.outputDirectory)
     }
 
     /// Sanitized filename suffix from preset name, falling back to "framed".

@@ -23,14 +23,6 @@ struct FramerCommands: Commands {
             .keyboardShortcut("e", modifiers: [.command, .shift])
         }
 
-        CommandMenu("View") {
-            Button("Library") { appState.activeTab = .library }
-                .keyboardShortcut("1", modifiers: .command)
-            Button("Presets") { appState.activeTab = .presets }
-                .keyboardShortcut("2", modifiers: .command)
-            Button("Export Queue") { appState.activeTab = .queue }
-                .keyboardShortcut("3", modifiers: .command)
-        }
     }
 }
 

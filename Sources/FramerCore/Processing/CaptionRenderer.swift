@@ -39,7 +39,13 @@ public enum CaptionRenderer {
         ctx.draw(image, in: CGRect(x: 0, y: 0, width: image.width, height: image.height))
 
         // Resolve font size
-        let borderPx = config.borderThickness.resolved(relativeTo: min(image.width, image.height))
+        let borderPx: Int
+        if let origin = imageOrigin {
+            // Canvas mode: use actual margin between photo and canvas edge
+            borderPx = Int(origin.y)
+        } else {
+            borderPx = config.borderThickness.resolved(relativeTo: min(image.width, image.height))
+        }
         let fontSize: CGFloat
         switch config.fontSize {
         case .fixed(let pts):
