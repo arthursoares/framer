@@ -3,6 +3,10 @@ import FramerCore
 
 struct SettingsPanel: View {
     @Environment(AppState.self) var appState
+    @State private var showingExportSheet = false
+    @State private var pendingExportItems: [PhotoItem] = []
+    @State private var selectedPresetIDs: Set<UUID> = []
+    @State private var includeCurrentSettings = true
 
     var body: some View {
         @Bindable var state = appState
@@ -119,6 +123,111 @@ struct SettingsPanel: View {
         .onReceive(NotificationCenter.default.publisher(for: .framerExportAll)) { _ in
             promptAndExport(appState.library)
         }
+        .sheet(isPresented: $showingExportSheet) {
+            exportSheet
+        }
+    }
+
+    // MARK: - Export Sheet
+
+    private var exportSheet: some View {
+        VStack(spacing: 0) {
+            VStack(spacing: 12) {
+                Text("Export \(pendingExportItems.count) photo\(pendingExportItems.count == 1 ? "" : "s")")
+                    .font(.headline)
+
+                // Current settings toggle
+                Toggle(isOn: $includeCurrentSettings) {
+                    HStack(spacing: 6) {
+                        Image(systemName: "slider.horizontal.3")
+                            .foregroundStyle(.secondary)
+                        Text("Current Settings")
+                        if let name = appState.activePresetName {
+                            Text("(\(name))")
+                                .foregroundStyle(.secondary)
+                        }
+                    }
+                }
+
+                if !appState.presets.isEmpty {
+                    Divider()
+
+                    VStack(alignment: .leading, spacing: 4) {
+                        Text("Also export with presets:")
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+
+                        ForEach(appState.presets) { preset in
+                            Toggle(isOn: presetToggleBinding(preset.id)) {
+                                Text(preset.name)
+                            }
+                        }
+                    }
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                }
+            }
+            .padding(20)
+
+            Divider()
+
+            HStack {
+                Button("Cancel") {
+                    showingExportSheet = false
+                    selectedPresetIDs.removeAll()
+                }
+                .keyboardShortcut(.cancelAction)
+
+                Spacer()
+
+                let totalExports = (includeCurrentSettings ? 1 : 0) + selectedPresetIDs.count
+                Button("Export\(totalExports > 1 ? " (\(totalExports) presets)" : "")") {
+                    performExport()
+                }
+                .keyboardShortcut(.defaultAction)
+                .disabled(totalExports == 0)
+            }
+            .padding(20)
+        }
+        .frame(width: 340)
+    }
+
+    private func presetToggleBinding(_ id: UUID) -> Binding<Bool> {
+        Binding(
+            get: { selectedPresetIDs.contains(id) },
+            set: { enabled in
+                if enabled { selectedPresetIDs.insert(id) }
+                else { selectedPresetIDs.remove(id) }
+            }
+        )
+    }
+
+    private func performExport() {
+        showingExportSheet = false
+        let items = pendingExportItems
+        guard !items.isEmpty else { return }
+
+        let panel = NSOpenPanel()
+        panel.canChooseFiles = false
+        panel.canChooseDirectories = true
+        panel.canCreateDirectories = true
+        panel.message = "Choose output folder"
+        guard panel.runModal() == .OK, let dir = panel.url else { return }
+
+        // Export with current settings
+        if includeCurrentSettings {
+            appState.exportItems(items, to: dir)
+        }
+
+        // Export with selected presets
+        let presetConfigs = appState.presets
+            .filter { selectedPresetIDs.contains($0.id) }
+            .map { (name: $0.name, config: $0.config) }
+
+        if !presetConfigs.isEmpty {
+            appState.exportItems(items, to: dir, withPresets: presetConfigs)
+        }
+
+        selectedPresetIDs.removeAll()
     }
 
     // MARK: - Layer Binding
@@ -173,13 +282,8 @@ struct SettingsPanel: View {
 
     private func promptAndExport(_ items: [PhotoItem]) {
         guard !items.isEmpty else { return }
-        let panel = NSOpenPanel()
-        panel.canChooseFiles = false
-        panel.canChooseDirectories = true
-        panel.canCreateDirectories = true
-        panel.message = "Choose output folder"
-        guard panel.runModal() == .OK, let dir = panel.url else { return }
-        appState.exportItems(items, to: dir)
+        pendingExportItems = items
+        showingExportSheet = true
     }
 }
 

@@ -296,9 +296,16 @@ struct SidebarQueueSection: View {
         HStack(spacing: 6) {
             statusIcon(job.status)
             VStack(alignment: .leading, spacing: 2) {
-                Text("\(job.items.count) photo\(job.items.count == 1 ? "" : "s")")
-                    .font(.caption)
-                    .foregroundStyle(.primary)
+                HStack(spacing: 4) {
+                    Text("\(job.items.count) photo\(job.items.count == 1 ? "" : "s")")
+                        .font(.caption)
+                        .foregroundStyle(.primary)
+                    if let label = job.label {
+                        Text(label)
+                            .font(.caption2)
+                            .foregroundStyle(.tertiary)
+                    }
+                }
                     .lineLimit(1)
                 if job.status == .running {
                     ProgressView(value: job.progress)

@@ -104,12 +104,13 @@ final class PresetStoreTests: XCTestCase {
         store.initializeDefaults()
 
         let all = try store.list()
-        XCTAssertEqual(all.count, 4)
+        XCTAssertEqual(all.count, 5)
         let names = Set(all.map(\.name))
-        XCTAssertTrue(names.contains("vintage"))
+        XCTAssertTrue(names.contains("film"))
         XCTAssertTrue(names.contains("instagram"))
         XCTAssertTrue(names.contains("minimal"))
-        XCTAssertTrue(names.contains("print10x15"))
+        XCTAssertTrue(names.contains("print 10x15"))
+        XCTAssertTrue(names.contains("dark gradient"))
     }
 
     func test_listPresets_mixedJSONAndYAML() throws {
@@ -120,23 +121,24 @@ final class PresetStoreTests: XCTestCase {
         try store.save(jsonPreset)
 
         let all = try store.list()
-        XCTAssertEqual(all.count, 5)
+        XCTAssertEqual(all.count, 6)
     }
 
-    func test_initializeDefaults_creates4Files() throws {
+    func test_initializeDefaults_creates5Files() throws {
         let store = PresetStore(directory: tempDir)
         store.initializeDefaults()
 
         let files = try FileManager.default.contentsOfDirectory(at: tempDir,
                                                                  includingPropertiesForKeys: nil)
         let yamlFiles = files.filter { $0.pathExtension == "yaml" }
-        XCTAssertEqual(yamlFiles.count, 4)
+        XCTAssertEqual(yamlFiles.count, 5)
 
         let names = Set(yamlFiles.map { $0.deletingPathExtension().lastPathComponent })
-        XCTAssertTrue(names.contains("vintage"))
+        XCTAssertTrue(names.contains("film"))
         XCTAssertTrue(names.contains("instagram"))
         XCTAssertTrue(names.contains("minimal"))
-        XCTAssertTrue(names.contains("print10x15"))
+        XCTAssertTrue(names.contains("print 10x15"))
+        XCTAssertTrue(names.contains("dark gradient"))
     }
 
     func test_initializeDefaults_doesNotOverwrite() throws {

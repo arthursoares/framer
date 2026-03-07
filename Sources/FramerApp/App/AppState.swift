@@ -31,13 +31,22 @@ final class AppState {
     // MARK: - Export
 
     func exportItems(_ items: [PhotoItem], to directory: URL) {
-        var job = ExportJob(items: items, config: currentConfig, outputDirectory: directory)
+        exportItems(items, to: directory, config: currentConfig, suffix: Self.exportSuffix(presetName: activePresetName))
+    }
+
+    func exportItems(_ items: [PhotoItem], to directory: URL, withPresets presetConfigs: [(name: String, config: ProcessingConfig)]) {
+        for (name, config) in presetConfigs {
+            let suffix = Self.exportSuffix(presetName: name)
+            exportItems(items, to: directory, config: config, suffix: suffix)
+        }
+    }
+
+    private func exportItems(_ items: [PhotoItem], to directory: URL, config: ProcessingConfig, suffix: String) {
+        var job = ExportJob(items: items, config: config, outputDirectory: directory, label: suffix)
         job.status = .running
         exportQueue.append(job)
 
         let jobId = job.id
-        let config = currentConfig
-        let suffix = Self.exportSuffix(presetName: activePresetName)
 
         Task {
             let processor = FrameProcessor()
@@ -129,6 +138,7 @@ struct ExportJob: Identifiable {
     let items: [PhotoItem]
     let config: ProcessingConfig
     let outputDirectory: URL
+    var label: String?
     var progress: Double = 0
     var completedCount: Int = 0
     var status: JobStatus = .queued
