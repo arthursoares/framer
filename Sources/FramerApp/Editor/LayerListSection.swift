@@ -958,6 +958,13 @@ struct LayerFillPicker: View {
     var fill: LayerFill
     var onChange: (LayerFill) -> Void
 
+    private static let signedFormatter: NumberFormatter = {
+        let f = NumberFormatter()
+        f.numberStyle = .decimal
+        f.maximumFractionDigits = 0
+        return f
+    }()
+
     var body: some View {
         Picker("Fill", selection: fillModeBinding) {
             Text("Solid Color").tag(0)
@@ -981,7 +988,7 @@ struct LayerFillPicker: View {
             LabeledContent("Saturation") {
                 HStack {
                     Slider(value: saturationBinding(params), in: -50...50)
-                    TextField("", value: saturationBinding(params), format: .number)
+                    TextField("", value: saturationBinding(params), formatter: Self.signedFormatter)
                         .textFieldStyle(.roundedBorder)
                         .frame(width: 50)
                         .multilineTextAlignment(.trailing)
@@ -991,7 +998,7 @@ struct LayerFillPicker: View {
             LabeledContent("Lightness") {
                 HStack {
                     Slider(value: lightnessBinding(params), in: -50...50)
-                    TextField("", value: lightnessBinding(params), format: .number)
+                    TextField("", value: lightnessBinding(params), formatter: Self.signedFormatter)
                         .textFieldStyle(.roundedBorder)
                         .frame(width: 50)
                         .multilineTextAlignment(.trailing)
@@ -1067,6 +1074,14 @@ struct CaptionLayerControls: View {
         case custom = "Custom"
     }
 
+    private static let signedIntFormatter: NumberFormatter = {
+        let f = NumberFormatter()
+        f.numberStyle = .decimal
+        f.maximumFractionDigits = 0
+        f.allowsFloats = false
+        return f
+    }()
+
     private static let cachedMonospacedFonts: [String] = {
         NSFontManager.shared.availableFontFamilies
             .filter { family in
@@ -1124,7 +1139,7 @@ struct CaptionLayerControls: View {
             LabeledContent("Offset X") {
                 HStack {
                     Slider(value: offsetXBinding, in: -200...200)
-                    TextField("", value: offsetXBinding, format: .number)
+                    TextField("", value: offsetXBinding, formatter: Self.signedIntFormatter)
                         .textFieldStyle(.roundedBorder)
                         .frame(width: 55)
                         .multilineTextAlignment(.trailing)
@@ -1139,7 +1154,7 @@ struct CaptionLayerControls: View {
             LabeledContent("Offset Y") {
                 HStack {
                     Slider(value: offsetYBinding, in: -200...200)
-                    TextField("", value: offsetYBinding, format: .number)
+                    TextField("", value: offsetYBinding, formatter: Self.signedIntFormatter)
                         .textFieldStyle(.roundedBorder)
                         .frame(width: 55)
                         .multilineTextAlignment(.trailing)
