@@ -48,6 +48,8 @@ final class PreviewViewModel {
                 guard !Task.isCancelled else { return }
                 originalImage = original
                 previewImage = preview
+            } catch is CancellationError {
+                return
             } catch {
                 self.error = error.localizedDescription
             }
