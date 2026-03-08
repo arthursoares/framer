@@ -2,7 +2,6 @@
 import Foundation
 import CoreGraphics
 import CoreText
-import AppKit
 
 public enum CaptionRenderer {
     public static func renderCaption(
@@ -45,26 +44,36 @@ public enum CaptionRenderer {
             fontSize = max(CGFloat(min(image.width, image.height)) * 0.02, 10)
         }
 
-        // Build attributed string
-        var font = NSFont(name: params.fontName, size: fontSize)
-            ?? NSFont.monospacedSystemFont(ofSize: fontSize, weight: .regular)
+        // Build attributed string using CoreText APIs (safe on background actors)
+        var font: CTFont = CTFontCreateWithName(params.fontName as CFString, fontSize, nil)
 
-        // Apply bold/italic traits via NSFontManager
+        // Verify the font resolved to the requested family; fall back to system monospace if not
+        let resolvedName = CTFontCopyPostScriptName(font) as String
+        if resolvedName.lowercased() == "lastresort" || resolvedName.lowercased().hasPrefix(".") {
+            font = CTFontCreateUIFontForLanguage(.userFixedPitch, fontSize, nil)
+                ?? CTFontCreateWithName("Courier New" as CFString, fontSize, nil)
+        }
+
+        // Apply bold/italic traits — CTFontCreateCopyWithSymbolicTraits returns nil when the
+        // face is not available, so fall back to the original font in that case.
         if params.fontStyle.contains(.bold) {
-            font = NSFontManager.shared.convert(font, toHaveTrait: .boldFontMask)
+            font = CTFontCreateCopyWithSymbolicTraits(font, 0, nil, .boldTrait, .boldTrait) ?? font
         }
         if params.fontStyle.contains(.italic) {
-            font = NSFontManager.shared.convert(font, toHaveTrait: .italicFontMask)
+            font = CTFontCreateCopyWithSymbolicTraits(font, 0, nil, .italicTrait, .italicTrait) ?? font
         }
 
+        // NSAttributedString is toll-free bridged to CFAttributedString, making it
+        // compatible with CTLineCreateWithAttributedString. NSAttributedString itself
+        // is in Foundation, not AppKit — safe to use on any thread.
         let attrs: [NSAttributedString.Key: Any] = [
-            .font: font,
-            .foregroundColor: NSColor(cgColor: params.fontColor.cgColor) ?? .black,
+            NSAttributedString.Key(kCTFontAttributeName as String): font,
+            NSAttributedString.Key(kCTForegroundColorAttributeName as String): params.fontColor.cgColor,
         ]
         let attrStr = NSAttributedString(string: text, attributes: attrs)
 
         // Measure text
-        let line = CTLineCreateWithAttributedString(attrStr)
+        let line = CTLineCreateWithAttributedString(attrStr as CFAttributedString)
         var ascent: CGFloat = 0, descent: CGFloat = 0, leading: CGFloat = 0
         CTLineGetTypographicBounds(line, &ascent, &descent, &leading)
 

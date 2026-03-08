@@ -114,9 +114,12 @@ struct SettingsPanel: View {
         .onAppear {
             ensureLayersInitialized()
         }
-        .onChange(of: appState.currentConfig) { _, _ in
-            // Re-derive layers when a preset is applied that has no explicit layers
-            ensureLayersInitialized()
+        .onChange(of: appState.currentConfig.layers == nil) { _, layersAreNil in
+            // Only initialize when a newly-applied preset carries no explicit layers.
+            // Avoids calling defaultLayers() on every slider or color change.
+            if layersAreNil {
+                ensureLayersInitialized()
+            }
         }
         .onReceive(NotificationCenter.default.publisher(for: .framerExportSelected)) { _ in
             promptAndExport(appState.library.filter { appState.selectedItems.contains($0.id) })

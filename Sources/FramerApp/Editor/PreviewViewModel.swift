@@ -35,12 +35,20 @@ final class PreviewViewModel {
                 let exif = try? EXIFReader.read(from: item.url)
                 exifData = exif
 
-                // Load original at preview resolution for before/after comparison
-                originalImage = Self.loadOriginal(from: item.url, maxDimension: 1200)
+                // Run original decode and preview render concurrently.
+                // loadOriginal is CPU-bound and synchronous, so push it onto a
+                // detached task to avoid blocking the MainActor executor.
+                let itemURL = item.url
+                let itemRotation = item.rotation
+                async let originalTask: NSImage? = Task.detached {
+                    Self.loadOriginal(from: itemURL, maxDimension: 1200)
+                }.value
+                async let previewTask = processor.previewImage(for: itemURL, config: config, rotation: itemRotation)
 
-                let image = try await processor.previewImage(for: item.url, config: config, rotation: item.rotation)
+                let (original, preview) = try await (originalTask, previewTask)
                 guard !Task.isCancelled else { return }
-                previewImage = image
+                originalImage = original
+                previewImage = preview
             } catch {
                 self.error = error.localizedDescription
             }

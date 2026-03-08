@@ -45,26 +45,63 @@ final class AppState {
         var job = ExportJob(items: items, config: config, outputDirectory: directory, label: suffix)
         job.status = .running
         exportQueue.append(job)
-
         let jobId = job.id
 
         Task {
-            let processor = FrameProcessor()
+            let maxConcurrency = ProcessInfo.processInfo.processorCount
+            var completed = 0
             var failedCount = 0
-            for (i, item) in items.enumerated() {
-                do {
-                    let outURL = Self.outputURL(for: item, config: config, directory: directory, suffix: suffix)
-                    try await processor.process(input: item.url, output: outURL, config: config, rotation: item.rotation)
-                } catch {
-                    failedCount += 1
+
+            await withTaskGroup(of: Bool.self) { group in
+                var index = 0
+
+                // Seed initial batch up to max concurrency
+                for _ in 0..<min(maxConcurrency, items.count) {
+                    let item = items[index]
+                    let idx = index
+                    index += 1
+                    _ = idx  // suppress unused warning; index tracks insertion order, not used inside closure
+                    group.addTask {
+                        let processor = FrameProcessor()
+                        let outURL = Self.outputURL(for: item, config: config, directory: directory, suffix: suffix)
+                        do {
+                            try await processor.process(input: item.url, output: outURL, config: config, rotation: item.rotation)
+                            return true
+                        } catch {
+                            return false
+                        }
+                    }
                 }
-                if let idx = exportQueue.firstIndex(where: { $0.id == jobId }) {
-                    exportQueue[idx].completedCount = i + 1
-                    exportQueue[idx].progress = Double(i + 1) / Double(items.count)
+
+                // Drain results and feed remaining items one-for-one
+                for await success in group {
+                    completed += 1
+                    if !success { failedCount += 1 }
+
+                    if let qIdx = exportQueue.firstIndex(where: { $0.id == jobId }) {
+                        exportQueue[qIdx].completedCount = completed
+                        exportQueue[qIdx].progress = Double(completed) / Double(items.count)
+                    }
+
+                    if index < items.count {
+                        let item = items[index]
+                        index += 1
+                        group.addTask {
+                            let processor = FrameProcessor()
+                            let outURL = Self.outputURL(for: item, config: config, directory: directory, suffix: suffix)
+                            do {
+                                try await processor.process(input: item.url, output: outURL, config: config, rotation: item.rotation)
+                                return true
+                            } catch {
+                                return false
+                            }
+                        }
+                    }
                 }
             }
-            if let idx = exportQueue.firstIndex(where: { $0.id == jobId }) {
-                exportQueue[idx].status = failedCount > 0
+
+            if let qIdx = exportQueue.firstIndex(where: { $0.id == jobId }) {
+                exportQueue[qIdx].status = failedCount > 0
                     ? .failed("\(failedCount) of \(items.count) failed")
                     : .done
             }
