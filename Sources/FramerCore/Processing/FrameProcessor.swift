@@ -13,8 +13,10 @@ public actor FrameProcessor {
     public func previewImage(for url: URL, config: ProcessingConfig, rotation: Int = 0) throws -> sending NSImage {
         let fullImage = try loadImage(from: url)
         let rotated = applyRotation(fullImage, degrees: rotation)
+        try Task.checkCancellation()
         let previewMax = previewMaxDimension(for: config, imageWidth: rotated.width, imageHeight: rotated.height)
         let cgImage = downscale(rotated, maxDimension: previewMax)
+        try Task.checkCancellation()
         let exif = (try? EXIFReader.read(from: url)) ?? ExifData()
 
         let borderResult: BorderResult

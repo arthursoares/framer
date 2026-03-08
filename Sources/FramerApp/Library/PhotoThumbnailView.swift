@@ -54,37 +54,46 @@ struct AsyncThumbnail: View {
         }
         .task {
             if let cgImage = await Self.loadCGThumbnail(from: url) {
-                image = NSImage(cgImage: cgImage, size: NSSize(width: 80, height: 80))
+                // Use the actual pixel dimensions so NSImage doesn't scale incorrectly at init.
+                image = NSImage(cgImage: cgImage, size: NSSize(width: cgImage.width, height: cgImage.height))
             }
         }
     }
 
-    /// Generates a square center-cropped thumbnail as a CGImage (Sendable) off the main actor.
+    /// Loads a retina-resolution thumbnail via ImageIO, caching the result in a
+    /// process-wide NSCache so repeated scrolls never re-decode from disk.
     private static func loadCGThumbnail(from url: URL) async -> CGImage? {
-        await Task.detached {
-            guard let source = CGImageSourceCreateWithURL(url as CFURL, nil),
-                  let full = CGImageSourceCreateImageAtIndex(source, 0, nil) else {
+        // Fast path: return cached image without hitting the disk.
+        if let cached = Self.thumbnailCache.object(forKey: url as NSURL) {
+            return cached.cgImage(forProposedRect: nil, context: nil, hints: nil)
+        }
+
+        return await Task.detached {
+            guard let source = CGImageSourceCreateWithURL(url as CFURL, nil) else { return nil }
+            let options: [CFString: Any] = [
+                // Ask ImageIO to decode only a small thumbnail, skipping the full image decode.
+                kCGImageSourceCreateThumbnailFromImageAlways: true,
+                // 160 px covers the 80-pt slot at 2x Retina without decoding the full image.
+                kCGImageSourceThumbnailMaxPixelSize: 160,
+                // Apply EXIF rotation so the thumbnail is correctly oriented.
+                kCGImageSourceCreateThumbnailWithTransform: true
+            ]
+            guard let thumbnail = CGImageSourceCreateThumbnailAtIndex(source, 0, options as CFDictionary) else {
                 return nil
             }
-            let w = full.width, h = full.height
-            let side = min(w, h)
-            let cropRect = CGRect(
-                x: (w - side) / 2,
-                y: (h - side) / 2,
-                width: side,
-                height: side
-            )
-            guard let cropped = full.cropping(to: cropRect) else { return nil }
-            // Scale down to 80×80
-            guard let ctx = CGContext(data: nil, width: 80, height: 80,
-                                      bitsPerComponent: 8, bytesPerRow: 0,
-                                      space: CGColorSpaceCreateDeviceRGB(),
-                                      bitmapInfo: CGImageAlphaInfo.premultipliedLast.rawValue) else {
-                return cropped
-            }
-            ctx.interpolationQuality = .high
-            ctx.draw(cropped, in: CGRect(x: 0, y: 0, width: 80, height: 80))
-            return ctx.makeImage()
+
+            // Store as NSImage so the cache can evict under memory pressure.
+            let nsImage = NSImage(cgImage: thumbnail, size: NSSize(width: thumbnail.width, height: thumbnail.height))
+            Self.thumbnailCache.setObject(nsImage, forKey: url as NSURL)
+
+            return thumbnail
         }.value
     }
+
+    /// Process-wide thumbnail cache. Capped at 500 entries (~40 MB at 160px JPEG thumbnails).
+    private static let thumbnailCache: NSCache<NSURL, NSImage> = {
+        let cache = NSCache<NSURL, NSImage>()
+        cache.countLimit = 500
+        return cache
+    }()
 }
