@@ -60,6 +60,9 @@ public enum YAMLConfig {
         var color_levels: Int?
         var dither_fg: String?
         var dither_bg: String?
+        var dither_threshold: Double?
+        var dither_sharpen: Double?
+        var dither_contrast: Double?
     }
 
     public static func encode(_ config: ProcessingConfig) throws -> String {
@@ -246,6 +249,9 @@ public enum YAMLConfig {
             schema.algorithm = p.algorithm.rawValue
             schema.bayer_level = p.bayerLevel
             schema.pixel_scale = p.pixelScale
+            if p.threshold != 0.5 { schema.dither_threshold = p.threshold }
+            if p.sharpen > 0 { schema.dither_sharpen = p.sharpen }
+            if p.contrast > 0 { schema.dither_contrast = p.contrast }
             switch p.colorMode {
             case .bw:
                 schema.color_mode = "bw"
@@ -379,7 +385,10 @@ public enum YAMLConfig {
                 algorithm: algo,
                 colorMode: colorMode,
                 bayerLevel: schema.bayer_level ?? 2,
-                pixelScale: schema.pixel_scale ?? 1
+                pixelScale: schema.pixel_scale ?? 1,
+                threshold: schema.dither_threshold ?? 0.5,
+                sharpen: schema.dither_sharpen ?? 0,
+                contrast: schema.dither_contrast ?? 0
             ))
 
         default:

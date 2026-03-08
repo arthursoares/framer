@@ -6,9 +6,12 @@ import CoreGraphics
 
 /// Applies dithering effects to images using various algorithms and color modes.
 ///
-/// Supports five dithering algorithms (Bayer ordered, Floyd-Steinberg, Atkinson,
-/// Blue Noise threshold, and Artistic Drip) with three color modes (black & white,
-/// two-tone, and quantized color).
+/// Supports nine dithering algorithms (Bayer, Floyd-Steinberg, Atkinson, Blue Noise,
+/// Artistic Drip, Halftone, Stucki, White Noise, Riemersma) with three color modes
+/// (black & white, two-tone, and quantized color).
+///
+/// All error diffusion algorithms use serpentine (boustrophedon) scanning to reduce
+/// directional banding artifacts.
 ///
 /// All luminance calculations use sRGB↔linear gamma conversion per IEC 61966-2-1.
 public enum DitherRenderer {
@@ -16,11 +19,6 @@ public enum DitherRenderer {
     // MARK: - Public API
 
     /// Apply dithering to an image using the specified parameters.
-    ///
-    /// - Parameters:
-    ///   - image: The source CGImage to dither.
-    ///   - params: Dithering parameters (algorithm, color mode, Bayer level, pixel scale).
-    /// - Returns: A new CGImage with dithering applied.
     public static func apply(to image: CGImage, params: DitherLayerParams) throws -> CGImage {
         let width = image.width
         let height = image.height
@@ -28,7 +26,6 @@ public enum DitherRenderer {
             throw FramerError.invalidImage(URL(fileURLWithPath: ""))
         }
 
-        // Rasterize into RGBA8 buffer
         let colorSpace = CGColorSpaceCreateDeviceRGB()
         let bitmapInfo = CGImageAlphaInfo.premultipliedLast.rawValue
 
@@ -74,18 +71,28 @@ public enum DitherRenderer {
         }
         let pixels = data.bindMemory(to: UInt8.self, capacity: workW * workH * 4)
 
+        // Pre-processing: sharpen and contrast
+        if params.sharpen > 0 {
+            applySharpen(pixels: pixels, width: workW, height: workH, amount: params.sharpen)
+        }
+        if params.contrast > 0 {
+            applyContrast(pixels: pixels, count: workW * workH, amount: params.contrast)
+        }
+
         // Apply dithering algorithm
+        let threshold = max(0.1, min(0.9, params.threshold))
         switch params.colorMode {
         case .bw, .twoTone:
             try applyMonochromeDither(
                 pixels: pixels, width: workW, height: workH,
-                algorithm: params.algorithm, bayerLevel: params.bayerLevel
+                algorithm: params.algorithm, bayerLevel: params.bayerLevel,
+                threshold: threshold
             )
         case .color(let levels):
             try applyColorDither(
                 pixels: pixels, width: workW, height: workH,
                 algorithm: params.algorithm, bayerLevel: params.bayerLevel,
-                levels: max(2, min(8, levels))
+                levels: max(2, min(8, levels)), threshold: threshold
             )
         }
 
@@ -116,6 +123,69 @@ public enum DitherRenderer {
         }
 
         return dithered
+    }
+
+    // MARK: - Pre-Processing
+
+    /// Apply unsharp mask sharpening to enhance edges before dithering.
+    private static func applySharpen(
+        pixels: UnsafeMutablePointer<UInt8>,
+        width: Int, height: Int,
+        amount: Double
+    ) {
+        let count = width * height
+        // Copy original pixels for the blur reference
+        let original = UnsafeMutablePointer<UInt8>.allocate(capacity: count * 4)
+        original.update(from: pixels, count: count * 4)
+        defer { original.deallocate() }
+
+        // Simple 3x3 box blur as the "unsharp" reference
+        for y in 0..<height {
+            for x in 0..<width {
+                let idx = (y * width + x) * 4
+                for c in 0..<3 {
+                    var sum = 0.0
+                    var samples = 0.0
+                    for dy in -1...1 {
+                        for dx in -1...1 {
+                            let ny = y + dy
+                            let nx = x + dx
+                            if ny >= 0 && ny < height && nx >= 0 && nx < width {
+                                sum += Double(original[(ny * width + nx) * 4 + c])
+                                samples += 1
+                            }
+                        }
+                    }
+                    let blurred = sum / samples
+                    let orig = Double(original[idx + c])
+                    // Unsharp mask: original + amount * (original - blurred)
+                    let sharpened = orig + amount * 2.0 * (orig - blurred)
+                    pixels[idx + c] = UInt8(max(0, min(255, round(sharpened))))
+                }
+            }
+        }
+    }
+
+    /// Apply S-curve contrast enhancement before dithering.
+    private static func applyContrast(
+        pixels: UnsafeMutablePointer<UInt8>,
+        count: Int,
+        amount: Double
+    ) {
+        // S-curve using sigmoid: steeper curve = more contrast
+        // amount 0 = no change, 1 = maximum contrast
+        let strength = amount * 5.0 // Scale to useful sigmoid range
+        for i in 0..<count {
+            let idx = i * 4
+            for c in 0..<3 {
+                let v = Double(pixels[idx + c]) / 255.0
+                // Centered sigmoid: pushes values away from 0.5
+                let centered = v - 0.5
+                let curved = centered * (1.0 + strength * (1.0 - 4.0 * centered * centered))
+                let result = max(0, min(1, curved + 0.5))
+                pixels[idx + c] = UInt8(round(result * 255.0))
+            }
+        }
     }
 
     // MARK: - Gamma Conversion (IEC 61966-2-1 sRGB)
@@ -155,14 +225,23 @@ public enum DitherRenderer {
         pixels: UnsafeMutablePointer<UInt8>,
         width: Int, height: Int,
         algorithm: DitherAlgorithm,
-        bayerLevel: Int
+        bayerLevel: Int,
+        threshold: Double
     ) throws {
-        // Convert to luminance buffer in linear space
+        // Apply threshold offset in sRGB (perceptual) space for uniform brightness adjustment,
+        // then convert to linear space for dithering calculations.
+        let offset = 0.5 - threshold
         let count = width * height
         var lumBuf = [Double](repeating: 0, count: count)
         for i in 0..<count {
             let idx = i * 4
-            lumBuf[i] = luminance(r: pixels[idx], g: pixels[idx + 1], b: pixels[idx + 2])
+            let rAdj = max(0, min(255, Double(pixels[idx]) + offset * 255.0))
+            let gAdj = max(0, min(255, Double(pixels[idx + 1]) + offset * 255.0))
+            let bAdj = max(0, min(255, Double(pixels[idx + 2]) + offset * 255.0))
+            let lr = sRGBToLinear(rAdj / 255.0)
+            let lg = sRGBToLinear(gAdj / 255.0)
+            let lb = sRGBToLinear(bAdj / 255.0)
+            lumBuf[i] = 0.2126 * lr + 0.7152 * lg + 0.0722 * lb
         }
 
         // Apply dithering algorithm to produce 0/1 decisions
@@ -175,8 +254,8 @@ public enum DitherRenderer {
             for y in 0..<height {
                 for x in 0..<width {
                     let i = y * width + x
-                    let threshold = matrix[y % size][x % size]
-                    output[i] = lumBuf[i] > threshold ? 255 : 0
+                    let mapValue = matrix[y % size][x % size]
+                    output[i] = lumBuf[i] > mapValue ? 255 : 0
                 }
             }
 
@@ -191,13 +270,33 @@ public enum DitherRenderer {
             for y in 0..<height {
                 for x in 0..<width {
                     let i = y * width + x
-                    let threshold = noise[(y % 64) * 64 + (x % 64)]
-                    output[i] = lumBuf[i] > threshold ? 255 : 0
+                    let mapValue = noise[(y % 64) * 64 + (x % 64)]
+                    output[i] = lumBuf[i] > mapValue ? 255 : 0
                 }
             }
 
         case .artisticDrip:
             output = artisticDripDither(lumBuf: &lumBuf, width: width, height: height)
+
+        case .halftone:
+            let matrix = halftoneMatrix()
+            let size = 6
+            for y in 0..<height {
+                for x in 0..<width {
+                    let i = y * width + x
+                    let mapValue = matrix[y % size][x % size]
+                    output[i] = lumBuf[i] > mapValue ? 255 : 0
+                }
+            }
+
+        case .stucki:
+            output = stuckiDither(lumBuf: &lumBuf, width: width, height: height)
+
+        case .whiteNoise:
+            output = whiteNoiseDither(lumBuf: &lumBuf, width: width, height: height)
+
+        case .riemersma:
+            output = riemersmaDither(lumBuf: &lumBuf, width: width, height: height)
         }
 
         // Write back to pixel buffer
@@ -206,7 +305,6 @@ public enum DitherRenderer {
             pixels[idx] = output[i]
             pixels[idx + 1] = output[i]
             pixels[idx + 2] = output[i]
-            // Alpha unchanged
         }
     }
 
@@ -218,20 +316,25 @@ public enum DitherRenderer {
         width: Int, height: Int,
         algorithm: DitherAlgorithm,
         bayerLevel: Int,
-        levels: Int
+        levels: Int,
+        threshold: Double
     ) throws {
         let count = width * height
 
-        // Convert each channel to linear space
         var rBuf = [Double](repeating: 0, count: count)
         var gBuf = [Double](repeating: 0, count: count)
         var bBuf = [Double](repeating: 0, count: count)
 
+        // Apply threshold offset in sRGB (perceptual) space before converting to linear
+        let offset = 0.5 - threshold
         for i in 0..<count {
             let idx = i * 4
-            rBuf[i] = sRGBToLinear(Double(pixels[idx]) / 255.0)
-            gBuf[i] = sRGBToLinear(Double(pixels[idx + 1]) / 255.0)
-            bBuf[i] = sRGBToLinear(Double(pixels[idx + 2]) / 255.0)
+            let rAdj = max(0.0, min(1.0, Double(pixels[idx]) / 255.0 + offset))
+            let gAdj = max(0.0, min(1.0, Double(pixels[idx + 1]) / 255.0 + offset))
+            let bAdj = max(0.0, min(1.0, Double(pixels[idx + 2]) / 255.0 + offset))
+            rBuf[i] = sRGBToLinear(rAdj)
+            gBuf[i] = sRGBToLinear(gAdj)
+            bBuf[i] = sRGBToLinear(bAdj)
         }
 
         // Dither each channel independently
@@ -242,7 +345,6 @@ public enum DitherRenderer {
         let bOut = ditherChannel(&bBuf, width: width, height: height,
                                  algorithm: algorithm, bayerLevel: bayerLevel, levels: levels)
 
-        // Write back to pixel buffer
         for i in 0..<count {
             let idx = i * 4
             pixels[idx] = rOut[i]
@@ -280,32 +382,16 @@ public enum DitherRenderer {
             }
 
         case .floydSteinberg:
-            var errors = buf
-            for y in 0..<height {
-                for x in 0..<width {
-                    let i = y * width + x
-                    let oldVal = max(0, min(1, errors[i]))
-                    let quantized = round(oldVal * maxLevel) / maxLevel
-                    let err = oldVal - quantized
-                    let srgb = linearToSRGB(max(0, min(1, quantized)))
-                    output[i] = UInt8(max(0, min(255, round(srgb * 255.0))))
-                    distributeFloydSteinberg(errors: &errors, x: x, y: y, width: width, height: height, error: err)
-                }
-            }
+            serpentineErrorDiffusion(
+                errors: &buf, output: &output, width: width, height: height,
+                maxLevel: maxLevel, distribute: distributeFloydSteinberg
+            )
 
         case .atkinson:
-            var errors = buf
-            for y in 0..<height {
-                for x in 0..<width {
-                    let i = y * width + x
-                    let oldVal = max(0, min(1, errors[i]))
-                    let quantized = round(oldVal * maxLevel) / maxLevel
-                    let err = oldVal - quantized
-                    let srgb = linearToSRGB(max(0, min(1, quantized)))
-                    output[i] = UInt8(max(0, min(255, round(srgb * 255.0))))
-                    distributeAtkinson(errors: &errors, x: x, y: y, width: width, height: height, error: err)
-                }
-            }
+            serpentineErrorDiffusion(
+                errors: &buf, output: &output, width: width, height: height,
+                maxLevel: maxLevel, distribute: distributeAtkinson
+            )
 
         case .blueNoise:
             let noise = blueNoiseTexture()
@@ -322,21 +408,74 @@ public enum DitherRenderer {
             }
 
         case .artisticDrip:
-            var errors = buf
+            serpentineErrorDiffusion(
+                errors: &buf, output: &output, width: width, height: height,
+                maxLevel: maxLevel, distribute: distributeArtisticDrip
+            )
+
+        case .halftone:
+            let matrix = halftoneMatrix()
+            let size = 6
             for y in 0..<height {
                 for x in 0..<width {
                     let i = y * width + x
-                    let oldVal = max(0, min(1, errors[i]))
-                    let quantized = round(oldVal * maxLevel) / maxLevel
-                    let err = oldVal - quantized
-                    let srgb = linearToSRGB(max(0, min(1, quantized)))
+                    let threshold = matrix[y % size][x % size] - 0.5
+                    let adjusted = buf[i] + threshold / maxLevel
+                    let quantized = round(adjusted * maxLevel) / maxLevel
+                    let clamped = max(0, min(1, quantized))
+                    let srgb = linearToSRGB(clamped)
                     output[i] = UInt8(max(0, min(255, round(srgb * 255.0))))
-                    distributeArtisticDrip(errors: &errors, x: x, y: y, width: width, height: height, error: err)
                 }
             }
+
+        case .stucki:
+            serpentineErrorDiffusion(
+                errors: &buf, output: &output, width: width, height: height,
+                maxLevel: maxLevel, distribute: distributeStucki
+            )
+
+        case .whiteNoise:
+            for y in 0..<height {
+                for x in 0..<width {
+                    let i = y * width + x
+                    let noise = seededRandom(x: x, y: y) - 0.5
+                    let adjusted = buf[i] + noise / maxLevel
+                    let quantized = round(adjusted * maxLevel) / maxLevel
+                    let clamped = max(0, min(1, quantized))
+                    let srgb = linearToSRGB(clamped)
+                    output[i] = UInt8(max(0, min(255, round(srgb * 255.0))))
+                }
+            }
+
+        case .riemersma:
+            // Riemersma uses Hilbert curve traversal — handled by dedicated function
+            riemersmaChannelDither(buf: &buf, output: &output, width: width, height: height, maxLevel: maxLevel)
         }
 
         return output
+    }
+
+    /// Generic serpentine error diffusion for color channel dithering.
+    private static func serpentineErrorDiffusion(
+        errors: inout [Double],
+        output: inout [UInt8],
+        width: Int, height: Int,
+        maxLevel: Double,
+        distribute: (inout [Double], Int, Int, Int, Int, Double, Bool) -> Void
+    ) {
+        for y in 0..<height {
+            let leftToRight = (y % 2 == 0)
+            let xRange = leftToRight ? stride(from: 0, to: width, by: 1) : stride(from: width - 1, to: -1, by: -1)
+            for x in xRange {
+                let i = y * width + x
+                let oldVal = max(0, min(1, errors[i]))
+                let quantized = round(oldVal * maxLevel) / maxLevel
+                let err = oldVal - quantized
+                let srgb = linearToSRGB(max(0, min(1, quantized)))
+                output[i] = UInt8(max(0, min(255, round(srgb * 255.0))))
+                distribute(&errors, x, y, width, height, err, leftToRight)
+            }
+        }
     }
 
     // MARK: - Two-Tone Color Mapping
@@ -365,12 +504,10 @@ public enum DitherRenderer {
         for i in 0..<count {
             let idx = i * 4
             if pixels[idx] > 127 {
-                // White → foreground
                 pixels[idx] = fgR
                 pixels[idx + 1] = fgG
                 pixels[idx + 2] = fgB
             } else {
-                // Black → background
                 pixels[idx] = bgR
                 pixels[idx + 1] = bgG
                 pixels[idx + 2] = bgB
@@ -386,14 +523,11 @@ public enum DitherRenderer {
     static func bayerMatrix(level: Int) -> [[Double]] {
         let clampedLevel = max(1, min(4, level))
 
-        // Start with 2x2 base
         var matrix: [[Double]] = [
             [0, 2],
             [3, 1]
         ]
 
-        // Recursively expand to desired level
-        // Level 1 = one expansion (4x4), level 2 = two (8x8), etc.
         for _ in 0..<clampedLevel {
             let n = matrix.count
             let newSize = n * 2
@@ -402,17 +536,16 @@ public enum DitherRenderer {
                 for x in 0..<newSize {
                     let baseVal = matrix[y % n][x % n]
                     let quadrant: Double
-                    if y < n && x < n { quadrant = 0 }      // top-left
-                    else if y < n { quadrant = 2 }            // top-right
-                    else if x < n { quadrant = 3 }            // bottom-left
-                    else { quadrant = 1 }                     // bottom-right
+                    if y < n && x < n { quadrant = 0 }
+                    else if y < n { quadrant = 2 }
+                    else if x < n { quadrant = 3 }
+                    else { quadrant = 1 }
                     expanded[y][x] = 4.0 * baseVal + quadrant
                 }
             }
             matrix = expanded
         }
 
-        // Normalize to [0, 1)
         let size = matrix.count
         let total = Double(size * size)
         for y in 0..<size {
@@ -424,9 +557,34 @@ public enum DitherRenderer {
         return matrix
     }
 
-    // MARK: - Floyd-Steinberg Error Diffusion
+    // MARK: - Halftone (Clustered Dot) Matrix
+
+    /// Generate a 6x6 clustered dot threshold matrix.
+    /// Dots grow outward from center, producing a classic newspaper print effect.
+    static func halftoneMatrix() -> [[Double]] {
+        // Spiral fill order from center outward — classic clustered dot
+        let raw: [[Double]] = [
+            [34, 29, 17, 21, 30, 35],
+            [28, 14,  9, 16, 20, 31],
+            [13,  8,  4,  5, 15, 19],
+            [12,  3,  0,  1, 10, 18],
+            [27,  7,  2,  6, 11, 24],
+            [33, 26, 22, 23, 25, 32]
+        ]
+        // Normalize to [0, 1)
+        var matrix = raw
+        for y in 0..<6 {
+            for x in 0..<6 {
+                matrix[y][x] = (raw[y][x] + 0.5) / 36.0
+            }
+        }
+        return matrix
+    }
+
+    // MARK: - Floyd-Steinberg Error Diffusion (with serpentine)
 
     /// Floyd-Steinberg error diffusion to 4 neighbors with weights (7, 3, 5, 1) / 16.
+    /// Uses serpentine scanning to reduce directional artifacts.
     private static func floydSteinbergDither(
         lumBuf: inout [Double],
         width: Int, height: Int
@@ -435,44 +593,48 @@ public enum DitherRenderer {
         var output = [UInt8](repeating: 0, count: count)
 
         for y in 0..<height {
-            for x in 0..<width {
+            let leftToRight = (y % 2 == 0)
+            let xRange = leftToRight
+                ? stride(from: 0, to: width, by: 1)
+                : stride(from: width - 1, to: -1, by: -1)
+            for x in xRange {
                 let i = y * width + x
                 let oldVal = max(0, min(1, lumBuf[i]))
                 let newVal: Double = oldVal > 0.5 ? 1.0 : 0.0
                 let err = oldVal - newVal
                 output[i] = newVal > 0.5 ? 255 : 0
-                distributeFloydSteinberg(errors: &lumBuf, x: x, y: y, width: width, height: height, error: err)
+                distributeFloydSteinberg(&lumBuf, x, y, width, height, err, leftToRight)
             }
         }
 
         return output
     }
 
-    @inline(__always)
     private static func distributeFloydSteinberg(
-        errors: inout [Double],
-        x: Int, y: Int, width: Int, height: Int,
-        error: Double
+        _ errors: inout [Double],
+        _ x: Int, _ y: Int, _ width: Int, _ height: Int,
+        _ error: Double, _ leftToRight: Bool
     ) {
-        // Right: 7/16
-        if x + 1 < width {
-            errors[y * width + (x + 1)] += error * 7.0 / 16.0
+        let fwd = leftToRight ? 1 : -1
+        // Forward: 7/16
+        if x + fwd >= 0 && x + fwd < width {
+            errors[y * width + (x + fwd)] += error * 7.0 / 16.0
         }
-        // Bottom-left: 3/16
-        if x - 1 >= 0 && y + 1 < height {
-            errors[(y + 1) * width + (x - 1)] += error * 3.0 / 16.0
+        // Back-below: 3/16
+        if x - fwd >= 0 && x - fwd < width && y + 1 < height {
+            errors[(y + 1) * width + (x - fwd)] += error * 3.0 / 16.0
         }
-        // Bottom: 5/16
+        // Below: 5/16
         if y + 1 < height {
             errors[(y + 1) * width + x] += error * 5.0 / 16.0
         }
-        // Bottom-right: 1/16
-        if x + 1 < width && y + 1 < height {
-            errors[(y + 1) * width + (x + 1)] += error * 1.0 / 16.0
+        // Forward-below: 1/16
+        if x + fwd >= 0 && x + fwd < width && y + 1 < height {
+            errors[(y + 1) * width + (x + fwd)] += error * 1.0 / 16.0
         }
     }
 
-    // MARK: - Atkinson Error Diffusion
+    // MARK: - Atkinson Error Diffusion (with serpentine)
 
     /// Atkinson error diffusion: 1/8 to 6 neighbors (only 75% of error propagated).
     private static func atkinsonDither(
@@ -483,36 +645,40 @@ public enum DitherRenderer {
         var output = [UInt8](repeating: 0, count: count)
 
         for y in 0..<height {
-            for x in 0..<width {
+            let leftToRight = (y % 2 == 0)
+            let xRange = leftToRight
+                ? stride(from: 0, to: width, by: 1)
+                : stride(from: width - 1, to: -1, by: -1)
+            for x in xRange {
                 let i = y * width + x
                 let oldVal = max(0, min(1, lumBuf[i]))
                 let newVal: Double = oldVal > 0.5 ? 1.0 : 0.0
                 let err = oldVal - newVal
                 output[i] = newVal > 0.5 ? 255 : 0
-                distributeAtkinson(errors: &lumBuf, x: x, y: y, width: width, height: height, error: err)
+                distributeAtkinson(&lumBuf, x, y, width, height, err, leftToRight)
             }
         }
 
         return output
     }
 
-    @inline(__always)
     private static func distributeAtkinson(
-        errors: inout [Double],
-        x: Int, y: Int, width: Int, height: Int,
-        error: Double
+        _ errors: inout [Double],
+        _ x: Int, _ y: Int, _ width: Int, _ height: Int,
+        _ error: Double, _ leftToRight: Bool
     ) {
         let fraction = error / 8.0
-        // Right
-        if x + 1 < width { errors[y * width + (x + 1)] += fraction }
-        // Two right
-        if x + 2 < width { errors[y * width + (x + 2)] += fraction }
-        // Bottom-left
-        if x - 1 >= 0 && y + 1 < height { errors[(y + 1) * width + (x - 1)] += fraction }
-        // Bottom
+        let fwd = leftToRight ? 1 : -1
+        // Forward
+        if x + fwd >= 0 && x + fwd < width { errors[y * width + (x + fwd)] += fraction }
+        // Two forward
+        if x + 2 * fwd >= 0 && x + 2 * fwd < width { errors[y * width + (x + 2 * fwd)] += fraction }
+        // Back-below
+        if x - fwd >= 0 && x - fwd < width && y + 1 < height { errors[(y + 1) * width + (x - fwd)] += fraction }
+        // Below
         if y + 1 < height { errors[(y + 1) * width + x] += fraction }
-        // Bottom-right
-        if x + 1 < width && y + 1 < height { errors[(y + 1) * width + (x + 1)] += fraction }
+        // Forward-below
+        if x + fwd >= 0 && x + fwd < width && y + 1 < height { errors[(y + 1) * width + (x + fwd)] += fraction }
         // Two below
         if y + 2 < height { errors[(y + 2) * width + x] += fraction }
     }
@@ -520,19 +686,15 @@ public enum DitherRenderer {
     // MARK: - Blue Noise Texture
 
     /// Generate a 64x64 blue noise threshold texture using R2 quasi-random sequence.
-    /// Values are normalized to [0, 1).
     static func blueNoiseTexture() -> [Double] {
         let size = 64
         let count = size * size
         var texture = [Double](repeating: 0, count: count)
 
-        // R2 quasi-random sequence (generalized golden ratio in 2D)
-        // g = 1.32471795724... (plastic constant)
         let g = 1.32471795724474602596
         let a1 = 1.0 / g
         let a2 = 1.0 / (g * g)
 
-        // Generate R2 sequence and rank pixels
         var points = [(index: Int, value: Double)](repeating: (0, 0), count: count)
         for i in 0..<count {
             let x = (0.5 + a1 * Double(i + 1)).truncatingRemainder(dividingBy: 1.0)
@@ -543,7 +705,6 @@ public enum DitherRenderer {
             points[i] = (idx, Double(i) / Double(count))
         }
 
-        // Fill texture: later points overwrite earlier ones at same position
         for point in points {
             texture[point.index] = point.value
         }
@@ -551,14 +712,9 @@ public enum DitherRenderer {
         return texture
     }
 
-    // MARK: - Artistic Drip Error Diffusion
+    // MARK: - Artistic Drip Error Diffusion (with serpentine)
 
-    /// Custom error diffusion kernel that pushes error predominantly downward,
-    /// creating a "dripping ink" effect.
-    ///
-    /// Kernel (fractions of error):
-    ///   [x+1, y]: 2/16, [x-1, y+1]: 1/16, [x, y+1]: 5/16,
-    ///   [x+1, y+1]: 2/16, [x, y+2]: 4/16, [x, y+3]: 2/16
+    /// Custom error diffusion kernel that pushes error predominantly downward ("dripping ink").
     private static func artisticDripDither(
         lumBuf: inout [Double],
         width: Int, height: Int
@@ -567,40 +723,44 @@ public enum DitherRenderer {
         var output = [UInt8](repeating: 0, count: count)
 
         for y in 0..<height {
-            for x in 0..<width {
+            let leftToRight = (y % 2 == 0)
+            let xRange = leftToRight
+                ? stride(from: 0, to: width, by: 1)
+                : stride(from: width - 1, to: -1, by: -1)
+            for x in xRange {
                 let i = y * width + x
                 let oldVal = max(0, min(1, lumBuf[i]))
                 let newVal: Double = oldVal > 0.5 ? 1.0 : 0.0
                 let err = oldVal - newVal
                 output[i] = newVal > 0.5 ? 255 : 0
-                distributeArtisticDrip(errors: &lumBuf, x: x, y: y, width: width, height: height, error: err)
+                distributeArtisticDrip(&lumBuf, x, y, width, height, err, leftToRight)
             }
         }
 
         return output
     }
 
-    @inline(__always)
     private static func distributeArtisticDrip(
-        errors: inout [Double],
-        x: Int, y: Int, width: Int, height: Int,
-        error: Double
+        _ errors: inout [Double],
+        _ x: Int, _ y: Int, _ width: Int, _ height: Int,
+        _ error: Double, _ leftToRight: Bool
     ) {
-        // Right: 2/16
-        if x + 1 < width {
-            errors[y * width + (x + 1)] += error * 2.0 / 16.0
+        let fwd = leftToRight ? 1 : -1
+        // Forward: 2/16
+        if x + fwd >= 0 && x + fwd < width {
+            errors[y * width + (x + fwd)] += error * 2.0 / 16.0
         }
-        // Bottom-left: 1/16
-        if x - 1 >= 0 && y + 1 < height {
-            errors[(y + 1) * width + (x - 1)] += error * 1.0 / 16.0
+        // Back-below: 1/16
+        if x - fwd >= 0 && x - fwd < width && y + 1 < height {
+            errors[(y + 1) * width + (x - fwd)] += error * 1.0 / 16.0
         }
-        // Bottom: 5/16
+        // Below: 5/16
         if y + 1 < height {
             errors[(y + 1) * width + x] += error * 5.0 / 16.0
         }
-        // Bottom-right: 2/16
-        if x + 1 < width && y + 1 < height {
-            errors[(y + 1) * width + (x + 1)] += error * 2.0 / 16.0
+        // Forward-below: 2/16
+        if x + fwd >= 0 && x + fwd < width && y + 1 < height {
+            errors[(y + 1) * width + (x + fwd)] += error * 2.0 / 16.0
         }
         // Two below: 4/16
         if y + 2 < height {
@@ -610,5 +770,247 @@ public enum DitherRenderer {
         if y + 3 < height {
             errors[(y + 3) * width + x] += error * 2.0 / 16.0
         }
+    }
+
+    // MARK: - Stucki Error Diffusion (with serpentine)
+
+    /// Stucki error diffusion: 12-neighbor kernel with weights summing to 42.
+    /// Produces smoother gradients than Floyd-Steinberg due to the wider kernel.
+    private static func stuckiDither(
+        lumBuf: inout [Double],
+        width: Int, height: Int
+    ) -> [UInt8] {
+        let count = width * height
+        var output = [UInt8](repeating: 0, count: count)
+
+        for y in 0..<height {
+            let leftToRight = (y % 2 == 0)
+            let xRange = leftToRight
+                ? stride(from: 0, to: width, by: 1)
+                : stride(from: width - 1, to: -1, by: -1)
+            for x in xRange {
+                let i = y * width + x
+                let oldVal = max(0, min(1, lumBuf[i]))
+                let newVal: Double = oldVal > 0.5 ? 1.0 : 0.0
+                let err = oldVal - newVal
+                output[i] = newVal > 0.5 ? 255 : 0
+                distributeStucki(&lumBuf, x, y, width, height, err, leftToRight)
+            }
+        }
+
+        return output
+    }
+
+    private static func distributeStucki(
+        _ errors: inout [Double],
+        _ x: Int, _ y: Int, _ width: Int, _ height: Int,
+        _ error: Double, _ leftToRight: Bool
+    ) {
+        let fwd = leftToRight ? 1 : -1
+        // Row 0 (current row): fwd+1 = 8/42, fwd+2 = 4/42
+        if x + fwd >= 0 && x + fwd < width {
+            errors[y * width + (x + fwd)] += error * 8.0 / 42.0
+        }
+        if x + 2 * fwd >= 0 && x + 2 * fwd < width {
+            errors[y * width + (x + 2 * fwd)] += error * 4.0 / 42.0
+        }
+        // Row 1: -2=2, -1=4, 0=8, +1=4, +2=2
+        if y + 1 < height {
+            if x - 2 * fwd >= 0 && x - 2 * fwd < width { errors[(y + 1) * width + (x - 2 * fwd)] += error * 2.0 / 42.0 }
+            if x - fwd >= 0 && x - fwd < width { errors[(y + 1) * width + (x - fwd)] += error * 4.0 / 42.0 }
+            errors[(y + 1) * width + x] += error * 8.0 / 42.0
+            if x + fwd >= 0 && x + fwd < width { errors[(y + 1) * width + (x + fwd)] += error * 4.0 / 42.0 }
+            if x + 2 * fwd >= 0 && x + 2 * fwd < width { errors[(y + 1) * width + (x + 2 * fwd)] += error * 2.0 / 42.0 }
+        }
+        // Row 2: -2=1, -1=2, 0=4, +1=2, +2=1
+        if y + 2 < height {
+            if x - 2 * fwd >= 0 && x - 2 * fwd < width { errors[(y + 2) * width + (x - 2 * fwd)] += error * 1.0 / 42.0 }
+            if x - fwd >= 0 && x - fwd < width { errors[(y + 2) * width + (x - fwd)] += error * 2.0 / 42.0 }
+            errors[(y + 2) * width + x] += error * 4.0 / 42.0
+            if x + fwd >= 0 && x + fwd < width { errors[(y + 2) * width + (x + fwd)] += error * 2.0 / 42.0 }
+            if x + 2 * fwd >= 0 && x + 2 * fwd < width { errors[(y + 2) * width + (x + 2 * fwd)] += error * 1.0 / 42.0 }
+        }
+    }
+
+    // MARK: - White Noise Dithering
+
+    /// White noise (random) dithering: each pixel gets an independent random threshold.
+    /// Produces a grainy, lo-fi aesthetic.
+    private static func whiteNoiseDither(
+        lumBuf: inout [Double],
+        width: Int, height: Int
+    ) -> [UInt8] {
+        let count = width * height
+        var output = [UInt8](repeating: 0, count: count)
+
+        for y in 0..<height {
+            for x in 0..<width {
+                let i = y * width + x
+                let threshold = seededRandom(x: x, y: y)
+                output[i] = lumBuf[i] > threshold ? 255 : 0
+            }
+        }
+
+        return output
+    }
+
+    /// Deterministic hash-based random for reproducible white noise.
+    @inline(__always)
+    private static func seededRandom(x: Int, y: Int) -> Double {
+        // Simple hash combining x, y coordinates for reproducibility
+        var h = UInt64(x) &* 0x517cc1b727220a95
+        h ^= UInt64(y) &* 0x6c62272e07bb0142
+        h = h ^ (h >> 33)
+        h = h &* 0xff51afd7ed558ccd
+        h = h ^ (h >> 33)
+        return Double(h & 0x7FFFFFFFFFFFFFFF) / Double(Int64.max)
+    }
+
+    // MARK: - Riemersma (Hilbert Curve) Dithering
+
+    /// Riemersma dithering: error diffusion along a Hilbert curve path.
+    /// Produces non-directional, organic-looking dithering patterns because
+    /// the space-filling curve distributes error in all directions.
+    private static func riemersmaDither(
+        lumBuf: inout [Double],
+        width: Int, height: Int
+    ) -> [UInt8] {
+        let count = width * height
+        var output = [UInt8](repeating: 0, count: count)
+
+        // Generate Hilbert curve path covering the image
+        let path = hilbertCurve(width: width, height: height)
+
+        // Error diffusion along the curve with exponential decay
+        let historySize = 16
+        var errorHistory = [Double](repeating: 0, count: historySize)
+        var historyIndex = 0
+
+        // Decay weights: most recent error has most influence
+        var weights = [Double](repeating: 0, count: historySize)
+        var totalWeight = 0.0
+        for i in 0..<historySize {
+            weights[i] = exp(-Double(i) * 0.3)
+            totalWeight += weights[i]
+        }
+
+        for pos in path {
+            let x = pos.0
+            let y = pos.1
+            guard x < width && y < height else { continue }
+            let i = y * width + x
+
+            // Add weighted error from history
+            var accumulatedError = 0.0
+            for j in 0..<historySize {
+                let idx = (historyIndex - j - 1 + historySize * 2) % historySize
+                accumulatedError += errorHistory[idx] * weights[j]
+            }
+            accumulatedError /= totalWeight
+
+            let adjusted = max(0, min(1, lumBuf[i] + accumulatedError))
+            let newVal: Double = adjusted > 0.5 ? 1.0 : 0.0
+            let err = adjusted - newVal
+            output[i] = newVal > 0.5 ? 255 : 0
+
+            errorHistory[historyIndex] = err
+            historyIndex = (historyIndex + 1) % historySize
+        }
+
+        return output
+    }
+
+    /// Riemersma channel dithering for color mode.
+    private static func riemersmaChannelDither(
+        buf: inout [Double],
+        output: inout [UInt8],
+        width: Int, height: Int,
+        maxLevel: Double
+    ) {
+        let path = hilbertCurve(width: width, height: height)
+
+        let historySize = 16
+        var errorHistory = [Double](repeating: 0, count: historySize)
+        var historyIndex = 0
+
+        var weights = [Double](repeating: 0, count: historySize)
+        var totalWeight = 0.0
+        for i in 0..<historySize {
+            weights[i] = exp(-Double(i) * 0.3)
+            totalWeight += weights[i]
+        }
+
+        for pos in path {
+            let x = pos.0
+            let y = pos.1
+            guard x < width && y < height else { continue }
+            let i = y * width + x
+
+            var accumulatedError = 0.0
+            for j in 0..<historySize {
+                let idx = (historyIndex - j - 1 + historySize * 2) % historySize
+                accumulatedError += errorHistory[idx] * weights[j]
+            }
+            accumulatedError /= totalWeight
+
+            let adjusted = max(0, min(1, buf[i] + accumulatedError))
+            let quantized = round(adjusted * maxLevel) / maxLevel
+            let err = adjusted - quantized
+            let srgb = linearToSRGB(max(0, min(1, quantized)))
+            output[i] = UInt8(max(0, min(255, round(srgb * 255.0))))
+
+            errorHistory[historyIndex] = err
+            historyIndex = (historyIndex + 1) % historySize
+        }
+    }
+
+    /// Generate a Hilbert curve path that covers a width×height rectangle.
+    /// Returns array of (x, y) coordinates in curve traversal order.
+    private static func hilbertCurve(width: Int, height: Int) -> [(Int, Int)] {
+        // Find smallest power of 2 that covers both dimensions
+        let maxDim = max(width, height)
+        var order = 1
+        while (1 << order) < maxDim { order += 1 }
+        let n = 1 << order
+
+        let totalPoints = n * n
+        var path = [(Int, Int)]()
+        path.reserveCapacity(width * height)
+
+        for d in 0..<totalPoints {
+            let (x, y) = d2xy(n: n, d: d)
+            if x < width && y < height {
+                path.append((x, y))
+            }
+        }
+
+        return path
+    }
+
+    /// Convert Hilbert curve distance d to (x, y) coordinates in an n×n grid.
+    private static func d2xy(n: Int, d: Int) -> (Int, Int) {
+        var rx: Int, ry: Int, s: Int
+        var x = 0, y = 0
+        var dd = d
+        s = 1
+        while s < n {
+            rx = (dd / 2) & 1
+            ry = ((dd ^ rx) & 1) ^ 1  // Note: ry inverted for standard orientation
+            // Rotate
+            if ry == 0 {
+                if rx == 1 {
+                    x = s - 1 - x
+                    y = s - 1 - y
+                }
+                let temp = x
+                x = y
+                y = temp
+            }
+            x += s * rx
+            y += s * ry
+            dd /= 4
+            s *= 2
+        }
+        return (x, y)
     }
 }

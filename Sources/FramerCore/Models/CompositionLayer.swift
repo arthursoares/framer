@@ -298,6 +298,10 @@ public enum DitherAlgorithm: String, Codable, Sendable, CaseIterable {
     case atkinson
     case blueNoise
     case artisticDrip
+    case halftone
+    case stucki
+    case whiteNoise
+    case riemersma
 
     public var label: String {
         switch self {
@@ -306,6 +310,18 @@ public enum DitherAlgorithm: String, Codable, Sendable, CaseIterable {
         case .atkinson: return "Atkinson"
         case .blueNoise: return "Blue Noise"
         case .artisticDrip: return "Artistic Drip"
+        case .halftone: return "Halftone"
+        case .stucki: return "Stucki"
+        case .whiteNoise: return "White Noise"
+        case .riemersma: return "Riemersma"
+        }
+    }
+
+    /// Whether this algorithm uses error diffusion (benefits from serpentine scanning).
+    public var isErrorDiffusion: Bool {
+        switch self {
+        case .floydSteinberg, .atkinson, .artisticDrip, .stucki, .riemersma: return true
+        default: return false
         }
     }
 }
@@ -356,19 +372,34 @@ public struct DitherLayerParams: Identifiable, Codable, Equatable, Sendable {
     public var colorMode: DitherColorMode
     public var bayerLevel: Int
     public var pixelScale: Int
+    /// Controls the black/white decision point (0.1–0.9, default 0.5).
+    /// Lower = brighter output (more white), higher = darker output (more black).
+    public var threshold: Double
+    /// Pre-sharpen amount before dithering (0–1, default 0 = off).
+    /// Enhances edge detail that would otherwise be lost during quantization.
+    public var sharpen: Double
+    /// Contrast boost before dithering (0–1, default 0 = no change).
+    /// Applies an S-curve to expand tonal range before quantization.
+    public var contrast: Double
 
     public init(
         id: UUID = UUID(),
         algorithm: DitherAlgorithm = .atkinson,
         colorMode: DitherColorMode = .bw,
         bayerLevel: Int = 2,
-        pixelScale: Int = 1
+        pixelScale: Int = 1,
+        threshold: Double = 0.5,
+        sharpen: Double = 0,
+        contrast: Double = 0
     ) {
         self.id = id
         self.algorithm = algorithm
         self.colorMode = colorMode
         self.bayerLevel = max(1, min(4, bayerLevel))
         self.pixelScale = max(1, min(8, pixelScale))
+        self.threshold = max(0.1, min(0.9, threshold))
+        self.sharpen = max(0, min(1, sharpen))
+        self.contrast = max(0, min(1, contrast))
     }
 }
 
