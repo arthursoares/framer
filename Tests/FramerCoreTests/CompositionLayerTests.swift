@@ -409,4 +409,45 @@ final class CompositionLayerTests: XCTestCase {
         XCTAssertEqual(result.image.width, 130) // 100 + 2*15
         XCTAssertEqual(result.image.height, 130)
     }
+
+    // MARK: - Dither Layer Codable
+
+    func test_ditherLayer_bw_roundtripsJSON() throws {
+        let layer = CompositionLayer.dither(DitherLayerParams(
+            algorithm: .atkinson,
+            colorMode: .bw,
+            bayerLevel: 2,
+            pixelScale: 1
+        ))
+        let data = try JSONEncoder().encode(layer)
+        let decoded = try JSONDecoder().decode(CompositionLayer.self, from: data)
+        XCTAssertEqual(layer, decoded)
+    }
+
+    func test_ditherLayer_twoTone_roundtripsJSON() throws {
+        let layer = CompositionLayer.dither(DitherLayerParams(
+            algorithm: .floydSteinberg,
+            colorMode: .twoTone(
+                foreground: try CodableColor(hex: "#FF0000"),
+                background: try CodableColor(hex: "#0000FF")
+            ),
+            bayerLevel: 3,
+            pixelScale: 2
+        ))
+        let data = try JSONEncoder().encode(layer)
+        let decoded = try JSONDecoder().decode(CompositionLayer.self, from: data)
+        XCTAssertEqual(layer, decoded)
+    }
+
+    func test_ditherLayer_color_roundtripsJSON() throws {
+        let layer = CompositionLayer.dither(DitherLayerParams(
+            algorithm: .bayer,
+            colorMode: .color(levels: 4),
+            bayerLevel: 1,
+            pixelScale: 4
+        ))
+        let data = try JSONEncoder().encode(layer)
+        let decoded = try JSONDecoder().decode(CompositionLayer.self, from: data)
+        XCTAssertEqual(layer, decoded)
+    }
 }
