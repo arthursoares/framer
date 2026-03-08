@@ -56,6 +56,10 @@ public enum YAMLConfig {
         var algorithm: String?
         var bayer_level: Int?
         var pixel_scale: Int?
+        var color_mode: String?
+        var color_levels: Int?
+        var dither_fg: String?
+        var dither_bg: String?
     }
 
     public static func encode(_ config: ProcessingConfig) throws -> String {
@@ -242,6 +246,17 @@ public enum YAMLConfig {
             schema.algorithm = p.algorithm.rawValue
             schema.bayer_level = p.bayerLevel
             schema.pixel_scale = p.pixelScale
+            switch p.colorMode {
+            case .bw:
+                schema.color_mode = "bw"
+            case .twoTone(let fg, let bg):
+                schema.color_mode = "twoTone"
+                schema.dither_fg = fg.hex
+                schema.dither_bg = bg.hex
+            case .color(let levels):
+                schema.color_mode = "color"
+                schema.color_levels = levels
+            }
             return schema
         }
     }
@@ -345,6 +360,26 @@ public enum YAMLConfig {
                 position: schema.caption_position.flatMap { CaptionPosition(rawValue: $0) } ?? .bottom,
                 offsetX: schema.caption_offset_x ?? 0,
                 offsetY: schema.caption_offset_y ?? 0
+            ))
+
+        case "dither":
+            let algo = schema.algorithm.flatMap { DitherAlgorithm(rawValue: $0) } ?? .atkinson
+            let colorMode: DitherColorMode
+            switch schema.color_mode {
+            case "twoTone":
+                let fg = (schema.dither_fg.flatMap { try? CodableColor(hex: $0) }) ?? .black
+                let bg = (schema.dither_bg.flatMap { try? CodableColor(hex: $0) }) ?? .white
+                colorMode = .twoTone(foreground: fg, background: bg)
+            case "color":
+                colorMode = .color(levels: schema.color_levels ?? 4)
+            default:
+                colorMode = .bw
+            }
+            return .dither(DitherLayerParams(
+                algorithm: algo,
+                colorMode: colorMode,
+                bayerLevel: schema.bayer_level ?? 2,
+                pixelScale: schema.pixel_scale ?? 1
             ))
 
         default:
