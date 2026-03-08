@@ -31,6 +31,13 @@ The border format is inspired by an old box of photos from my grandfather, featu
 - **Orientation Layer**: Force landscape or portrait via 90-degree rotation
 - **Caption Layer**: EXIF-based captions with template tokens
 - **Overlay Layer**: Texture overlays (dirt, film dust, light leaks, wet plate) with blend modes
+- **Dither Layer**: 9 dithering algorithms with 3 color modes, pre-processing controls
+
+### Dithering
+- **Algorithms**: Bayer (ordered), Floyd-Steinberg, Atkinson, Blue Noise, Artistic Drip (Parker), Halftone (clustered dot), Stucki, White Noise, Riemersma (Hilbert curve)
+- **Color Modes**: Black & white, two-tone (custom fg/bg colors), full color (per-channel quantization)
+- **Controls**: Threshold (brightness), pixel scale (1–8× chunky retro), Bayer level (1–4), pre-sharpen, contrast
+- **Quality**: Serpentine scanning on all error diffusion, sRGB↔linear gamma conversion
 
 ### Caption Templates
 - **EXIF Date Extraction**: Automatically displays date as "MON 'YY" format
