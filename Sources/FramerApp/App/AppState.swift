@@ -108,7 +108,7 @@ final class AppState {
         }
     }
 
-    static func outputURL(for item: PhotoItem, config: ProcessingConfig, directory: URL, suffix: String) -> URL {
+    nonisolated static func outputURL(for item: PhotoItem, config: ProcessingConfig, directory: URL, suffix: String) -> URL {
         let ext = config.outputFormat == .png ? "png" : "jpg"
         let stem = item.url.deletingPathExtension().lastPathComponent
         return directory.appendingPathComponent("\(stem)_\(suffix).\(ext)")

@@ -40,12 +40,11 @@ final class PreviewViewModel {
                 // detached task to avoid blocking the MainActor executor.
                 let itemURL = item.url
                 let itemRotation = item.rotation
-                async let originalTask: NSImage? = Task.detached {
+                let originalHandle = Task.detached {
                     Self.loadOriginal(from: itemURL, maxDimension: 1200)
-                }.value
-                async let previewTask = processor.previewImage(for: itemURL, config: config, rotation: itemRotation)
-
-                let (original, preview) = try await (originalTask, previewTask)
+                }
+                let preview = try await processor.previewImage(for: itemURL, config: config, rotation: itemRotation)
+                let original = await originalHandle.value
                 guard !Task.isCancelled else { return }
                 originalImage = original
                 previewImage = preview
@@ -57,7 +56,7 @@ final class PreviewViewModel {
     }
 
     /// Loads and downscales the source image for before/after comparison.
-    private static func loadOriginal(from url: URL, maxDimension: Int) -> NSImage? {
+    private nonisolated static func loadOriginal(from url: URL, maxDimension: Int) -> NSImage? {
         guard let source = CGImageSourceCreateWithURL(url as CFURL, nil),
               let cgImage = CGImageSourceCreateImageAtIndex(source, 0, nil) else {
             return nil
