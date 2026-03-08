@@ -1567,7 +1567,7 @@ struct DitherLayerControls: View {
         LabeledContent("Threshold: \(String(format: "%.2f", params.threshold))") {
             Slider(value: thresholdBinding, in: 0.1...0.9, step: 0.05)
         }
-        .caption("Lower = brighter, Higher = darker")
+        .caption("Lower = darker, Higher = brighter")
 
         LabeledContent("Sharpen: \(String(format: "%.0f%%", params.sharpen * 100))") {
             Slider(value: sharpenBinding, in: 0...1, step: 0.1)
