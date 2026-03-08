@@ -721,18 +721,16 @@ public enum BorderRenderer {
 
         case .screen:
             // Screen: result = 1 - (1-base)*(1-overlay)
-            // t1 = ones - bC,  t2 = ones - oC,  rC = ones - t1*t2
-            // Implemented without a separate `ones` allocation by using vDSP_vsadd
-            // and negating: (1-x) = -x + 1, but the simplest correct form uses
-            // vDSP_vsub(src, 1, ones, 1, dst, 1, n) which computes dst = ones - src.
+            // vDSP_vsmsa(src, stride, &scalar, &addend, dst, stride, N)
+            // computes dst[i] = src[i] * scalar + addend, so with scalar=-1, addend=1:
+            //   dst[i] = src[i] * (-1) + 1 = 1 - src[i]
+            var negOne: Float = -1.0
             var one: Float = 1.0
             // R
-            vDSP_vsadd(bR, 1, &one, t1, 1, n); var negOne: Float = -1.0
-            // Simpler: use vDSP_vsmsa: t1 = bR*(-1)+1 = 1-bR
-            vDSP_vsmsa(bR, 1, &negOne, &one, t1, 1, n)   // t1 = 1 - bR
-            vDSP_vsmsa(oR, 1, &negOne, &one, t2, 1, n)   // t2 = 1 - oR
-            vDSP_vmul(t1, 1, t2, 1, rR, 1, n)             // rR = (1-bR)*(1-oR)
-            vDSP_vsmsa(rR, 1, &negOne, &one, rR, 1, n)    // rR = 1 - rR
+            vDSP_vsmsa(bR, 1, &negOne, &one, t1, 1, n)    // t1 = 1 - bR
+            vDSP_vsmsa(oR, 1, &negOne, &one, t2, 1, n)    // t2 = 1 - oR
+            vDSP_vmul(t1, 1, t2, 1, rR, 1, n)              // rR = (1-bR)*(1-oR)
+            vDSP_vsmsa(rR, 1, &negOne, &one, rR, 1, n)     // rR = 1 - rR
             // G
             vDSP_vsmsa(bG, 1, &negOne, &one, t1, 1, n)
             vDSP_vsmsa(oG, 1, &negOne, &one, t2, 1, n)
@@ -802,15 +800,14 @@ public enum BorderRenderer {
         vDSP_vsmul(rG, 1, &s255, rG, 1, n)
         vDSP_vsmul(rB, 1, &s255, rB, 1, n)
 
-        // Write channels back into the interleaved base buffer with stride 4.
-        // vDSP_vfixu8 writes packed UInt8 output; we use a stride-4 destination by
-        // converting to a temporary packed array then scattering, because vDSP_vfixu8
-        // does not support strided output. Use t1/t2/t3 (Float) as intermediates and
-        // re-interpret a UInt8 view for the strided scatter.
+        // Re-interleave R/G/B back into the strided base buffer using vDSP_vfixu8.
+        // vDSP_vfixu8(src, srcStride, dst, dstStride, N) supports non-unit output
+        // stride, so each channel can be written directly at offset 0/1/2 with
+        // dstStride=4, scattering values into the correct byte lanes.
+        // Alpha (base + 3) is left unchanged.
         vDSP_vfixu8(rR, 1, base + 0, 4, n)
         vDSP_vfixu8(rG, 1, base + 1, 4, n)
         vDSP_vfixu8(rB, 1, base + 2, 4, n)
-        // Alpha channel (base + 3) is left unchanged.
     }
 
     /// De-interleaves an interleaved RGBA Float buffer into separate R, G, B channel buffers.
