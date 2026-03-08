@@ -53,6 +53,9 @@ public enum YAMLConfig {
         var caption_position: String?
         var caption_offset_x: Int?
         var caption_offset_y: Int?
+        var algorithm: String?
+        var bayer_level: Int?
+        var pixel_scale: Int?
     }
 
     public static func encode(_ config: ProcessingConfig) throws -> String {
@@ -232,6 +235,13 @@ public enum YAMLConfig {
             schema.caption_position = p.position.rawValue
             if p.offsetX != 0 { schema.caption_offset_x = p.offsetX }
             if p.offsetY != 0 { schema.caption_offset_y = p.offsetY }
+            return schema
+
+        case .dither(let p):
+            var schema = YAMLLayerSchema(type: "dither")
+            schema.algorithm = p.algorithm.rawValue
+            schema.bayer_level = p.bayerLevel
+            schema.pixel_scale = p.pixelScale
             return schema
         }
     }

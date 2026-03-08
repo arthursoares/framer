@@ -168,6 +168,9 @@ public enum BorderRenderer {
 
             case .caption(let params):
                 current = try CaptionRenderer.renderCaption(on: current, params: params, exif: exif)
+
+            case .dither:
+                break // Dither rendering handled separately (see DitherRenderer)
             }
             i += 1
         }

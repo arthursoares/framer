@@ -290,6 +290,88 @@ public struct CaptionLayerParams: Identifiable, Codable, Equatable, Sendable {
     }
 }
 
+// MARK: - Dither
+
+public enum DitherAlgorithm: String, Codable, Sendable, CaseIterable {
+    case bayer
+    case floydSteinberg
+    case atkinson
+    case blueNoise
+    case artisticDrip
+
+    public var label: String {
+        switch self {
+        case .bayer: return "Bayer"
+        case .floydSteinberg: return "Floyd-Steinberg"
+        case .atkinson: return "Atkinson"
+        case .blueNoise: return "Blue Noise"
+        case .artisticDrip: return "Artistic Drip"
+        }
+    }
+}
+
+public enum DitherColorMode: Codable, Equatable, Sendable {
+    case bw
+    case twoTone(foreground: CodableColor, background: CodableColor)
+    case color(levels: Int)
+
+    private enum CodingKeys: String, CodingKey {
+        case type, foreground, background, levels
+    }
+
+    public init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        let type = try container.decode(String.self, forKey: .type)
+        switch type {
+        case "bw": self = .bw
+        case "twoTone":
+            let fg = try container.decode(CodableColor.self, forKey: .foreground)
+            let bg = try container.decode(CodableColor.self, forKey: .background)
+            self = .twoTone(foreground: fg, background: bg)
+        case "color":
+            let levels = try container.decode(Int.self, forKey: .levels)
+            self = .color(levels: levels)
+        default: self = .bw
+        }
+    }
+
+    public func encode(to encoder: Encoder) throws {
+        var container = encoder.container(keyedBy: CodingKeys.self)
+        switch self {
+        case .bw: try container.encode("bw", forKey: .type)
+        case .twoTone(let fg, let bg):
+            try container.encode("twoTone", forKey: .type)
+            try container.encode(fg, forKey: .foreground)
+            try container.encode(bg, forKey: .background)
+        case .color(let levels):
+            try container.encode("color", forKey: .type)
+            try container.encode(levels, forKey: .levels)
+        }
+    }
+}
+
+public struct DitherLayerParams: Identifiable, Codable, Equatable, Sendable {
+    public let id: UUID
+    public var algorithm: DitherAlgorithm
+    public var colorMode: DitherColorMode
+    public var bayerLevel: Int
+    public var pixelScale: Int
+
+    public init(
+        id: UUID = UUID(),
+        algorithm: DitherAlgorithm = .atkinson,
+        colorMode: DitherColorMode = .bw,
+        bayerLevel: Int = 2,
+        pixelScale: Int = 1
+    ) {
+        self.id = id
+        self.algorithm = algorithm
+        self.colorMode = colorMode
+        self.bayerLevel = max(1, min(4, bayerLevel))
+        self.pixelScale = max(1, min(8, pixelScale))
+    }
+}
+
 // MARK: - CompositionLayer
 
 public enum CompositionLayer: Identifiable, Codable, Equatable, Sendable {
@@ -300,6 +382,7 @@ public enum CompositionLayer: Identifiable, Codable, Equatable, Sendable {
     case overlay(OverlayLayerParams)
     case orientation(OrientationLayerParams)
     case caption(CaptionLayerParams)
+    case dither(DitherLayerParams)
 
     public var id: UUID {
         switch self {
@@ -310,6 +393,7 @@ public enum CompositionLayer: Identifiable, Codable, Equatable, Sendable {
         case .overlay(let p): return p.id
         case .orientation(let p): return p.id
         case .caption(let p): return p.id
+        case .dither(let p): return p.id
         }
     }
 
@@ -322,6 +406,7 @@ public enum CompositionLayer: Identifiable, Codable, Equatable, Sendable {
         case .overlay(let p): return p.kind == .frame ? "Frame" : "Texture"
         case .orientation: return "Orientation"
         case .caption: return "Caption"
+        case .dither: return "Dither"
         }
     }
 
@@ -334,6 +419,7 @@ public enum CompositionLayer: Identifiable, Codable, Equatable, Sendable {
         case .overlay(let p): return p.kind == .frame ? "photo.artframe" : "sparkles"
         case .orientation: return "rotate.right"
         case .caption: return "textformat"
+        case .dither: return "circle.dotted"
         }
     }
 
@@ -361,6 +447,8 @@ public enum CompositionLayer: Identifiable, Codable, Equatable, Sendable {
             self = .orientation(try container.decode(OrientationLayerParams.self, forKey: .params))
         case "caption":
             self = .caption(try container.decode(CaptionLayerParams.self, forKey: .params))
+        case "dither":
+            self = .dither(try container.decode(DitherLayerParams.self, forKey: .params))
         default:
             throw DecodingError.dataCorruptedError(
                 forKey: .type, in: container,
@@ -392,6 +480,9 @@ public enum CompositionLayer: Identifiable, Codable, Equatable, Sendable {
             try container.encode(p, forKey: .params)
         case .caption(let p):
             try container.encode("caption", forKey: .type)
+            try container.encode(p, forKey: .params)
+        case .dither(let p):
+            try container.encode("dither", forKey: .type)
             try container.encode(p, forKey: .params)
         }
     }
