@@ -51,6 +51,30 @@ final class DitherRendererTests: XCTestCase {
         return ctx.makeImage()!
     }
 
+    /// Create a checkerboard image with alternating light/dark blocks.
+    func makeCheckerboardImage(width: Int, height: Int, blockSize: Int) -> CGImage {
+        let colorSpace = CGColorSpaceCreateDeviceRGB()
+        let bitmapInfo = CGImageAlphaInfo.premultipliedLast.rawValue
+        let ctx = CGContext(
+            data: nil, width: width, height: height,
+            bitsPerComponent: 8, bytesPerRow: width * 4,
+            space: colorSpace, bitmapInfo: bitmapInfo
+        )!
+        let data = ctx.data!.bindMemory(to: UInt8.self, capacity: width * height * 4)
+        for y in 0..<height {
+            for x in 0..<width {
+                let idx = (y * width + x) * 4
+                let isLight = ((x / blockSize) + (y / blockSize)) % 2 == 0
+                let val: UInt8 = isLight ? 200 : 50
+                data[idx] = val
+                data[idx + 1] = val
+                data[idx + 2] = val
+                data[idx + 3] = 255
+            }
+        }
+        return ctx.makeImage()!
+    }
+
     /// Extract pixels from a CGImage as an array of (r, g, b) tuples.
     func extractPixels(from image: CGImage) -> [(r: UInt8, g: UInt8, b: UInt8)] {
         let width = image.width
@@ -275,11 +299,206 @@ final class DitherRendererTests: XCTestCase {
             "Pixel scale \(scale) should produce >95% consistent NxN blocks, got \(consistency * 100)%")
     }
 
+    // MARK: - Threshold Tests
+
+    func test_threshold_clampsInInit() {
+        let paramsLow = DitherLayerParams(threshold: 0.0)
+        XCTAssertEqual(paramsLow.threshold, 0.1, "Threshold below 0.1 should be clamped to 0.1")
+
+        let paramsHigh = DitherLayerParams(threshold: 1.0)
+        XCTAssertEqual(paramsHigh.threshold, 0.9, "Threshold above 0.9 should be clamped to 0.9")
+
+        let paramsNormal = DitherLayerParams(threshold: 0.3)
+        XCTAssertEqual(paramsNormal.threshold, 0.3, accuracy: 0.001)
+    }
+
+    func test_threshold_defaultIsHalf() {
+        let params = DitherLayerParams()
+        XCTAssertEqual(params.threshold, 0.5, accuracy: 0.001)
+    }
+
+    func test_threshold_lowerProducesBrighterOutput() throws {
+        let image = makeSolidImage(width: 64, height: 64, gray: 128)
+
+        let paramsBright = DitherLayerParams(algorithm: .bayer, colorMode: .bw, bayerLevel: 2, threshold: 0.2)
+        let paramsDark = DitherLayerParams(algorithm: .bayer, colorMode: .bw, bayerLevel: 2, threshold: 0.8)
+
+        let resultBright = try DitherRenderer.apply(to: image, params: paramsBright)
+        let resultDark = try DitherRenderer.apply(to: image, params: paramsDark)
+
+        let whiteBright = extractPixels(from: resultBright).filter { $0.r == 255 }.count
+        let whiteDark = extractPixels(from: resultDark).filter { $0.r == 255 }.count
+
+        XCTAssertGreaterThan(whiteBright, whiteDark,
+            "Lower threshold should produce more white pixels (brighter), got bright=\(whiteBright) dark=\(whiteDark)")
+    }
+
+    func test_threshold_worksWithColorMode() throws {
+        let image = makeSolidImage(width: 64, height: 64, gray: 128)
+
+        let paramsBright = DitherLayerParams(algorithm: .bayer, colorMode: .color(levels: 2), bayerLevel: 2, threshold: 0.2)
+        let paramsDark = DitherLayerParams(algorithm: .bayer, colorMode: .color(levels: 2), bayerLevel: 2, threshold: 0.8)
+
+        let resultBright = try DitherRenderer.apply(to: image, params: paramsBright)
+        let resultDark = try DitherRenderer.apply(to: image, params: paramsDark)
+
+        let avgBright = extractPixels(from: resultBright).map { Int($0.r) }.reduce(0, +)
+        let avgDark = extractPixels(from: resultDark).map { Int($0.r) }.reduce(0, +)
+
+        XCTAssertGreaterThan(avgBright, avgDark,
+            "Lower threshold should produce brighter color output, got bright=\(avgBright) dark=\(avgDark)")
+    }
+
+    func test_threshold_yamlRoundtrip() throws {
+        var config = ProcessingConfig.default
+        config.layers = [
+            .dither(DitherLayerParams(algorithm: .atkinson, threshold: 0.3))
+        ]
+
+        let yaml = try YAMLConfig.encode(config)
+        let decoded = try YAMLConfig.decode(yaml)
+
+        guard let layers = decoded.layers, let layer = layers.first,
+              case .dither(let params) = layer else {
+            XCTFail("Expected dither layer after YAML round-trip")
+            return
+        }
+        XCTAssertEqual(params.threshold, 0.3, accuracy: 0.001)
+    }
+
+    func test_threshold_yamlDefaultWhenMissing() throws {
+        // YAML without dither_threshold should default to 0.5
+        let yaml = """
+        layers:
+        - type: dither
+          algorithm: bayer
+          bayer_level: 2
+          pixel_scale: 1
+          color_mode: bw
+        """
+        let config = try YAMLConfig.decode(yaml)
+        guard let layers = config.layers, let layer = layers.first,
+              case .dither(let params) = layer else {
+            XCTFail("Expected dither layer")
+            return
+        }
+        XCTAssertEqual(params.threshold, 0.5, accuracy: 0.001)
+    }
+
+    // MARK: - New Algorithm Tests
+
+    func test_halftone_bw_producesOnlyBlackWhite() throws {
+        let image = makeGradientImage(width: 64, height: 64)
+        let params = DitherLayerParams(algorithm: .halftone, colorMode: .bw)
+        let result = try DitherRenderer.apply(to: image, params: params)
+        let pixels = extractPixels(from: result)
+        for pixel in pixels {
+            XCTAssertTrue(pixel.r == 0 || pixel.r == 255, "Halftone B&W should produce only 0 or 255, got \(pixel.r)")
+            XCTAssertEqual(pixel.r, pixel.g)
+            XCTAssertEqual(pixel.g, pixel.b)
+        }
+    }
+
+    func test_stucki_bw_producesOnlyBlackWhite() throws {
+        let image = makeGradientImage(width: 64, height: 64)
+        let params = DitherLayerParams(algorithm: .stucki, colorMode: .bw)
+        let result = try DitherRenderer.apply(to: image, params: params)
+        let pixels = extractPixels(from: result)
+        for pixel in pixels {
+            XCTAssertTrue(pixel.r == 0 || pixel.r == 255, "Stucki B&W should produce only 0 or 255, got \(pixel.r)")
+            XCTAssertEqual(pixel.r, pixel.g)
+            XCTAssertEqual(pixel.g, pixel.b)
+        }
+    }
+
+    func test_whiteNoise_bw_producesOnlyBlackWhite() throws {
+        let image = makeGradientImage(width: 64, height: 64)
+        let params = DitherLayerParams(algorithm: .whiteNoise, colorMode: .bw)
+        let result = try DitherRenderer.apply(to: image, params: params)
+        let pixels = extractPixels(from: result)
+        for pixel in pixels {
+            XCTAssertTrue(pixel.r == 0 || pixel.r == 255, "White Noise B&W should produce only 0 or 255, got \(pixel.r)")
+            XCTAssertEqual(pixel.r, pixel.g)
+            XCTAssertEqual(pixel.g, pixel.b)
+        }
+    }
+
+    func test_riemersma_bw_producesOnlyBlackWhite() throws {
+        let image = makeGradientImage(width: 64, height: 64)
+        let params = DitherLayerParams(algorithm: .riemersma, colorMode: .bw)
+        let result = try DitherRenderer.apply(to: image, params: params)
+        let pixels = extractPixels(from: result)
+        for pixel in pixels {
+            XCTAssertTrue(pixel.r == 0 || pixel.r == 255, "Riemersma B&W should produce only 0 or 255, got \(pixel.r)")
+            XCTAssertEqual(pixel.r, pixel.g)
+            XCTAssertEqual(pixel.g, pixel.b)
+        }
+    }
+
+    func test_whiteNoise_isDeterministic() throws {
+        let image = makeGradientImage(width: 64, height: 64)
+        let params = DitherLayerParams(algorithm: .whiteNoise, colorMode: .bw)
+        let result1 = try DitherRenderer.apply(to: image, params: params)
+        let result2 = try DitherRenderer.apply(to: image, params: params)
+        let pixels1 = extractPixels(from: result1)
+        let pixels2 = extractPixels(from: result2)
+        for i in 0..<pixels1.count {
+            XCTAssertEqual(pixels1[i].r, pixels2[i].r, "White noise should be deterministic (seeded)")
+        }
+    }
+
+    // MARK: - Pre-Processing Tests
+
+    func test_sharpen_clampsInInit() {
+        let low = DitherLayerParams(sharpen: -1)
+        XCTAssertEqual(low.sharpen, 0)
+        let high = DitherLayerParams(sharpen: 2)
+        XCTAssertEqual(high.sharpen, 1)
+    }
+
+    func test_contrast_clampsInInit() {
+        let low = DitherLayerParams(contrast: -1)
+        XCTAssertEqual(low.contrast, 0)
+        let high = DitherLayerParams(contrast: 2)
+        XCTAssertEqual(high.contrast, 1)
+    }
+
+    func test_sharpen_changesOutput() throws {
+        // Use a checkerboard pattern so unsharp mask has edges to enhance
+        let image = makeCheckerboardImage(width: 64, height: 64, blockSize: 4)
+        let paramsOff = DitherLayerParams(algorithm: .bayer, colorMode: .bw, bayerLevel: 2, sharpen: 0)
+        let paramsOn = DitherLayerParams(algorithm: .bayer, colorMode: .bw, bayerLevel: 2, sharpen: 1)
+        let resultOff = try DitherRenderer.apply(to: image, params: paramsOff)
+        let resultOn = try DitherRenderer.apply(to: image, params: paramsOn)
+        let pixelsOff = extractPixels(from: resultOff)
+        let pixelsOn = extractPixels(from: resultOn)
+        var diffs = 0
+        for i in 0..<pixelsOff.count {
+            if pixelsOff[i].r != pixelsOn[i].r { diffs += 1 }
+        }
+        XCTAssertGreaterThan(diffs, 0, "Sharpen should produce different output on high-contrast edges")
+    }
+
+    func test_contrast_changesOutput() throws {
+        let image = makeGradientImage(width: 64, height: 64)
+        let paramsOff = DitherLayerParams(algorithm: .bayer, colorMode: .bw, bayerLevel: 2, contrast: 0)
+        let paramsOn = DitherLayerParams(algorithm: .bayer, colorMode: .bw, bayerLevel: 2, contrast: 1)
+        let resultOff = try DitherRenderer.apply(to: image, params: paramsOff)
+        let resultOn = try DitherRenderer.apply(to: image, params: paramsOn)
+        let pixelsOff = extractPixels(from: resultOff)
+        let pixelsOn = extractPixels(from: resultOn)
+        var diffs = 0
+        for i in 0..<pixelsOff.count {
+            if pixelsOff[i].r != pixelsOn[i].r { diffs += 1 }
+        }
+        XCTAssertGreaterThan(diffs, 0, "Contrast should produce different output")
+    }
+
     // MARK: - All Algorithms Produce Different Output
 
     func test_allAlgorithms_produceDifferentOutput() throws {
         let image = makeGradientImage(width: 64, height: 64)
-        let algorithms: [DitherAlgorithm] = [.bayer, .floydSteinberg, .atkinson, .blueNoise, .artisticDrip]
+        let algorithms: [DitherAlgorithm] = DitherAlgorithm.allCases
 
         var results = [DitherAlgorithm: [UInt8]]()
 

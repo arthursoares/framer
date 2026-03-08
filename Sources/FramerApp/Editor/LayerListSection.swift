@@ -1563,6 +1563,21 @@ struct DitherLayerControls: View {
                 in: 2...8
             )
         }
+
+        LabeledContent("Threshold: \(String(format: "%.2f", params.threshold))") {
+            Slider(value: thresholdBinding, in: 0.1...0.9, step: 0.05)
+        }
+        .caption("Lower = brighter, Higher = darker")
+
+        LabeledContent("Sharpen: \(String(format: "%.0f%%", params.sharpen * 100))") {
+            Slider(value: sharpenBinding, in: 0...1, step: 0.1)
+        }
+        .caption("Pre-sharpen to preserve edge detail")
+
+        LabeledContent("Contrast: \(String(format: "%.0f%%", params.contrast * 100))") {
+            Slider(value: contrastBinding, in: 0...1, step: 0.1)
+        }
+        .caption("Boost contrast before dithering")
     }
 
     // MARK: - Bindings
@@ -1643,6 +1658,39 @@ struct DitherLayerControls: View {
                 guard let c = try? CodableColor(hex: hex) else { return }
                 var p = params
                 p.colorMode = .twoTone(foreground: fg, background: c)
+                onChange(p)
+            }
+        )
+    }
+
+    private var thresholdBinding: Binding<Double> {
+        Binding(
+            get: { params.threshold },
+            set: { newValue in
+                var p = params
+                p.threshold = newValue
+                onChange(p)
+            }
+        )
+    }
+
+    private var sharpenBinding: Binding<Double> {
+        Binding(
+            get: { params.sharpen },
+            set: { newValue in
+                var p = params
+                p.sharpen = newValue
+                onChange(p)
+            }
+        )
+    }
+
+    private var contrastBinding: Binding<Double> {
+        Binding(
+            get: { params.contrast },
+            set: { newValue in
+                var p = params
+                p.contrast = newValue
                 onChange(p)
             }
         )
