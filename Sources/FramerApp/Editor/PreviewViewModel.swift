@@ -1,4 +1,5 @@
 import SwiftUI
+@preconcurrency import AppKit
 import FramerCore
 
 @MainActor
@@ -44,7 +45,7 @@ final class PreviewViewModel {
                     Self.loadOriginal(from: itemURL, maxDimension: 1200)
                 }
                 let preview = try await processor.previewImage(for: itemURL, config: config, rotation: itemRotation)
-                let original = await originalHandle.value
+                nonisolated(unsafe) let original = await originalHandle.value
                 guard !Task.isCancelled else { return }
                 originalImage = original
                 previewImage = preview

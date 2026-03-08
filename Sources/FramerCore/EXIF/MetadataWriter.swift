@@ -38,6 +38,13 @@ public enum MetadataWriter {
                 }
             }
 
+            // Reset orientation to normal since we apply rotation manually
+            properties[kCGImagePropertyOrientation as String] = 1
+            if var tiff = properties[kCGImagePropertyTIFFDictionary as String] as? [String: Any] {
+                tiff[kCGImagePropertyTIFFOrientation as String] = 1
+                properties[kCGImagePropertyTIFFDictionary as String] = tiff
+            }
+
             // Add IPTC keywords
             let style = styleName(borderStyle)
             let keywords: [String] = ["framer", "framer - \(style)"]

@@ -157,6 +157,94 @@ public enum ColorExtractor {
         )
     }
 
+    /// Extract the two most dominant high-contrast colors from an image.
+    /// Returns (primary, secondary) where primary is the most prominent color
+    /// and secondary is the most visually distinct runner-up.
+    public static func extractTwoDominantColors(from image: CGImage) -> (CodableColor, CodableColor) {
+        let pixels = samplePixels(from: image)
+        guard !pixels.isEmpty else {
+            return (.black, .white)
+        }
+
+        let hslPixels = pixels.map { HSLColor.fromRGB(r: $0.r, g: $0.g, b: $0.b) }
+
+        // Group by hue into buckets
+        var buckets = [(hsl: [HSLColor], index: Int)]()
+        var rawBuckets = [[HSLColor]](repeating: [], count: bucketCount)
+        for pixel in hslPixels {
+            let idx = min(Int(pixel.h / degreesPerBucket), bucketCount - 1)
+            rawBuckets[idx].append(pixel)
+        }
+
+        // Score buckets: count × (avgSaturation / 100)
+        for (i, bucket) in rawBuckets.enumerated() {
+            guard !bucket.isEmpty else { continue }
+            buckets.append((hsl: bucket, index: i))
+        }
+
+        // Sort by score descending
+        buckets.sort { a, b in
+            let scoreA = Double(a.hsl.count) * (a.hsl.reduce(0) { $0 + $1.s } / Double(a.hsl.count) / 100.0)
+            let scoreB = Double(b.hsl.count) * (b.hsl.reduce(0) { $0 + $1.s } / Double(b.hsl.count) / 100.0)
+            return scoreA > scoreB
+        }
+
+        // Primary: average of the top bucket
+        func averageColor(_ bucket: [HSLColor]) -> HSLColor {
+            var totalWeight = 0.0
+            var wH = 0.0, wS = 0.0, wL = 0.0
+            for p in bucket {
+                let w = max(p.s, 0.1)
+                totalWeight += w
+                wH += p.h * w
+                wS += p.s * w
+                wL += p.l * w
+            }
+            return HSLColor(h: wH / totalWeight, s: wS / totalWeight, l: wL / totalWeight)
+        }
+
+        let primary: HSLColor
+        if let first = buckets.first {
+            primary = averageColor(first.hsl)
+        } else {
+            primary = HSLColor(h: 0, s: 0, l: 50)
+        }
+
+        // Secondary: pick the bucket most distant in hue from primary
+        var secondary = HSLColor(h: 0, s: 0, l: primary.l > 50 ? 10 : 90)
+        var bestDistance = -1.0
+        for bucket in buckets.dropFirst() {
+            let avg = averageColor(bucket.hsl)
+            // Hue distance on the color wheel
+            let hueDist = min(abs(avg.h - primary.h), 360 - abs(avg.h - primary.h))
+            // Also consider lightness difference for contrast
+            let lightDist = abs(avg.l - primary.l)
+            let distance = hueDist + lightDist * 0.5
+            if distance > bestDistance {
+                bestDistance = distance
+                secondary = avg
+            }
+        }
+
+        // Ensure minimum contrast: if colors are too similar, push secondary lighter/darker
+        let lightDiff = abs(primary.l - secondary.l)
+        if lightDiff < 20 {
+            secondary.l = primary.l > 50 ? max(0, primary.l - 40) : min(100, primary.l + 40)
+        }
+
+        func toCodableColor(_ hsl: HSLColor) -> CodableColor {
+            let (r, g, b) = hsl.rgbComponents
+            let hex = String(format: "#%02X%02X%02X",
+                             Int(round(r * 255)), Int(round(g * 255)), Int(round(b * 255)))
+            return (try? CodableColor(hex: hex)) ?? .black
+        }
+
+        // Always return (dark, light) order for consistent UI
+        let dark = primary.l <= secondary.l ? primary : secondary
+        let light = primary.l <= secondary.l ? secondary : primary
+        return (toCodableColor(dark), toCodableColor(light))
+    }
+
     /// Generate gradient colors from a dominant color.
     /// Returns (center, edge) CGColors for gradient stops.
     /// `saturationShift` and `lightnessShift` adjust the generated values (-50...+50).

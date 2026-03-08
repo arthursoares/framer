@@ -64,11 +64,11 @@ struct AsyncThumbnail: View {
     /// process-wide NSCache so repeated scrolls never re-decode from disk.
     private static func loadCGThumbnail(from url: URL) async -> CGImage? {
         // Fast path: return cached image without hitting the disk.
-        if let cached = Self.thumbnailCache.object(forKey: url as NSURL) {
+        if let cached = thumbnailCache.object(forKey: url as NSURL) {
             return cached.cgImage(forProposedRect: nil, context: nil, hints: nil)
         }
 
-        return await Task.detached {
+        return await Task.detached { () -> CGImage? in
             guard let source = CGImageSourceCreateWithURL(url as CFURL, nil) else { return nil }
             let options: [CFString: Any] = [
                 // Ask ImageIO to decode only a small thumbnail, skipping the full image decode.
@@ -84,14 +84,14 @@ struct AsyncThumbnail: View {
 
             // Store as NSImage so the cache can evict under memory pressure.
             let nsImage = NSImage(cgImage: thumbnail, size: NSSize(width: thumbnail.width, height: thumbnail.height))
-            Self.thumbnailCache.setObject(nsImage, forKey: url as NSURL)
+            thumbnailCache.setObject(nsImage, forKey: url as NSURL)
 
             return thumbnail
         }.value
     }
 
     /// Process-wide thumbnail cache. Capped at 500 entries (~40 MB at 160px JPEG thumbnails).
-    private static let thumbnailCache: NSCache<NSURL, NSImage> = {
+    private nonisolated(unsafe) static let thumbnailCache: NSCache<NSURL, NSImage> = {
         let cache = NSCache<NSURL, NSImage>()
         cache.countLimit = 500
         return cache

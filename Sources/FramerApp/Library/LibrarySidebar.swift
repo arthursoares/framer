@@ -71,6 +71,16 @@ struct LibrarySidebar: View {
         .onReceive(NotificationCenter.default.publisher(for: .framerDeleteSelected)) { _ in
             removeSelected()
         }
+        .onReceive(NotificationCenter.default.publisher(for: .framerRotateCW)) { _ in
+            for id in appState.selectedItems {
+                appState.rotateItem(id, clockwise: true)
+            }
+        }
+        .onReceive(NotificationCenter.default.publisher(for: .framerRotateCCW)) { _ in
+            for id in appState.selectedItems {
+                appState.rotateItem(id, clockwise: false)
+            }
+        }
     }
 
     private var emptyState: some View {
@@ -126,6 +136,7 @@ struct SidebarPresetsSection: View {
     @State private var newPresetName = ""
     @State private var presetToDelete: Preset?
     @State private var isExpanded = true
+    @State private var saveError: String?
 
     var body: some View {
         DisclosureGroup("Presets", isExpanded: $isExpanded) {
@@ -154,6 +165,14 @@ struct SidebarPresetsSection: View {
         .foregroundStyle(.secondary)
         .sheet(isPresented: $showingSaveSheet) {
             savePresetSheet
+        }
+        .alert("Save Failed", isPresented: .init(
+            get: { saveError != nil },
+            set: { if !$0 { saveError = nil } }
+        )) {
+            Button("OK") { saveError = nil }
+        } message: {
+            Text(saveError ?? "Unknown error")
         }
         .alert("Delete Preset?", isPresented: .init(
             get: { presetToDelete != nil },
@@ -214,9 +233,13 @@ struct SidebarPresetsSection: View {
             }
             Button {
                 let updated = Preset(id: preset.id, name: preset.name, config: appState.currentConfig)
-                try? appState.presetStore.save(updated)
-                appState.loadPresets()
-                appState.activePresetName = preset.name
+                do {
+                    try appState.presetStore.save(updated)
+                    appState.loadPresets()
+                    appState.activePresetName = preset.name
+                } catch {
+                    saveError = error.localizedDescription
+                }
             } label: {
                 Label("Update with Current Settings", systemImage: "arrow.triangle.2.circlepath")
             }
@@ -249,10 +272,15 @@ struct SidebarPresetsSection: View {
                     let name = newPresetName.trimmingCharacters(in: .whitespaces)
                     guard !name.isEmpty else { return }
                     let preset = Preset(name: name, config: appState.currentConfig)
-                    try? appState.presetStore.save(preset)
-                    appState.loadPresets()
-                    newPresetName = ""
-                    showingSaveSheet = false
+                    do {
+                        try appState.presetStore.save(preset)
+                        appState.loadPresets()
+                        appState.activePresetName = preset.name
+                        newPresetName = ""
+                        showingSaveSheet = false
+                    } catch {
+                        saveError = error.localizedDescription
+                    }
                 }
                 .keyboardShortcut(.defaultAction)
                 .disabled(newPresetName.trimmingCharacters(in: .whitespaces).isEmpty)

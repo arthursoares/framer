@@ -6,6 +6,7 @@ struct PresetManagerView: View {
     @State private var showingSaveSheet = false
     @State private var newPresetName = ""
     @State private var presetToDelete: Preset?
+    @State private var saveError: String?
 
     var body: some View {
         VStack(spacing: 0) {
@@ -31,6 +32,14 @@ struct PresetManagerView: View {
         }
         .sheet(isPresented: $showingSaveSheet) {
             savePresetSheet
+        }
+        .alert("Save Failed", isPresented: .init(
+            get: { saveError != nil },
+            set: { if !$0 { saveError = nil } }
+        )) {
+            Button("OK") { saveError = nil }
+        } message: {
+            Text(saveError ?? "Unknown error")
         }
         .alert("Delete Preset?", isPresented: .init(
             get: { presetToDelete != nil },
@@ -196,10 +205,15 @@ struct PresetManagerView: View {
         let name = newPresetName.trimmingCharacters(in: .whitespaces)
         guard !name.isEmpty else { return }
         let preset = Preset(name: name, config: appState.currentConfig)
-        try? appState.presetStore.save(preset)
-        appState.loadPresets()
-        newPresetName = ""
-        showingSaveSheet = false
+        do {
+            try appState.presetStore.save(preset)
+            appState.loadPresets()
+            appState.activePresetName = preset.name
+            newPresetName = ""
+            showingSaveSheet = false
+        } catch {
+            saveError = error.localizedDescription
+        }
     }
 
     private func deletePreset(_ preset: Preset) {

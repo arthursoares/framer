@@ -31,13 +31,12 @@ targets:
         INFOPLIST_KEY_CFBundleDisplayName: "Framer"
         SWIFT_STRICT_CONCURRENCY: complete
         GENERATE_INFOPLIST_FILE: YES
+        CODE_SIGN_ENTITLEMENTS: Framer.entitlements
       configs:
         Debug:
           SWIFT_ACTIVE_COMPILATION_CONDITIONS: DEBUG
         Release:
           SWIFT_ACTIVE_COMPILATION_CONDITIONS: ""
-    entitlements:
-      path: Sources/FramerApp/Framer.entitlements
 
 schemes:
   Framer:
