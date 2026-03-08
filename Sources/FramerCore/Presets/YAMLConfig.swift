@@ -63,6 +63,7 @@ public enum YAMLConfig {
         var dither_threshold: Double?
         var dither_sharpen: Double?
         var dither_contrast: Double?
+        var dither_flipped: Bool?
     }
 
     public static func encode(_ config: ProcessingConfig) throws -> String {
@@ -237,7 +238,11 @@ public enum YAMLConfig {
             }
             if p.fontStyle.contains(.bold) { schema.font_bold = true }
             if p.fontStyle.contains(.italic) { schema.font_italic = true }
-            schema.font_color = p.fontColor.hex
+            switch p.fontColorMode {
+            case .fixed(let c): schema.font_color = c.hex
+            case .dominant: schema.font_color = "dominant"
+            case .dominantInverted: schema.font_color = "dominant_inverted"
+            }
             schema.caption_alignment = p.alignment.rawValue
             schema.caption_position = p.position.rawValue
             if p.offsetX != 0 { schema.caption_offset_x = p.offsetX }
@@ -259,6 +264,9 @@ public enum YAMLConfig {
                 schema.color_mode = "twoTone"
                 schema.dither_fg = fg.hex
                 schema.dither_bg = bg.hex
+            case .dominantTwoTone(let flipped):
+                schema.color_mode = "dominantTwoTone"
+                if flipped { schema.dither_flipped = true }
             case .color(let levels):
                 schema.color_mode = "color"
                 schema.color_levels = levels
@@ -361,7 +369,13 @@ public enum YAMLConfig {
                 fontName: schema.font_name ?? "Courier New",
                 fontSize: fontSize,
                 fontStyle: fontStyle,
-                fontColor: (schema.font_color.flatMap { try? CodableColor(hex: $0) }) ?? .black,
+                fontColorMode: {
+                    switch schema.font_color {
+                    case "dominant": return .dominant
+                    case "dominant_inverted": return .dominantInverted
+                    default: return .fixed((schema.font_color.flatMap { try? CodableColor(hex: $0) }) ?? .black)
+                    }
+                }(),
                 alignment: schema.caption_alignment.flatMap { CaptionAlignment(rawValue: $0) } ?? .center,
                 position: schema.caption_position.flatMap { CaptionPosition(rawValue: $0) } ?? .bottom,
                 offsetX: schema.caption_offset_x ?? 0,
@@ -376,6 +390,8 @@ public enum YAMLConfig {
                 let fg = (schema.dither_fg.flatMap { try? CodableColor(hex: $0) }) ?? .black
                 let bg = (schema.dither_bg.flatMap { try? CodableColor(hex: $0) }) ?? .white
                 colorMode = .twoTone(foreground: fg, background: bg)
+            case "dominantTwoTone":
+                colorMode = .dominantTwoTone(flipped: schema.dither_flipped ?? false)
             case "color":
                 colorMode = .color(levels: schema.color_levels ?? 4)
             default:

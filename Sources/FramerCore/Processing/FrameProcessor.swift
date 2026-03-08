@@ -35,9 +35,12 @@ public actor FrameProcessor {
         let cgImage = applyRotation(try loadImage(from: input), degrees: rotation)
         let exif = (try? EXIFReader.read(from: input)) ?? ExifData()
 
+        // Compute the preview base dimension so DitherRenderer can match pixel scale
+        let previewBase = previewMaxDimension(for: config, imageWidth: cgImage.width, imageHeight: cgImage.height)
+
         let borderResult: BorderResult
         if let layers = config.layers {
-            borderResult = try BorderRenderer.applyLayers(layers, to: cgImage, sourceImage: cgImage, exif: exif)
+            borderResult = try BorderRenderer.applyLayers(layers, to: cgImage, sourceImage: cgImage, exif: exif, previewBaseDimension: previewBase)
         } else {
             borderResult = try BorderRenderer.applyBorder(to: cgImage, config: config, style: config.borderStyle)
         }

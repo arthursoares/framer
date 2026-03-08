@@ -52,7 +52,8 @@ public enum BorderRenderer {
         _ layers: [CompositionLayer],
         to image: CGImage,
         sourceImage: CGImage,
-        exif: ExifData
+        exif: ExifData,
+        previewBaseDimension: Int? = nil
     ) throws -> BorderResult {
         var current = image
         var imageOrigin: CGPoint?
@@ -167,10 +168,10 @@ public enum BorderRenderer {
                 }
 
             case .caption(let params):
-                current = try CaptionRenderer.renderCaption(on: current, params: params, exif: exif)
+                current = try CaptionRenderer.renderCaption(on: current, params: params, exif: exif, sourceImage: sourceImage)
 
             case .dither(let params):
-                current = try DitherRenderer.apply(to: current, params: params)
+                current = try DitherRenderer.apply(to: current, params: params, previewBaseDimension: previewBaseDimension, sourceImage: sourceImage)
             }
             i += 1
         }

@@ -28,7 +28,6 @@
 		07CE80E5C2C968E54B507CD5 /* LayerListSection.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LayerListSection.swift; sourceTree = "<group>"; };
 		0E0B6486256E0670295F5B6D /* ExportQueueView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ExportQueueView.swift; sourceTree = "<group>"; };
 		2D489C640FED51CA24D6BF68 /* PhotoThumbnailView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PhotoThumbnailView.swift; sourceTree = "<group>"; };
-		4427E617D9D891A807030728 /* Framer.entitlements */ = {isa = PBXFileReference; lastKnownFileType = text.plist.entitlements; path = Framer.entitlements; sourceTree = "<group>"; };
 		8154A40DD384301E5946B867 /* ContentView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ContentView.swift; sourceTree = "<group>"; };
 		853BC2BF3CFA9B161007BBB9 /* SettingsPanel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SettingsPanel.swift; sourceTree = "<group>"; };
 		887B8615A10066CAD105DE73 /* LibrarySidebar.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LibrarySidebar.swift; sourceTree = "<group>"; };
@@ -79,7 +78,6 @@
 			isa = PBXGroup;
 			children = (
 				8154A40DD384301E5946B867 /* ContentView.swift */,
-				4427E617D9D891A807030728 /* Framer.entitlements */,
 				F0FD903B4E5363A1DB8E148F /* App */,
 				1435E1AB35705AD546EE83ED /* Editor */,
 				E3F0C922AF54F919EB9E251B /* Library */,
@@ -237,7 +235,7 @@
 			isa = XCBuildConfiguration;
 			buildSettings = {
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
-				CODE_SIGN_ENTITLEMENTS = Sources/FramerApp/Framer.entitlements;
+				CODE_SIGN_ENTITLEMENTS = Framer.entitlements;
 				COMBINE_HIDPI_IMAGES = YES;
 				CURRENT_PROJECT_VERSION = 1;
 				GENERATE_INFOPLIST_FILE = YES;
@@ -378,7 +376,7 @@
 			isa = XCBuildConfiguration;
 			buildSettings = {
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
-				CODE_SIGN_ENTITLEMENTS = Sources/FramerApp/Framer.entitlements;
+				CODE_SIGN_ENTITLEMENTS = Framer.entitlements;
 				COMBINE_HIDPI_IMAGES = YES;
 				CURRENT_PROJECT_VERSION = 1;
 				GENERATE_INFOPLIST_FILE = YES;

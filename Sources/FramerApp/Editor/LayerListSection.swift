@@ -33,7 +33,7 @@ struct LayerListSection: View {
                     withAnimation(.easeInOut(duration: 0.2)) {
                         layers.move(fromOffsets: IndexSet(integer: fromIndex), toOffset: toOffset)
                     }
-                    undoManager?.registerUndo(withTarget: UndoProxy.shared) { _ in
+                    undoManager?.registerUndo(withTarget: UndoProxy.shared) { @MainActor _ in
                         withAnimation(.easeInOut(duration: 0.2)) {
                             layers = snapshot
                         }
@@ -117,10 +117,10 @@ struct LayerListSection: View {
         withAnimation(.easeInOut(duration: 0.2)) {
             layers.remove(at: index)
         }
-        undoManager?.registerUndo(withTarget: UndoProxy.shared) { _ in
+        undoManager?.registerUndo(withTarget: UndoProxy.shared) { @MainActor _ in
             withAnimation(.easeInOut(duration: 0.2)) {
-                let insertAt = min(index, layers.count)
-                layers.insert(removed, at: insertAt)
+                let insertAt = min(index, self.layers.count)
+                self.layers.insert(removed, at: insertAt)
             }
         }
         undoManager?.setActionName("Delete Layer")
@@ -131,10 +131,10 @@ struct LayerListSection: View {
             layers.append(layer)
         }
         let addedIndex = layers.count - 1
-        undoManager?.registerUndo(withTarget: UndoProxy.shared) { _ in
+        undoManager?.registerUndo(withTarget: UndoProxy.shared) { @MainActor _ in
             withAnimation(.easeInOut(duration: 0.2)) {
-                if addedIndex < layers.count {
-                    layers.remove(at: addedIndex)
+                if addedIndex < self.layers.count {
+                    self.layers.remove(at: addedIndex)
                 }
             }
         }
@@ -145,9 +145,9 @@ struct LayerListSection: View {
         withAnimation(.easeInOut(duration: 0.2)) {
             layers.swapAt(source, destination)
         }
-        undoManager?.registerUndo(withTarget: UndoProxy.shared) { _ in
+        undoManager?.registerUndo(withTarget: UndoProxy.shared) { @MainActor _ in
             withAnimation(.easeInOut(duration: 0.2)) {
-                layers.swapAt(destination, source)
+                self.layers.swapAt(destination, source)
             }
         }
         undoManager?.setActionName("Move Layer")
@@ -162,7 +162,8 @@ struct LayerListSection: View {
 }
 
 /// Proxy target for UndoManager since it requires NSObject.
-private final class UndoProxy: NSObject {
+@MainActor
+private final class UndoProxy: NSObject, Sendable {
     static let shared = UndoProxy()
 }
 
@@ -1241,8 +1242,17 @@ struct CaptionLayerControls: View {
                 }
             }
 
-            // Font color
-            ColorPickerWithHex("Font Color", selection: fontColorBinding)
+            // Font color mode
+            Picker("Font Color", selection: fontColorModeIndex) {
+                Text("Custom").tag(0)
+                Text("Dominant").tag(1)
+                Text("Invert Dominant").tag(2)
+            }
+            .pickerStyle(.segmented)
+
+            if case .fixed = params.fontColorMode {
+                ColorPickerWithHex("Color", selection: fontColorBinding)
+            }
         }
     }
 
@@ -1390,6 +1400,27 @@ struct CaptionLayerControls: View {
         )
     }
 
+    private var fontColorModeIndex: Binding<Int> {
+        Binding(
+            get: {
+                switch params.fontColorMode {
+                case .fixed: return 0
+                case .dominant: return 1
+                case .dominantInverted: return 2
+                }
+            },
+            set: { idx in
+                var p = params
+                switch idx {
+                case 1: p.fontColorMode = .dominant
+                case 2: p.fontColorMode = .dominantInverted
+                default: p.fontColorMode = .fixed(params.fontColor)
+                }
+                onChange(p)
+            }
+        )
+    }
+
     private var fontColorBinding: Binding<Color> {
         Binding(
             get: { Color(nsColor: NSColor(cgColor: params.fontColor.cgColor) ?? .white) },
@@ -1397,7 +1428,7 @@ struct CaptionLayerControls: View {
                 guard let hex = newColor.hexString else { return }
                 guard let c = try? CodableColor(hex: hex) else { return }
                 var p = params
-                p.fontColor = c
+                p.fontColorMode = .fixed(c)
                 onChange(p)
             }
         )
@@ -1532,6 +1563,7 @@ struct DitherLayerControls: View {
         Picker("Color Mode", selection: colorModeTag) {
             Text("B&W").tag(0)
             Text("Two-Tone").tag(1)
+            Text("Dominant").tag(3)
             Text("Color").tag(2)
         }
         .pickerStyle(.segmented)
@@ -1554,6 +1586,11 @@ struct DitherLayerControls: View {
         if case .twoTone(let fg, let bg) = params.colorMode {
             ColorPickerWithHex("Foreground", selection: foregroundBinding(fg: fg, bg: bg))
             ColorPickerWithHex("Background", selection: backgroundBinding(fg: fg, bg: bg))
+        }
+
+        if case .dominantTwoTone(let flipped) = params.colorMode {
+            Toggle("Flip Colors", isOn: flippedBinding(flipped))
+                .caption("Swap foreground and background")
         }
 
         if case .color(let levels) = params.colorMode {
@@ -1599,6 +1636,7 @@ struct DitherLayerControls: View {
                 switch params.colorMode {
                 case .bw: return 0
                 case .twoTone: return 1
+                case .dominantTwoTone: return 3
                 case .color: return 2
                 }
             },
@@ -1606,8 +1644,9 @@ struct DitherLayerControls: View {
                 var p = params
                 switch tag {
                 case 0: p.colorMode = .bw
-                case 1: p.colorMode = .twoTone(foreground: .black, background: .white)
+                case 1: p.colorMode = .twoTone(foreground: (try? CodableColor(hex: "#0251FF")) ?? .black, background: .black)
                 case 2: p.colorMode = .color(levels: 4)
+                case 3: p.colorMode = .dominantTwoTone(flipped: false)
                 default: break
                 }
                 onChange(p)
@@ -1691,6 +1730,17 @@ struct DitherLayerControls: View {
             set: { newValue in
                 var p = params
                 p.contrast = newValue
+                onChange(p)
+            }
+        )
+    }
+
+    private func flippedBinding(_ currentFlipped: Bool) -> Binding<Bool> {
+        Binding(
+            get: { currentFlipped },
+            set: { newValue in
+                var p = params
+                p.colorMode = .dominantTwoTone(flipped: newValue)
                 onChange(p)
             }
         )

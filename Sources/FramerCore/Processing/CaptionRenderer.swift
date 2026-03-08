@@ -7,7 +7,8 @@ public enum CaptionRenderer {
     public static func renderCaption(
         on image: CGImage,
         params: CaptionLayerParams,
-        exif: ExifData
+        exif: ExifData,
+        sourceImage: CGImage? = nil
     ) throws -> CGImage {
         // Resolve caption text
         let text: String
@@ -66,9 +67,30 @@ public enum CaptionRenderer {
         // NSAttributedString is toll-free bridged to CFAttributedString, making it
         // compatible with CTLineCreateWithAttributedString. NSAttributedString itself
         // is in Foundation, not AppKit — safe to use on any thread.
+        // Resolve font color from mode
+        let resolvedColor: CGColor
+        switch params.fontColorMode {
+        case .fixed(let c):
+            resolvedColor = c.cgColor
+        case .dominant:
+            let img = sourceImage ?? image
+            let dominant = ColorExtractor.extractDominantColor(from: img)
+            resolvedColor = dominant.cgColor
+        case .dominantInverted:
+            let img = sourceImage ?? image
+            let dominant = ColorExtractor.extractDominantColor(from: img)
+            // Invert: shift hue 180°, invert lightness
+            let inverted = HSLColor(
+                h: dominant.h + 180 > 360 ? dominant.h - 180 : dominant.h + 180,
+                s: dominant.s,
+                l: 100 - dominant.l
+            )
+            resolvedColor = inverted.cgColor
+        }
+
         let attrs: [NSAttributedString.Key: Any] = [
             NSAttributedString.Key(kCTFontAttributeName as String): font,
-            NSAttributedString.Key(kCTForegroundColorAttributeName as String): params.fontColor.cgColor,
+            NSAttributedString.Key(kCTForegroundColorAttributeName as String): resolvedColor,
         ]
         let attrStr = NSAttributedString(string: text, attributes: attrs)
 

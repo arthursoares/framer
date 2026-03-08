@@ -8,7 +8,7 @@ public final class PresetStore {
     public convenience init() {
         let appSupport = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask).first!
         let dir = appSupport.appendingPathComponent("Framer/presets", isDirectory: true)
-        try? FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
+        try! FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
         self.init(directory: dir)
     }
 
@@ -26,7 +26,7 @@ public final class PresetStore {
 
         let url = directory.appendingPathComponent("\(preset.id.uuidString).json")
         let data = try JSONEncoder().encode(preset)
-        try data.write(to: url)
+        try data.write(to: url, options: .atomic)
     }
 
     public func load(id: UUID) throws -> Preset {
@@ -49,10 +49,18 @@ public final class PresetStore {
             presetsById[id] = Preset(id: id, name: name, config: config)
         }
 
-        // Load JSON presets second (override YAML if same ID)
+        // Load JSON presets second (override YAML if same ID).
+        // Corrupted files are skipped (not re-thrown) so one bad file
+        // doesn't wipe the entire preset list.
         for url in files where url.pathExtension == "json" {
-            guard let preset = try? JSONDecoder().decode(Preset.self, from: Data(contentsOf: url)) else { continue }
-            presetsById[preset.id] = preset
+            do {
+                let data = try Data(contentsOf: url)
+                let preset = try JSONDecoder().decode(Preset.self, from: data)
+                presetsById[preset.id] = preset
+            } catch {
+                // Remove corrupted/empty JSON files so they don't persist.
+                try? FileManager.default.removeItem(at: url)
+            }
         }
 
         return presetsById.values.sorted { $0.name < $1.name }

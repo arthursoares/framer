@@ -253,17 +253,65 @@ public struct OrientationLayerParams: Identifiable, Codable, Equatable, Sendable
 
 // MARK: - Caption
 
+public enum CaptionColorMode: Codable, Equatable, Sendable {
+    case fixed(CodableColor)
+    case dominant
+    case dominantInverted
+
+    private enum CodingKeys: String, CodingKey {
+        case type, color
+    }
+
+    public init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        let type = try container.decode(String.self, forKey: .type)
+        switch type {
+        case "fixed":
+            let c = try container.decode(CodableColor.self, forKey: .color)
+            self = .fixed(c)
+        case "dominant":
+            self = .dominant
+        case "dominantInverted":
+            self = .dominantInverted
+        default:
+            self = .fixed(.black)
+        }
+    }
+
+    public func encode(to encoder: Encoder) throws {
+        var container = encoder.container(keyedBy: CodingKeys.self)
+        switch self {
+        case .fixed(let c):
+            try container.encode("fixed", forKey: .type)
+            try container.encode(c, forKey: .color)
+        case .dominant:
+            try container.encode("dominant", forKey: .type)
+        case .dominantInverted:
+            try container.encode("dominantInverted", forKey: .type)
+        }
+    }
+}
+
 public struct CaptionLayerParams: Identifiable, Codable, Equatable, Sendable {
     public let id: UUID
     public var mode: CaptionMode
     public var fontName: String
     public var fontSize: FontSize
     public var fontStyle: FontStyle
-    public var fontColor: CodableColor
+    public var fontColorMode: CaptionColorMode
     public var alignment: CaptionAlignment
     public var position: CaptionPosition
     public var offsetX: Int
     public var offsetY: Int
+
+    /// Convenience accessor for backward compatibility.
+    public var fontColor: CodableColor {
+        get {
+            if case .fixed(let c) = fontColorMode { return c }
+            return .black
+        }
+        set { fontColorMode = .fixed(newValue) }
+    }
 
     public init(
         id: UUID = UUID(),
@@ -272,6 +320,7 @@ public struct CaptionLayerParams: Identifiable, Codable, Equatable, Sendable {
         fontSize: FontSize = .auto,
         fontStyle: FontStyle = [],
         fontColor: CodableColor = .black,
+        fontColorMode: CaptionColorMode? = nil,
         alignment: CaptionAlignment = .center,
         position: CaptionPosition = .bottom,
         offsetX: Int = 0,
@@ -282,11 +331,51 @@ public struct CaptionLayerParams: Identifiable, Codable, Equatable, Sendable {
         self.fontName = fontName
         self.fontSize = fontSize
         self.fontStyle = fontStyle
-        self.fontColor = fontColor
+        self.fontColorMode = fontColorMode ?? .fixed(fontColor)
         self.alignment = alignment
         self.position = position
         self.offsetX = offsetX
         self.offsetY = offsetY
+    }
+
+    private enum CodingKeys: String, CodingKey {
+        case id, mode, fontName, fontSize, fontStyle, fontColor, fontColorMode
+        case alignment, position, offsetX, offsetY
+    }
+
+    public init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        id = try container.decode(UUID.self, forKey: .id)
+        mode = try container.decode(CaptionMode.self, forKey: .mode)
+        fontName = try container.decode(String.self, forKey: .fontName)
+        fontSize = try container.decode(FontSize.self, forKey: .fontSize)
+        fontStyle = try container.decode(FontStyle.self, forKey: .fontStyle)
+        alignment = try container.decode(CaptionAlignment.self, forKey: .alignment)
+        position = try container.decode(CaptionPosition.self, forKey: .position)
+        offsetX = try container.decodeIfPresent(Int.self, forKey: .offsetX) ?? 0
+        offsetY = try container.decodeIfPresent(Int.self, forKey: .offsetY) ?? 0
+
+        // Prefer new fontColorMode; fall back to legacy fontColor field
+        if let fcm = try? container.decode(CaptionColorMode.self, forKey: .fontColorMode) {
+            fontColorMode = fcm
+        } else {
+            let c = try container.decodeIfPresent(CodableColor.self, forKey: .fontColor) ?? .black
+            fontColorMode = .fixed(c)
+        }
+    }
+
+    public func encode(to encoder: Encoder) throws {
+        var container = encoder.container(keyedBy: CodingKeys.self)
+        try container.encode(id, forKey: .id)
+        try container.encode(mode, forKey: .mode)
+        try container.encode(fontName, forKey: .fontName)
+        try container.encode(fontSize, forKey: .fontSize)
+        try container.encode(fontStyle, forKey: .fontStyle)
+        try container.encode(fontColorMode, forKey: .fontColorMode)
+        try container.encode(alignment, forKey: .alignment)
+        try container.encode(position, forKey: .position)
+        try container.encode(offsetX, forKey: .offsetX)
+        try container.encode(offsetY, forKey: .offsetY)
     }
 }
 
@@ -329,10 +418,13 @@ public enum DitherAlgorithm: String, Codable, Sendable, CaseIterable {
 public enum DitherColorMode: Codable, Equatable, Sendable {
     case bw
     case twoTone(foreground: CodableColor, background: CodableColor)
+    /// Two-tone using the two most dominant high-contrast colors from the image.
+    /// When `flipped` is true, foreground and background are swapped.
+    case dominantTwoTone(flipped: Bool)
     case color(levels: Int)
 
     private enum CodingKeys: String, CodingKey {
-        case type, foreground, background, levels
+        case type, foreground, background, levels, flipped
     }
 
     public init(from decoder: Decoder) throws {
@@ -344,6 +436,9 @@ public enum DitherColorMode: Codable, Equatable, Sendable {
             let fg = try container.decode(CodableColor.self, forKey: .foreground)
             let bg = try container.decode(CodableColor.self, forKey: .background)
             self = .twoTone(foreground: fg, background: bg)
+        case "dominantTwoTone":
+            let flipped = try container.decodeIfPresent(Bool.self, forKey: .flipped) ?? false
+            self = .dominantTwoTone(flipped: flipped)
         case "color":
             let levels = try container.decode(Int.self, forKey: .levels)
             self = .color(levels: levels)
@@ -359,6 +454,9 @@ public enum DitherColorMode: Codable, Equatable, Sendable {
             try container.encode("twoTone", forKey: .type)
             try container.encode(fg, forKey: .foreground)
             try container.encode(bg, forKey: .background)
+        case .dominantTwoTone(let flipped):
+            try container.encode("dominantTwoTone", forKey: .type)
+            if flipped { try container.encode(true, forKey: .flipped) }
         case .color(let levels):
             try container.encode("color", forKey: .type)
             try container.encode(levels, forKey: .levels)
