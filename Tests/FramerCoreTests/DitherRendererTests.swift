@@ -317,11 +317,11 @@ final class DitherRendererTests: XCTestCase {
         XCTAssertEqual(params.threshold, 0.5, accuracy: 0.001)
     }
 
-    func test_threshold_lowerProducesBrighterOutput() throws {
+    func test_threshold_higherProducesBrighterOutput() throws {
         let image = makeSolidImage(width: 64, height: 64, gray: 128)
 
-        let paramsBright = DitherLayerParams(algorithm: .bayer, colorMode: .bw, bayerLevel: 2, threshold: 0.2)
-        let paramsDark = DitherLayerParams(algorithm: .bayer, colorMode: .bw, bayerLevel: 2, threshold: 0.8)
+        let paramsBright = DitherLayerParams(algorithm: .bayer, colorMode: .bw, bayerLevel: 2, threshold: 0.8)
+        let paramsDark = DitherLayerParams(algorithm: .bayer, colorMode: .bw, bayerLevel: 2, threshold: 0.2)
 
         let resultBright = try DitherRenderer.apply(to: image, params: paramsBright)
         let resultDark = try DitherRenderer.apply(to: image, params: paramsDark)
@@ -330,14 +330,14 @@ final class DitherRendererTests: XCTestCase {
         let whiteDark = extractPixels(from: resultDark).filter { $0.r == 255 }.count
 
         XCTAssertGreaterThan(whiteBright, whiteDark,
-            "Lower threshold should produce more white pixels (brighter), got bright=\(whiteBright) dark=\(whiteDark)")
+            "Higher threshold should produce more white pixels (brighter), got bright=\(whiteBright) dark=\(whiteDark)")
     }
 
     func test_threshold_worksWithColorMode() throws {
         let image = makeSolidImage(width: 64, height: 64, gray: 128)
 
-        let paramsBright = DitherLayerParams(algorithm: .bayer, colorMode: .color(levels: 2), bayerLevel: 2, threshold: 0.2)
-        let paramsDark = DitherLayerParams(algorithm: .bayer, colorMode: .color(levels: 2), bayerLevel: 2, threshold: 0.8)
+        let paramsBright = DitherLayerParams(algorithm: .bayer, colorMode: .color(levels: 2), bayerLevel: 2, threshold: 0.8)
+        let paramsDark = DitherLayerParams(algorithm: .bayer, colorMode: .color(levels: 2), bayerLevel: 2, threshold: 0.2)
 
         let resultBright = try DitherRenderer.apply(to: image, params: paramsBright)
         let resultDark = try DitherRenderer.apply(to: image, params: paramsDark)
@@ -346,7 +346,7 @@ final class DitherRendererTests: XCTestCase {
         let avgDark = extractPixels(from: resultDark).map { Int($0.r) }.reduce(0, +)
 
         XCTAssertGreaterThan(avgBright, avgDark,
-            "Lower threshold should produce brighter color output, got bright=\(avgBright) dark=\(avgDark)")
+            "Higher threshold should produce brighter color output, got bright=\(avgBright) dark=\(avgDark)")
     }
 
     func test_threshold_yamlRoundtrip() throws {

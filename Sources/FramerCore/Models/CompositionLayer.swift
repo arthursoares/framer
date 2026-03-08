@@ -373,7 +373,7 @@ public struct DitherLayerParams: Identifiable, Codable, Equatable, Sendable {
     public var bayerLevel: Int
     public var pixelScale: Int
     /// Controls the black/white decision point (0.1–0.9, default 0.5).
-    /// Lower = brighter output (more white), higher = darker output (more black).
+    /// Lower = darker output (more black), higher = brighter output (more white).
     public var threshold: Double
     /// Pre-sharpen amount before dithering (0–1, default 0 = off).
     /// Enhances edge detail that would otherwise be lost during quantization.

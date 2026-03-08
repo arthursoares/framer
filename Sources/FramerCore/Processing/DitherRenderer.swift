@@ -230,7 +230,7 @@ public enum DitherRenderer {
     ) throws {
         // Apply threshold offset in sRGB (perceptual) space for uniform brightness adjustment,
         // then convert to linear space for dithering calculations.
-        let offset = 0.5 - threshold
+        let offset = threshold - 0.5
         let count = width * height
         var lumBuf = [Double](repeating: 0, count: count)
         for i in 0..<count {
@@ -326,7 +326,7 @@ public enum DitherRenderer {
         var bBuf = [Double](repeating: 0, count: count)
 
         // Apply threshold offset in sRGB (perceptual) space before converting to linear
-        let offset = 0.5 - threshold
+        let offset = threshold - 0.5
         for i in 0..<count {
             let idx = i * 4
             let rAdj = max(0.0, min(1.0, Double(pixels[idx]) / 255.0 + offset))
