@@ -81,6 +81,11 @@ struct LayerListSection: View {
             } label: {
                 Label("Caption", systemImage: "textformat")
             }
+            Button {
+                addLayer(.dither(DitherLayerParams()))
+            } label: {
+                Label("Dither", systemImage: "circle.dotted")
+            }
             Divider()
             Button {
                 addLayer(.overlay(OverlayLayerParams(kind: .frame)))
@@ -275,6 +280,8 @@ struct LayerRow: View {
             OrientationLayerControls(params: params) { layer = .orientation($0) }
         case .caption(let params):
             CaptionLayerControls(params: params) { layer = .caption($0) }
+        case .dither(let params):
+            DitherLayerControls(params: params) { layer = .dither($0) }
         }
     }
 
@@ -302,6 +309,8 @@ struct LayerRow: View {
             case .custom: return "Custom"
             case .none: return "Off"
             }
+        case .dither(let p):
+            return p.algorithm.label
         }
     }
 }
@@ -1504,6 +1513,161 @@ struct FlowLayout: Layout {
         }
 
         return (CGSize(width: totalWidth, height: y + rowHeight), origins)
+    }
+}
+
+// MARK: - DitherLayerControls
+
+struct DitherLayerControls: View {
+    var params: DitherLayerParams
+    var onChange: (DitherLayerParams) -> Void
+
+    var body: some View {
+        Picker("Algorithm", selection: algorithmBinding) {
+            ForEach(DitherAlgorithm.allCases, id: \.self) { algo in
+                Text(algo.label).tag(algo)
+            }
+        }
+
+        Picker("Color Mode", selection: colorModeTag) {
+            Text("B&W").tag(0)
+            Text("Two-Tone").tag(1)
+            Text("Color").tag(2)
+        }
+        .pickerStyle(.segmented)
+
+        if params.algorithm == .bayer {
+            Stepper(
+                "Bayer Level: \(params.bayerLevel)",
+                value: bayerLevelBinding,
+                in: 1...4
+            )
+            .caption("(\(1 << (params.bayerLevel + 1))×\(1 << (params.bayerLevel + 1)))")
+        }
+
+        Stepper(
+            "Pixel Scale: \(params.pixelScale)×",
+            value: pixelScaleBinding,
+            in: 1...8
+        )
+
+        if case .twoTone(let fg, let bg) = params.colorMode {
+            ColorPickerWithHex("Foreground", selection: foregroundBinding(fg: fg, bg: bg))
+            ColorPickerWithHex("Background", selection: backgroundBinding(fg: fg, bg: bg))
+        }
+
+        if case .color(let levels) = params.colorMode {
+            Stepper(
+                "Levels: \(levels) per channel",
+                value: levelsBinding(levels),
+                in: 2...8
+            )
+        }
+    }
+
+    // MARK: - Bindings
+
+    private var algorithmBinding: Binding<DitherAlgorithm> {
+        Binding(
+            get: { params.algorithm },
+            set: { newValue in
+                var p = params
+                p.algorithm = newValue
+                onChange(p)
+            }
+        )
+    }
+
+    private var colorModeTag: Binding<Int> {
+        Binding(
+            get: {
+                switch params.colorMode {
+                case .bw: return 0
+                case .twoTone: return 1
+                case .color: return 2
+                }
+            },
+            set: { tag in
+                var p = params
+                switch tag {
+                case 0: p.colorMode = .bw
+                case 1: p.colorMode = .twoTone(foreground: .black, background: .white)
+                case 2: p.colorMode = .color(levels: 4)
+                default: break
+                }
+                onChange(p)
+            }
+        )
+    }
+
+    private var bayerLevelBinding: Binding<Int> {
+        Binding(
+            get: { params.bayerLevel },
+            set: { newValue in
+                var p = params
+                p.bayerLevel = newValue
+                onChange(p)
+            }
+        )
+    }
+
+    private var pixelScaleBinding: Binding<Int> {
+        Binding(
+            get: { params.pixelScale },
+            set: { newValue in
+                var p = params
+                p.pixelScale = newValue
+                onChange(p)
+            }
+        )
+    }
+
+    private func foregroundBinding(fg: CodableColor, bg: CodableColor) -> Binding<Color> {
+        Binding(
+            get: { Color(nsColor: NSColor(cgColor: fg.cgColor) ?? .white) },
+            set: { newColor in
+                guard let hex = newColor.hexString else { return }
+                guard let c = try? CodableColor(hex: hex) else { return }
+                var p = params
+                p.colorMode = .twoTone(foreground: c, background: bg)
+                onChange(p)
+            }
+        )
+    }
+
+    private func backgroundBinding(fg: CodableColor, bg: CodableColor) -> Binding<Color> {
+        Binding(
+            get: { Color(nsColor: NSColor(cgColor: bg.cgColor) ?? .white) },
+            set: { newColor in
+                guard let hex = newColor.hexString else { return }
+                guard let c = try? CodableColor(hex: hex) else { return }
+                var p = params
+                p.colorMode = .twoTone(foreground: fg, background: c)
+                onChange(p)
+            }
+        )
+    }
+
+    private func levelsBinding(_ currentLevels: Int) -> Binding<Int> {
+        Binding(
+            get: { currentLevels },
+            set: { newValue in
+                var p = params
+                p.colorMode = .color(levels: newValue)
+                onChange(p)
+            }
+        )
+    }
+}
+
+private extension View {
+    func caption(_ text: String) -> some View {
+        VStack(alignment: .leading, spacing: 2) {
+            self
+            Text(text)
+                .font(.caption)
+                .foregroundStyle(.secondary)
+        }
     }
 }
 
