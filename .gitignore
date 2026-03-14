@@ -26,3 +26,8 @@ releases/
 
 # Legacy
 *.lrdevplugin/
+.ai-assistant/
+.ai-project/
+
+# CLI binary (build output)
+framer

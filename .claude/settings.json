@@ -6,10 +6,9 @@
       "Bash(git diff:*)",
       "Bash(git log:*)",
       "Bash(git branch:*)",
-      "Bash(npm run typecheck:*)",
-      "Bash(npm run lint:*)",
-      "Bash(npm run test:*)",
-      "Bash(npm run build:*)"
+      "Bash(swift build:*)",
+      "Bash(swift test:*)",
+      "Bash(swift run:*)"
     ]
   }
 }
