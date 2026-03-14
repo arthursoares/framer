@@ -28,6 +28,7 @@ releases/
 *.lrdevplugin/
 .ai-assistant/
 .ai-project/
+Framer-iOS/
 
 # CLI binary (build output)
 framer
