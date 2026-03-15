@@ -24,6 +24,16 @@ struct LivePreviewPanel: View {
                         .padding(24)
                         .shadow(color: .black.opacity(0.15), radius: 12, y: 6)
                         .transition(.opacity)
+                        .overlay(alignment: .bottomTrailing) {
+                            if !showOriginal, let dims = viewModel.outputDimensions {
+                                Text(dims)
+                                    .font(.caption.monospacedDigit())
+                                    .padding(.horizontal, 8)
+                                    .padding(.vertical, 4)
+                                    .background(.ultraThinMaterial, in: RoundedRectangle(cornerRadius: 6))
+                                    .padding(8)
+                            }
+                        }
                 } else {
                     VStack(spacing: 16) {
                         Image(systemName: "photo.artframe")

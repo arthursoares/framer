@@ -11,13 +11,29 @@ final class PreviewViewModel {
     var error: String?
     var exifData: ExifData?
 
+    /// Original (source) image pixel dimensions, set when a photo is loaded.
+    private(set) var originalPixelSize: CGSize?
+    /// The current processing config, cached for output size computation.
+    private var currentConfig: ProcessingConfig?
+
+    /// Formatted output dimensions string (e.g. "1920 × 1080"), or nil when unavailable.
+    var outputDimensions: String? {
+        guard let inputSize = originalPixelSize,
+              let layers = currentConfig?.layers else { return nil }
+        let output = OutputSizeCalculator.outputSize(for: inputSize, layers: layers)
+        return "\(Int(output.width)) × \(Int(output.height))"
+    }
+
     private var renderTask: Task<Void, Never>?
     private let processor = FrameProcessor()
 
     func updatePreview(for item: PhotoItem?, config: ProcessingConfig) {
+        currentConfig = config
+
         guard let item else {
             previewImage = nil
             originalImage = nil
+            originalPixelSize = nil
             exifData = nil
             error = nil
             return
@@ -44,10 +60,16 @@ final class PreviewViewModel {
                 let originalHandle = Task.detached {
                     Self.loadOriginal(from: itemURL, maxDimension: 1200)
                 }
+
+                // Read full-resolution pixel dimensions (cheap metadata-only call).
+                let pixelSize = Task.detached { Self.readPixelSize(from: itemURL) }
+
                 let preview = try await processor.previewImage(for: itemURL, config: config, rotation: itemRotation)
                 nonisolated(unsafe) let original = await originalHandle.value
+                let resolvedPixelSize = await pixelSize.value
                 guard !Task.isCancelled else { return }
                 originalImage = original
+                originalPixelSize = resolvedPixelSize
                 previewImage = preview
             } catch is CancellationError {
                 return
@@ -56,6 +78,17 @@ final class PreviewViewModel {
             }
             isLoading = false
         }
+    }
+
+    /// Reads the full-resolution pixel dimensions from an image URL without decoding pixels.
+    private nonisolated static func readPixelSize(from url: URL) -> CGSize? {
+        guard let source = CGImageSourceCreateWithURL(url as CFURL, nil),
+              let props = CGImageSourceCopyPropertiesAtIndex(source, 0, nil) as? [CFString: Any],
+              let w = props[kCGImagePropertyPixelWidth] as? Int,
+              let h = props[kCGImagePropertyPixelHeight] as? Int else {
+            return nil
+        }
+        return CGSize(width: w, height: h)
     }
 
     /// Loads and downscales the source image for before/after comparison.
