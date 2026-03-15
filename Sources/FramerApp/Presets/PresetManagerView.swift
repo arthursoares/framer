@@ -155,6 +155,7 @@ struct PresetManagerView: View {
         switch config.outputFormat {
         case .jpeg(let q): return "JPEG \(q)%"
         case .png: return "PNG"
+        case .mp4: return "MP4"
         }
     }
 

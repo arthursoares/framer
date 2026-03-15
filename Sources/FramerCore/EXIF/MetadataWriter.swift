@@ -24,6 +24,9 @@ public enum MetadataWriter {
             properties[kCGImageDestinationLossyCompressionQuality as String] = Double(quality) / 100.0
         case .png:
             utType = "public.png" as CFString
+        case .mp4:
+            // Video metadata is handled separately by VideoProcessor
+            return
         }
 
         if preserveMetadata {

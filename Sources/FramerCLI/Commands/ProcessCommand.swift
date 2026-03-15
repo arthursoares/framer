@@ -195,6 +195,7 @@ struct ProcessCommand: AsyncParsableCommand {
         switch format {
         case .png: ext = "png"
         case .jpeg: ext = "jpg"
+        case .mp4: ext = "mp4"
         }
         let suffix: String
         switch style {

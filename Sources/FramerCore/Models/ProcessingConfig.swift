@@ -176,6 +176,7 @@ public enum FontSize: Codable, Equatable, Sendable {
 public enum OutputFormat: Codable, Equatable, Sendable {
     case jpeg(quality: Int)
     case png
+    case mp4(VideoExportConfig)
 }
 
 // MARK: - BackgroundMode
@@ -202,6 +203,7 @@ public struct ProcessingConfig: Equatable, Sendable {
     public var noMetadata: Bool
     public var backgroundMode: BackgroundMode
     public var layers: [CompositionLayer]?
+    public var videoExport: VideoExportConfig?
 
     public init(
         borderStyle: BorderStyle = .solid,
@@ -215,7 +217,8 @@ public struct ProcessingConfig: Equatable, Sendable {
         outerPadding: Int = 0,
         noMetadata: Bool = false,
         backgroundMode: BackgroundMode = .color,
-        layers: [CompositionLayer]? = nil
+        layers: [CompositionLayer]? = nil,
+        videoExport: VideoExportConfig? = nil
     ) {
         self.borderStyle = borderStyle
         self.borderThickness = borderThickness
@@ -229,6 +232,7 @@ public struct ProcessingConfig: Equatable, Sendable {
         self.noMetadata = noMetadata
         self.backgroundMode = backgroundMode
         self.layers = layers
+        self.videoExport = videoExport
     }
 
     public static let `default` = ProcessingConfig()
@@ -240,7 +244,7 @@ extension ProcessingConfig: Codable {
         case borderStyle, borderThickness, borderColor, padding
         case outputFormat, instagramMaxSize, postProcess
         case backgroundColor, outerPadding, noMetadata
-        case backgroundMode, layers
+        case backgroundMode, layers, videoExport
     }
 
     public init(from decoder: Decoder) throws {
@@ -258,6 +262,7 @@ extension ProcessingConfig: Codable {
         noMetadata = (try? container.decodeIfPresent(Bool.self, forKey: .noMetadata)) ?? false
         backgroundMode = (try? container.decodeIfPresent(BackgroundMode.self, forKey: .backgroundMode)) ?? .color
         layers = try? container.decodeIfPresent([CompositionLayer].self, forKey: .layers)
+        videoExport = try? container.decodeIfPresent(VideoExportConfig.self, forKey: .videoExport)
     }
 }
 
@@ -269,6 +274,7 @@ public enum FramerError: LocalizedError {
     case exifReadFailed(URL)
     case unsupportedFormat(String)
     case encodingFailed(URL)
+    case invalidTrimRange(String)
 
     public var errorDescription: String? {
         switch self {
@@ -277,6 +283,7 @@ public enum FramerError: LocalizedError {
         case .exifReadFailed(let u): return "Cannot read EXIF: \(u.path)"
         case .unsupportedFormat(let s): return "Unsupported format: \(s)"
         case .encodingFailed(let u): return "Failed to encode image: \(u.path)"
+        case .invalidTrimRange(let s): return "Invalid trim range: \(s)"
         }
     }
 }

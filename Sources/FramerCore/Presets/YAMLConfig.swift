@@ -91,6 +91,8 @@ public enum YAMLConfig {
             schema.jpeg_quality = q
         case .png:
             schema.output_format = "png"
+        case .mp4:
+            schema.output_format = "mp4"
         }
         schema.instagram_max_size = config.instagramMaxSize
         schema.post_process = config.postProcess
