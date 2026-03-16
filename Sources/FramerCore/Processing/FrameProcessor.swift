@@ -84,7 +84,7 @@ public actor FrameProcessor {
 
     // MARK: - Helpers
 
-    private func extractVideoFrame(from url: URL) throws -> CGImage {
+    private nonisolated func extractVideoFrame(from url: URL) throws -> CGImage {
         let asset = AVAsset(url: url)
         let generator = AVAssetImageGenerator(asset: asset)
         generator.appliesPreferredTrackTransform = true

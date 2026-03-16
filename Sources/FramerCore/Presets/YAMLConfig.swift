@@ -22,6 +22,8 @@ public enum YAMLConfig {
         var print_height_mm: Double?
         var print_dpi: Int?
         var background_mode: String?
+        var codec: String?
+        var trim: String?
         var layers: [YAMLLayerSchema]?
     }
 
@@ -100,6 +102,18 @@ public enum YAMLConfig {
         if config.outerPadding != 0 { schema.outer_padding = config.outerPadding }
         if config.noMetadata { schema.no_metadata = config.noMetadata }
         if config.backgroundMode != .color { schema.background_mode = config.backgroundMode.rawValue }
+        if let videoExport = config.videoExport {
+            schema.codec = videoExport.codec.rawValue
+            if let trim = videoExport.trim {
+                let startH = Int(trim.start / 3600)
+                let startM = Int(trim.start.truncatingRemainder(dividingBy: 3600) / 60)
+                let startS = trim.start.truncatingRemainder(dividingBy: 60)
+                let endH = Int(trim.end / 3600)
+                let endM = Int(trim.end.truncatingRemainder(dividingBy: 3600) / 60)
+                let endS = trim.end.truncatingRemainder(dividingBy: 60)
+                schema.trim = String(format: "%02d:%02d:%06.3f-%02d:%02d:%06.3f", startH, startM, startS, endH, endM, endS)
+            }
+        }
         if let layers = config.layers {
             schema.layers = layers.map { encodeLayers($0) }
         }
@@ -137,6 +151,12 @@ public enum YAMLConfig {
         if let nm = schema.no_metadata { config.noMetadata = nm }
         if let bm = schema.background_mode, let mode = BackgroundMode(rawValue: bm) {
             config.backgroundMode = mode
+        }
+        if schema.codec != nil || schema.trim != nil {
+            let videoCodec: VideoCodec = schema.codec == "h265" ? .h265 : .h264
+            var trimRange: TrimRange? = nil
+            if let t = schema.trim { trimRange = try? TrimRange(from: t) }
+            config.videoExport = VideoExportConfig(codec: videoCodec, trim: trimRange)
         }
         if let yamlLayers = schema.layers {
             config.layers = yamlLayers.compactMap { decodeLayers($0) }

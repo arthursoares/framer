@@ -37,6 +37,18 @@ struct ProcessCommand: AsyncParsableCommand {
     @Option(help: "Print height in mm (default 100)") var printHeight: Double?
     @Option(help: "Print DPI (default 300)") var printDpi: Int?
 
+    @Option(name: .long, help: "Video trim range in timecode format: HH:MM:SS.mmm-HH:MM:SS.mmm")
+    var trim: String?
+
+    @Option(name: .long, help: "Video output codec: h264 (default) or h265")
+    var codec: String = "h264"
+
+    private static let videoExtensions: Set<String> = ["mp4", "mov", "m4v", "avi", "mkv", "webm"]
+
+    private func isVideoFile(_ url: URL) -> Bool {
+        Self.videoExtensions.contains(url.pathExtension.lowercased())
+    }
+
     mutating func run() async throws {
         // Initialize default presets if needed
         PresetStore().initializeDefaults()
@@ -120,6 +132,36 @@ struct ProcessCommand: AsyncParsableCommand {
             }
             let workerCount = workers ?? ProcessInfo.processInfo.processorCount
             try await batchProcess(directory: inputURL, outputDir: outputDir, config: cfg, workers: workerCount)
+        } else if isVideoFile(inputURL) {
+            let outputURL: URL
+            if let f = outputFile {
+                outputURL = URL(fileURLWithPath: f)
+            } else {
+                let outDir = URL(fileURLWithPath: output!)
+                try FileManager.default.createDirectory(at: outDir, withIntermediateDirectories: true)
+                let stem = inputURL.deletingPathExtension().lastPathComponent
+                outputURL = outDir.appendingPathComponent("\(stem).mp4")
+            }
+
+            let videoCodec: VideoCodec = codec == "h265" ? .h265 : .h264
+            var trimRange: TrimRange? = nil
+            if let trimString = trim {
+                trimRange = try TrimRange(from: trimString)
+            }
+            let videoConfig = VideoExportConfig(codec: videoCodec, trim: trimRange)
+
+            let processor = VideoProcessor()
+            await processor.onProgress { progress in
+                print("\rProcessing: frame \(progress.currentFrame)/\(progress.totalFrames) (\(Int(progress.fraction * 100))%)", terminator: "")
+                fflush(stdout)
+            }
+            try await processor.process(
+                input: inputURL,
+                output: outputURL,
+                config: cfg,
+                videoExport: videoConfig
+            )
+            print("\nDone: \(outputURL.path)")
         } else {
             let outURL: URL
             if let f = outputFile {
@@ -141,52 +183,91 @@ struct ProcessCommand: AsyncParsableCommand {
         let outDir = URL(fileURLWithPath: outputDir)
         try fm.createDirectory(at: outDir, withIntermediateDirectories: true)
 
-        let images = try fm.contentsOfDirectory(at: directory, includingPropertiesForKeys: nil)
-            .filter { ["jpg","jpeg","png","tiff","tif","heic"].contains($0.pathExtension.lowercased()) }
+        let imageExtensions: Set<String> = ["jpg", "jpeg", "png", "tiff", "tif", "heic"]
+        let allFiles = try fm.contentsOfDirectory(at: directory, includingPropertiesForKeys: nil)
+        let images = allFiles.filter { imageExtensions.contains($0.pathExtension.lowercased()) }
+        let videos = allFiles.filter { Self.videoExtensions.contains($0.pathExtension.lowercased()) }
 
-        guard !images.isEmpty else {
-            print("No images found in \(directory.path)")
+        guard !images.isEmpty || !videos.isEmpty else {
+            print("No images or videos found in \(directory.path)")
             return
         }
 
-        let total = images.count
-        print("Processing \(total) image\(total == 1 ? "" : "s") with \(workers) worker\(workers == 1 ? "" : "s")...")
+        let totalImages = images.count
+        let totalVideos = videos.count
 
-        let counter = Counter()
+        // Process images in parallel
+        if !images.isEmpty {
+            print("Processing \(totalImages) image\(totalImages == 1 ? "" : "s") with \(workers) worker\(workers == 1 ? "" : "s")...")
 
-        try await withThrowingTaskGroup(of: Void.self) { group in
-            var pending = images.makeIterator()
+            let counter = Counter()
 
-            // Seed initial workers
-            for _ in 0..<min(workers, total) {
-                if let url = pending.next() {
-                    group.addTask {
-                        let outURL = Self.outputName(for: url, in: outDir, style: config.borderStyle, format: config.outputFormat)
-                        let processor = FrameProcessor()
-                        try await processor.process(input: url, output: outURL, config: config)
-                        Self.runPostProcess(config.postProcess, file: outURL)
-                        let d = await counter.increment()
-                        print("[\(d)/\(total)] \(url.lastPathComponent)")
+            try await withThrowingTaskGroup(of: Void.self) { group in
+                var pending = images.makeIterator()
+
+                // Seed initial workers
+                for _ in 0..<min(workers, totalImages) {
+                    if let url = pending.next() {
+                        group.addTask {
+                            let outURL = Self.outputName(for: url, in: outDir, style: config.borderStyle, format: config.outputFormat)
+                            let processor = FrameProcessor()
+                            try await processor.process(input: url, output: outURL, config: config)
+                            Self.runPostProcess(config.postProcess, file: outURL)
+                            let d = await counter.increment()
+                            print("[\(d)/\(totalImages)] \(url.lastPathComponent)")
+                        }
+                    }
+                }
+
+                // As each finishes, schedule next
+                for try await _ in group {
+                    if let url = pending.next() {
+                        group.addTask {
+                            let outURL = Self.outputName(for: url, in: outDir, style: config.borderStyle, format: config.outputFormat)
+                            let processor = FrameProcessor()
+                            try await processor.process(input: url, output: outURL, config: config)
+                            Self.runPostProcess(config.postProcess, file: outURL)
+                            let d = await counter.increment()
+                            print("[\(d)/\(totalImages)] \(url.lastPathComponent)")
+                        }
                     }
                 }
             }
 
-            // As each finishes, schedule next
-            for try await _ in group {
-                if let url = pending.next() {
-                    group.addTask {
-                        let outURL = Self.outputName(for: url, in: outDir, style: config.borderStyle, format: config.outputFormat)
-                        let processor = FrameProcessor()
-                        try await processor.process(input: url, output: outURL, config: config)
-                        Self.runPostProcess(config.postProcess, file: outURL)
-                        let d = await counter.increment()
-                        print("[\(d)/\(total)] \(url.lastPathComponent)")
-                    }
-                }
-            }
+            print("Done: \(totalImages) images processed to \(outDir.path)")
         }
 
-        print("Done: \(total) images processed to \(outDir.path)")
+        // Process videos sequentially
+        if !videos.isEmpty {
+            print("Processing \(totalVideos) video\(totalVideos == 1 ? "" : "s")...")
+
+            let videoCodec: VideoCodec = codec == "h265" ? .h265 : .h264
+            var trimRange: TrimRange? = nil
+            if let trimString = trim {
+                trimRange = try TrimRange(from: trimString)
+            }
+            let videoConfig = VideoExportConfig(codec: videoCodec, trim: trimRange)
+
+            for (index, videoURL) in videos.enumerated() {
+                let stem = videoURL.deletingPathExtension().lastPathComponent
+                let outputURL = outDir.appendingPathComponent("\(stem).mp4")
+
+                let processor = VideoProcessor()
+                await processor.onProgress { progress in
+                    print("\rVideo \(index + 1)/\(totalVideos): frame \(progress.currentFrame)/\(progress.totalFrames) (\(Int(progress.fraction * 100))%)", terminator: "")
+                    fflush(stdout)
+                }
+                try await processor.process(
+                    input: videoURL,
+                    output: outputURL,
+                    config: config,
+                    videoExport: videoConfig
+                )
+                print("\n[\(index + 1)/\(totalVideos)] \(videoURL.lastPathComponent)")
+            }
+
+            print("Done: \(totalVideos) videos processed to \(outDir.path)")
+        }
     }
 
     static func outputName(for input: URL, in dir: URL, style: BorderStyle, format: OutputFormat) -> URL {
