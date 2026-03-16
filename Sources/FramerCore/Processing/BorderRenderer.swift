@@ -173,8 +173,14 @@ public enum BorderRenderer {
             case .dither(let params):
                 current = try DitherRenderer.apply(to: current, params: params, previewBaseDimension: previewBaseDimension, sourceImage: sourceImage)
 
-            case .aspectRatio:
-                break // TODO: implement in Task 2
+            case .aspectRatio(let params):
+                let imageSize = CGSize(width: current.width, height: current.height)
+                let cropRect = params.cropRect(for: imageSize)
+                guard cropRect.width > 0, cropRect.height > 0,
+                      let cropped = current.cropping(to: cropRect) else {
+                    i += 1; continue
+                }
+                current = cropped
             }
             i += 1
         }
