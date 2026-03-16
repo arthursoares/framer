@@ -450,4 +450,64 @@ final class CompositionLayerTests: XCTestCase {
         let decoded = try JSONDecoder().decode(CompositionLayer.self, from: data)
         XCTAssertEqual(layer, decoded)
     }
+
+    // MARK: - Aspect Ratio Layer
+
+    func test_aspectRatioLayer_roundtripsJSON() throws {
+        let layer = CompositionLayer.aspectRatio(AspectRatioLayerParams(
+            ratioWidth: 4, ratioHeight: 5, offsetX: 0.2, offsetY: -0.3
+        ))
+        let data = try JSONEncoder().encode(layer)
+        let decoded = try JSONDecoder().decode(CompositionLayer.self, from: data)
+        XCTAssertEqual(layer, decoded)
+    }
+
+    func test_aspectRatio_cropRect_landscapeToSquare() {
+        let params = AspectRatioLayerParams(ratioWidth: 1, ratioHeight: 1)
+        let rect = params.cropRect(for: CGSize(width: 200, height: 100))
+        XCTAssertEqual(rect.width, 100)
+        XCTAssertEqual(rect.height, 100)
+        XCTAssertEqual(rect.origin.x, 50)
+        XCTAssertEqual(rect.origin.y, 0)
+    }
+
+    func test_aspectRatio_cropRect_portraitToSquare() {
+        let params = AspectRatioLayerParams(ratioWidth: 1, ratioHeight: 1)
+        let rect = params.cropRect(for: CGSize(width: 100, height: 200))
+        XCTAssertEqual(rect.width, 100)
+        XCTAssertEqual(rect.height, 100)
+        XCTAssertEqual(rect.origin.x, 0)
+        XCTAssertEqual(rect.origin.y, 50)
+    }
+
+    func test_aspectRatio_cropRect_alreadyMatchingRatio() {
+        let params = AspectRatioLayerParams(ratioWidth: 2, ratioHeight: 1)
+        let rect = params.cropRect(for: CGSize(width: 200, height: 100))
+        XCTAssertEqual(rect.width, 200)
+        XCTAssertEqual(rect.height, 100)
+    }
+
+    func test_aspectRatio_cropRect_withOffset() {
+        let params = AspectRatioLayerParams(ratioWidth: 1, ratioHeight: 1, offsetX: 1.0)
+        let rect = params.cropRect(for: CGSize(width: 200, height: 100))
+        XCTAssertEqual(rect.width, 100)
+        XCTAssertEqual(rect.height, 100)
+        XCTAssertEqual(rect.origin.x, 100)
+        XCTAssertEqual(rect.origin.y, 0)
+    }
+
+    func test_aspectRatio_cropRect_4by5() {
+        let params = AspectRatioLayerParams(ratioWidth: 4, ratioHeight: 5)
+        let rect = params.cropRect(for: CGSize(width: 1000, height: 1000))
+        XCTAssertEqual(rect.width, 800)
+        XCTAssertEqual(rect.height, 1000)
+        XCTAssertEqual(rect.origin.x, 100)
+    }
+
+    func test_aspectRatio_croppedSize() {
+        let params = AspectRatioLayerParams(ratioWidth: 1, ratioHeight: 1)
+        let size = params.croppedSize(for: CGSize(width: 200, height: 100))
+        XCTAssertEqual(size.width, 100)
+        XCTAssertEqual(size.height, 100)
+    }
 }

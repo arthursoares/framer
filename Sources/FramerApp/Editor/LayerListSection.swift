@@ -283,6 +283,8 @@ struct LayerRow: View {
             CaptionLayerControls(params: params) { layer = .caption($0) }
         case .dither(let params):
             DitherLayerControls(params: params) { layer = .dither($0) }
+        case .aspectRatio:
+            EmptyView() // TODO: implement in Task 5
         }
     }
 
@@ -312,6 +314,8 @@ struct LayerRow: View {
             }
         case .dither(let p):
             return p.algorithm.label
+        case .aspectRatio(let p):
+            return "\(p.ratioWidth):\(p.ratioHeight)"
         }
     }
 }

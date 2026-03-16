@@ -172,6 +172,9 @@ public enum BorderRenderer {
 
             case .dither(let params):
                 current = try DitherRenderer.apply(to: current, params: params, previewBaseDimension: previewBaseDimension, sourceImage: sourceImage)
+
+            case .aspectRatio:
+                break // TODO: implement in Task 2
             }
             i += 1
         }
