@@ -6,7 +6,49 @@ import CoreGraphics
 /// producing a `CIImage` output.
 public enum CIFilterPipeline {
 
+    /// Whether a layer can be fully processed on the GPU via Core Image.
+    /// Layers that return `false` need CPU fallback (BorderRenderer).
+    public static func canProcessOnGPU(_ layer: CompositionLayer) -> Bool {
+        switch layer {
+        case .border, .padding, .canvas, .resize, .overlay:
+            return true
+        case .dither(let params):
+            // Only B&W Bayer dithering is implemented on GPU
+            switch params.colorMode {
+            case .bw:
+                return true
+            default:
+                return false
+            }
+        case .orientation, .caption:
+            return false
+        }
+    }
+
+    /// Split a layer stack into runs of GPU-capable and CPU-required layers.
+    /// Returns an array of (isGPU: Bool, layers: [CompositionLayer]) tuples.
+    public static func partitionLayers(_ layers: [CompositionLayer]) -> [(isGPU: Bool, layers: [CompositionLayer])] {
+        guard !layers.isEmpty else { return [] }
+        var result: [(isGPU: Bool, layers: [CompositionLayer])] = []
+        var currentIsGPU = canProcessOnGPU(layers[0])
+        var currentRun: [CompositionLayer] = [layers[0]]
+
+        for layer in layers.dropFirst() {
+            let gpu = canProcessOnGPU(layer)
+            if gpu == currentIsGPU {
+                currentRun.append(layer)
+            } else {
+                result.append((isGPU: currentIsGPU, layers: currentRun))
+                currentIsGPU = gpu
+                currentRun = [layer]
+            }
+        }
+        result.append((isGPU: currentIsGPU, layers: currentRun))
+        return result
+    }
+
     /// Apply the full layer stack to a CIImage, returning the composited result.
+    /// Only processes GPU-capable layers; CPU-only layers are skipped (no-op).
     public static func apply(
         layers: [CompositionLayer],
         to image: CIImage,

@@ -4,10 +4,14 @@ import CoreImage
 import CoreGraphics
 import VideoToolbox
 
-/// Orchestrates video processing: AVAssetReader → BorderRenderer → AVAssetWriter
+/// Orchestrates video processing: AVAssetReader → hybrid GPU/CPU pipeline → AVAssetWriter
 /// with audio passthrough.
-/// Uses the same CGImage-based BorderRenderer pipeline as image export so that
-/// video output matches the UI preview exactly (dithering, captions, etc.).
+///
+/// Uses a multi-pass approach per frame:
+/// 1. Partition the layer stack into GPU-capable and CPU-only runs
+/// 2. GPU runs use CIFilterPipeline (Core Image) — stays on GPU, no CGImage conversion
+/// 3. CPU runs use BorderRenderer — converts to CGImage, processes, converts back
+/// This maximizes GPU utilization while ensuring full feature parity (captions, color dithering).
 public actor VideoProcessor {
 
     public struct Progress: Sendable {
@@ -152,6 +156,10 @@ public actor VideoProcessor {
         }
         writer.startSession(atSourceTime: timeRange.start)
 
+        // Partition layers into GPU and CPU runs (computed once, reused per frame)
+        let layerPartitions = CIFilterPipeline.partitionLayers(layers)
+        let allGPU = layerPartitions.allSatisfy(\.isGPU)
+
         // Process video frames
         let exif = ExifData()
         var frameIndex = 0
@@ -165,18 +173,44 @@ public actor VideoProcessor {
 
             let presentationTime = CMSampleBufferGetPresentationTimeStamp(sampleBuffer)
 
-            // Convert CVPixelBuffer → CGImage for BorderRenderer
-            guard let frameCGImage = cgImage(from: pixelBuffer) else {
-                continue
-            }
+            let processedCGImage: CGImage
 
-            // Apply the same layer pipeline used for image export
-            let borderResult = try BorderRenderer.applyLayers(
-                layers,
-                to: frameCGImage,
-                sourceImage: frameCGImage,
-                exif: exif
-            )
+            if allGPU {
+                // Fast path: entire layer stack on GPU, single CIImage pass
+                let sourceCI = CIImage(cvPixelBuffer: pixelBuffer)
+                let resultCI = CIFilterPipeline.apply(layers: layers, to: sourceCI, sourceImage: sourceCI, exif: exif)
+                guard let cg = ciContext.createCGImage(resultCI, from: resultCI.extent) else { continue }
+                processedCGImage = cg
+            } else {
+                // Hybrid path: alternate between GPU and CPU runs
+                var currentCI = CIImage(cvPixelBuffer: pixelBuffer)
+                let sourceCI = currentCI
+
+                for partition in layerPartitions {
+                    if partition.isGPU {
+                        // GPU run — process via CIFilterPipeline, stay as CIImage
+                        currentCI = CIFilterPipeline.apply(
+                            layers: partition.layers,
+                            to: currentCI,
+                            sourceImage: sourceCI,
+                            exif: exif
+                        )
+                    } else {
+                        // CPU run — convert to CGImage, process via BorderRenderer, convert back
+                        guard let cgInput = ciContext.createCGImage(currentCI, from: currentCI.extent) else { continue }
+                        let borderResult = try BorderRenderer.applyLayers(
+                            partition.layers,
+                            to: cgInput,
+                            sourceImage: cgInput,
+                            exif: exif
+                        )
+                        currentCI = CIImage(cgImage: borderResult.image)
+                    }
+                }
+
+                guard let cg = ciContext.createCGImage(currentCI, from: currentCI.extent) else { continue }
+                processedCGImage = cg
+            }
 
             // Wait for writer input to be ready
             while !videoWriterInput.isReadyForMoreMediaData {
@@ -190,7 +224,7 @@ public actor VideoProcessor {
             }
 
             // Convert processed CGImage → CVPixelBuffer
-            guard let outputBuffer = self.pixelBuffer(from: borderResult.image, pool: pool) else {
+            guard let outputBuffer = self.pixelBuffer(from: processedCGImage, pool: pool) else {
                 cleanupPartialFile(at: output)
                 throw FramerError.encodingFailed(output)
             }
