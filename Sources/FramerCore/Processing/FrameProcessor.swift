@@ -66,25 +66,58 @@ public actor FrameProcessor {
     }
 
     /// Compute preview downscale target based on layer requirements.
-    /// If a canvas layer specifies large dimensions, the preview photo needs to be
-    /// proportionally larger so it fills the canvas properly.
+    /// Simulates all size-mutating layers to determine the largest intermediate
+    /// dimension the photo reaches, so the preview is scaled appropriately.
     private func previewMaxDimension(for config: ProcessingConfig, imageWidth: Int, imageHeight: Int) -> Int {
         let baseDimension = 1200
         let layers = config.layers ?? CompositionLayer.defaultLayers()
 
-        // Find the largest canvas dimension in the layer stack
-        var maxCanvasDim = 0
+        // Walk the layer stack, simulating size changes to find the max intermediate dimension.
+        // This ensures aspectRatio, resize, canvas, border, and padding are all accounted for.
+        var w = CGFloat(imageWidth)
+        var h = CGFloat(imageHeight)
+        var maxDim: CGFloat = 0
+
         for layer in layers {
-            if case .canvas(let p) = layer {
-                maxCanvasDim = max(maxCanvasDim, p.width, p.height)
+            switch layer {
+            case .aspectRatio(let p):
+                let cropped = p.croppedSize(for: CGSize(width: w, height: h))
+                w = cropped.width
+                h = cropped.height
+
+            case .border(let p):
+                let shorter = Int(min(w, h))
+                let t = CGFloat(p.thickness.resolved(relativeTo: shorter))
+                w += t * 2
+                h += t * 2
+
+            case .padding(let p):
+                let t = CGFloat(p.thickness)
+                w += t * 2
+                h += t * 2
+
+            case .canvas(let p):
+                w = CGFloat(p.width)
+                h = CGFloat(p.height)
+
+            case .resize(let p):
+                let maxW = CGFloat(p.maxWidth)
+                let maxH = CGFloat(p.maxHeight)
+                if w > maxW || h > maxH {
+                    let scale = min(maxW / w, maxH / h)
+                    w = (w * scale).rounded(.down)
+                    h = (h * scale).rounded(.down)
+                }
+
+            default:
+                break
             }
+            maxDim = max(maxDim, w, h)
         }
 
-        guard maxCanvasDim > baseDimension else { return baseDimension }
-
-        // Scale up the preview so the photo proportionally fills the canvas.
-        // Cap at 3000 to keep preview responsive.
-        return min(maxCanvasDim, 3000)
+        let needed = Int(maxDim)
+        guard needed > baseDimension else { return baseDimension }
+        return min(needed, 3000)
     }
 
     private func applyRotation(_ image: CGImage, degrees: Int) -> CGImage {
