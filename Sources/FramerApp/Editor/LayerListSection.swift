@@ -52,6 +52,11 @@ struct LayerListSection: View {
     private var addLayerMenu: some View {
         Menu {
             Button {
+                addLayer(.aspectRatio(AspectRatioLayerParams()))
+            } label: {
+                Label("Aspect Ratio", systemImage: "crop")
+            }
+            Button {
                 addLayer(.border(BorderLayerParams()))
             } label: {
                 Label("Border", systemImage: "square.dashed")
@@ -283,8 +288,8 @@ struct LayerRow: View {
             CaptionLayerControls(params: params) { layer = .caption($0) }
         case .dither(let params):
             DitherLayerControls(params: params) { layer = .dither($0) }
-        case .aspectRatio:
-            EmptyView() // TODO: implement in Task 5
+        case .aspectRatio(let params):
+            AspectRatioLayerControls(params: params) { layer = .aspectRatio($0) }
         }
     }
 
@@ -719,6 +724,110 @@ struct ResizeLayerControls: View {
                 p.maxHeight = $0
                 onChange(p)
             }
+        )
+    }
+}
+
+// MARK: - AspectRatioLayerControls
+
+struct AspectRatioLayerControls: View {
+    var params: AspectRatioLayerParams
+    var onChange: (AspectRatioLayerParams) -> Void
+
+    private let presets: [(label: String, w: Int, h: Int)] = [
+        ("1:1", 1, 1),
+        ("4:5", 4, 5),
+        ("5:4", 5, 4),
+        ("3:2", 3, 2),
+        ("2:3", 2, 3),
+        ("16:9", 16, 9),
+        ("9:16", 9, 16),
+    ]
+
+    private var isCustom: Bool {
+        !presets.contains { $0.w == params.ratioWidth && $0.h == params.ratioHeight }
+    }
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            HStack {
+                Text("Ratio")
+                    .frame(width: 80, alignment: .leading)
+                Picker("", selection: ratioBinding) {
+                    ForEach(presets, id: \.label) { preset in
+                        Text(preset.label).tag("\(preset.w):\(preset.h)")
+                    }
+                    Text("Custom").tag("custom")
+                }
+                .labelsHidden()
+            }
+
+            if isCustom {
+                HStack {
+                    Text("Custom")
+                        .frame(width: 80, alignment: .leading)
+                    TextField("W", value: Binding(
+                        get: { params.ratioWidth },
+                        set: { onChange(AspectRatioLayerParams(id: params.id, ratioWidth: max(1, $0), ratioHeight: params.ratioHeight, offsetX: params.offsetX, offsetY: params.offsetY)) }
+                    ), format: .number)
+                    .frame(width: 50)
+                    .textFieldStyle(.roundedBorder)
+                    Text(":")
+                    TextField("H", value: Binding(
+                        get: { params.ratioHeight },
+                        set: { onChange(AspectRatioLayerParams(id: params.id, ratioWidth: params.ratioWidth, ratioHeight: max(1, $0), offsetX: params.offsetX, offsetY: params.offsetY)) }
+                    ), format: .number)
+                    .frame(width: 50)
+                    .textFieldStyle(.roundedBorder)
+                }
+            }
+
+            HStack {
+                Text("Offset X")
+                    .frame(width: 80, alignment: .leading)
+                Slider(value: offsetXBinding, in: -1...1)
+                Text(String(format: "%.1f", params.offsetX))
+                    .monospacedDigit()
+                    .frame(width: 30)
+            }
+
+            HStack {
+                Text("Offset Y")
+                    .frame(width: 80, alignment: .leading)
+                Slider(value: offsetYBinding, in: -1...1)
+                Text(String(format: "%.1f", params.offsetY))
+                    .monospacedDigit()
+                    .frame(width: 30)
+            }
+        }
+    }
+
+    private var ratioBinding: Binding<String> {
+        Binding(
+            get: {
+                if isCustom { return "custom" }
+                return "\(params.ratioWidth):\(params.ratioHeight)"
+            },
+            set: { newValue in
+                if newValue == "custom" { return }
+                if let preset = presets.first(where: { "\($0.w):\($0.h)" == newValue }) {
+                    onChange(AspectRatioLayerParams(id: params.id, ratioWidth: preset.w, ratioHeight: preset.h, offsetX: params.offsetX, offsetY: params.offsetY))
+                }
+            }
+        )
+    }
+
+    private var offsetXBinding: Binding<Double> {
+        Binding(
+            get: { params.offsetX },
+            set: { onChange(AspectRatioLayerParams(id: params.id, ratioWidth: params.ratioWidth, ratioHeight: params.ratioHeight, offsetX: $0, offsetY: params.offsetY)) }
+        )
+    }
+
+    private var offsetYBinding: Binding<Double> {
+        Binding(
+            get: { params.offsetY },
+            set: { onChange(AspectRatioLayerParams(id: params.id, ratioWidth: params.ratioWidth, ratioHeight: params.ratioHeight, offsetX: params.offsetX, offsetY: $0)) }
         )
     }
 }
