@@ -81,6 +81,7 @@ final class AppState {
                             }
                             return true
                         } catch {
+                            print("Export failed for \(item.url.lastPathComponent): \(error)")
                             return false
                         }
                     }

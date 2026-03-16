@@ -37,6 +37,11 @@ public actor VideoProcessor {
         config: ProcessingConfig,
         videoExport: VideoExportConfig
     ) async throws {
+        // AVAssetWriter fails if output file already exists — remove it first
+        if FileManager.default.fileExists(atPath: output.path) {
+            try FileManager.default.removeItem(at: output)
+        }
+
         let asset = AVAsset(url: input)
 
         // Load video track
@@ -163,7 +168,6 @@ public actor VideoProcessor {
         // Process video frames
         let exif = ExifData()
         var frameIndex = 0
-
         while let sampleBuffer = videoReaderOutput.copyNextSampleBuffer() {
             try Task.checkCancellation()
 
