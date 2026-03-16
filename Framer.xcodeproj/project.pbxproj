@@ -10,6 +10,7 @@
 		02AB8ECED2BAEEB2B7CC18BA /* PreviewViewModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8A6E6F60B12048759BD1E60C /* PreviewViewModel.swift */; };
 		355A4363ACBC6A2F1F32A042 /* ExportQueueView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0E0B6486256E0670295F5B6D /* ExportQueueView.swift */; };
 		469EBA583F3674764B8E843A /* LayerListSection.swift in Sources */ = {isa = PBXBuildFile; fileRef = 07CE80E5C2C968E54B507CD5 /* LayerListSection.swift */; };
+		4E1BF7D9288C2BD819D221A3 /* VideoTimelineView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 70A8458866BFDF287809B34E /* VideoTimelineView.swift */; };
 		8B4266040896BBED84762794 /* textures in Resources */ = {isa = PBXBuildFile; fileRef = B1EC2164F8A3DF317311D2C8 /* textures */; };
 		8E694017A189A83A3A04EBEB /* PresetManagerView.swift in Sources */ = {isa = PBXBuildFile; fileRef = A26EF2B8DCC58AC9FECE1C1B /* PresetManagerView.swift */; };
 		99960FA45C14BE5AB62A06DE /* SettingsPanel.swift in Sources */ = {isa = PBXBuildFile; fileRef = 853BC2BF3CFA9B161007BBB9 /* SettingsPanel.swift */; };
@@ -18,6 +19,7 @@
 		C37E4F0ACEACE1B0C38A0A44 /* FramerCore in Frameworks */ = {isa = PBXBuildFile; productRef = 485E1F7CDB2606E54DEE58BD /* FramerCore */; };
 		C9AFF874A9B65F3ED9C2D94A /* LivePreviewPanel.swift in Sources */ = {isa = PBXBuildFile; fileRef = B69C29C8A7CF6558AEBA54C3 /* LivePreviewPanel.swift */; };
 		D2E564203E647371EAED04D0 /* PreferencesView.swift in Sources */ = {isa = PBXBuildFile; fileRef = B7A795F9CA0BC01E3F2251A9 /* PreferencesView.swift */; };
+		D7F8D600BF8BB85467EAA1E1 /* VideoPlayerViewModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = 17844B842462C98E1DCFFFF8 /* VideoPlayerViewModel.swift */; };
 		DAF4447EF4E27C19DC3B3FF0 /* FramerApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = E4A8C555BBECD2011E74D76D /* FramerApp.swift */; };
 		EF8F6E68028E690EFF0EA667 /* AppState.swift in Sources */ = {isa = PBXBuildFile; fileRef = F5FEA0A44FC6AF06DDC8F260 /* AppState.swift */; };
 		FC5BB028D5897E5F76991EA5 /* ContentView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8154A40DD384301E5946B867 /* ContentView.swift */; };
@@ -27,7 +29,9 @@
 /* Begin PBXFileReference section */
 		07CE80E5C2C968E54B507CD5 /* LayerListSection.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LayerListSection.swift; sourceTree = "<group>"; };
 		0E0B6486256E0670295F5B6D /* ExportQueueView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ExportQueueView.swift; sourceTree = "<group>"; };
+		17844B842462C98E1DCFFFF8 /* VideoPlayerViewModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = VideoPlayerViewModel.swift; sourceTree = "<group>"; };
 		2D489C640FED51CA24D6BF68 /* PhotoThumbnailView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PhotoThumbnailView.swift; sourceTree = "<group>"; };
+		70A8458866BFDF287809B34E /* VideoTimelineView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = VideoTimelineView.swift; sourceTree = "<group>"; };
 		8154A40DD384301E5946B867 /* ContentView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ContentView.swift; sourceTree = "<group>"; };
 		853BC2BF3CFA9B161007BBB9 /* SettingsPanel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SettingsPanel.swift; sourceTree = "<group>"; };
 		887B8615A10066CAD105DE73 /* LibrarySidebar.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LibrarySidebar.swift; sourceTree = "<group>"; };
@@ -70,6 +74,8 @@
 				B69C29C8A7CF6558AEBA54C3 /* LivePreviewPanel.swift */,
 				8A6E6F60B12048759BD1E60C /* PreviewViewModel.swift */,
 				853BC2BF3CFA9B161007BBB9 /* SettingsPanel.swift */,
+				17844B842462C98E1DCFFFF8 /* VideoPlayerViewModel.swift */,
+				70A8458866BFDF287809B34E /* VideoTimelineView.swift */,
 			);
 			path = Editor;
 			sourceTree = "<group>";
@@ -225,6 +231,8 @@
 				8E694017A189A83A3A04EBEB /* PresetManagerView.swift in Sources */,
 				02AB8ECED2BAEEB2B7CC18BA /* PreviewViewModel.swift in Sources */,
 				99960FA45C14BE5AB62A06DE /* SettingsPanel.swift in Sources */,
+				D7F8D600BF8BB85467EAA1E1 /* VideoPlayerViewModel.swift in Sources */,
+				4E1BF7D9288C2BD819D221A3 /* VideoTimelineView.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};

@@ -67,6 +67,11 @@ final class AppState {
                         let outURL = Self.outputURL(for: item, config: config, directory: directory, suffix: suffix)
                         do {
                             if Self.isVideoFile(item.url) {
+                                let msg = "AppState: starting video export \(item.url.lastPathComponent) -> \(outURL.lastPathComponent)\n"
+                                if let h = FileHandle(forWritingAtPath: "/tmp/vproc.log") {
+                                    h.seekToEndOfFile(); h.write(msg.data(using: .utf8)!); h.closeFile()
+                                } else { try? msg.write(toFile: "/tmp/vproc.log", atomically: false, encoding: .utf8) }
+
                                 let videoConfig = VideoExportConfig(codec: videoCodec)
                                 let processor = VideoProcessor()
                                 try await processor.process(

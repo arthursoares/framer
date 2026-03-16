@@ -10,17 +10,10 @@ public enum CIFilterPipeline {
     /// Layers that return `false` need CPU fallback (BorderRenderer).
     public static func canProcessOnGPU(_ layer: CompositionLayer) -> Bool {
         switch layer {
-        case .border, .padding, .canvas, .resize, .overlay:
+        case .border, .padding, .canvas, .resize, .overlay, .dither, .caption:
+            // Caption is a no-op in GPU pipeline (captions are photo-only via CGImage renderer)
             return true
-        case .dither(let params):
-            // Only B&W Bayer dithering is implemented on GPU
-            switch params.colorMode {
-            case .bw:
-                return true
-            default:
-                return false
-            }
-        case .orientation, .caption:
+        case .orientation:
             return false
         }
     }
@@ -90,7 +83,7 @@ public enum CIFilterPipeline {
             // Captions are applied via the existing CGImage-based CaptionRenderer for still images.
             return image
         case .dither(let params):
-            return applyDither(params, to: image)
+            return applyDither(params, to: image, sourceImage: sourceImage)
         }
     }
 
@@ -201,7 +194,7 @@ public enum CIFilterPipeline {
 
     // MARK: - Dither
 
-    private static func applyDither(_ params: DitherLayerParams, to image: CIImage) -> CIImage {
+    private static func applyDither(_ params: DitherLayerParams, to image: CIImage, sourceImage: CIImage? = nil) -> CIImage {
         let extent = image.extent
         let pixelScale = max(1, min(8, params.pixelScale))
 
@@ -222,6 +215,8 @@ public enum CIFilterPipeline {
         ditherFilter.inputImage = working
         ditherFilter.threshold = Float(params.threshold)
         ditherFilter.bayerLevel = params.bayerLevel
+        ditherFilter.colorMode = params.colorMode
+        ditherFilter.sourceImage = sourceImage
         working = ditherFilter.outputImage ?? working
 
         // Step 3: If pixelScale > 1, upscale back with nearest-neighbor (CIAffineTransform)
