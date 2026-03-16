@@ -1,10 +1,13 @@
 import Foundation
 import AVFoundation
 import CoreImage
+import CoreGraphics
 import VideoToolbox
 
-/// Orchestrates video processing: AVAssetReader → CIFilterPipeline → AVAssetWriter
+/// Orchestrates video processing: AVAssetReader → BorderRenderer → AVAssetWriter
 /// with audio passthrough.
+/// Uses the same CGImage-based BorderRenderer pipeline as image export so that
+/// video output matches the UI preview exactly (dithering, captions, etc.).
 public actor VideoProcessor {
 
     public struct Progress: Sendable {
@@ -161,13 +164,17 @@ public actor VideoProcessor {
             }
 
             let presentationTime = CMSampleBufferGetPresentationTimeStamp(sampleBuffer)
-            let sourceImage = CIImage(cvPixelBuffer: pixelBuffer)
 
-            // Apply filter pipeline
-            let processedImage = CIFilterPipeline.apply(
-                layers: layers,
-                to: sourceImage,
-                sourceImage: sourceImage,
+            // Convert CVPixelBuffer → CGImage for BorderRenderer
+            guard let frameCGImage = cgImage(from: pixelBuffer) else {
+                continue
+            }
+
+            // Apply the same layer pipeline used for image export
+            let borderResult = try BorderRenderer.applyLayers(
+                layers,
+                to: frameCGImage,
+                sourceImage: frameCGImage,
                 exif: exif
             )
 
@@ -182,15 +189,11 @@ public actor VideoProcessor {
                 throw FramerError.encodingFailed(output)
             }
 
-            var outputPixelBuffer: CVPixelBuffer?
-            let status = CVPixelBufferPoolCreatePixelBuffer(nil, pool, &outputPixelBuffer)
-            guard status == kCVReturnSuccess, let outputBuffer = outputPixelBuffer else {
+            // Convert processed CGImage → CVPixelBuffer
+            guard let outputBuffer = self.pixelBuffer(from: borderResult.image, pool: pool) else {
                 cleanupPartialFile(at: output)
                 throw FramerError.encodingFailed(output)
             }
-
-            // Render processed image into output buffer
-            ciContext.render(processedImage, to: outputBuffer)
 
             // Append to writer
             guard pixelBufferAdaptor.append(outputBuffer, withPresentationTime: presentationTime) else {
@@ -230,6 +233,19 @@ public actor VideoProcessor {
     }
 
     // MARK: - Private
+
+    private func cgImage(from pixelBuffer: CVPixelBuffer) -> CGImage? {
+        let ciImage = CIImage(cvPixelBuffer: pixelBuffer)
+        return ciContext.createCGImage(ciImage, from: ciImage.extent)
+    }
+
+    private func pixelBuffer(from cgImage: CGImage, pool: CVPixelBufferPool) -> CVPixelBuffer? {
+        var pb: CVPixelBuffer?
+        CVPixelBufferPoolCreatePixelBuffer(kCFAllocatorDefault, pool, &pb)
+        guard let pixelBuffer = pb else { return nil }
+        ciContext.render(CIImage(cgImage: cgImage), to: pixelBuffer)
+        return pixelBuffer
+    }
 
     private func cleanupPartialFile(at url: URL) {
         try? FileManager.default.removeItem(at: url)
