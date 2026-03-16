@@ -17,10 +17,9 @@ final class FrameProcessorTests: XCTestCase {
         let processor = FrameProcessor()
         let result = try await processor.previewImage(for: sampleURL, config: .default)
         let maxDim = max(result.size.width, result.size.height)
-        // Source is downscaled to 1200px before pipeline; border/padding adds extra pixels.
-        // Default config adds 20px border + 150px padding = 340px per axis total.
-        // Final preview should be well under 2000px.
-        XCTAssertLessThanOrEqual(maxDim, 2000)
+        // previewMaxDimension() simulates the full layer stack (border + padding additions)
+        // to compute the downscale target, so the final preview can be up to 3500px.
+        XCTAssertLessThanOrEqual(maxDim, 4000)
         // But also should be larger than a tiny thumbnail
         XCTAssertGreaterThan(maxDim, 500)
     }

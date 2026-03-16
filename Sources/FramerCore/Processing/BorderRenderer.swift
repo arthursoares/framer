@@ -174,8 +174,8 @@ public enum BorderRenderer {
                 current = try DitherRenderer.apply(to: current, params: params, previewBaseDimension: previewBaseDimension, sourceImage: sourceImage)
 
             case .aspectRatio(let params):
-                let imageSize = CGSize(width: current.width, height: current.height)
-                let cropRect = params.cropRect(for: imageSize)
+                let currentSize = CGSize(width: current.width, height: current.height)
+                let cropRect = params.cropRect(for: currentSize)
                 guard cropRect.width > 0, cropRect.height > 0,
                       let cropped = current.cropping(to: cropRect) else {
                     i += 1; continue
@@ -260,19 +260,26 @@ public enum BorderRenderer {
         }
         var rings: [Ring] = []
         var j = start
+        // Track a running virtual size so percent-based thicknesses resolve against
+        // the same dimensions they would in the non-coalesced path (where `current`
+        // grows after each border/padding layer).
+        var virtualW = image.width
+        var virtualH = image.height
         while j < layers.count {
             switch layers[j] {
             case .border(let p):
-                // Use the *original* image size for resolving relative sizes — each ring
-                // wraps the one inside it, but BorderSize is resolved relative to the
-                // innermost image (same as the non-coalesced path where `current` is
-                // the image before this run started).
-                let t = p.thickness.resolved(relativeTo: min(image.width, image.height))
-                if t > 0 { rings.append(Ring(thickness: t, color: p.color.cgColor)) }
+                let t = p.thickness.resolved(relativeTo: min(virtualW, virtualH))
+                if t > 0 {
+                    rings.append(Ring(thickness: t, color: p.color.cgColor))
+                    virtualW += t * 2
+                    virtualH += t * 2
+                }
             case .padding(let p):
                 if p.thickness > 0 {
                     let c = resolveLayerFillColor(p.fill, sourceImage: sourceImage, cachedDominant: cachedDominant)
                     rings.append(Ring(thickness: p.thickness, color: c))
+                    virtualW += p.thickness * 2
+                    virtualH += p.thickness * 2
                 }
             default:
                 break
