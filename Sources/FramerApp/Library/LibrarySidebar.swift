@@ -48,7 +48,7 @@ struct LibrarySidebar: View {
                     .help("Remove selected photos from library")
                 }
                 Button(action: openFilePicker) {
-                    Label("Add Photos", systemImage: "plus")
+                    Label("Add Media", systemImage: "plus")
                 }
             }
         }
@@ -88,7 +88,7 @@ struct LibrarySidebar: View {
             Image(systemName: "photo.on.rectangle.angled")
                 .font(.system(size: 28))
                 .foregroundStyle(.secondary)
-            Text("Drop photos here or click +")
+            Text("Drop photos or videos here, or click +")
                 .font(.caption)
                 .foregroundStyle(.tertiary)
         }
