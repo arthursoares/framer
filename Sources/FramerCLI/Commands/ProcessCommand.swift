@@ -43,10 +43,8 @@ struct ProcessCommand: AsyncParsableCommand {
     @Option(name: .long, help: "Video output codec: h264 (default) or h265")
     var codec: String = "h264"
 
-    private static let videoExtensions: Set<String> = ["mp4", "mov", "m4v", "avi", "mkv", "webm"]
-
     private func isVideoFile(_ url: URL) -> Bool {
-        Self.videoExtensions.contains(url.pathExtension.lowercased())
+        FrameProcessor.isVideoFile(url)
     }
 
     mutating func run() async throws {
@@ -186,7 +184,7 @@ struct ProcessCommand: AsyncParsableCommand {
         let imageExtensions: Set<String> = ["jpg", "jpeg", "png", "tiff", "tif", "heic"]
         let allFiles = try fm.contentsOfDirectory(at: directory, includingPropertiesForKeys: nil)
         let images = allFiles.filter { imageExtensions.contains($0.pathExtension.lowercased()) }
-        let videos = allFiles.filter { Self.videoExtensions.contains($0.pathExtension.lowercased()) }
+        let videos = allFiles.filter { FrameProcessor.isVideoFile($0) }
 
         guard !images.isEmpty || !videos.isEmpty else {
             print("No images or videos found in \(directory.path)")

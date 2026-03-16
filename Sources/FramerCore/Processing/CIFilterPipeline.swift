@@ -40,10 +40,12 @@ public enum CIFilterPipeline {
         case .overlay(let params):
             return applyOverlay(params, to: image)
         case .orientation:
-            // TODO: orientation transform
+            // Known limitation: orientation not yet implemented in CI pipeline.
+            // Video orientation is handled by AVAssetReader's preferredTrackTransform.
             return image
         case .caption:
-            // TODO: CoreText rendering
+            // Known limitation: caption rendering not yet implemented in CI pipeline.
+            // Captions are applied via the existing CGImage-based CaptionRenderer for still images.
             return image
         case .dither(let params):
             return applyDither(params, to: image)
@@ -92,7 +94,8 @@ public enum CIFilterPipeline {
                 alpha: 1.0
             )
         default:
-            // TODO: implement gradient and dominant color fills
+            // Known limitation: gradient and dominant color fills not yet implemented in CI pipeline.
+            // Falls back to white background.
             fillColor = CIColor.white
         }
 
@@ -119,7 +122,8 @@ public enum CIFilterPipeline {
                 alpha: 1.0
             )
         default:
-            // TODO: implement gradient and dominant color fills
+            // Known limitation: gradient and dominant color fills not yet implemented in CI pipeline.
+            // Falls back to white background.
             fillColor = CIColor.white
         }
 

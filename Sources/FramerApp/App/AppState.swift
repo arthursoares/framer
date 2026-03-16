@@ -18,7 +18,6 @@ final class AppState {
     var videoExportProgress: Double = 0
     var isExportingVideo: Bool = false
 
-    private nonisolated(unsafe) static let videoExtensions: Set<String> = ["mp4", "mov", "m4v", "avi", "mkv", "webm"]
 
     init() {
         presetStore.initializeDefaults()
@@ -132,7 +131,7 @@ final class AppState {
     // MARK: - Video Export
 
     nonisolated static func isVideoFile(_ url: URL) -> Bool {
-        videoExtensions.contains(url.pathExtension.lowercased())
+        FrameProcessor.isVideoFile(url)
     }
 
     func exportVideo(item: PhotoItem, outputURL: URL, trimRange: TrimRange? = nil) async throws {
@@ -159,7 +158,7 @@ final class AppState {
 
     func addPhotos(from urls: [URL]) {
         let imageExts: Set<String> = ["jpg", "jpeg", "png", "tiff", "tif", "heic"]
-        let supportedExts = imageExts.union(Self.videoExtensions)
+        let supportedExts = imageExts.union(FrameProcessor.videoExtensions)
         var allFiles: [URL] = []
         for url in urls {
             var isDir: ObjCBool = false

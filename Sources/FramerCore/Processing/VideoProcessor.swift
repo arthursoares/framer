@@ -1,6 +1,7 @@
 import Foundation
 import AVFoundation
 import CoreImage
+import VideoToolbox
 
 /// Orchestrates video processing: AVAssetReader → CIFilterPipeline → AVAssetWriter
 /// with audio passthrough.
@@ -91,8 +92,17 @@ public actor VideoProcessor {
             }
         }
 
+        // Check HEVC hardware support; fall back to H.264 if unavailable
+        var effectiveCodec = videoExport.codec
+        if effectiveCodec == .h265 {
+            if !VTIsHardwareDecodeSupported(kCMVideoCodecType_HEVC) {
+                effectiveCodec = .h264
+                print("Warning: HEVC hardware encoding not available, falling back to H.264")
+            }
+        }
+
         // Set up writer
-        let videoCodec: AVVideoCodecType = videoExport.codec == .h265 ? .hevc : .h264
+        let videoCodec: AVVideoCodecType = effectiveCodec == .h265 ? .hevc : .h264
         let writerVideoSettings: [String: Any] = [
             AVVideoCodecKey: videoCodec,
             AVVideoWidthKey: outputWidth,
