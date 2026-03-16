@@ -399,6 +399,37 @@ final class CompositionLayerTests: XCTestCase {
         XCTAssertEqual(result.image.height, 200)
     }
 
+    func test_applyLayers_coalescedPercentBorder_matchesNonCoalesced() throws {
+        // Percent-based borders in a coalesced run must resolve against the accumulated
+        // dimensions (as if each layer were applied individually), not the original image.
+        let image = makeTestImage(width: 200, height: 100)
+        let layers: [CompositionLayer] = [
+            .border(BorderLayerParams(thickness: .pixels(20), color: try CodableColor(hex: "#FF0000"))),
+            .border(BorderLayerParams(thickness: .percent(10), color: try CodableColor(hex: "#00FF00")))
+        ]
+        let result = try BorderRenderer.applyLayers(layers, to: image, sourceImage: image, exif: ExifData())
+        // After first border: 200+40=240 x 100+40=140, shorter side = 140
+        // 10% of 140 = 14
+        // Final: 240+28=268 x 140+28=168
+        XCTAssertEqual(result.image.width, 268)
+        XCTAssertEqual(result.image.height, 168)
+    }
+
+    func test_applyLayers_coalescedPercentBorderPadding_correctDimensions() throws {
+        // Mix of padding and percent border in a coalesced run
+        let image = makeTestImage(width: 100, height: 100)
+        let layers: [CompositionLayer] = [
+            .padding(PaddingLayerParams(thickness: 50, fill: .color(try CodableColor(hex: "#FFFFFF")))),
+            .border(BorderLayerParams(thickness: .percent(10), color: try CodableColor(hex: "#FF0000")))
+        ]
+        let result = try BorderRenderer.applyLayers(layers, to: image, sourceImage: image, exif: ExifData())
+        // After padding: 100+100=200 x 200, shorter = 200
+        // 10% of 200 = 20
+        // Final: 200+40=240 x 240
+        XCTAssertEqual(result.image.width, 240)
+        XCTAssertEqual(result.image.height, 240)
+    }
+
     func test_applyLayers_singleBorder_notCoalesced() throws {
         // Single border should still work (no coalescing when only 1 layer)
         let image = makeTestImage(width: 100, height: 100)
