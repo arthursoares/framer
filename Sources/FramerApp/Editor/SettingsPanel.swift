@@ -61,6 +61,11 @@ struct SettingsPanel: View {
                 }
 
                 Toggle("Strip EXIF metadata", isOn: $state.currentConfig.noMetadata)
+
+                Picker("Video Codec", selection: $state.videoCodec) {
+                    Text("H.264").tag(VideoCodec.h264)
+                    Text("H.265 (HEVC)").tag(VideoCodec.h265)
+                }
             }
         }
         .formStyle(.grouped)

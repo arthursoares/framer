@@ -1,4 +1,5 @@
 import SwiftUI
+import FramerCore
 
 struct ExportQueueView: View {
     @Environment(AppState.self) var appState
@@ -22,12 +23,37 @@ struct ExportQueueView: View {
 
             Divider()
 
-            if appState.exportQueue.isEmpty {
+            // Video export progress (shown above queue when active)
+            if appState.isExportingVideo {
+                videoExportProgress
+            }
+
+            if appState.exportQueue.isEmpty && !appState.isExportingVideo {
                 emptyState
             } else {
                 jobList
             }
         }
+    }
+
+    private var videoExportProgress: some View {
+        VStack(alignment: .leading, spacing: 6) {
+            HStack {
+                ProgressView()
+                    .controlSize(.small)
+                Text("Exporting Video...")
+                    .font(.headline)
+                Spacer()
+                Text("\(Int(appState.videoExportProgress * 100))%")
+                    .font(.caption)
+                    .monospacedDigit()
+                    .foregroundStyle(.secondary)
+            }
+            ProgressView(value: appState.videoExportProgress)
+                .progressViewStyle(.linear)
+        }
+        .padding(.horizontal, 16)
+        .padding(.vertical, 10)
     }
 
     private var emptyState: some View {
@@ -58,7 +84,7 @@ struct ExportQueueView: View {
         VStack(alignment: .leading, spacing: 6) {
             HStack {
                 statusIcon(job.status)
-                Text("\(job.items.count) photo\(job.items.count == 1 ? "" : "s")")
+                Text(jobItemLabel(job))
                     .font(.headline)
                 Spacer()
                 Text(statusLabel(job.status))
@@ -124,6 +150,19 @@ struct ExportQueueView: View {
         case .done: "Done"
         case .failed(let msg): "Failed: \(msg)"
         }
+    }
+
+    private func jobItemLabel(_ job: ExportJob) -> String {
+        let videoCount = job.items.filter { AppState.isVideoFile($0.url) }.count
+        let photoCount = job.items.count - videoCount
+        var parts: [String] = []
+        if photoCount > 0 {
+            parts.append("\(photoCount) photo\(photoCount == 1 ? "" : "s")")
+        }
+        if videoCount > 0 {
+            parts.append("\(videoCount) video\(videoCount == 1 ? "" : "s")")
+        }
+        return parts.joined(separator: ", ")
     }
 
     private var hasCompleted: Bool {

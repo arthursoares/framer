@@ -12,6 +12,13 @@ final class AppState {
     var presetStore = PresetStore()
     var exportQueue: [ExportJob] = []
 
+    // MARK: - Video Export
+
+    var videoCodec: VideoCodec = .h264
+    var videoExportProgress: Double = 0
+    var isExportingVideo: Bool = false
+
+    private nonisolated(unsafe) static let videoExtensions: Set<String> = ["mp4", "mov", "m4v", "avi", "mkv", "webm"]
 
     init() {
         presetStore.initializeDefaults()
@@ -49,28 +56,41 @@ final class AppState {
 
         Task {
             let maxConcurrency = ProcessInfo.processInfo.processorCount
+            let videoCodec = self.videoCodec
             var completed = 0
             var failedCount = 0
 
             await withTaskGroup(of: Bool.self) { group in
                 var index = 0
 
-                // Seed initial batch up to max concurrency
-                for _ in 0..<min(maxConcurrency, items.count) {
-                    let item = items[index]
-                    let idx = index
-                    index += 1
-                    _ = idx  // suppress unused warning; index tracks insertion order, not used inside closure
+                func addExportTask(for item: PhotoItem) {
                     group.addTask {
-                        let processor = FrameProcessor()
                         let outURL = Self.outputURL(for: item, config: config, directory: directory, suffix: suffix)
                         do {
-                            try await processor.process(input: item.url, output: outURL, config: config, rotation: item.rotation)
+                            if Self.isVideoFile(item.url) {
+                                let videoConfig = VideoExportConfig(codec: videoCodec)
+                                let processor = VideoProcessor()
+                                try await processor.process(
+                                    input: item.url,
+                                    output: outURL,
+                                    config: config,
+                                    videoExport: videoConfig
+                                )
+                            } else {
+                                let processor = FrameProcessor()
+                                try await processor.process(input: item.url, output: outURL, config: config, rotation: item.rotation)
+                            }
                             return true
                         } catch {
                             return false
                         }
                     }
+                }
+
+                // Seed initial batch up to max concurrency
+                for _ in 0..<min(maxConcurrency, items.count) {
+                    addExportTask(for: items[index])
+                    index += 1
                 }
 
                 // Drain results and feed remaining items one-for-one
@@ -84,18 +104,8 @@ final class AppState {
                     }
 
                     if index < items.count {
-                        let item = items[index]
+                        addExportTask(for: items[index])
                         index += 1
-                        group.addTask {
-                            let processor = FrameProcessor()
-                            let outURL = Self.outputURL(for: item, config: config, directory: directory, suffix: suffix)
-                            do {
-                                try await processor.process(input: item.url, output: outURL, config: config, rotation: item.rotation)
-                                return true
-                            } catch {
-                                return false
-                            }
-                        }
                     }
                 }
             }
@@ -109,15 +119,47 @@ final class AppState {
     }
 
     nonisolated static func outputURL(for item: PhotoItem, config: ProcessingConfig, directory: URL, suffix: String) -> URL {
-        let ext = config.outputFormat == .png ? "png" : "jpg"
+        let ext: String
+        if isVideoFile(item.url) {
+            ext = "mp4"
+        } else {
+            ext = config.outputFormat == .png ? "png" : "jpg"
+        }
         let stem = item.url.deletingPathExtension().lastPathComponent
         return directory.appendingPathComponent("\(stem)_\(suffix).\(ext)")
+    }
+
+    // MARK: - Video Export
+
+    nonisolated static func isVideoFile(_ url: URL) -> Bool {
+        videoExtensions.contains(url.pathExtension.lowercased())
+    }
+
+    func exportVideo(item: PhotoItem, outputURL: URL, trimRange: TrimRange? = nil) async throws {
+        isExportingVideo = true
+        videoExportProgress = 0
+        defer { isExportingVideo = false }
+
+        let videoConfig = VideoExportConfig(codec: videoCodec, trim: trimRange)
+        let processor = VideoProcessor()
+        await processor.onProgress { [weak self] progress in
+            Task { @MainActor in
+                self?.videoExportProgress = progress.fraction
+            }
+        }
+        try await processor.process(
+            input: item.url,
+            output: outputURL,
+            config: currentConfig,
+            videoExport: videoConfig
+        )
     }
 
     // MARK: - Photo Import
 
     func addPhotos(from urls: [URL]) {
         let imageExts: Set<String> = ["jpg", "jpeg", "png", "tiff", "tif", "heic"]
+        let supportedExts = imageExts.union(Self.videoExtensions)
         var allFiles: [URL] = []
         for url in urls {
             var isDir: ObjCBool = false
@@ -126,8 +168,8 @@ final class AppState {
                 let files = (try? FileManager.default.contentsOfDirectory(
                     at: url, includingPropertiesForKeys: nil)
                 ) ?? []
-                allFiles += files.filter { imageExts.contains($0.pathExtension.lowercased()) }
-            } else if imageExts.contains(url.pathExtension.lowercased()) {
+                allFiles += files.filter { supportedExts.contains($0.pathExtension.lowercased()) }
+            } else if supportedExts.contains(url.pathExtension.lowercased()) {
                 allFiles.append(url)
             }
         }
