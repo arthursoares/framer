@@ -2,16 +2,30 @@ import Foundation
 import CoreGraphics
 import ImageIO
 import AppKit
+import AVFoundation
 
 /// Orchestrates the full image processing pipeline.
 /// Runs on a background actor to keep the main thread free.
 public actor FrameProcessor {
     public init() {}
 
+    // MARK: - Video Detection
+
+    private static let videoExtensions: Set<String> = ["mp4", "mov", "m4v", "avi", "mkv", "webm"]
+
+    public static func isVideoFile(_ url: URL) -> Bool {
+        videoExtensions.contains(url.pathExtension.lowercased())
+    }
+
     // MARK: - Preview (downscaled, no disk I/O)
 
     public func previewImage(for url: URL, config: ProcessingConfig, rotation: Int = 0) throws -> sending NSImage {
-        let fullImage = try loadImage(from: url)
+        let fullImage: CGImage
+        if Self.isVideoFile(url) {
+            fullImage = try extractVideoFrame(from: url)
+        } else {
+            fullImage = try loadImage(from: url)
+        }
         let rotated = applyRotation(fullImage, degrees: rotation)
         try Task.checkCancellation()
         let previewMax = previewMaxDimension(for: config, imageWidth: rotated.width, imageHeight: rotated.height)
@@ -31,7 +45,20 @@ public actor FrameProcessor {
 
     // MARK: - Full Export
 
-    public func process(input: URL, output: URL, config: ProcessingConfig, rotation: Int = 0) throws {
+    public func process(input: URL, output: URL, config: ProcessingConfig, rotation: Int = 0) async throws {
+        // Delegate to VideoProcessor for video files
+        if Self.isVideoFile(input) {
+            let videoConfig = config.videoExport ?? VideoExportConfig()
+            let videoProcessor = VideoProcessor()
+            try await videoProcessor.process(
+                input: input,
+                output: output,
+                config: config,
+                videoExport: videoConfig
+            )
+            return
+        }
+
         let cgImage = applyRotation(try loadImage(from: input), degrees: rotation)
         let exif = (try? EXIFReader.read(from: input)) ?? ExifData()
 
@@ -56,6 +83,21 @@ public actor FrameProcessor {
     }
 
     // MARK: - Helpers
+
+    private func extractVideoFrame(from url: URL) throws -> CGImage {
+        let asset = AVAsset(url: url)
+        let generator = AVAssetImageGenerator(asset: asset)
+        generator.appliesPreferredTrackTransform = true
+        generator.maximumSize = CGSize(width: 1920, height: 1920)
+        generator.requestedTimeToleranceBefore = .zero
+        generator.requestedTimeToleranceAfter = CMTime(seconds: 1, preferredTimescale: 600)
+        do {
+            let cgImage = try generator.copyCGImage(at: .zero, actualTime: nil)
+            return cgImage
+        } catch {
+            throw FramerError.invalidImage(url)
+        }
+    }
 
     private func loadImage(from url: URL) throws -> CGImage {
         guard let source = CGImageSourceCreateWithURL(url as CFURL, nil),
