@@ -36,6 +36,7 @@ struct ProcessCommand: AsyncParsableCommand {
     @Option(help: "Print width in mm (default 148)") var printWidth: Double?
     @Option(help: "Print height in mm (default 100)") var printHeight: Double?
     @Option(help: "Print DPI (default 300)") var printDpi: Int?
+    @Option(help: "Crop to aspect ratio (e.g. 4:5, 1:1, 16:9)") var aspectRatio: String?
 
     mutating func run() async throws {
         // Initialize default presets if needed
@@ -99,6 +100,14 @@ struct ProcessCommand: AsyncParsableCommand {
         // Ensure layers exist and add caption
         if cfg.layers == nil {
             cfg.layers = CompositionLayer.defaultLayers()
+        }
+
+        // Insert aspect ratio crop at the beginning of the layer stack
+        if let ratioStr = aspectRatio {
+            let parts = ratioStr.split(separator: ":").compactMap { Int($0) }
+            if parts.count == 2, parts[0] > 0, parts[1] > 0 {
+                cfg.layers?.insert(.aspectRatio(AspectRatioLayerParams(ratioWidth: parts[0], ratioHeight: parts[1])), at: 0)
+            }
         }
         // Remove any existing caption layers, then append
         cfg.layers?.removeAll { if case .caption = $0 { return true }; return false }
