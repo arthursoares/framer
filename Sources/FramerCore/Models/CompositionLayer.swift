@@ -501,6 +501,66 @@ public struct DitherLayerParams: Identifiable, Codable, Equatable, Sendable {
     }
 }
 
+// MARK: - Aspect Ratio
+
+public struct AspectRatioLayerParams: Identifiable, Codable, Equatable, Sendable {
+    public let id: UUID
+    public var ratioWidth: Int
+    public var ratioHeight: Int
+    public var offsetX: Double  // -1.0 (left) to 1.0 (right), 0 = center
+    public var offsetY: Double  // -1.0 (bottom) to 1.0 (top), 0 = center
+
+    public init(
+        id: UUID = UUID(),
+        ratioWidth: Int = 1,
+        ratioHeight: Int = 1,
+        offsetX: Double = 0,
+        offsetY: Double = 0
+    ) {
+        self.id = id
+        self.ratioWidth = max(1, ratioWidth)
+        self.ratioHeight = max(1, ratioHeight)
+        self.offsetX = max(-1, min(1, offsetX))
+        self.offsetY = max(-1, min(1, offsetY))
+    }
+
+    /// Compute the crop rect for a given image size.
+    public func cropRect(for imageSize: CGSize) -> CGRect {
+        let targetRatio = CGFloat(ratioWidth) / CGFloat(ratioHeight)
+        let imageRatio = imageSize.width / imageSize.height
+
+        let cropW: CGFloat
+        let cropH: CGFloat
+
+        if targetRatio > imageRatio {
+            cropW = imageSize.width
+            cropH = imageSize.width / targetRatio
+        } else {
+            cropW = imageSize.height * targetRatio
+            cropH = imageSize.height
+        }
+
+        let maxOffsetX = (imageSize.width - cropW) / 2
+        let maxOffsetY = (imageSize.height - cropH) / 2
+
+        let cropX = maxOffsetX + offsetX * maxOffsetX
+        let cropY = maxOffsetY + offsetY * maxOffsetY
+
+        return CGRect(
+            x: cropX.rounded(.down),
+            y: cropY.rounded(.down),
+            width: cropW.rounded(.down),
+            height: cropH.rounded(.down)
+        )
+    }
+
+    /// Compute output size after cropping.
+    public func croppedSize(for imageSize: CGSize) -> CGSize {
+        let rect = cropRect(for: imageSize)
+        return CGSize(width: rect.width, height: rect.height)
+    }
+}
+
 // MARK: - CompositionLayer
 
 public enum CompositionLayer: Identifiable, Codable, Equatable, Sendable {
@@ -512,6 +572,7 @@ public enum CompositionLayer: Identifiable, Codable, Equatable, Sendable {
     case orientation(OrientationLayerParams)
     case caption(CaptionLayerParams)
     case dither(DitherLayerParams)
+    case aspectRatio(AspectRatioLayerParams)
 
     public var id: UUID {
         switch self {
@@ -523,6 +584,7 @@ public enum CompositionLayer: Identifiable, Codable, Equatable, Sendable {
         case .orientation(let p): return p.id
         case .caption(let p): return p.id
         case .dither(let p): return p.id
+        case .aspectRatio(let p): return p.id
         }
     }
 
@@ -536,6 +598,7 @@ public enum CompositionLayer: Identifiable, Codable, Equatable, Sendable {
         case .orientation: return "Orientation"
         case .caption: return "Caption"
         case .dither: return "Dither"
+        case .aspectRatio: return "Aspect Ratio"
         }
     }
 
@@ -549,6 +612,7 @@ public enum CompositionLayer: Identifiable, Codable, Equatable, Sendable {
         case .orientation: return "rotate.right"
         case .caption: return "textformat"
         case .dither: return "circle.dotted"
+        case .aspectRatio: return "crop"
         }
     }
 
@@ -578,6 +642,8 @@ public enum CompositionLayer: Identifiable, Codable, Equatable, Sendable {
             self = .caption(try container.decode(CaptionLayerParams.self, forKey: .params))
         case "dither":
             self = .dither(try container.decode(DitherLayerParams.self, forKey: .params))
+        case "aspectRatio":
+            self = .aspectRatio(try container.decode(AspectRatioLayerParams.self, forKey: .params))
         default:
             throw DecodingError.dataCorruptedError(
                 forKey: .type, in: container,
@@ -612,6 +678,9 @@ public enum CompositionLayer: Identifiable, Codable, Equatable, Sendable {
             try container.encode(p, forKey: .params)
         case .dither(let p):
             try container.encode("dither", forKey: .type)
+            try container.encode(p, forKey: .params)
+        case .aspectRatio(let p):
+            try container.encode("aspectRatio", forKey: .type)
             try container.encode(p, forKey: .params)
         }
     }
