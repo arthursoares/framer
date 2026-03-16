@@ -100,7 +100,7 @@ struct LibrarySidebar: View {
         panel.allowsMultipleSelection = true
         panel.canChooseFiles = true
         panel.canChooseDirectories = true
-        panel.allowedContentTypes = [.jpeg, .png, .tiff, .heic]
+        panel.allowedContentTypes = [.jpeg, .png, .tiff, .heic, .mpeg4Movie, .quickTimeMovie, .movie, .avi]
         if panel.runModal() == .OK {
             appState.addPhotos(from: panel.urls)
         }
