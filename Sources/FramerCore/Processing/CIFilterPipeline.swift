@@ -37,18 +37,16 @@ public enum CIFilterPipeline {
             return applyCanvas(params, to: image)
         case .resize(let params):
             return applyResize(params, to: image)
-        case .overlay:
-            // TODO: Metal kernel in Task 4
-            return image
+        case .overlay(let params):
+            return applyOverlay(params, to: image)
         case .orientation:
             // TODO: orientation transform
             return image
         case .caption:
             // TODO: CoreText rendering
             return image
-        case .dither:
-            // TODO: Metal kernel in Task 4
-            return image
+        case .dither(let params):
+            return applyDither(params, to: image)
         }
     }
 
@@ -153,5 +151,104 @@ public enum CIFilterPipeline {
         filter.setValue(1.0, forKey: kCIInputAspectRatioKey)
 
         return filter.outputImage ?? image
+    }
+
+    // MARK: - Dither
+
+    private static func applyDither(_ params: DitherLayerParams, to image: CIImage) -> CIImage {
+        let extent = image.extent
+        let pixelScale = max(1, min(8, params.pixelScale))
+
+        var working = image
+
+        // Step 1: If pixelScale > 1, downscale with Lanczos
+        if pixelScale > 1 {
+            let scaleFactor = 1.0 / CGFloat(pixelScale)
+            guard let downFilter = CIFilter(name: "CILanczosScaleTransform") else { return image }
+            downFilter.setValue(working, forKey: kCIInputImageKey)
+            downFilter.setValue(scaleFactor, forKey: kCIInputScaleKey)
+            downFilter.setValue(1.0, forKey: kCIInputAspectRatioKey)
+            working = downFilter.outputImage ?? working
+        }
+
+        // Step 2: Apply DitherCIFilter (Bayer dithering via CIFilter chain)
+        let ditherFilter = DitherCIFilter()
+        ditherFilter.inputImage = working
+        ditherFilter.threshold = Float(params.threshold)
+        ditherFilter.bayerLevel = params.bayerLevel
+        working = ditherFilter.outputImage ?? working
+
+        // Step 3: If pixelScale > 1, upscale back with nearest-neighbor (CIAffineTransform)
+        if pixelScale > 1 {
+            let upscale = CGAffineTransform(scaleX: CGFloat(pixelScale), y: CGFloat(pixelScale))
+            let upscaled = working.transformed(by: upscale, highQualityDownsample: false)
+            // Crop to original extent to handle any rounding differences
+            working = upscaled.cropped(to: extent)
+        }
+
+        return working
+    }
+
+    // MARK: - Overlay
+
+    private static func applyOverlay(_ params: OverlayLayerParams, to image: CIImage) -> CIImage {
+        // Resolve overlay texture URL
+        guard let overlayURL = TextureFrameProvider.overlayURL(forName: params.overlayName) else {
+            return image
+        }
+
+        // Load the overlay image
+        guard let overlayCGImage = TextureFrameProvider.loadFullImage(for: overlayURL) else {
+            return image
+        }
+
+        let extent = image.extent
+        var overlayCI = CIImage(cgImage: overlayCGImage)
+
+        // Scale overlay to match image dimensions
+        let overlayExtent = overlayCI.extent
+        let scaleX = extent.width / overlayExtent.width
+        let scaleY = extent.height / overlayExtent.height
+        overlayCI = overlayCI.transformed(by: CGAffineTransform(scaleX: scaleX, y: scaleY))
+
+        // Apply opacity (0-100 range in params)
+        let opacity = max(0, min(1, params.opacity / 100.0))
+        if opacity < 1.0 {
+            // Apply opacity using CIColorMatrix on the overlay's alpha channel
+            guard let opacityFilter = CIFilter(name: "CIColorMatrix") else { return image }
+            opacityFilter.setValue(overlayCI, forKey: kCIInputImageKey)
+            opacityFilter.setValue(CIVector(x: 1, y: 0, z: 0, w: 0), forKey: "inputRVector")
+            opacityFilter.setValue(CIVector(x: 0, y: 1, z: 0, w: 0), forKey: "inputGVector")
+            opacityFilter.setValue(CIVector(x: 0, y: 0, z: 1, w: 0), forKey: "inputBVector")
+            opacityFilter.setValue(CIVector(x: 0, y: 0, z: 0, w: CGFloat(opacity)), forKey: "inputAVector")
+            opacityFilter.setValue(CIVector(x: 0, y: 0, z: 0, w: 0), forKey: "inputBiasVector")
+            overlayCI = opacityFilter.outputImage ?? overlayCI
+        }
+
+        // Apply blend mode
+        let blended: CIImage
+        switch params.blendMode {
+        case .screen:
+            blended = applyBlend(name: "CIScreenBlendMode", foreground: overlayCI, background: image)
+        case .multiply:
+            blended = applyBlend(name: "CIMultiplyBlendMode", foreground: overlayCI, background: image)
+        case .softLight:
+            blended = applyBlend(name: "CISoftLightBlendMode", foreground: overlayCI, background: image)
+        case .normal:
+            // Normal mode: composite overlay over base image
+            blended = applyBlend(name: "CISourceOverCompositing", foreground: overlayCI, background: image)
+        }
+
+        return blended.cropped(to: extent)
+    }
+
+    /// Apply a named blend mode CIFilter with foreground over background.
+    private static func applyBlend(name: String, foreground: CIImage, background: CIImage) -> CIImage {
+        guard let filter = CIFilter(name: name) else {
+            return foreground.composited(over: background)
+        }
+        filter.setValue(foreground, forKey: kCIInputImageKey)
+        filter.setValue(background, forKey: kCIInputBackgroundImageKey)
+        return filter.outputImage ?? foreground.composited(over: background)
     }
 }
