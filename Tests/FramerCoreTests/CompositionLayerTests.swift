@@ -510,4 +510,28 @@ final class CompositionLayerTests: XCTestCase {
         XCTAssertEqual(size.width, 100)
         XCTAssertEqual(size.height, 100)
     }
+
+    // MARK: - Aspect Ratio BorderRenderer Integration
+
+    func test_aspectRatio_borderRenderer_cropsImage() throws {
+        let image = makeTestImage(width: 200, height: 100)
+        let layers: [CompositionLayer] = [
+            .aspectRatio(AspectRatioLayerParams(ratioWidth: 1, ratioHeight: 1))
+        ]
+        let result = try BorderRenderer.applyLayers(layers, to: image, sourceImage: image, exif: ExifData())
+        XCTAssertEqual(result.image.width, 100)
+        XCTAssertEqual(result.image.height, 100)
+    }
+
+    func test_aspectRatio_beforeBorder_affectsOutput() throws {
+        let image = makeTestImage(width: 200, height: 100)
+        let layers: [CompositionLayer] = [
+            .aspectRatio(AspectRatioLayerParams(ratioWidth: 1, ratioHeight: 1)),
+            .border(BorderLayerParams(thickness: .pixels(10), color: .white))
+        ]
+        let result = try BorderRenderer.applyLayers(layers, to: image, sourceImage: image, exif: ExifData())
+        // 100x100 crop + 10px border on each side = 120x120
+        XCTAssertEqual(result.image.width, 120)
+        XCTAssertEqual(result.image.height, 120)
+    }
 }

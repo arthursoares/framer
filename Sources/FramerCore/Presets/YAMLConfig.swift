@@ -64,10 +64,9 @@ public enum YAMLConfig {
         var dither_sharpen: Double?
         var dither_contrast: Double?
         var dither_flipped: Bool?
-        var ratio_width: Int?
-        var ratio_height: Int?
-        var aspect_offset_x: Double?
-        var aspect_offset_y: Double?
+        var ratio: String?
+        var offset_x: Double?
+        var offset_y: Double?
     }
 
     public static func encode(_ config: ProcessingConfig) throws -> String {
@@ -278,11 +277,10 @@ public enum YAMLConfig {
             return schema
 
         case .aspectRatio(let p):
-            var schema = YAMLLayerSchema(type: "aspectRatio")
-            schema.ratio_width = p.ratioWidth
-            schema.ratio_height = p.ratioHeight
-            if p.offsetX != 0 { schema.aspect_offset_x = p.offsetX }
-            if p.offsetY != 0 { schema.aspect_offset_y = p.offsetY }
+            var schema = YAMLLayerSchema(type: "aspect_ratio")
+            schema.ratio = "\(p.ratioWidth):\(p.ratioHeight)"
+            if p.offsetX != 0 { schema.offset_x = p.offsetX }
+            if p.offsetY != 0 { schema.offset_y = p.offsetY }
             return schema
         }
     }
@@ -419,17 +417,24 @@ public enum YAMLConfig {
                 contrast: schema.dither_contrast ?? 0
             ))
 
-        case "aspectRatio":
+        case "aspect_ratio":
+            let (rw, rh) = parseRatio(schema.ratio ?? "1:1")
             return .aspectRatio(AspectRatioLayerParams(
-                ratioWidth: schema.ratio_width ?? 1,
-                ratioHeight: schema.ratio_height ?? 1,
-                offsetX: schema.aspect_offset_x ?? 0,
-                offsetY: schema.aspect_offset_y ?? 0
+                ratioWidth: rw,
+                ratioHeight: rh,
+                offsetX: schema.offset_x ?? 0,
+                offsetY: schema.offset_y ?? 0
             ))
 
         default:
             return nil
         }
+    }
+
+    private static func parseRatio(_ str: String) -> (Int, Int) {
+        let parts = str.split(separator: ":").compactMap { Int($0) }
+        guard parts.count == 2, parts[0] > 0, parts[1] > 0 else { return (1, 1) }
+        return (parts[0], parts[1])
     }
 
     private static func decodeFill(_ schema: YAMLLayerSchema) -> LayerFill {
