@@ -21,7 +21,7 @@ struct LayerListSection: View {
                 .draggable(layer.id.uuidString) {
                     Label(layer.label, systemImage: layer.iconName)
                         .padding(6)
-                        .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 6))
+                        .background(Color.surface2, in: RoundedRectangle(cornerRadius: 6))
                 }
                 .dropDestination(for: String.self) { items, _ in
                     guard let droppedIDString = items.first,
@@ -45,7 +45,10 @@ struct LayerListSection: View {
 
             addLayerMenu
         } header: {
-            Text("Layers (\(layers.count))")
+            Text("LAYERS (\(layers.count))")
+                .font(AppFont.sectionHeader)
+                .tracking(1.5)
+                .foregroundStyle(Color.text3)
         }
     }
 
@@ -109,6 +112,7 @@ struct LayerListSection: View {
             }
         } label: {
             Label("Add Layer", systemImage: "plus.circle")
+                .foregroundStyle(Color.text2)
         }
     }
 
@@ -195,6 +199,7 @@ struct LayerRow: View {
                     }
                     .buttonStyle(.plain)
                     .disabled(onMoveUp == nil)
+                    .foregroundStyle(Color.text3)
                     .opacity(onMoveUp == nil ? 0.25 : 0.6)
                     .accessibilityLabel("Move layer up")
 
@@ -208,31 +213,34 @@ struct LayerRow: View {
                     }
                     .buttonStyle(.plain)
                     .disabled(onMoveDown == nil)
+                    .foregroundStyle(Color.text3)
                     .opacity(onMoveDown == nil ? 0.25 : 0.6)
                     .accessibilityLabel("Move layer down")
                 }
 
                 Image(systemName: layer.iconName)
-                    .foregroundStyle(.secondary)
+                    .foregroundStyle(Color.text2)
                     .frame(width: 20)
 
                 Text(layer.label)
+                    .font(AppFont.layerName)
+                    .foregroundStyle(Color.text0)
 
                 Spacer()
 
                 Text(layerSummary)
-                    .font(.caption.monospaced())
-                    .foregroundStyle(.tertiary)
+                    .font(AppFont.badgeSummary)
+                    .foregroundStyle(Color.text2)
                     .padding(.horizontal, 6)
                     .padding(.vertical, 2)
-                    .background(.quaternary, in: Capsule())
+                    .background(Color.surface4, in: Capsule())
 
                 Button {
                     onDelete()
                 } label: {
                     Image(systemName: "xmark")
                         .font(.caption2)
-                        .foregroundStyle(.secondary)
+                        .foregroundStyle(isHovering ? Color.error : Color.text3)
                         .frame(width: 20, height: 20)
                         .contentShape(Rectangle())
                 }
@@ -349,7 +357,7 @@ struct BorderLayerControls: View {
                         .multilineTextAlignment(.trailing)
                         .monospacedDigit()
                     Text(thicknessMode.rawValue)
-                        .foregroundStyle(.secondary)
+                        .foregroundStyle(Color.text2)
                         .frame(width: 20)
                 }
             }
@@ -411,7 +419,7 @@ struct PaddingLayerControls: View {
                     .multilineTextAlignment(.trailing)
                     .monospacedDigit()
                 Text("px")
-                    .foregroundStyle(.secondary)
+                    .foregroundStyle(Color.text2)
                     .frame(width: 20)
             }
         }
@@ -513,14 +521,14 @@ struct CanvasLayerControls: View {
                     .textFieldStyle(.roundedBorder)
                     .monospacedDigit()
             }
-            Text("px").foregroundStyle(.secondary).frame(width: 20)
+            Text("px").foregroundStyle(Color.text2).frame(width: 20)
             LabeledContent("Height") {
                 TextField("", value: heightBinding, format: .number)
                     .frame(width: 60)
                     .textFieldStyle(.roundedBorder)
                     .monospacedDigit()
             }
-            Text("px").foregroundStyle(.secondary).frame(width: 20)
+            Text("px").foregroundStyle(Color.text2).frame(width: 20)
         }
     }
 
@@ -557,7 +565,7 @@ struct CanvasLayerControls: View {
                         .monospacedDigit()
                         .onChange(of: widthPhysical) { _, _ in syncPhysicalToPixels() }
                 }
-                Text(physicalUnit.rawValue).foregroundStyle(.secondary).frame(width: 24)
+                Text(physicalUnit.rawValue).foregroundStyle(Color.text2).frame(width: 24)
                 LabeledContent("Height") {
                     TextField("", value: $heightPhysical, format: .number.precision(.fractionLength(1)))
                         .frame(width: 60)
@@ -565,7 +573,7 @@ struct CanvasLayerControls: View {
                         .monospacedDigit()
                         .onChange(of: heightPhysical) { _, _ in syncPhysicalToPixels() }
                 }
-                Text(physicalUnit.rawValue).foregroundStyle(.secondary).frame(width: 24)
+                Text(physicalUnit.rawValue).foregroundStyle(Color.text2).frame(width: 24)
             }
         }
     }
@@ -576,8 +584,8 @@ struct CanvasLayerControls: View {
             HStack {
                 Spacer()
                 Text("\(params.width) x \(params.height) px")
-                    .font(.caption.monospaced())
-                    .foregroundStyle(.tertiary)
+                    .font(AppFont.mono(10))
+                    .foregroundStyle(Color.text3)
             }
         }
     }
@@ -830,7 +838,7 @@ struct OverlayLayerControls: View {
                     .multilineTextAlignment(.trailing)
                     .monospacedDigit()
                 Text("%")
-                    .foregroundStyle(.secondary)
+                    .foregroundStyle(Color.text2)
                     .frame(width: 20)
             }
         }
@@ -843,10 +851,10 @@ struct OverlayLayerControls: View {
             }
         } label: {
             Label("Open Overlays Folder", systemImage: "folder")
-                .font(.caption)
+                .font(AppFont.controlLabel)
         }
         .buttonStyle(.plain)
-        .foregroundStyle(.secondary)
+        .foregroundStyle(Color.text2)
     }
 
     // MARK: - Thumbnail
@@ -1158,7 +1166,7 @@ struct CaptionLayerControls: View {
                         .multilineTextAlignment(.trailing)
                         .monospacedDigit()
                     Text("px")
-                        .foregroundStyle(.secondary)
+                        .foregroundStyle(Color.text2)
                         .frame(width: 20)
                 }
             }
@@ -1173,7 +1181,7 @@ struct CaptionLayerControls: View {
                         .multilineTextAlignment(.trailing)
                         .monospacedDigit()
                     Text("px")
-                        .foregroundStyle(.secondary)
+                        .foregroundStyle(Color.text2)
                         .frame(width: 20)
                 }
             }
@@ -1236,7 +1244,7 @@ struct CaptionLayerControls: View {
                             .multilineTextAlignment(.trailing)
                             .monospacedDigit()
                         Text("pt")
-                            .foregroundStyle(.secondary)
+                            .foregroundStyle(Color.text2)
                             .frame(width: 20)
                     }
                 }
@@ -1480,8 +1488,8 @@ struct TemplateTokenBar: View {
     private func tokenRow(_ category: TemplateToken.Category) -> some View {
         HStack(spacing: 4) {
             Text(category.rawValue)
-                .font(.caption2)
-                .foregroundStyle(.tertiary)
+                .font(AppFont.body(10))
+                .foregroundStyle(Color.text3)
                 .frame(width: 48, alignment: .trailing)
 
             FlowLayout(spacing: 4) {
@@ -1490,10 +1498,10 @@ struct TemplateTokenBar: View {
                         text.append(token.token)
                     } label: {
                         Text(token.label)
-                            .font(.caption)
+                            .font(AppFont.controlLabel)
                             .padding(.horizontal, 6)
                             .padding(.vertical, 2)
-                            .background(.quaternary, in: Capsule())
+                            .background(Color.surface4, in: Capsule())
                     }
                     .buttonStyle(.plain)
                     .help("Insert \(token.token)")
@@ -1763,8 +1771,8 @@ private extension View {
         VStack(alignment: .leading, spacing: 2) {
             self
             Text(text)
-                .font(.caption)
-                .foregroundStyle(.secondary)
+                .font(AppFont.controlLabel)
+                .foregroundStyle(Color.text2)
         }
     }
 }
