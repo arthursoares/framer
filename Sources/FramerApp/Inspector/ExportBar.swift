@@ -158,6 +158,7 @@ struct ExportBar: View {
         showingExportSheet = false
         let items = pendingExportItems
         guard !items.isEmpty else { return }
+        guard includeCurrentSettings || !selectedPresetIDs.isEmpty else { return }
 
         let panel = NSOpenPanel()
         panel.canChooseFiles = false

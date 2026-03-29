@@ -5,29 +5,27 @@ struct InspectorView: View {
     @Environment(AppState.self) var appState
 
     var body: some View {
-        VStack(spacing: 0) {
-            ScrollView {
-                VStack(alignment: .leading, spacing: 16) {
-                    // Active preset banner
-                    if let presetName = appState.activePresetName {
-                        activePresetBanner(presetName)
-                    }
-
-                    // Presets section
-                    presetsSection
-
-                    // Layers section
-                    layersSection
-
-                    // Output section
-                    outputSection
+        ScrollView {
+            VStack(alignment: .leading, spacing: 16) {
+                // Active preset banner
+                if let presetName = appState.activePresetName {
+                    activePresetBanner(presetName)
                 }
-                .padding(12)
-            }
 
+                // Presets section
+                presetsSection
+
+                // Layers section
+                layersSection
+
+                // Output section
+                outputSection
+            }
+            .padding(12)
+        }
+        .safeAreaInset(edge: .bottom, spacing: 0) {
             ExportBar()
         }
-        .frame(width: 280)
         .background(Color.surface1)
         .overlay(alignment: .leading) {
             Rectangle().fill(Color.borderDefault).frame(width: 1)
