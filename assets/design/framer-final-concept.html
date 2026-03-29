@@ -1,0 +1,864 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Framer — Final UI Concept</title>
+<link href="https://fonts.googleapis.com/css2?family=Atkinson+Hyperlegible+Next:ital,wght@0,400;0,500;0,600;0,700;1,400;1,500&family=Source+Code+Pro:wght@300;400;500;600&display=swap" rel="stylesheet">
+<style>
+:root {
+  --surface-0: #0e0e10;
+  --surface-1: #141416;
+  --surface-2: #1a1a1e;
+  --surface-3: #222226;
+  --surface-4: #2a2a2f;
+  --text-0: #f0ede8;
+  --text-1: #b8b4ad;
+  --text-2: #7d7a74;
+  --text-3: #4e4c48;
+  --accent: #d4956a;
+  --accent-dim: #a06840;
+  --accent-glow: rgba(212, 149, 106, 0.08);
+  --accent-subtle: rgba(212, 149, 106, 0.15);
+  --success: #5e9f6d;
+  --error: #c75d5d;
+  --border: rgba(255, 255, 255, 0.06);
+  --border-active: rgba(255, 255, 255, 0.12);
+  --r-sm: 4px;
+  --r-md: 6px;
+  --r-lg: 10px;
+  --font-mono: 'Source Code Pro', ui-monospace, monospace;
+  --font-body: 'Atkinson Hyperlegible Next', 'Atkinson Hyperlegible', system-ui, sans-serif;
+}
+
+* { box-sizing: border-box; margin: 0; padding: 0; }
+
+body {
+  font-family: var(--font-body);
+  background: #080808;
+  color: var(--text-0);
+  -webkit-font-smoothing: antialiased;
+  overflow: hidden;
+  height: 100vh;
+}
+
+/* ── Window ──────────────────────────────── */
+.window-frame {
+  display: flex;
+  flex-direction: column;
+  height: 100vh;
+  background: var(--surface-0);
+}
+
+.titlebar {
+  display: flex;
+  align-items: center;
+  height: 38px;
+  padding: 0 14px;
+  background: var(--surface-1);
+  border-bottom: 1px solid var(--border);
+  flex-shrink: 0;
+}
+.traffic-lights { display: flex; gap: 7px; margin-right: 16px; }
+.traffic-light { width: 12px; height: 12px; border-radius: 50%; }
+.traffic-light.close { background: #ff5f57; }
+.traffic-light.minimize { background: #febc2e; }
+.traffic-light.maximize { background: #28c840; }
+.titlebar-text {
+  font-family: var(--font-mono);
+  font-size: 12px;
+  color: var(--text-2);
+  letter-spacing: 0.5px;
+  text-transform: lowercase;
+}
+.titlebar-actions {
+  margin-left: auto;
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+.tb-btn {
+  display: flex; align-items: center; justify-content: center;
+  height: 26px; padding: 0 8px; border: none;
+  background: transparent; color: var(--text-2);
+  font-family: var(--font-body); font-size: 11px; font-weight: 500;
+  cursor: pointer; border-radius: var(--r-sm); gap: 4px;
+}
+.tb-btn:hover { background: var(--surface-3); color: var(--text-1); }
+
+/* ── Main Layout ─────────────────────────── */
+.main-layout {
+  display: flex;
+  flex: 1;
+  overflow: hidden;
+}
+
+/* ── Canvas ──────────────────────────────── */
+.canvas-area {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  background: var(--surface-0);
+  min-width: 0;
+  position: relative;
+}
+
+.canvas-viewport {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  position: relative;
+  background:
+    radial-gradient(ellipse at 50% 40%, rgba(212,149,106,0.02) 0%, transparent 60%),
+    var(--surface-0);
+  overflow: hidden;
+}
+
+/* Subtle dot grid */
+.canvas-viewport::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  opacity: 0.025;
+  background-image:
+    radial-gradient(circle, rgba(255,255,255,0.8) 0.5px, transparent 0.5px);
+  background-size: 24px 24px;
+  pointer-events: none;
+}
+
+/* Rendered output — single honest artifact */
+.canvas-image-wrapper {
+  position: relative;
+  max-width: calc(100% - 80px);
+  max-height: calc(100% - 32px);
+}
+
+.framed-photo {
+  background: #f5f0e8;
+  padding: 22px 22px 48px;
+  position: relative;
+  box-shadow:
+    0 2px 8px rgba(0,0,0,0.25),
+    0 8px 32px rgba(0,0,0,0.35),
+    0 0 0 1px rgba(255,255,255,0.03);
+}
+.framed-photo svg { display: block; }
+.framed-photo .frame-caption {
+  position: absolute;
+  bottom: 14px;
+  left: 0; right: 0;
+  text-align: center;
+  font-family: var(--font-mono);
+  font-size: 11px;
+  letter-spacing: 3px;
+  color: #6b6560;
+  text-transform: uppercase;
+}
+
+/* Before/After toggle — simple, honest */
+.preview-toggle {
+  position: absolute;
+  top: 14px;
+  left: 14px;
+  display: flex;
+  background: rgba(14, 14, 16, 0.7);
+  backdrop-filter: blur(12px);
+  border: 1px solid var(--border);
+  border-radius: var(--r-md);
+  overflow: hidden;
+  z-index: 10;
+}
+.toggle-btn {
+  padding: 5px 14px;
+  font-family: var(--font-body);
+  font-size: 10px;
+  font-weight: 600;
+  letter-spacing: 0.5px;
+  text-transform: uppercase;
+  border: none;
+  background: transparent;
+  color: var(--text-2);
+  cursor: pointer;
+}
+.toggle-btn.active {
+  background: var(--accent-subtle);
+  color: var(--accent);
+}
+
+/* ════════════════════════════════════════════
+   FLOATING GLASS FILMSTRIP
+   ════════════════════════════════════════════ */
+.filmstrip-float {
+  position: absolute;
+  bottom: 14px;
+  left: 14px;
+  right: 294px; /* leave room for inspector */
+  display: flex;
+  align-items: center;
+  gap: 3px;
+  padding: 6px 10px;
+  background: rgba(14, 14, 16, 0.6);
+  backdrop-filter: blur(20px) saturate(1.4);
+  border: 1px solid rgba(255,255,255,0.07);
+  border-radius: 12px;
+  z-index: 20;
+  overflow-x: auto;
+  scrollbar-width: none;
+}
+.filmstrip-float::-webkit-scrollbar { display: none; }
+
+.ff-frame {
+  flex-shrink: 0;
+  width: 48px;
+  height: 34px;
+  border-radius: 3px;
+  overflow: hidden;
+  cursor: pointer;
+  border: 1.5px solid transparent;
+  opacity: 0.55;
+}
+.ff-frame:hover { opacity: 0.85; }
+.ff-frame.selected {
+  border-color: var(--accent);
+  opacity: 1;
+  box-shadow: 0 0 8px rgba(212,149,106,0.25);
+}
+.ff-frame-img {
+  width: 100%; height: 100%;
+}
+.ff-frame-img.has-color {
+  background: linear-gradient(135deg, var(--c1), var(--c2));
+}
+
+.ff-divider {
+  width: 1px;
+  height: 20px;
+  background: rgba(255,255,255,0.08);
+  flex-shrink: 0;
+  margin: 0 4px;
+}
+
+.ff-count {
+  font-family: var(--font-mono);
+  font-size: 10px;
+  color: var(--text-3);
+  padding: 0 4px;
+  white-space: nowrap;
+  flex-shrink: 0;
+}
+.ff-add {
+  width: 26px; height: 26px; border-radius: 50%;
+  border: 1px dashed rgba(255,255,255,0.12);
+  background: transparent; color: var(--text-3);
+  font-size: 14px; cursor: pointer;
+  display: flex; align-items: center; justify-content: center;
+  flex-shrink: 0;
+}
+.ff-add:hover { border-color: var(--accent-dim); color: var(--accent); }
+
+/* EXIF bar — sits between canvas and filmstrip */
+.exif-bar {
+  display: flex;
+  align-items: center;
+  padding: 7px 16px;
+  background: var(--surface-1);
+  border-top: 1px solid var(--border);
+  gap: 14px;
+  flex-shrink: 0;
+}
+.exif-camera { font-size: 11px; color: var(--text-2); white-space: nowrap; }
+.exif-chips { display: flex; gap: 5px; }
+.exif-chip {
+  font-family: var(--font-mono); font-size: 10px; color: var(--text-2);
+  background: var(--surface-3); padding: 2px 8px; border-radius: 10px; white-space: nowrap;
+}
+.exif-spacer { flex: 1; }
+.exif-caption-label {
+  font-family: var(--font-body); font-size: 9px; color: var(--text-3);
+  text-transform: uppercase; letter-spacing: 0.5px;
+}
+.exif-caption-value {
+  font-family: var(--font-mono); font-size: 11px; color: var(--text-1);
+}
+.exif-info-btn {
+  width: 22px; height: 22px; border-radius: 50%;
+  border: 1px solid var(--border); background: transparent;
+  color: var(--text-3); font-size: 11px; cursor: pointer;
+  display: flex; align-items: center; justify-content: center;
+}
+.exif-info-btn:hover { border-color: var(--border-active); color: var(--text-2); }
+
+/* ── Inspector ───────────────────────────── */
+.inspector {
+  width: 280px;
+  flex-shrink: 0;
+  background: var(--surface-1);
+  border-left: 1px solid var(--border);
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+.inspector-scroll {
+  flex: 1; overflow-y: auto; padding-bottom: 16px;
+}
+.inspector-scroll::-webkit-scrollbar { width: 6px; }
+.inspector-scroll::-webkit-scrollbar-track { background: transparent; }
+.inspector-scroll::-webkit-scrollbar-thumb { background: var(--surface-4); border-radius: 3px; }
+
+/* Active preset banner */
+.active-preset-banner {
+  display: flex; align-items: center; gap: 8px;
+  margin: 10px 12px 2px; padding: 7px 10px;
+  background: var(--accent-glow);
+  border: 1px solid rgba(212,149,106,0.12);
+  border-radius: var(--r-md);
+}
+.active-preset-banner .banner-icon { font-size: 12px; color: var(--accent); }
+.active-preset-banner .banner-name {
+  font-family: var(--font-body); font-size: 11px; font-weight: 600;
+  color: var(--accent); flex: 1;
+}
+.active-preset-banner .banner-close {
+  background: none; border: none; color: var(--text-3);
+  font-size: 10px; cursor: pointer; padding: 2px;
+}
+.active-preset-banner .banner-close:hover { color: var(--text-1); }
+
+/* Section */
+.section { padding: 0; margin-top: 6px; }
+.section-header {
+  display: flex; align-items: center; justify-content: space-between; padding: 8px 14px;
+}
+.section-title {
+  font-family: var(--font-body); font-size: 10px; font-weight: 600;
+  letter-spacing: 1.5px; text-transform: uppercase; color: var(--text-3);
+}
+.section-count {
+  font-family: var(--font-mono); font-size: 10px; color: var(--text-3); margin-left: 4px;
+}
+
+/* ════════════════════════════════════════════
+   LIVE PRESET PREVIEWS
+   ════════════════════════════════════════════ */
+.preset-grid {
+  padding: 0 10px;
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 6px;
+  margin-bottom: 8px;
+}
+.preset-preview {
+  cursor: pointer; border-radius: var(--r-md); overflow: hidden;
+  border: 2px solid transparent; position: relative; background: var(--surface-3);
+}
+.preset-preview:hover { border-color: var(--border-active); }
+.preset-preview.active {
+  border-color: var(--accent);
+  box-shadow: 0 0 10px rgba(212,149,106,0.15);
+}
+.preset-preview-img {
+  width: 100%; aspect-ratio: 4/3;
+  display: flex; align-items: center; justify-content: center;
+  position: relative; overflow: hidden;
+}
+.pp-photo {
+  width: 100%; height: 100%;
+  background: linear-gradient(135deg, #8b6fba 0%, #4ebd6a 100%);
+}
+.pp-border { position: absolute; inset: 0; pointer-events: none; }
+.pp-border.white-vintage {
+  border: 6px solid #f5f0e8;
+  border-bottom: 14px solid #f5f0e8;
+}
+.pp-border.white-vintage::after {
+  content: '—'; position: absolute; bottom: 0px; left: 0; right: 0;
+  text-align: center; font-family: var(--font-mono); font-size: 5px;
+  color: #9a9590; letter-spacing: 1px;
+}
+.pp-border.instagram { border: 5px solid #ffffff; }
+.pp-border.black-minimal { border: 3px solid #1a1a1a; }
+.pp-border.dusty-vintage {
+  border: 6px solid #e8ddd0;
+  border-bottom: 14px solid #e8ddd0;
+}
+.preset-preview-name {
+  padding: 4px 4px 5px; font-size: 9px; font-weight: 500;
+  color: var(--text-2); text-align: center; background: var(--surface-2);
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
+.preset-preview.active .preset-preview-name {
+  color: var(--accent); background: var(--accent-glow);
+}
+.preset-preview-check {
+  position: absolute; top: 4px; right: 4px;
+  width: 14px; height: 14px; border-radius: 50%;
+  background: var(--accent); color: var(--surface-0);
+  font-size: 8px; display: none; align-items: center; justify-content: center; font-weight: 700;
+}
+.preset-preview.active .preset-preview-check { display: flex; }
+.preset-add-card {
+  border: 1px dashed var(--border); border-radius: var(--r-md);
+  display: flex; flex-direction: column; align-items: center; justify-content: center;
+  cursor: pointer; color: var(--text-3); font-size: 18px; min-height: 72px;
+}
+.preset-add-card:hover { border-color: var(--border-active); color: var(--text-2); background: var(--surface-2); }
+.preset-add-card span { font-size: 8px; margin-top: 2px; font-weight: 500; letter-spacing: 0.5px; }
+
+/* ── Layers ──────────────────────────────── */
+.layer-list { padding: 0 8px; }
+.layer-row {
+  border: 1px solid transparent; border-radius: var(--r-md);
+  margin-bottom: 2px; overflow: hidden;
+}
+.layer-row:hover { border-color: var(--border); }
+.layer-row.expanded { border-color: var(--border); background: var(--surface-2); }
+
+.layer-header {
+  display: flex; align-items: center; gap: 6px;
+  padding: 6px 8px; cursor: pointer; user-select: none;
+}
+.layer-reorder { display: flex; flex-direction: column; }
+.layer-reorder button {
+  background: none; border: none; color: var(--text-3);
+  font-size: 8px; cursor: pointer; padding: 1px 3px; line-height: 1;
+}
+.layer-reorder button:hover { color: var(--text-1); }
+.layer-reorder button:disabled { opacity: 0.2; cursor: default; }
+
+.layer-icon { font-size: 13px; color: var(--text-2); width: 18px; text-align: center; }
+.layer-name { font-size: 12px; font-weight: 450; color: var(--text-0); flex: 1; }
+.layer-badge {
+  font-family: var(--font-mono); font-size: 9px; color: var(--text-3);
+  background: var(--surface-4); padding: 2px 7px; border-radius: 10px;
+}
+.layer-delete {
+  background: none; border: none; color: var(--text-3);
+  font-size: 9px; cursor: pointer; padding: 2px 4px; opacity: 0; border-radius: var(--r-sm);
+}
+.layer-row:hover .layer-delete { opacity: 1; }
+.layer-delete:hover { color: var(--error); background: rgba(199,93,93,0.1); }
+.layer-expand-chevron { font-size: 9px; color: var(--text-3); width: 14px; text-align: center; }
+
+.layer-controls { padding: 4px 10px 10px 36px; display: none; }
+.layer-row.expanded .layer-controls { display: block; }
+
+.control-row {
+  display: flex; align-items: center; justify-content: space-between; padding: 4px 0; gap: 10px;
+}
+.control-label { font-size: 11px; color: var(--text-2); white-space: nowrap; min-width: 60px; }
+.control-input { flex: 1; display: flex; align-items: center; gap: 6px; justify-content: flex-end; }
+
+input[type="range"] {
+  -webkit-appearance: none; width: 100%; height: 3px;
+  background: var(--surface-4); border-radius: 2px; outline: none;
+}
+input[type="range"]::-webkit-slider-thumb {
+  -webkit-appearance: none; width: 12px; height: 12px; border-radius: 50%;
+  background: var(--text-1); border: 2px solid var(--surface-1); cursor: pointer;
+}
+input[type="range"]::-webkit-slider-thumb:hover { background: var(--accent); }
+
+.num-input {
+  width: 48px; padding: 3px 6px; font-family: var(--font-mono); font-size: 10px;
+  background: var(--surface-3); border: 1px solid var(--border);
+  border-radius: var(--r-sm); color: var(--text-0); text-align: right; outline: none;
+}
+.num-input:focus { border-color: var(--accent-dim); }
+.control-unit { font-family: var(--font-mono); font-size: 9px; color: var(--text-3); width: 16px; }
+.color-swatch {
+  width: 22px; height: 22px; border-radius: var(--r-sm);
+  border: 1px solid var(--border-active); cursor: pointer; flex-shrink: 0;
+}
+.hex-input {
+  width: 64px; padding: 3px 6px; font-family: var(--font-mono); font-size: 10px;
+  background: var(--surface-3); border: 1px solid var(--border);
+  border-radius: var(--r-sm); color: var(--text-0); outline: none;
+}
+.control-select {
+  padding: 3px 6px; font-family: var(--font-mono); font-size: 10px;
+  background: var(--surface-3); border: 1px solid var(--border);
+  border-radius: var(--r-sm); color: var(--text-0); outline: none;
+}
+.control-toggle {
+  width: 32px; height: 18px; border-radius: 9px;
+  background: var(--surface-4); border: none; cursor: pointer; position: relative;
+}
+.control-toggle::after {
+  content: ''; position: absolute; top: 3px; left: 3px;
+  width: 12px; height: 12px; border-radius: 50%; background: var(--text-2);
+}
+.control-toggle.on { background: var(--accent-dim); }
+.control-toggle.on::after { left: auto; right: 3px; background: var(--text-0); }
+
+.add-layer-btn {
+  display: flex; align-items: center; justify-content: center; gap: 6px;
+  width: calc(100% - 16px); margin: 6px 8px; padding: 7px 0;
+  border: 1px dashed var(--border); border-radius: var(--r-md);
+  background: transparent; color: var(--text-3);
+  font-family: var(--font-body); font-size: 11px; font-weight: 500; cursor: pointer;
+}
+.add-layer-btn:hover { border-color: var(--border-active); color: var(--text-2); background: var(--surface-2); }
+
+/* ── Output ──────────────────────────────── */
+.output-section { border-top: 1px solid var(--border); margin-top: 8px; padding: 0 14px; }
+.output-row { display: flex; align-items: center; justify-content: space-between; padding: 6px 0; }
+.output-label { font-size: 11px; color: var(--text-2); }
+.format-pills { display: flex; background: var(--surface-3); border-radius: var(--r-sm); overflow: hidden; }
+.format-pill {
+  padding: 3px 12px; font-family: var(--font-mono); font-size: 10px; font-weight: 500;
+  border: none; background: transparent; color: var(--text-2); cursor: pointer;
+}
+.format-pill.active { background: var(--accent-subtle); color: var(--accent); }
+
+/* ── Export bar ──────────────────────────── */
+.export-bar {
+  border-top: 1px solid var(--border); padding: 10px 12px;
+  display: flex; gap: 8px; background: var(--surface-1);
+}
+.export-btn {
+  flex: 1; display: flex; align-items: center; justify-content: center; gap: 6px;
+  padding: 8px 12px; border: 1px solid var(--border); border-radius: var(--r-md);
+  background: transparent; font-family: var(--font-body); font-size: 11px;
+  font-weight: 600; color: var(--text-1); cursor: pointer;
+}
+.export-btn:hover { background: var(--surface-2); border-color: var(--border-active); }
+.export-btn.primary { background: var(--accent-dim); border-color: var(--accent); color: var(--text-0); }
+.export-btn.primary:hover { background: var(--accent); color: var(--surface-0); }
+.export-count {
+  font-family: var(--font-mono); font-size: 9px; font-weight: 600;
+  background: rgba(255,255,255,0.12); padding: 1px 6px; border-radius: 8px;
+}
+.export-btn.primary .export-count { background: rgba(0,0,0,0.2); }
+
+/* ── Empty state ─────────────────────────── */
+.empty-state {
+  display: none;
+  flex-direction: column; align-items: center; justify-content: center;
+  gap: 14px; height: 100%; color: var(--text-3);
+}
+.empty-state-icon { font-size: 48px; opacity: 0.2; }
+.empty-state h3 {
+  font-family: var(--font-body); font-size: 17px; font-weight: 400;
+  font-style: italic; color: var(--text-2);
+}
+.empty-state p { font-size: 12px; color: var(--text-3); text-align: center; line-height: 1.5; }
+</style>
+</head>
+<body>
+
+<div class="window-frame">
+  <!-- Titlebar -->
+  <div class="titlebar">
+    <div class="traffic-lights">
+      <div class="traffic-light close"></div>
+      <div class="traffic-light minimize"></div>
+      <div class="traffic-light maximize"></div>
+    </div>
+    <span class="titlebar-text">framer</span>
+    <div class="titlebar-actions">
+      <button class="tb-btn"><span style="font-size:14px">−</span></button>
+      <button class="tb-btn"><span style="font-size:14px">+</span> Add</button>
+    </div>
+  </div>
+
+  <div class="main-layout">
+
+    <!-- ═══ CANVAS ═══ -->
+    <div class="canvas-area">
+      <div class="canvas-viewport">
+        <!-- Rendered output — the honest single artifact -->
+        <div class="canvas-image-wrapper" id="canvasImage">
+          <div class="framed-photo" id="framedOutput">
+            <svg width="540" height="360" viewBox="0 0 540 360" style="display:block;">
+              <rect width="540" height="185" fill="#9a88c4"/>
+              <rect y="10" width="540" height="112" fill="#b4a0d8" opacity="0.5"/>
+              <rect y="240" width="540" height="120" fill="#dbd5c8"/>
+              <rect x="25" y="82" width="102" height="185" rx="51" ry="51" fill="#5cc44e"/>
+              <rect x="25" y="150" width="102" height="117" fill="#5cc44e"/>
+              <rect x="150" y="92" width="102" height="175" rx="51" ry="51" fill="#4ab03e"/>
+              <rect x="150" y="160" width="102" height="107" fill="#4ab03e"/>
+              <rect x="280" y="87" width="102" height="180" rx="51" ry="51" fill="#58c04a"/>
+              <rect x="280" y="155" width="102" height="112" fill="#58c04a"/>
+              <rect x="410" y="82" width="102" height="185" rx="51" ry="51" fill="#4dba40"/>
+              <rect x="410" y="150" width="102" height="117" fill="#4dba40"/>
+              <rect x="122" y="58" width="7" height="262" fill="#8a7ab0" opacity="0.7"/>
+              <rect x="252" y="58" width="7" height="262" fill="#8a7ab0" opacity="0.7"/>
+              <rect x="382" y="58" width="7" height="262" fill="#8a7ab0" opacity="0.7"/>
+            </svg>
+            <div class="frame-caption">— mar '18 —</div>
+          </div>
+        </div>
+
+        <!-- Before / After -->
+        <div class="preview-toggle">
+          <button class="toggle-btn" id="btnBefore">Before</button>
+          <button class="toggle-btn active" id="btnAfter">After</button>
+        </div>
+
+        <!-- Floating glass filmstrip -->
+        <div class="filmstrip-float" id="filmstrip">
+          <div class="ff-frame selected" data-i="0">
+            <div class="ff-frame-img has-color" style="--c1:#8b6fba;--c2:#4ebd6a;"></div>
+          </div>
+          <div class="ff-frame" data-i="1">
+            <div class="ff-frame-img has-color" style="--c1:#c76d4e;--c2:#d4b06a;"></div>
+          </div>
+          <div class="ff-frame" data-i="2">
+            <div class="ff-frame-img has-color" style="--c1:#4a7fb5;--c2:#6bc5c7;"></div>
+          </div>
+          <div class="ff-frame" data-i="3">
+            <div class="ff-frame-img has-color" style="--c1:#2e2e38;--c2:#5a4e6e;"></div>
+          </div>
+          <div class="ff-frame" data-i="4">
+            <div class="ff-frame-img has-color" style="--c1:#b54a6a;--c2:#d49c6a;"></div>
+          </div>
+          <div class="ff-frame" data-i="5">
+            <div class="ff-frame-img has-color" style="--c1:#3d6b4a;--c2:#a8c77a;"></div>
+          </div>
+          <div class="ff-frame" data-i="6">
+            <div class="ff-frame-img has-color" style="--c1:#7a6040;--c2:#c4a870;"></div>
+          </div>
+          <div class="ff-frame" data-i="7">
+            <div class="ff-frame-img has-color" style="--c1:#5b5b8a;--c2:#9a7abf;"></div>
+          </div>
+          <div class="ff-frame" data-i="8">
+            <div class="ff-frame-img has-color" style="--c1:#8a5a4a;--c2:#c49070;"></div>
+          </div>
+          <div class="ff-frame" data-i="9">
+            <div class="ff-frame-img has-color" style="--c1:#4a8a6a;--c2:#70c4a0;"></div>
+          </div>
+          <div class="ff-frame" data-i="10">
+            <div class="ff-frame-img has-color" style="--c1:#6a4a8a;--c2:#a070c4;"></div>
+          </div>
+          <div class="ff-divider"></div>
+          <span class="ff-count">11</span>
+          <button class="ff-add" title="Add photos">+</button>
+        </div>
+      </div>
+
+      <!-- EXIF bar -->
+      <div class="exif-bar">
+        <span class="exif-camera">Canon EOS 5D Mark III</span>
+        <div class="exif-chips">
+          <span class="exif-chip">ISO 400</span>
+          <span class="exif-chip">f/2.8</span>
+          <span class="exif-chip">1/250s</span>
+          <span class="exif-chip">35mm</span>
+        </div>
+        <div class="exif-spacer"></div>
+        <div style="display:flex;flex-direction:column;align-items:flex-end;gap:1px;">
+          <span class="exif-caption-label">Caption</span>
+          <span class="exif-caption-value">— MAR '18 —</span>
+        </div>
+        <button class="exif-info-btn">ⓘ</button>
+      </div>
+    </div>
+
+    <!-- ═══ INSPECTOR ═══ -->
+    <div class="inspector">
+      <div class="inspector-scroll">
+        <!-- Active preset -->
+        <div class="active-preset-banner">
+          <span class="banner-icon">◆</span>
+          <span class="banner-name">Vintage White</span>
+          <button class="banner-close">✕</button>
+        </div>
+
+        <!-- Preset previews -->
+        <div class="section">
+          <div class="section-header"><span class="section-title">Presets</span></div>
+          <div class="preset-grid" id="presetGrid">
+            <div class="preset-preview active" data-preset="vintage">
+              <div class="preset-preview-img"><div class="pp-photo"></div><div class="pp-border white-vintage"></div><div class="preset-preview-check">✓</div></div>
+              <div class="preset-preview-name">Vintage White</div>
+            </div>
+            <div class="preset-preview" data-preset="instagram">
+              <div class="preset-preview-img"><div class="pp-photo"></div><div class="pp-border instagram"></div><div class="preset-preview-check">✓</div></div>
+              <div class="preset-preview-name">Instagram 4:5</div>
+            </div>
+            <div class="preset-preview" data-preset="minimal">
+              <div class="preset-preview-img"><div class="pp-photo"></div><div class="pp-border black-minimal"></div><div class="preset-preview-check">✓</div></div>
+              <div class="preset-preview-name">Minimal Black</div>
+            </div>
+            <div class="preset-preview" data-preset="none">
+              <div class="preset-preview-img"><div class="pp-photo"></div><div class="preset-preview-check">✓</div></div>
+              <div class="preset-preview-name">No Border</div>
+            </div>
+            <div class="preset-preview" data-preset="dusty">
+              <div class="preset-preview-img" style="filter:sepia(0.3) contrast(1.1);"><div class="pp-photo"></div><div class="pp-border dusty-vintage"></div><div class="preset-preview-check">✓</div></div>
+              <div class="preset-preview-name">Dusty Film</div>
+            </div>
+            <div class="preset-add-card">+<span>SAVE</span></div>
+          </div>
+        </div>
+
+        <!-- Layers -->
+        <div class="section">
+          <div class="section-header"><span class="section-title">Layers<span class="section-count">5</span></span></div>
+          <div class="layer-list">
+
+            <div class="layer-row" onclick="toggleLayer(this)">
+              <div class="layer-header">
+                <div class="layer-reorder"><button disabled>▴</button><button>▾</button></div>
+                <span class="layer-icon">↔</span><span class="layer-name">Padding</span>
+                <span class="layer-badge">4%</span>
+                <button class="layer-delete" onclick="event.stopPropagation()">✕</button>
+                <span class="layer-expand-chevron">›</span>
+              </div>
+              <div class="layer-controls">
+                <div class="control-row"><span class="control-label">Amount</span><div class="control-input"><input type="range" min="0" max="15" value="4" style="flex:1"><input type="text" class="num-input" value="4"><span class="control-unit">%</span></div></div>
+              </div>
+            </div>
+
+            <div class="layer-row expanded" onclick="toggleLayer(this)">
+              <div class="layer-header">
+                <div class="layer-reorder"><button>▴</button><button>▾</button></div>
+                <span class="layer-icon">☐</span><span class="layer-name">Border</span>
+                <span class="layer-badge">solid · 5%</span>
+                <button class="layer-delete" onclick="event.stopPropagation()">✕</button>
+                <span class="layer-expand-chevron">⌄</span>
+              </div>
+              <div class="layer-controls">
+                <div class="control-row"><span class="control-label">Style</span><div class="control-input"><select class="control-select"><option selected>Solid</option><option>Instagram 4:5</option></select></div></div>
+                <div class="control-row"><span class="control-label">Size</span><div class="control-input"><input type="range" min="1" max="20" value="5" style="flex:1"><input type="text" class="num-input" value="5"><span class="control-unit">%</span></div></div>
+                <div class="control-row"><span class="control-label">Color</span><div class="control-input"><div class="color-swatch" style="background:#f5f0e8;"></div><input type="text" class="hex-input" value="#F5F0E8"></div></div>
+              </div>
+            </div>
+
+            <div class="layer-row" onclick="toggleLayer(this)">
+              <div class="layer-header">
+                <div class="layer-reorder"><button>▴</button><button>▾</button></div>
+                <span class="layer-icon">T</span><span class="layer-name">Caption</span>
+                <span class="layer-badge">{{mon}} '{{year2}}</span>
+                <button class="layer-delete" onclick="event.stopPropagation()">✕</button>
+                <span class="layer-expand-chevron">›</span>
+              </div>
+              <div class="layer-controls">
+                <div class="control-row"><span class="control-label">Template</span><div class="control-input"><input type="text" class="hex-input" value="— {{mon}} '{{year2}} —" style="width:100%"></div></div>
+                <div class="control-row"><span class="control-label">Style</span>
+                  <div class="control-input" style="gap:10px">
+                    <label style="font-size:11px;color:var(--text-2);display:flex;align-items:center;gap:4px;"><button class="control-toggle on" onclick="event.stopPropagation();this.classList.toggle('on')"></button>Bold</label>
+                    <label style="font-size:11px;color:var(--text-2);display:flex;align-items:center;gap:4px;"><button class="control-toggle" onclick="event.stopPropagation();this.classList.toggle('on')"></button>Italic</label>
+                  </div>
+                </div>
+                <div class="control-row"><span class="control-label">Size</span><div class="control-input"><input type="range" min="0.5" max="3" value="1" step="0.1" style="flex:1"><input type="text" class="num-input" value="1.0"><span class="control-unit">×</span></div></div>
+              </div>
+            </div>
+
+            <div class="layer-row" onclick="toggleLayer(this)">
+              <div class="layer-header">
+                <div class="layer-reorder"><button>▴</button><button>▾</button></div>
+                <span class="layer-icon">✦</span><span class="layer-name">Dust & Scratches</span>
+                <span class="layer-badge">30%</span>
+                <button class="layer-delete" onclick="event.stopPropagation()">✕</button>
+                <span class="layer-expand-chevron">›</span>
+              </div>
+              <div class="layer-controls">
+                <div class="control-row"><span class="control-label">Opacity</span><div class="control-input"><input type="range" min="0" max="100" value="30" style="flex:1"><input type="text" class="num-input" value="30"><span class="control-unit">%</span></div></div>
+                <div class="control-row"><span class="control-label">Blend</span><div class="control-input"><select class="control-select"><option>Screen</option><option selected>Overlay</option><option>Multiply</option><option>Soft Light</option></select></div></div>
+              </div>
+            </div>
+
+            <div class="layer-row" onclick="toggleLayer(this)">
+              <div class="layer-header">
+                <div class="layer-reorder"><button>▴</button><button disabled>▾</button></div>
+                <span class="layer-icon">◌</span><span class="layer-name">Dither</span>
+                <span class="layer-badge">off</span>
+                <button class="layer-delete" onclick="event.stopPropagation()">✕</button>
+                <span class="layer-expand-chevron">›</span>
+              </div>
+              <div class="layer-controls">
+                <div class="control-row"><span class="control-label">Algorithm</span><div class="control-input"><select class="control-select"><option>Floyd-Steinberg</option><option>Atkinson</option><option>Bayer</option><option>Halftone</option><option>Blue Noise</option></select></div></div>
+                <div class="control-row"><span class="control-label">Enabled</span><div class="control-input"><button class="control-toggle" onclick="event.stopPropagation();this.classList.toggle('on')"></button></div></div>
+              </div>
+            </div>
+
+          </div>
+          <button class="add-layer-btn">+ Add layer</button>
+        </div>
+
+        <!-- Output -->
+        <div class="output-section">
+          <div class="section-header" style="padding-left:0;padding-right:0;"><span class="section-title">Output</span></div>
+          <div class="output-row"><span class="output-label">Format</span><div class="format-pills"><button class="format-pill active">JPEG</button><button class="format-pill">PNG</button></div></div>
+          <div class="output-row"><span class="output-label">Quality</span><div class="control-input" style="flex:none;gap:6px;"><input type="range" min="60" max="100" value="100" style="width:100px;"><input type="text" class="num-input" value="100"><span class="control-unit">%</span></div></div>
+          <div class="output-row"><span class="output-label">Strip EXIF</span><button class="control-toggle" onclick="this.classList.toggle('on')"></button></div>
+        </div>
+      </div>
+
+      <!-- Export bar -->
+      <div class="export-bar">
+        <button class="export-btn">↑ Selected <span class="export-count">1</span></button>
+        <button class="export-btn primary">↑ All <span class="export-count">11</span></button>
+      </div>
+    </div>
+
+  </div>
+</div>
+
+<script>
+// Layer expand/collapse
+function toggleLayer(el) {
+  const wasExpanded = el.classList.contains('expanded');
+  el.classList.toggle('expanded');
+  el.querySelector('.layer-expand-chevron').textContent = wasExpanded ? '›' : '⌄';
+}
+
+// Filmstrip selection — syncs preset thumbnails
+document.querySelectorAll('.ff-frame').forEach(f => {
+  f.addEventListener('click', () => {
+    document.querySelectorAll('.ff-frame').forEach(x => x.classList.remove('selected'));
+    f.classList.add('selected');
+    const img = f.querySelector('.ff-frame-img');
+    const c1 = img.style.getPropertyValue('--c1');
+    const c2 = img.style.getPropertyValue('--c2');
+    document.querySelectorAll('.pp-photo').forEach(pp => {
+      pp.style.background = `linear-gradient(135deg, ${c1} 0%, ${c2} 100%)`;
+    });
+    // Update count display
+    const count = document.querySelectorAll('.ff-frame.selected').length;
+    document.querySelector('.export-btn:first-child .export-count').textContent = count;
+  });
+});
+
+// Before / After
+document.getElementById('btnBefore').addEventListener('click', function() {
+  this.classList.add('active');
+  document.getElementById('btnAfter').classList.remove('active');
+  // Show raw photo (remove frame styling)
+  const frame = document.getElementById('framedOutput');
+  frame.style.background = 'transparent';
+  frame.style.padding = '0';
+  frame.style.boxShadow = '0 2px 8px rgba(0,0,0,0.25), 0 8px 32px rgba(0,0,0,0.35)';
+  frame.querySelector('.frame-caption').style.display = 'none';
+});
+document.getElementById('btnAfter').addEventListener('click', function() {
+  this.classList.add('active');
+  document.getElementById('btnBefore').classList.remove('active');
+  const frame = document.getElementById('framedOutput');
+  frame.style.background = '#f5f0e8';
+  frame.style.padding = '22px 22px 48px';
+  frame.style.boxShadow = '0 2px 8px rgba(0,0,0,0.25), 0 8px 32px rgba(0,0,0,0.35), 0 0 0 1px rgba(255,255,255,0.03)';
+  frame.querySelector('.frame-caption').style.display = '';
+});
+
+// Preset selection
+document.querySelectorAll('.preset-preview').forEach(t => {
+  t.addEventListener('click', () => {
+    document.querySelectorAll('.preset-preview').forEach(x => x.classList.remove('active'));
+    t.classList.add('active');
+    document.querySelector('.banner-name').textContent = t.querySelector('.preset-preview-name').textContent;
+  });
+});
+
+// Format pills
+document.querySelectorAll('.format-pill').forEach(p => {
+  p.addEventListener('click', () => {
+    document.querySelectorAll('.format-pill').forEach(x => x.classList.remove('active'));
+    p.classList.add('active');
+  });
+});
+</script>
+</body>
+</html>
