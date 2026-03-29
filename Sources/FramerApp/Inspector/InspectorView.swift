@@ -3,10 +3,6 @@ import FramerCore
 
 struct InspectorView: View {
     @Environment(AppState.self) var appState
-    @State private var showingSaveSheet = false
-    @State private var newPresetName = ""
-    @State private var presetToDelete: Preset?
-    @State private var saveError: String?
 
     var body: some View {
         VStack(spacing: 0) {
@@ -39,32 +35,6 @@ struct InspectorView: View {
         .onAppear { ensureLayersInitialized() }
         .onChange(of: appState.currentConfig.layers == nil) { _, layersAreNil in
             if layersAreNil { ensureLayersInitialized() }
-        }
-        .sheet(isPresented: $showingSaveSheet) { savePresetSheet }
-        .alert("Save Failed", isPresented: .init(
-            get: { saveError != nil },
-            set: { if !$0 { saveError = nil } }
-        )) {
-            Button("OK") { saveError = nil }
-        } message: {
-            Text(saveError ?? "Unknown error")
-        }
-        .alert("Delete Preset?", isPresented: .init(
-            get: { presetToDelete != nil },
-            set: { if !$0 { presetToDelete = nil } }
-        )) {
-            Button("Cancel", role: .cancel) { presetToDelete = nil }
-            Button("Delete", role: .destructive) {
-                if let preset = presetToDelete {
-                    try? appState.presetStore.delete(id: preset.id)
-                    appState.loadPresets()
-                    presetToDelete = nil
-                }
-            }
-        } message: {
-            if let preset = presetToDelete {
-                Text("Are you sure you want to delete \"\(preset.name)\"?")
-            }
         }
     }
 
@@ -106,86 +76,7 @@ struct InspectorView: View {
                 .tracking(1.5)
                 .foregroundStyle(Color.text3)
 
-            if appState.presets.isEmpty {
-                Text("No presets yet")
-                    .font(AppFont.body(11))
-                    .foregroundStyle(Color.text3)
-                    .padding(.vertical, 4)
-            } else {
-                ForEach(appState.presets) { preset in
-                    presetRow(preset)
-                }
-            }
-
-            Button(action: { showingSaveSheet = true }) {
-                HStack(spacing: 4) {
-                    Image(systemName: "plus.circle")
-                        .font(.system(size: 10))
-                    Text("Save Current Settings")
-                        .font(AppFont.body(11))
-                }
-                .foregroundStyle(Color.text2)
-            }
-            .buttonStyle(.plain)
-        }
-    }
-
-    private func presetRow(_ preset: Preset) -> some View {
-        Button {
-            appState.currentConfig = preset.config
-            appState.activePresetName = preset.name
-        } label: {
-            HStack(spacing: 6) {
-                Image(systemName: "slider.horizontal.3")
-                    .font(.system(size: 9))
-                    .foregroundStyle(Color.text3)
-                    .frame(width: 14)
-                Text(preset.name)
-                    .font(AppFont.layerName)
-                    .foregroundStyle(Color.text0)
-                    .lineLimit(1)
-                Spacer()
-                if appState.activePresetName == preset.name {
-                    Image(systemName: "checkmark")
-                        .font(.system(size: 9, weight: .bold))
-                        .foregroundStyle(Color.accent)
-                }
-            }
-            .padding(.vertical, 4)
-            .padding(.horizontal, 8)
-            .background(
-                appState.activePresetName == preset.name
-                    ? Color.accentGlow
-                    : Color.clear,
-                in: RoundedRectangle(cornerRadius: CornerRadius.sm)
-            )
-        }
-        .buttonStyle(.plain)
-        .contextMenu {
-            Button {
-                appState.currentConfig = preset.config
-                appState.activePresetName = preset.name
-            } label: {
-                Label("Apply", systemImage: "checkmark.circle")
-            }
-            Button {
-                let updated = Preset(id: preset.id, name: preset.name, config: appState.currentConfig)
-                do {
-                    try appState.presetStore.save(updated)
-                    appState.loadPresets()
-                    appState.activePresetName = preset.name
-                } catch {
-                    saveError = error.localizedDescription
-                }
-            } label: {
-                Label("Update with Current Settings", systemImage: "arrow.triangle.2.circlepath")
-            }
-            Divider()
-            Button(role: .destructive) {
-                presetToDelete = preset
-            } label: {
-                Label("Delete", systemImage: "trash")
-            }
+            PresetPreviewGrid()
         }
     }
 
@@ -267,43 +158,5 @@ struct InspectorView: View {
         )
     }
 
-    // MARK: - Save Preset Sheet
 
-    private var savePresetSheet: some View {
-        VStack(spacing: 16) {
-            Text("Save Preset")
-                .font(AppFont.body(14, weight: .semibold))
-                .foregroundStyle(Color.text0)
-
-            TextField("Preset name", text: $newPresetName)
-                .textFieldStyle(.roundedBorder)
-                .frame(width: 260)
-
-            HStack {
-                Button("Cancel") {
-                    newPresetName = ""
-                    showingSaveSheet = false
-                }
-                .keyboardShortcut(.cancelAction)
-
-                Button("Save") {
-                    let name = newPresetName.trimmingCharacters(in: .whitespaces)
-                    guard !name.isEmpty else { return }
-                    let preset = Preset(name: name, config: appState.currentConfig)
-                    do {
-                        try appState.presetStore.save(preset)
-                        appState.loadPresets()
-                        appState.activePresetName = preset.name
-                        newPresetName = ""
-                        showingSaveSheet = false
-                    } catch {
-                        saveError = error.localizedDescription
-                    }
-                }
-                .keyboardShortcut(.defaultAction)
-                .disabled(newPresetName.trimmingCharacters(in: .whitespaces).isEmpty)
-            }
-        }
-        .padding(24)
-    }
 }
