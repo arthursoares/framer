@@ -19,6 +19,9 @@ targets:
       - path: assets/textures
         type: folder
         buildPhase: resources
+      - path: assets/fonts
+        type: folder
+        buildPhase: resources
     dependencies:
       - package: FramerCore
         product: FramerCore
