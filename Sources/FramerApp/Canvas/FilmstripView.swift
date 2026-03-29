@@ -42,7 +42,7 @@ struct FilmstripView: View {
                         }
 
                         // Add button
-                        Button(action: openFilePicker) {
+                        Button(action: { NotificationCenter.default.post(name: .framerOpenPhotos, object: nil) }) {
                             Circle()
                                 .strokeBorder(Color.text3, style: StrokeStyle(lineWidth: 1, dash: [3]))
                                 .frame(width: 26, height: 26)
@@ -77,14 +77,4 @@ struct FilmstripView: View {
         }
     }
 
-    private func openFilePicker() {
-        let panel = NSOpenPanel()
-        panel.allowsMultipleSelection = true
-        panel.canChooseFiles = true
-        panel.canChooseDirectories = true
-        panel.allowedContentTypes = [.jpeg, .png, .tiff, .heic]
-        if panel.runModal() == .OK {
-            appState.addPhotos(from: panel.urls)
-        }
-    }
 }

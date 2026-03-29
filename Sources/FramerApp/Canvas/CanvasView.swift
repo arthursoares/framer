@@ -132,6 +132,19 @@ struct CanvasView: View {
         .onReceive(NotificationCenter.default.publisher(for: .framerRotateCCW)) { _ in
             for id in appState.selectedItems { appState.rotateItem(id, clockwise: false) }
         }
+        .onKeyPress(.space) {
+            showOriginal.toggle()
+            return .handled
+        }
+        .onKeyPress(.leftArrow) {
+            navigateFilmstrip(forward: false)
+            return .handled
+        }
+        .onKeyPress(.rightArrow) {
+            navigateFilmstrip(forward: true)
+            return .handled
+        }
+        .focusable()
     }
 
     private func updatePreview() {
@@ -161,6 +174,21 @@ struct CanvasView: View {
         if panel.runModal() == .OK {
             appState.addPhotos(from: panel.urls)
         }
+    }
+
+    private func navigateFilmstrip(forward: Bool) {
+        guard !appState.library.isEmpty else { return }
+        let currentID = appState.selectedItems.first
+        let currentIndex = currentID.flatMap { id in appState.library.firstIndex(where: { $0.id == id }) }
+        let nextIndex: Int
+        if let idx = currentIndex {
+            nextIndex = forward
+                ? min(idx + 1, appState.library.count - 1)
+                : max(idx - 1, 0)
+        } else {
+            nextIndex = 0
+        }
+        appState.selectedItems = [appState.library[nextIndex].id]
     }
 
     private func removeSelected() {
