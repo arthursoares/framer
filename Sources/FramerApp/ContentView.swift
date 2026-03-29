@@ -5,16 +5,11 @@ struct ContentView: View {
     @Environment(AppState.self) var appState
 
     var body: some View {
-        NavigationSplitView {
-            LibrarySidebar()
-                .navigationSplitViewColumnWidth(min: 200, ideal: 250, max: 300)
-        } content: {
-            LivePreviewPanel()
-        } detail: {
-            SettingsPanel()
-                .navigationSplitViewColumnWidth(min: 260, ideal: 300, max: 400)
+        HStack(spacing: 0) {
+            CanvasView()
+            InspectorView()
+                .frame(width: 280)
         }
-        .navigationSplitViewStyle(.balanced)
-        .frame(minWidth: 1000, minHeight: 700)
+        .frame(minWidth: 900, minHeight: 650)
     }
 }
