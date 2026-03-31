@@ -14,19 +14,25 @@ struct LayerDetailView: View {
             VStack(alignment: .leading, spacing: 16) {
                 // Mini live preview
                 ZStack {
-                    Color.surface2
+                    Color.surface1
                     if let miniPreview {
                         Image(uiImage: miniPreview)
                             .resizable()
                             .aspectRatio(contentMode: .fit)
                             .padding(12)
-                    } else {
+                            .shadow(color: .black.opacity(0.3), radius: 6, y: 2)
+                    } else if appState.selectedPhoto != nil {
                         ProgressView()
                             .tint(Color.text3)
                     }
                 }
+                .frame(maxWidth: .infinity)
                 .frame(height: 180)
                 .clipShape(RoundedRectangle(cornerRadius: CornerRadius.lg))
+                .overlay(
+                    RoundedRectangle(cornerRadius: CornerRadius.lg)
+                        .stroke(Color.borderDefault, lineWidth: 1)
+                )
                 .padding(.horizontal, 16)
 
                 // Layer header
@@ -132,7 +138,9 @@ private struct ControlRow<Content: View>: View {
                 .font(AppFont.controlLabel)
                 .foregroundStyle(Color.text2)
             content()
+                .frame(maxWidth: .infinity, alignment: .leading)
         }
+        .frame(maxWidth: .infinity, alignment: .leading)
         .padding(12)
         .background(Color.surface2, in: RoundedRectangle(cornerRadius: CornerRadius.lg))
     }
