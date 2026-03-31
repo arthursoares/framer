@@ -48,7 +48,12 @@ enum AppFont {
 
     /// Source Code Pro for data values
     static func mono(_ size: CGFloat, weight: Font.Weight = .regular) -> Font {
-        .custom("Source Code Pro", size: size).weight(weight)
+        let name: String
+        switch weight {
+        case .medium, .semibold, .bold: name = "SourceCodePro-Medium"
+        default: name = "SourceCodePro-Regular"
+        }
+        return .custom(name, size: size)
     }
 
     // iOS-adapted presets (slightly larger than macOS for touch)
