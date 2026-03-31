@@ -50,6 +50,11 @@ struct PresetPreviewGrid: View {
                     } label: {
                         Label("Rename", systemImage: "pencil")
                     }
+                    Button {
+                        exportPreset(preset)
+                    } label: {
+                        Label("Export…", systemImage: "square.and.arrow.up")
+                    }
                     Divider()
                     Button(role: .destructive) {
                         try? appState.presetStore.delete(id: preset.id)
@@ -63,6 +68,25 @@ struct PresetPreviewGrid: View {
             // Save card
             saveCard
         }
+        // Preset management row
+        HStack(spacing: 8) {
+            Button { importPresets() } label: {
+                Label("Import", systemImage: "square.and.arrow.down")
+                    .font(AppFont.body(10))
+                    .foregroundStyle(Color.text3)
+            }
+            .buttonStyle(.plain)
+
+            Spacer()
+
+            Button { showInFinder() } label: {
+                Label("Show in Finder", systemImage: "folder")
+                    .font(AppFont.body(10))
+                    .foregroundStyle(Color.text3)
+            }
+            .buttonStyle(.plain)
+        }
+
         .onChange(of: appState.selectedPhoto?.id) { _, _ in
             schedulePreviewRenders()
         }
@@ -105,7 +129,7 @@ struct PresetPreviewGrid: View {
                             .foregroundStyle(Color.text3)
                     }
                 }
-                .aspectRatio(4/3, contentMode: .fit)
+                .aspectRatio(1, contentMode: .fit)
 
                 Color.clear.frame(height: 22)
             }
@@ -176,5 +200,37 @@ struct PresetPreviewGrid: View {
         appState.loadPresets()
         appState.activePresetName = preset.name
         appState.appliedPresetConfig = preset.config
+    }
+
+    // MARK: - Import / Export
+
+    private func exportPreset(_ preset: Preset) {
+        guard let data = try? appState.presetStore.exportData(for: preset) else { return }
+        let panel = NSSavePanel()
+        panel.nameFieldStringValue = "\(preset.name).framerpreset"
+        panel.allowedContentTypes = [.json]
+        if panel.runModal() == .OK, let url = panel.url {
+            try? data.write(to: url)
+        }
+    }
+
+    private func importPresets() {
+        let panel = NSOpenPanel()
+        panel.allowsMultipleSelection = true
+        panel.canChooseFiles = true
+        panel.allowedContentTypes = [.json]
+        panel.message = "Select .framerpreset or .json files to import"
+        if panel.runModal() == .OK {
+            for url in panel.urls {
+                if let data = try? Data(contentsOf: url) {
+                    try? appState.presetStore.importData(data)
+                }
+            }
+            appState.loadPresets()
+        }
+    }
+
+    private func showInFinder() {
+        NSWorkspace.shared.open(appState.presetStore.storageDirectory)
     }
 }
