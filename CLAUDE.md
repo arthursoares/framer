@@ -12,25 +12,36 @@ This file is an entry point for AI coding assistants. All guidelines, workflows,
 
 ## Project Overview
 
-**framer** - Swift macOS app and CLI for adding frames, borders, captions, and texture overlays to photos
+**framer** - Swift macOS/iOS app and CLI for adding frames, borders, captions, and texture overlays to photos
 
 | Aspect | Value |
 |--------|-------|
 | Language | Swift 5.10 |
-| Platforms | macOS 14+ |
+| Platforms | macOS 14+, iOS 17+ |
 | Package Manager | Swift Package Manager |
 | Xcode Project | XcodeGen (`project.yml`) |
-| Targets | FramerCore (library), FramerCLI (executable), FramerApp (SwiftUI) |
+| Targets | FramerCore (library), FramerCLI (executable), FramerApp (macOS SwiftUI), FramerMobile (iOS SwiftUI) |
 | Test Framework | XCTest |
+| Git LFS | Texture overlays in `assets/textures/` are stored with Git LFS |
 
 ## Quick Commands
 
 | Task | Command |
 |------|---------|
-| Build | `swift build` |
+| Build (macOS) | `swift build` |
+| Build (iOS) | `xcodebuild build -scheme FramerMobile -destination 'generic/platform=iOS Simulator'` |
 | Test | `swift test` |
 | Xcode Project | `xcodegen generate` |
 | Validate | `swift build && swift test` |
+
+## Setup
+
+After cloning, fetch Git LFS files (texture overlays are ~150 files stored via LFS):
+```
+git lfs install
+git lfs pull
+```
+Without this, overlay textures will be 132-byte pointer files and overlays won't render.
 
 ## Commit Style
 
@@ -46,9 +57,8 @@ chore: maintenance tasks
 
 ## Project Context
 
-- [.ai-project/.memory.md](.ai-project/.memory.md) - Project architecture & stack
-- [.ai-project/.context.md](.ai-project/.context.md) - Patterns & quick reference
-- [.ai-project/project/commands.md](.ai-project/project/commands.md) - All commands
+- [assets/design/DESIGN_BRIEFING.md](assets/design/DESIGN_BRIEFING.md) - macOS UI design spec ("Darkroom Editorial")
+- [assets/design/ios/IOS_DESIGN_BRIEFING.md](assets/design/ios/IOS_DESIGN_BRIEFING.md) - iOS UI design spec
 
 ## Available Commands
 
