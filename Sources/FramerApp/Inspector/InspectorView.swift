@@ -46,9 +46,18 @@ struct InspectorView: View {
             Text(name)
                 .font(AppFont.body(11, weight: .semibold))
                 .foregroundStyle(Color.accent)
+            if appState.isPresetModified {
+                Text("Modified")
+                    .font(AppFont.body(9, weight: .medium))
+                    .foregroundStyle(Color.text2)
+                    .padding(.horizontal, 5)
+                    .padding(.vertical, 2)
+                    .background(Color.surface3, in: Capsule())
+            }
             Spacer()
             Button {
                 appState.activePresetName = nil
+                appState.appliedPresetConfig = nil
             } label: {
                 Image(systemName: "xmark")
                     .font(.system(size: 8, weight: .bold))

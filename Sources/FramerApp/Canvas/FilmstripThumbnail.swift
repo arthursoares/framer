@@ -2,6 +2,7 @@ import SwiftUI
 import FramerCore
 
 struct FilmstripThumbnail: View {
+    @Environment(AppState.self) var appState
     let item: PhotoItem
     let isSelected: Bool
     @State private var isHovered = false
@@ -18,5 +19,26 @@ struct FilmstripThumbnail: View {
             )
             .shadow(color: isSelected ? Color.accent.opacity(0.25) : .clear, radius: 8)
             .onHover { isHovered = $0 }
+            .contextMenu {
+                Button {
+                    appState.rotateItem(item.id, clockwise: true)
+                } label: {
+                    Label("Rotate Right", systemImage: "rotate.right")
+                }
+                Button {
+                    appState.rotateItem(item.id, clockwise: false)
+                } label: {
+                    Label("Rotate Left", systemImage: "rotate.left")
+                }
+                Divider()
+                Button(role: .destructive) {
+                    withAnimation {
+                        appState.library.removeAll { $0.id == item.id }
+                        appState.selectedItems.remove(item.id)
+                    }
+                } label: {
+                    Label("Remove", systemImage: "trash")
+                }
+            }
     }
 }

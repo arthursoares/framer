@@ -66,15 +66,7 @@ struct FilmstripView: View {
                 }
             }
         }
-        .background {
-            RoundedRectangle(cornerRadius: 12)
-                .fill(.black.opacity(0.6))
-                .background(.ultraThinMaterial, in: RoundedRectangle(cornerRadius: 12))
-                .overlay(
-                    RoundedRectangle(cornerRadius: 12)
-                        .stroke(Color.white.opacity(0.07), lineWidth: 1)
-                )
-        }
+        .background(Color.clear)
     }
 
 }
