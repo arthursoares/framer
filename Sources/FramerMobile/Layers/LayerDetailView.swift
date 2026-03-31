@@ -620,6 +620,100 @@ private struct DitherControls: View {
                 .pickerStyle(.menu)
             }
 
+            ControlRow(label: "Color Mode") {
+                Picker("", selection: Binding(
+                    get: {
+                        switch params.colorMode {
+                        case .bw: return 0
+                        case .twoTone: return 1
+                        case .color: return 2
+                        case .dominantTwoTone: return 3
+                        }
+                    },
+                    set: { tag in
+                        var p = params
+                        switch tag {
+                        case 0: p.colorMode = .bw
+                        case 1: p.colorMode = .twoTone(foreground: (try? CodableColor(hex: "#0251FF")) ?? .black, background: .black)
+                        case 2: p.colorMode = .color(levels: 4)
+                        case 3: p.colorMode = .dominantTwoTone(flipped: false)
+                        default: break
+                        }
+                        onChange(p)
+                    }
+                )) {
+                    Text("B&W").tag(0)
+                    Text("Two-Tone").tag(1)
+                    Text("Color").tag(2)
+                    Text("Dominant").tag(3)
+                }
+                .pickerStyle(.segmented)
+            }
+
+            if params.algorithm == .bayer {
+                ControlRow(label: "Bayer Level: \(params.bayerLevel)") {
+                    Stepper("", value: Binding(
+                        get: { params.bayerLevel },
+                        set: { var p = params; p.bayerLevel = $0; onChange(p) }
+                    ), in: 1...4)
+                    .labelsHidden()
+                }
+            }
+
+            ControlRow(label: "Pixel Scale: \(params.pixelScale)×") {
+                Stepper("", value: Binding(
+                    get: { params.pixelScale },
+                    set: { var p = params; p.pixelScale = $0; onChange(p) }
+                ), in: 1...8)
+                .labelsHidden()
+            }
+
+            // Two-Tone color pickers
+            if case .twoTone(let fg, let bg) = params.colorMode {
+                ControlRow(label: "Foreground") {
+                    ColorPicker("", selection: Binding(
+                        get: { Color(cgColor: fg.cgColor) },
+                        set: { newColor in
+                            guard let hex = newColor.hexString, let c = try? CodableColor(hex: hex) else { return }
+                            var p = params; p.colorMode = .twoTone(foreground: c, background: bg); onChange(p)
+                        }
+                    ))
+                    .labelsHidden()
+                }
+                ControlRow(label: "Background") {
+                    ColorPicker("", selection: Binding(
+                        get: { Color(cgColor: bg.cgColor) },
+                        set: { newColor in
+                            guard let hex = newColor.hexString, let c = try? CodableColor(hex: hex) else { return }
+                            var p = params; p.colorMode = .twoTone(foreground: fg, background: c); onChange(p)
+                        }
+                    ))
+                    .labelsHidden()
+                }
+            }
+
+            // Dominant two-tone flip
+            if case .dominantTwoTone(let flipped) = params.colorMode {
+                ControlRow(label: "Flip Colors") {
+                    Toggle("", isOn: Binding(
+                        get: { flipped },
+                        set: { var p = params; p.colorMode = .dominantTwoTone(flipped: $0); onChange(p) }
+                    ))
+                    .labelsHidden()
+                }
+            }
+
+            // Color levels
+            if case .color(let levels) = params.colorMode {
+                ControlRow(label: "Levels: \(levels) per channel") {
+                    Stepper("", value: Binding(
+                        get: { levels },
+                        set: { var p = params; p.colorMode = .color(levels: $0); onChange(p) }
+                    ), in: 2...8)
+                    .labelsHidden()
+                }
+            }
+
             ControlRow(label: "Threshold (\(String(format: "%.2f", params.threshold)))") {
                 Slider(value: Binding(
                     get: { params.threshold },

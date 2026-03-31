@@ -12,35 +12,49 @@ struct LayerStrip: View {
     }
 
     @State private var draggingID: UUID?
+    @State private var dropTargetIndex: Int?
 
     var body: some View {
         ScrollView {
             VStack(spacing: 4) {
                 ForEach(Array(layers.wrappedValue.enumerated()), id: \.element.id) { index, layer in
-                    NavigationLink(value: layer.id) {
-                        LayerRow(layer: layer)
-                    }
-                    .buttonStyle(.plain)
-                    .opacity(draggingID == layer.id ? 0.3 : 1.0)
-                    .draggable(layer.id.uuidString) {
-                        Text(layer.label)
-                            .font(AppFont.layerName)
-                            .padding(.horizontal, 12)
-                            .padding(.vertical, 8)
-                            .background(Color.surface3, in: RoundedRectangle(cornerRadius: CornerRadius.md))
-                            .onAppear { draggingID = layer.id }
-                    }
-                    .dropDestination(for: String.self) { items, _ in
-                        draggingID = nil
-                        guard let droppedStr = items.first,
-                              let droppedID = UUID(uuidString: droppedStr),
-                              let fromIndex = layers.wrappedValue.firstIndex(where: { $0.id == droppedID }),
-                              fromIndex != index else { return false }
-                        let toOffset = index > fromIndex ? index + 1 : index
-                        withAnimation(.easeInOut(duration: 0.2)) {
-                            layers.wrappedValue.move(fromOffsets: IndexSet(integer: fromIndex), toOffset: toOffset)
+                    VStack(spacing: 0) {
+                        // Drop indicator above this row
+                        if dropTargetIndex == index {
+                            dropIndicator
                         }
-                        return true
+
+                        NavigationLink(value: layer.id) {
+                            LayerRow(layer: layer)
+                        }
+                        .buttonStyle(.plain)
+                        .opacity(draggingID == layer.id ? 0.3 : 1.0)
+                        .draggable(layer.id.uuidString) {
+                            Text(layer.label)
+                                .font(AppFont.layerName)
+                                .padding(.horizontal, 12)
+                                .padding(.vertical, 8)
+                                .background(Color.surface3, in: RoundedRectangle(cornerRadius: CornerRadius.md))
+                                .overlay(RoundedRectangle(cornerRadius: CornerRadius.md).stroke(Color.accent.opacity(0.3), lineWidth: 1))
+                                .onAppear { draggingID = layer.id }
+                        }
+                        .dropDestination(for: String.self) { items, _ in
+                            dropTargetIndex = nil
+                            draggingID = nil
+                            guard let droppedStr = items.first,
+                                  let droppedID = UUID(uuidString: droppedStr),
+                                  let fromIndex = layers.wrappedValue.firstIndex(where: { $0.id == droppedID }),
+                                  fromIndex != index else { return false }
+                            let toOffset = index > fromIndex ? index + 1 : index
+                            withAnimation(.easeInOut(duration: 0.2)) {
+                                layers.wrappedValue.move(fromOffsets: IndexSet(integer: fromIndex), toOffset: toOffset)
+                            }
+                            return true
+                        } isTargeted: { targeted in
+                            withAnimation(.easeInOut(duration: 0.15)) {
+                                dropTargetIndex = targeted ? index : (dropTargetIndex == index ? nil : dropTargetIndex)
+                            }
+                        }
                     }
                 }
 
@@ -49,6 +63,22 @@ struct LayerStrip: View {
             .padding(.horizontal, 16)
         }
         .frame(maxHeight: 220)
+    }
+
+    private var dropIndicator: some View {
+        HStack(spacing: 4) {
+            Circle()
+                .fill(Color.accent)
+                .frame(width: 5, height: 5)
+            Rectangle()
+                .fill(Color.accent)
+                .frame(height: 2)
+            Circle()
+                .fill(Color.accent)
+                .frame(width: 5, height: 5)
+        }
+        .padding(.vertical, 2)
+        .transition(.opacity.combined(with: .scale(scale: 0.8)))
     }
 
     private var addLayerButton: some View {
