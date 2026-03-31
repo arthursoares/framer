@@ -163,7 +163,7 @@ struct PresetCard: View {
                     if let thumb = thumbnail {
                         Image(uiImage: thumb)
                             .resizable()
-                            .aspectRatio(contentMode: .fill)
+                            .aspectRatio(contentMode: .fit)
                     }
                 }
                 .aspectRatio(1, contentMode: .fit)

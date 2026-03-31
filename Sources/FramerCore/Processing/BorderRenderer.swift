@@ -63,9 +63,9 @@ public enum BorderRenderer {
         let needsDominant = layers.contains { layer in
             switch layer {
             case .padding(let p):
-                return p.fill == .dominantColor || p.fill.isGradient
+                return p.fill.isDominant
             case .canvas(let p):
-                return p.fill == .dominantColor || p.fill.isGradient
+                return p.fill.isDominant
             default:
                 return false
             }
@@ -194,7 +194,15 @@ public enum BorderRenderer {
         switch fill {
         case .color(let c):
             return c.cgColor
-        case .dominantColor, .gradientLinear, .gradientRadial:
+        case .dominantColor(let params):
+            let dominant = cachedDominant ?? ColorExtractor.extractDominantColor(from: sourceImage)
+            let adjusted = HSLColor(
+                h: dominant.h,
+                s: max(0, min(100, dominant.s + params.saturationShift)),
+                l: max(0, min(100, dominant.l + params.lightnessShift))
+            )
+            return adjusted.cgColor
+        case .gradientLinear, .gradientRadial:
             let dominant = cachedDominant ?? ColorExtractor.extractDominantColor(from: sourceImage)
             return dominant.cgColor
         }
@@ -204,9 +212,14 @@ public enum BorderRenderer {
         switch fill {
         case .color(let c):
             return .solid(c.cgColor)
-        case .dominantColor:
+        case .dominantColor(let params):
             let dominant = cachedDominant ?? ColorExtractor.extractDominantColor(from: sourceImage)
-            return .solid(dominant.cgColor)
+            let adjusted = HSLColor(
+                h: dominant.h,
+                s: max(0, min(100, dominant.s + params.saturationShift)),
+                l: max(0, min(100, dominant.l + params.lightnessShift))
+            )
+            return .solid(adjusted.cgColor)
         case .gradientLinear(let params):
             let dominant = cachedDominant ?? ColorExtractor.extractDominantColor(from: sourceImage)
             let (center, edge) = ColorExtractor.generateGradientColors(

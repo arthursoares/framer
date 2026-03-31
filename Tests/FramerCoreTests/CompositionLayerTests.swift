@@ -30,7 +30,7 @@ final class CompositionLayerTests: XCTestCase {
     func test_paddingLayer_roundtripsJSON() throws {
         let layer = CompositionLayer.padding(PaddingLayerParams(
             thickness: 50,
-            fill: .dominantColor
+            fill: .dominantColor()
         ))
         let data = try JSONEncoder().encode(layer)
         let decoded = try JSONDecoder().decode(CompositionLayer.self, from: data)
@@ -146,7 +146,7 @@ final class CompositionLayerTests: XCTestCase {
     }
 
     func test_layerFill_dominant_roundtripsJSON() throws {
-        let fill = LayerFill.dominantColor
+        let fill = LayerFill.dominantColor()
         let data = try JSONEncoder().encode(fill)
         let decoded = try JSONDecoder().decode(LayerFill.self, from: data)
         XCTAssertEqual(fill, decoded)
