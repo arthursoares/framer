@@ -2,41 +2,6 @@ import SwiftUI
 import CoreGraphics
 import ImageIO
 
-struct PhotoThumbnailView: View {
-    let item: PhotoItem
-    @Environment(AppState.self) var appState
-
-    var body: some View {
-        HStack(spacing: 8) {
-            AsyncThumbnail(url: item.url)
-                .frame(width: 40, height: 40)
-                .clipShape(RoundedRectangle(cornerRadius: 4))
-                .rotationEffect(.degrees(Double(item.rotation)))
-
-            VStack(alignment: .leading, spacing: 1) {
-                Text(item.url.deletingPathExtension().lastPathComponent)
-                    .lineLimit(1)
-                    .truncationMode(.middle)
-                Text(item.url.pathExtension.uppercased())
-                    .font(.caption2)
-                    .foregroundStyle(.tertiary)
-            }
-        }
-        .contextMenu {
-            Button {
-                appState.rotateItem(item.id, clockwise: true)
-            } label: {
-                Label("Rotate 90° CW", systemImage: "rotate.right")
-            }
-            Button {
-                appState.rotateItem(item.id, clockwise: false)
-            } label: {
-                Label("Rotate 90° CCW", systemImage: "rotate.left")
-            }
-        }
-    }
-}
-
 struct AsyncThumbnail: View {
     let url: URL
     @State private var image: NSImage?
@@ -49,7 +14,7 @@ struct AsyncThumbnail: View {
                     .aspectRatio(contentMode: .fill)
             } else {
                 Image(systemName: "photo")
-                    .foregroundStyle(.secondary)
+                    .foregroundStyle(Color.text3)
             }
         }
         .task {

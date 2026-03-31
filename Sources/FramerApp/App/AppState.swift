@@ -8,6 +8,14 @@ final class AppState {
     var selectedItems: Set<PhotoItem.ID> = []
     var currentConfig: ProcessingConfig = .default
     var activePresetName: String?
+    /// Snapshot of the config when a preset was applied — used to detect manual overrides.
+    var appliedPresetConfig: ProcessingConfig?
+
+    /// True when a preset is active but config has been manually modified.
+    var isPresetModified: Bool {
+        guard activePresetName != nil, let applied = appliedPresetConfig else { return false }
+        return currentConfig != applied
+    }
     var presets: [Preset] = []
     var presetStore = PresetStore()
     var exportQueue: [ExportJob] = []

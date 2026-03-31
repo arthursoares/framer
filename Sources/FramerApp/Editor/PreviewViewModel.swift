@@ -10,6 +10,8 @@ final class PreviewViewModel {
     var isLoading = false
     var error: String?
     var exifData: ExifData?
+    /// Pixel dimensions of the rendered output image.
+    var outputSize: CGSize?
 
     private var renderTask: Task<Void, Never>?
     private let processor = FrameProcessor()
@@ -20,6 +22,7 @@ final class PreviewViewModel {
             originalImage = nil
             exifData = nil
             error = nil
+            outputSize = nil
             return
         }
 
@@ -45,10 +48,11 @@ final class PreviewViewModel {
                     Self.loadOriginal(from: itemURL, maxDimension: 1200)
                 }
                 let preview = try await processor.previewImage(for: itemURL, config: config, rotation: itemRotation)
-                nonisolated(unsafe) let original = await originalHandle.value
+                let original = await originalHandle.value
                 guard !Task.isCancelled else { return }
                 originalImage = original
                 previewImage = preview
+                outputSize = preview.size
             } catch is CancellationError {
                 return
             } catch {
