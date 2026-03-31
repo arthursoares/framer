@@ -8,38 +8,61 @@ struct LayerListSection: View {
     @Binding var layers: [CompositionLayer]
     @Environment(\.undoManager) private var undoManager
     @State private var draggingLayerID: UUID?
+    @State private var dropTargetIndex: Int?
 
     var body: some View {
         Section {
             ForEach(Array(layers.enumerated()), id: \.element.id) { index, layer in
-                LayerRow(
-                    layer: binding(for: index),
-                    onDelete: { removeLayer(at: index) },
-                    onMoveUp: index > 0 ? { moveLayer(from: index, to: index - 1) } : nil,
-                    onMoveDown: index < layers.count - 1 ? { moveLayer(from: index, to: index + 1) } : nil
-                )
-                .draggable(layer.id.uuidString) {
-                    Label(layer.label, systemImage: layer.iconName)
-                        .padding(6)
-                        .background(Color.surface2, in: RoundedRectangle(cornerRadius: 6))
-                }
-                .dropDestination(for: String.self) { items, _ in
-                    guard let droppedIDString = items.first,
-                          let droppedID = UUID(uuidString: droppedIDString),
-                          let fromIndex = layers.firstIndex(where: { $0.id == droppedID }),
-                          fromIndex != index else { return false }
-                    let toOffset = index > fromIndex ? index + 1 : index
-                    let snapshot = layers
-                    withAnimation(.easeInOut(duration: 0.2)) {
-                        layers.move(fromOffsets: IndexSet(integer: fromIndex), toOffset: toOffset)
+                VStack(spacing: 0) {
+                    // Drop indicator line above this row
+                    if dropTargetIndex == index {
+                        dropIndicator
                     }
-                    undoManager?.registerUndo(withTarget: UndoProxy.shared) { @MainActor _ in
+
+                    LayerRow(
+                        layer: binding(for: index),
+                        onDelete: { removeLayer(at: index) },
+                        onMoveUp: index > 0 ? { moveLayer(from: index, to: index - 1) } : nil,
+                        onMoveDown: index < layers.count - 1 ? { moveLayer(from: index, to: index + 1) } : nil
+                    )
+                    .opacity(draggingLayerID == layer.id ? 0.3 : 1.0)
+                    .draggable(layer.id.uuidString) {
+                        Label(layer.label, systemImage: layer.iconName)
+                            .padding(.horizontal, 10)
+                            .padding(.vertical, 6)
+                            .background(Color.surface2, in: RoundedRectangle(cornerRadius: 6))
+                            .overlay(RoundedRectangle(cornerRadius: 6).stroke(Color.accent.opacity(0.3), lineWidth: 1))
+                            .onAppear { draggingLayerID = layer.id }
+                    }
+                    .dropDestination(for: String.self) { items, _ in
+                        dropTargetIndex = nil
+                        draggingLayerID = nil
+                        guard let droppedIDString = items.first,
+                              let droppedID = UUID(uuidString: droppedIDString),
+                              let fromIndex = layers.firstIndex(where: { $0.id == droppedID }),
+                              fromIndex != index else { return false }
+                        let toOffset = index > fromIndex ? index + 1 : index
+                        let snapshot = layers
                         withAnimation(.easeInOut(duration: 0.2)) {
-                            layers = snapshot
+                            layers.move(fromOffsets: IndexSet(integer: fromIndex), toOffset: toOffset)
+                        }
+                        undoManager?.registerUndo(withTarget: UndoProxy.shared) { @MainActor _ in
+                            withAnimation(.easeInOut(duration: 0.2)) {
+                                layers = snapshot
+                            }
+                        }
+                        undoManager?.setActionName("Move Layer")
+                        return true
+                    } isTargeted: { targeted in
+                        withAnimation(.easeInOut(duration: 0.15)) {
+                            dropTargetIndex = targeted ? index : (dropTargetIndex == index ? nil : dropTargetIndex)
                         }
                     }
-                    undoManager?.setActionName("Move Layer")
-                    return true
+
+                    // Drop indicator after last row
+                    if index == layers.count - 1 && dropTargetIndex == layers.count {
+                        dropIndicator
+                    }
                 }
             }
 
@@ -50,6 +73,22 @@ struct LayerListSection: View {
                 .tracking(1.5)
                 .foregroundStyle(Color.text3)
         }
+    }
+
+    private var dropIndicator: some View {
+        HStack(spacing: 4) {
+            Circle()
+                .fill(Color.accent)
+                .frame(width: 5, height: 5)
+            Rectangle()
+                .fill(Color.accent)
+                .frame(height: 2)
+            Circle()
+                .fill(Color.accent)
+                .frame(width: 5, height: 5)
+        }
+        .padding(.vertical, 2)
+        .transition(.opacity.combined(with: .scale(scale: 0.8)))
     }
 
     private var addLayerMenu: some View {

@@ -32,7 +32,7 @@ struct PresetStrip: View {
                                 .font(.system(size: 16))
                                 .foregroundStyle(Color.text3)
                         }
-                        .aspectRatio(4/3, contentMode: .fit)
+                        .aspectRatio(1, contentMode: .fit)
                         .clipShape(RoundedRectangle(cornerRadius: CornerRadius.md))
                         .overlay(
                             RoundedRectangle(cornerRadius: CornerRadius.md)
@@ -71,7 +71,7 @@ struct PresetCard: View {
                             .aspectRatio(contentMode: .fill)
                     }
                 }
-                .aspectRatio(4/3, contentMode: .fit)
+                .aspectRatio(1, contentMode: .fit)
                 .clipShape(RoundedRectangle(cornerRadius: CornerRadius.md))
                 .overlay(
                     RoundedRectangle(cornerRadius: CornerRadius.md)

@@ -24,7 +24,7 @@ struct PresetPreviewCard: View {
                             .tint(Color.text3)
                     }
                 }
-                .aspectRatio(4/3, contentMode: .fit)
+                .aspectRatio(1, contentMode: .fit)
                 .clipped()
 
                 // Label strip

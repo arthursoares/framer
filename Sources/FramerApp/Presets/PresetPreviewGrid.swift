@@ -5,6 +5,8 @@ struct PresetPreviewGrid: View {
     @Environment(AppState.self) var appState
     @State private var presetPreviews: [UUID: NSImage] = [:]
     @State private var renderTasks: [UUID: Task<Void, Never>] = [:]
+    @State private var renamingPreset: Preset?
+    @State private var renameText = ""
 
     private let columns = [
         GridItem(.flexible(), spacing: 6),
@@ -42,6 +44,12 @@ struct PresetPreviewGrid: View {
                     } label: {
                         Label("Update with Current Settings", systemImage: "arrow.triangle.2.circlepath")
                     }
+                    Button {
+                        renameText = preset.name
+                        renamingPreset = preset
+                    } label: {
+                        Label("Rename", systemImage: "pencil")
+                    }
                     Divider()
                     Button(role: .destructive) {
                         try? appState.presetStore.delete(id: preset.id)
@@ -60,6 +68,26 @@ struct PresetPreviewGrid: View {
         }
         .onAppear {
             schedulePreviewRenders()
+        }
+        .alert("Rename Preset", isPresented: Binding(
+            get: { renamingPreset != nil },
+            set: { if !$0 { renamingPreset = nil } }
+        )) {
+            TextField("Preset name", text: $renameText)
+            Button("Cancel", role: .cancel) { renamingPreset = nil }
+            Button("Rename") {
+                if let preset = renamingPreset, !renameText.isEmpty {
+                    let updated = Preset(id: preset.id, name: renameText, config: preset.config)
+                    try? appState.presetStore.save(updated)
+                    if appState.activePresetName == preset.name {
+                        appState.activePresetName = renameText
+                    }
+                    appState.loadPresets()
+                }
+                renamingPreset = nil
+            }
+        } message: {
+            Text("Enter a new name for this preset.")
         }
     }
 
