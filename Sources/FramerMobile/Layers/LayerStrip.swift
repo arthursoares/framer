@@ -11,6 +11,8 @@ struct LayerStrip: View {
         )
     }
 
+    @State private var draggingID: UUID?
+
     var body: some View {
         ScrollView {
             VStack(spacing: 4) {
@@ -19,6 +21,27 @@ struct LayerStrip: View {
                         LayerRow(layer: layer)
                     }
                     .buttonStyle(.plain)
+                    .opacity(draggingID == layer.id ? 0.3 : 1.0)
+                    .draggable(layer.id.uuidString) {
+                        Text(layer.label)
+                            .font(AppFont.layerName)
+                            .padding(.horizontal, 12)
+                            .padding(.vertical, 8)
+                            .background(Color.surface3, in: RoundedRectangle(cornerRadius: CornerRadius.md))
+                            .onAppear { draggingID = layer.id }
+                    }
+                    .dropDestination(for: String.self) { items, _ in
+                        draggingID = nil
+                        guard let droppedStr = items.first,
+                              let droppedID = UUID(uuidString: droppedStr),
+                              let fromIndex = layers.wrappedValue.firstIndex(where: { $0.id == droppedID }),
+                              fromIndex != index else { return false }
+                        let toOffset = index > fromIndex ? index + 1 : index
+                        withAnimation(.easeInOut(duration: 0.2)) {
+                            layers.wrappedValue.move(fromOffsets: IndexSet(integer: fromIndex), toOffset: toOffset)
+                        }
+                        return true
+                    }
                 }
 
                 addLayerButton
