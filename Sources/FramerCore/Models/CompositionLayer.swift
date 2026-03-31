@@ -267,11 +267,11 @@ public struct OrientationLayerParams: Identifiable, Codable, Equatable, Sendable
 
 public enum CaptionColorMode: Codable, Equatable, Sendable {
     case fixed(CodableColor)
-    case dominant
-    case dominantInverted
+    case dominant(saturationShift: Double = 0, lightnessShift: Double = 0)
+    case dominantInverted(saturationShift: Double = 0, lightnessShift: Double = 0)
 
     private enum CodingKeys: String, CodingKey {
-        case type, color
+        case type, color, saturationShift, lightnessShift
     }
 
     public init(from decoder: Decoder) throws {
@@ -282,9 +282,13 @@ public enum CaptionColorMode: Codable, Equatable, Sendable {
             let c = try container.decode(CodableColor.self, forKey: .color)
             self = .fixed(c)
         case "dominant":
-            self = .dominant
+            let sat = try container.decodeIfPresent(Double.self, forKey: .saturationShift) ?? 0
+            let light = try container.decodeIfPresent(Double.self, forKey: .lightnessShift) ?? 0
+            self = .dominant(saturationShift: sat, lightnessShift: light)
         case "dominantInverted":
-            self = .dominantInverted
+            let sat = try container.decodeIfPresent(Double.self, forKey: .saturationShift) ?? 0
+            let light = try container.decodeIfPresent(Double.self, forKey: .lightnessShift) ?? 0
+            self = .dominantInverted(saturationShift: sat, lightnessShift: light)
         default:
             self = .fixed(.black)
         }
@@ -296,10 +300,14 @@ public enum CaptionColorMode: Codable, Equatable, Sendable {
         case .fixed(let c):
             try container.encode("fixed", forKey: .type)
             try container.encode(c, forKey: .color)
-        case .dominant:
+        case .dominant(let sat, let light):
             try container.encode("dominant", forKey: .type)
-        case .dominantInverted:
+            if sat != 0 { try container.encode(sat, forKey: .saturationShift) }
+            if light != 0 { try container.encode(light, forKey: .lightnessShift) }
+        case .dominantInverted(let sat, let light):
             try container.encode("dominantInverted", forKey: .type)
+            if sat != 0 { try container.encode(sat, forKey: .saturationShift) }
+            if light != 0 { try container.encode(light, forKey: .lightnessShift) }
         }
     }
 }
@@ -431,12 +439,11 @@ public enum DitherColorMode: Codable, Equatable, Sendable {
     case bw
     case twoTone(foreground: CodableColor, background: CodableColor)
     /// Two-tone using the two most dominant high-contrast colors from the image.
-    /// When `flipped` is true, foreground and background are swapped.
-    case dominantTwoTone(flipped: Bool)
+    case dominantTwoTone(flipped: Bool, saturationShift: Double = 0, lightnessShift: Double = 0)
     case color(levels: Int)
 
     private enum CodingKeys: String, CodingKey {
-        case type, foreground, background, levels, flipped
+        case type, foreground, background, levels, flipped, saturationShift, lightnessShift
     }
 
     public init(from decoder: Decoder) throws {
@@ -450,7 +457,9 @@ public enum DitherColorMode: Codable, Equatable, Sendable {
             self = .twoTone(foreground: fg, background: bg)
         case "dominantTwoTone":
             let flipped = try container.decodeIfPresent(Bool.self, forKey: .flipped) ?? false
-            self = .dominantTwoTone(flipped: flipped)
+            let sat = try container.decodeIfPresent(Double.self, forKey: .saturationShift) ?? 0
+            let light = try container.decodeIfPresent(Double.self, forKey: .lightnessShift) ?? 0
+            self = .dominantTwoTone(flipped: flipped, saturationShift: sat, lightnessShift: light)
         case "color":
             let levels = try container.decode(Int.self, forKey: .levels)
             self = .color(levels: levels)
@@ -466,9 +475,11 @@ public enum DitherColorMode: Codable, Equatable, Sendable {
             try container.encode("twoTone", forKey: .type)
             try container.encode(fg, forKey: .foreground)
             try container.encode(bg, forKey: .background)
-        case .dominantTwoTone(let flipped):
+        case .dominantTwoTone(let flipped, let sat, let light):
             try container.encode("dominantTwoTone", forKey: .type)
             if flipped { try container.encode(true, forKey: .flipped) }
+            if sat != 0 { try container.encode(sat, forKey: .saturationShift) }
+            if light != 0 { try container.encode(light, forKey: .lightnessShift) }
         case .color(let levels):
             try container.encode("color", forKey: .type)
             try container.encode(levels, forKey: .levels)

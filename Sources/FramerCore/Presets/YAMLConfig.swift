@@ -246,6 +246,8 @@ public enum YAMLConfig {
             case .fixed(let c): schema.font_color = c.hex
             case .dominant: schema.font_color = "dominant"
             case .dominantInverted: schema.font_color = "dominant_inverted"
+            // Note: saturation/lightness shifts for caption dominant colors
+            // are persisted in the JSON Codable path, not YAML (YAML is legacy)
             }
             schema.caption_alignment = p.alignment.rawValue
             schema.caption_position = p.position.rawValue
@@ -268,9 +270,11 @@ public enum YAMLConfig {
                 schema.color_mode = "twoTone"
                 schema.dither_fg = fg.hex
                 schema.dither_bg = bg.hex
-            case .dominantTwoTone(let flipped):
+            case .dominantTwoTone(let flipped, let sat, let light):
                 schema.color_mode = "dominantTwoTone"
                 if flipped { schema.dither_flipped = true }
+                if sat != 0 { schema.gradient_saturation = sat }
+                if light != 0 { schema.gradient_lightness = light }
             case .color(let levels):
                 schema.color_mode = "color"
                 schema.color_levels = levels
@@ -384,8 +388,8 @@ public enum YAMLConfig {
                 fontStyle: fontStyle,
                 fontColorMode: {
                     switch schema.font_color {
-                    case "dominant": return .dominant
-                    case "dominant_inverted": return .dominantInverted
+                    case "dominant": return .dominant()
+                    case "dominant_inverted": return .dominantInverted()
                     default: return .fixed((schema.font_color.flatMap { try? CodableColor(hex: $0) }) ?? .black)
                     }
                 }(),
