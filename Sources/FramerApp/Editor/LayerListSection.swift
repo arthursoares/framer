@@ -824,53 +824,70 @@ struct AspectRatioLayerControls: View {
     }
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 8) {
-            HStack {
-                Text("Ratio")
-                    .frame(width: 80, alignment: .leading)
-                Picker("", selection: ratioBinding) {
-                    ForEach(presets, id: \.label) { preset in
-                        Text(preset.label).tag("\(preset.w):\(preset.h)")
-                    }
-                    Text("Custom").tag("custom")
+        VStack(alignment: .leading, spacing: 4) {
+            Text("Ratio")
+                .font(AppFont.controlLabel)
+                .foregroundStyle(Color.text2)
+            Picker("", selection: ratioBinding) {
+                ForEach(presets, id: \.label) { preset in
+                    Text(preset.label).tag("\(preset.w):\(preset.h)")
                 }
-                .labelsHidden()
+                Text("Custom").tag("custom")
             }
+            .labelsHidden()
+        }
 
-            if isCustom {
-                HStack {
-                    Text("Custom")
-                        .frame(width: 80, alignment: .leading)
+        if isCustom {
+            HStack(spacing: 8) {
+                VStack(alignment: .leading, spacing: 4) {
+                    Text("Width")
+                        .font(AppFont.controlLabel)
+                        .foregroundStyle(Color.text2)
                     TextField("W", value: Binding(
                         get: { params.ratioWidth },
                         set: { onChange(AspectRatioLayerParams(id: params.id, ratioWidth: max(1, $0), ratioHeight: params.ratioHeight, offsetX: params.offsetX, offsetY: params.offsetY)) }
                     ), format: .number)
-                    .frame(width: 50)
                     .textFieldStyle(.roundedBorder)
-                    Text(":")
+                    .monospacedDigit()
+                }
+                Text(":")
+                    .foregroundStyle(Color.text3)
+                    .padding(.top, 18)
+                VStack(alignment: .leading, spacing: 4) {
+                    Text("Height")
+                        .font(AppFont.controlLabel)
+                        .foregroundStyle(Color.text2)
                     TextField("H", value: Binding(
                         get: { params.ratioHeight },
                         set: { onChange(AspectRatioLayerParams(id: params.id, ratioWidth: params.ratioWidth, ratioHeight: max(1, $0), offsetX: params.offsetX, offsetY: params.offsetY)) }
                     ), format: .number)
-                    .frame(width: 50)
                     .textFieldStyle(.roundedBorder)
+                    .monospacedDigit()
                 }
             }
+        }
 
+        VStack(alignment: .leading, spacing: 4) {
+            Text("Offset X")
+                .font(AppFont.controlLabel)
+                .foregroundStyle(Color.text2)
             HStack {
-                Text("Offset X")
-                    .frame(width: 80, alignment: .leading)
                 Slider(value: offsetXBinding, in: -1...1)
                 Text(String(format: "%.1f", params.offsetX))
+                    .font(AppFont.mono(10))
                     .monospacedDigit()
                     .frame(width: 30)
             }
+        }
 
+        VStack(alignment: .leading, spacing: 4) {
+            Text("Offset Y")
+                .font(AppFont.controlLabel)
+                .foregroundStyle(Color.text2)
             HStack {
-                Text("Offset Y")
-                    .frame(width: 80, alignment: .leading)
                 Slider(value: offsetYBinding, in: -1...1)
                 Text(String(format: "%.1f", params.offsetY))
+                    .font(AppFont.mono(10))
                     .monospacedDigit()
                     .frame(width: 30)
             }
