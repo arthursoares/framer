@@ -7,6 +7,7 @@ struct CanvasView: View {
     @State private var viewModel = PreviewViewModel()
     @Binding var showOriginal: Bool
     @State private var isDropTargeted = false
+    @FocusState private var isFocused: Bool
 
     var body: some View {
         VStack(spacing: 0) {
@@ -147,7 +148,10 @@ struct CanvasView: View {
             return .handled
         }
         .focusable()
+        .focused($isFocused)
         .focusEffectDisabled()
+        .onAppear { isFocused = true }
+        .onTapGesture { isFocused = true }
     }
 
     private func updatePreview() {
