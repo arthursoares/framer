@@ -29,8 +29,9 @@ struct TopMenuBar: View {
 
     var body: some View {
         HStack {
-            BeforeAfterToggle(showOriginal: $showOriginal)
-                .opacity(appState.selectedPhoto != nil ? 1 : 0)
+            if appState.selectedPhoto != nil {
+                BeforeAfterToggle(showOriginal: $showOriginal)
+            }
             Spacer()
         }
         .padding(.horizontal, 16)

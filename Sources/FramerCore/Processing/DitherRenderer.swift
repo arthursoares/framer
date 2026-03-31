@@ -139,7 +139,7 @@ public enum DitherRenderer {
         let scale: Int
         if params.pixelScale > 1, let previewBase = previewBaseDimension {
             let currentMax = max(width, height)
-            scale = max(1, Int(round(Double(currentMax) * Double(params.pixelScale) / Double(previewBase))))
+            scale = max(1, min(32, Int(round(Double(currentMax) * Double(params.pixelScale) / Double(previewBase)))))
         } else {
             scale = max(1, min(8, params.pixelScale))
         }

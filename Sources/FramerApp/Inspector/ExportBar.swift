@@ -146,11 +146,11 @@ struct ExportBar: View {
         panel.canChooseDirectories = true
         panel.canCreateDirectories = true
         panel.message = "Choose output folder"
-        if !lastExportDirectory.isEmpty, let url = URL(string: lastExportDirectory) {
-            panel.directoryURL = url
+        if !lastExportDirectory.isEmpty {
+            panel.directoryURL = URL(fileURLWithPath: lastExportDirectory)
         }
         guard panel.runModal() == .OK, let dir = panel.url else { return }
-        lastExportDirectory = dir.absoluteString
+        lastExportDirectory = dir.path
         appState.exportItems(items, to: dir)
     }
 
@@ -165,11 +165,11 @@ struct ExportBar: View {
         panel.canChooseDirectories = true
         panel.canCreateDirectories = true
         panel.message = "Choose output folder"
-        if !lastExportDirectory.isEmpty, let url = URL(string: lastExportDirectory) {
-            panel.directoryURL = url
+        if !lastExportDirectory.isEmpty {
+            panel.directoryURL = URL(fileURLWithPath: lastExportDirectory)
         }
         guard panel.runModal() == .OK, let dir = panel.url else { return }
-        lastExportDirectory = dir.absoluteString
+        lastExportDirectory = dir.path
 
         if includeCurrentSettings {
             appState.exportItems(items, to: dir)

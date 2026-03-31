@@ -43,12 +43,13 @@ struct LayerListSection: View {
                               fromIndex != index else { return false }
                         let toOffset = index > fromIndex ? index + 1 : index
                         let snapshot = layers
+                        let layersBinding = $layers
                         withAnimation(.easeInOut(duration: 0.2)) {
                             layers.move(fromOffsets: IndexSet(integer: fromIndex), toOffset: toOffset)
                         }
                         undoManager?.registerUndo(withTarget: UndoProxy.shared) { @MainActor _ in
                             withAnimation(.easeInOut(duration: 0.2)) {
-                                layers = snapshot
+                                layersBinding.wrappedValue = snapshot
                             }
                         }
                         undoManager?.setActionName("Move Layer")
@@ -162,27 +163,29 @@ struct LayerListSection: View {
 
     private func removeLayer(at index: Int) {
         let removed = layers[index]
+        let layersBinding = $layers
         _ = withAnimation(.easeInOut(duration: 0.2)) {
             layers.remove(at: index)
         }
         undoManager?.registerUndo(withTarget: UndoProxy.shared) { @MainActor _ in
             withAnimation(.easeInOut(duration: 0.2)) {
-                let insertAt = min(index, self.layers.count)
-                self.layers.insert(removed, at: insertAt)
+                let insertAt = min(index, layersBinding.wrappedValue.count)
+                layersBinding.wrappedValue.insert(removed, at: insertAt)
             }
         }
         undoManager?.setActionName("Delete Layer")
     }
 
     private func addLayer(_ layer: CompositionLayer) {
+        let layersBinding = $layers
         withAnimation(.easeInOut(duration: 0.2)) {
             layers.append(layer)
         }
         let addedIndex = layers.count - 1
         undoManager?.registerUndo(withTarget: UndoProxy.shared) { @MainActor _ in
             withAnimation(.easeInOut(duration: 0.2)) {
-                if addedIndex < self.layers.count {
-                    self.layers.remove(at: addedIndex)
+                if addedIndex < layersBinding.wrappedValue.count {
+                    layersBinding.wrappedValue.remove(at: addedIndex)
                 }
             }
         }
@@ -190,12 +193,13 @@ struct LayerListSection: View {
     }
 
     private func moveLayer(from source: Int, to destination: Int) {
+        let layersBinding = $layers
         withAnimation(.easeInOut(duration: 0.2)) {
             layers.swapAt(source, destination)
         }
         undoManager?.registerUndo(withTarget: UndoProxy.shared) { @MainActor _ in
             withAnimation(.easeInOut(duration: 0.2)) {
-                self.layers.swapAt(destination, source)
+                layersBinding.wrappedValue.swapAt(destination, source)
             }
         }
         undoManager?.setActionName("Move Layer")
@@ -1179,9 +1183,10 @@ private struct AsyncOverlayThumbnail: View {
                 TextureFrameProvider.cachedThumbnail(for: info)
             }.value
             if let cgImage = image {
+                let scale = NSScreen.main?.backingScaleFactor ?? 2.0
                 thumbnail = NSImage(
                     cgImage: cgImage,
-                    size: NSSize(width: cgImage.width, height: cgImage.height)
+                    size: NSSize(width: CGFloat(cgImage.width) / scale, height: CGFloat(cgImage.height) / scale)
                 )
             }
         }

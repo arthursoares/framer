@@ -76,8 +76,10 @@ struct PreviewArea: View {
             }
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
-        .onLongPressGesture(minimumDuration: .infinity, pressing: { pressing in
-            showingOriginal = pressing
-        }, perform: {})
+        .simultaneousGesture(
+            DragGesture(minimumDistance: 0)
+                .onChanged { _ in showingOriginal = true }
+                .onEnded { _ in showingOriginal = false }
+        )
     }
 }

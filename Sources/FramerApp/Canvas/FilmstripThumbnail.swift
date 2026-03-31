@@ -15,7 +15,7 @@ struct FilmstripThumbnail: View {
         }
         .frame(width: 40, height: 40)
         .clipShape(RoundedRectangle(cornerRadius: 4))
-        .opacity(isSelected ? 1.0 : isHovered ? 0.85 : 0.55)
+        .opacity(isSelected ? 1.0 : isHovered ? 0.85 : 0.7)
         .overlay(
             RoundedRectangle(cornerRadius: 4)
                 .stroke(Color.accent, lineWidth: isSelected ? 1.5 : 0)

@@ -10,6 +10,13 @@ struct EditorView: View {
     @State private var selectedPickerItems: [PhotosPickerItem] = []
     @State private var isLoadingPhotos = false
 
+    private var layersBinding: Binding<[CompositionLayer]> {
+        Binding(
+            get: { appState.currentConfig.layers ?? CompositionLayer.defaultLayers() },
+            set: { appState.currentConfig.layers = $0 }
+        )
+    }
+
     var body: some View {
         NavigationStack {
             VStack(spacing: 0) {
@@ -30,6 +37,28 @@ struct EditorView: View {
                 BottomPanel(presetCache: presetCache)
             }
             .background(Color.surface0)
+            .navigationDestination(for: UUID.self) { layerID in
+                if let index = layersBinding.wrappedValue.firstIndex(where: { $0.id == layerID }) {
+                    LayerDetailView(layer: Binding(
+                        get: {
+                            guard layersBinding.wrappedValue.indices.contains(index),
+                                  layersBinding.wrappedValue[index].id == layerID else {
+                                return layersBinding.wrappedValue.first { $0.id == layerID } ?? .border(BorderLayerParams())
+                            }
+                            return layersBinding.wrappedValue[index]
+                        },
+                        set: {
+                            if let i = layersBinding.wrappedValue.firstIndex(where: { $0.id == layerID }) {
+                                layersBinding.wrappedValue[i] = $0
+                            }
+                        }
+                    ), onDelete: {
+                        if let i = layersBinding.wrappedValue.firstIndex(where: { $0.id == layerID }) {
+                            layersBinding.wrappedValue.remove(at: i)
+                        }
+                    })
+                }
+            }
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .principal) {
@@ -72,7 +101,10 @@ struct EditorView: View {
             }
         }
         .onChange(of: selectedPickerItems) { _, items in
-            guard !items.isEmpty else { return }
+            guard !items.isEmpty else {
+                selectedPickerItems.removeAll()
+                return
+            }
             loadPhotos(from: items)
         }
         .onChange(of: appState.selectedIndex) { _, _ in
@@ -139,19 +171,23 @@ struct EditorView: View {
     private func loadPhotos(from items: [PhotosPickerItem]) {
         isLoadingPhotos = true
         Task {
+            defer { isLoadingPhotos = false }
             var newItems: [PhotoItem] = []
             for item in items {
                 if let data = try? await item.loadTransferable(type: Data.self) {
                     let tempURL = FileManager.default.temporaryDirectory
                         .appendingPathComponent(UUID().uuidString)
                         .appendingPathExtension("jpg")
-                    try? data.write(to: tempURL)
-                    newItems.append(PhotoItem(url: tempURL))
+                    do {
+                        try data.write(to: tempURL)
+                        newItems.append(PhotoItem(url: tempURL))
+                    } catch {
+                        // skip this item
+                    }
                 }
             }
             appState.addPhotos(newItems)
             selectedPickerItems.removeAll()
-            isLoadingPhotos = false
         }
     }
 
@@ -195,12 +231,14 @@ struct AsyncThumbnail: View {
     }
 
     private nonisolated static func loadThumbnail(from url: URL) async -> UIImage? {
-        guard let data = try? Data(contentsOf: url),
-              let full = UIImage(data: data) else { return nil }
-        let maxDim: CGFloat = 100
-        let scale = min(maxDim / full.size.width, maxDim / full.size.height, 1.0)
-        let size = CGSize(width: full.size.width * scale, height: full.size.height * scale)
-        let renderer = UIGraphicsImageRenderer(size: size)
-        return renderer.image { _ in full.draw(in: CGRect(origin: .zero, size: size)) }
+        await Task.detached {
+            guard let data = try? Data(contentsOf: url),
+                  let full = UIImage(data: data) else { return nil }
+            let maxDim: CGFloat = 100
+            let scale = min(maxDim / full.size.width, maxDim / full.size.height, 1.0)
+            let size = CGSize(width: full.size.width * scale, height: full.size.height * scale)
+            let renderer = UIGraphicsImageRenderer(size: size)
+            return renderer.image { _ in full.draw(in: CGRect(origin: .zero, size: size)) }
+        }.value
     }
 }

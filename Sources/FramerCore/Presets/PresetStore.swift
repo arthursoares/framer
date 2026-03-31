@@ -6,9 +6,10 @@ public final class PresetStore {
 
     /// Default initializer — uses ~/Library/Application Support/Framer/presets/
     public convenience init() {
-        let appSupport = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask).first!
+        let appSupport = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask).first
+            ?? FileManager.default.temporaryDirectory
         let dir = appSupport.appendingPathComponent("Framer/presets", isDirectory: true)
-        try! FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
+        try? FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
         self.init(directory: dir)
     }
 

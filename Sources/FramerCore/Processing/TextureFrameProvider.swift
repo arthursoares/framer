@@ -95,15 +95,9 @@ public enum TextureFrameProvider {
     /// Returns all available overlays. Results are cached after first scan.
     public static func availableOverlays() -> [OverlayInfo] {
         _lock.lock()
-        if let cached = _cachedOverlays {
-            _lock.unlock()
-            return cached
-        }
-        _lock.unlock()
-
+        defer { _lock.unlock() }
+        if let cached = _cachedOverlays { return cached }
         let overlays = scanOverlays()
-
-        _lock.lock()
         _cachedOverlays = overlays
         // Build URL lookup
         var urlMap: [String: URL] = [:]
@@ -113,8 +107,6 @@ public enum TextureFrameProvider {
         var byKind: [OverlayKind: [OverlayInfo]] = [:]
         for o in overlays { byKind[o.kind, default: []].append(o) }
         _cachedByKind = byKind
-        _lock.unlock()
-
         return overlays
     }
 

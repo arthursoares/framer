@@ -245,16 +245,21 @@ public enum BorderRenderer {
     /// and none of them use gradient fills (which need per-layer rendering).
     private static func canCoalesce(_ layers: [CompositionLayer], from start: Int) -> Bool {
         guard start + 1 < layers.count else { return false }
-        for j in start..<min(start + 2, layers.count) {
+        var count = 0
+        for j in start..<layers.count {
             switch layers[j] {
-            case .border: continue
-            case .padding(let p):
-                if p.fill.isGradient { return false }
+            case .border:
+                count += 1
                 continue
-            default: return false
+            case .padding(let p):
+                if p.fill.isGradient { return count >= 2 }
+                count += 1
+                continue
+            default:
+                return count >= 2
             }
         }
-        return true
+        return count >= 2
     }
 
     /// Merges a run of consecutive border/padding layers into a single CGContext.
