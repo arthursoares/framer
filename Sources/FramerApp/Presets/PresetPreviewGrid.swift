@@ -20,7 +20,7 @@ struct PresetPreviewGrid: View {
                 PresetPreviewCard(
                     preset: preset,
                     isActive: appState.activePresetName == preset.name,
-                    thumbnail: presetPreviews[preset.id],
+                    thumbnail: appState.selectedPhoto != nil ? presetPreviews[preset.id] : nil,
                     onTap: {
                         appState.currentConfig = preset.config
                         appState.activePresetName = preset.name
