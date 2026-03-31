@@ -18,10 +18,6 @@ struct PresetPreviewCard: View {
                         Image(nsImage: thumbnail)
                             .resizable()
                             .aspectRatio(contentMode: .fill)
-                    } else {
-                        ProgressView()
-                            .controlSize(.mini)
-                            .tint(Color.text3)
                     }
                 }
                 .aspectRatio(1, contentMode: .fit)
