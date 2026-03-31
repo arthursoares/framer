@@ -78,6 +78,18 @@ struct EditorView: View {
                     }
                 }
                 ToolbarItem(placement: .topBarTrailing) {
+                    if appState.selectedPhoto != nil {
+                        Button {
+                            if let photo = appState.selectedPhoto {
+                                appState.rotateItem(photo.id, clockwise: true)
+                            }
+                        } label: {
+                            Image(systemName: "rotate.right")
+                                .foregroundStyle(Color.text2)
+                        }
+                    }
+                }
+                ToolbarItem(placement: .topBarTrailing) {
                     if viewModel.previewImage != nil {
                         Menu {
                             Button {
@@ -169,9 +181,32 @@ struct EditorView: View {
                             .stroke(index == appState.selectedIndex ? Color.accent : .clear, lineWidth: 1.5)
                     )
                     .opacity(index == appState.selectedIndex ? 1.0 : 0.55)
-                        .onTapGesture {
-                            appState.selectedIndex = index
+                    .onTapGesture {
+                        appState.selectedIndex = index
+                    }
+                    .contextMenu {
+                        Button {
+                            appState.rotateItem(item.id, clockwise: true)
+                        } label: {
+                            Label("Rotate Right", systemImage: "rotate.right")
                         }
+                        Button {
+                            appState.rotateItem(item.id, clockwise: false)
+                        } label: {
+                            Label("Rotate Left", systemImage: "rotate.left")
+                        }
+                        Divider()
+                        Button(role: .destructive) {
+                            withAnimation {
+                                appState.library.removeAll { $0.id == item.id }
+                                if appState.selectedIndex >= appState.library.count {
+                                    appState.selectedIndex = max(0, appState.library.count - 1)
+                                }
+                            }
+                        } label: {
+                            Label("Remove", systemImage: "trash")
+                        }
+                    }
                 }
             }
             .padding(.horizontal, 16)
