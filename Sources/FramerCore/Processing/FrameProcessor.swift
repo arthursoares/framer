@@ -1,7 +1,6 @@
 import Foundation
 import CoreGraphics
 import ImageIO
-import AppKit
 
 /// Orchestrates the full image processing pipeline.
 /// Runs on a background actor to keep the main thread free.
@@ -10,7 +9,7 @@ public actor FrameProcessor {
 
     // MARK: - Preview (downscaled, no disk I/O)
 
-    public func previewImage(for url: URL, config: ProcessingConfig, rotation: Int = 0) throws -> sending NSImage {
+    public func previewCGImage(for url: URL, config: ProcessingConfig, rotation: Int = 0) throws -> sending CGImage {
         let fullImage = try loadImage(from: url)
         let rotated = applyRotation(fullImage, degrees: rotation)
         try Task.checkCancellation()
@@ -26,7 +25,7 @@ public actor FrameProcessor {
             borderResult = try BorderRenderer.applyBorder(to: cgImage, config: config, style: config.borderStyle)
         }
 
-        return NSImage(cgImage: borderResult.image, size: NSSize(width: borderResult.image.width, height: borderResult.image.height))
+        return borderResult.image
     }
 
     // MARK: - Full Export

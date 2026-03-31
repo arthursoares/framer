@@ -6,17 +6,17 @@ final class FrameProcessorTests: XCTestCase {
         Bundle.module.url(forResource: "sample", withExtension: "jpg", subdirectory: "Resources")!
     }
 
-    func test_previewImage_returnsNSImage() async throws {
+    func test_previewCGImage_returnsCGImage() async throws {
         let processor = FrameProcessor()
-        let result = try await processor.previewImage(for: sampleURL, config: .default)
-        XCTAssertNotNil(result)
-        XCTAssertGreaterThan(result.size.width, 0)
+        let result = try await processor.previewCGImage(for: sampleURL, config: .default)
+        XCTAssertGreaterThan(result.width, 0)
+        XCTAssertGreaterThan(result.height, 0)
     }
 
-    func test_previewImage_maxDimension_reasonable() async throws {
+    func test_previewCGImage_maxDimension_reasonable() async throws {
         let processor = FrameProcessor()
-        let result = try await processor.previewImage(for: sampleURL, config: .default)
-        let maxDim = max(result.size.width, result.size.height)
+        let result = try await processor.previewCGImage(for: sampleURL, config: .default)
+        let maxDim = max(result.width, result.height)
         // previewMaxDimension() simulates the full layer stack (border + padding additions)
         // to compute the downscale target, so the final preview can be up to 3500px.
         XCTAssertLessThanOrEqual(maxDim, 4000)
