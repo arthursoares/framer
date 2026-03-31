@@ -192,12 +192,12 @@ struct AsyncThumbnail: View {
     }
 
     private nonisolated static func loadThumbnail(from url: URL) async -> UIImage? {
-        guard let source = CGImageSourceCreateWithURL(url as CFURL, nil) else { return nil }
-        let options: [CFString: Any] = [
-            kCGImageSourceThumbnailMaxPixelSize: 100,
-            kCGImageSourceCreateThumbnailFromImageAlways: true
-        ]
-        guard let cgImage = CGImageSourceCreateThumbnailAtIndex(source, 0, options as CFDictionary) else { return nil }
-        return UIImage(cgImage: cgImage)
+        guard let data = try? Data(contentsOf: url),
+              let full = UIImage(data: data) else { return nil }
+        let maxDim: CGFloat = 100
+        let scale = min(maxDim / full.size.width, maxDim / full.size.height, 1.0)
+        let size = CGSize(width: full.size.width * scale, height: full.size.height * scale)
+        let renderer = UIGraphicsImageRenderer(size: size)
+        return renderer.image { _ in full.draw(in: CGRect(origin: .zero, size: size)) }
     }
 }
