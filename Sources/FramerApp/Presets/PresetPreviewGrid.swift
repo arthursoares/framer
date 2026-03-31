@@ -172,7 +172,13 @@ struct PresetPreviewGrid: View {
                     }.value
                     guard !Task.isCancelled else { return }
 
-                    let preview = NSImage(cgImage: cgImage, size: NSSize(width: cgImage.width, height: cgImage.height))
+                    // Size in points (not pixels) — divide by screen scale so
+                    // SwiftUI renders at the correct dimensions on Retina displays.
+                    let scale = NSScreen.main?.backingScaleFactor ?? 2.0
+                    let preview = NSImage(cgImage: cgImage, size: NSSize(
+                        width: CGFloat(cgImage.width) / scale,
+                        height: CGFloat(cgImage.height) / scale
+                    ))
                     await MainActor.run {
                         presetPreviews[presetID] = preview
                     }
