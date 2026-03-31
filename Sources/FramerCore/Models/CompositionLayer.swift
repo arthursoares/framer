@@ -11,11 +11,13 @@ public struct GradientParams: Codable, Equatable, Sendable {
         self.saturationShift = saturationShift
         self.lightnessShift = lightnessShift
     }
+
+    public static let none = GradientParams()
 }
 
 public enum LayerFill: Codable, Equatable, Sendable {
     case color(CodableColor)
-    case dominantColor
+    case dominantColor(GradientParams = GradientParams())
     case gradientLinear(GradientParams = GradientParams())
     case gradientRadial(GradientParams = GradientParams())
 
@@ -31,7 +33,8 @@ public enum LayerFill: Codable, Equatable, Sendable {
             let c = try container.decode(CodableColor.self, forKey: .color)
             self = .color(c)
         case "dominant":
-            self = .dominantColor
+            let params = try container.decodeIfPresent(GradientParams.self, forKey: .gradientParams) ?? GradientParams()
+            self = .dominantColor(params)
         case "gradient_linear":
             let params = try container.decodeIfPresent(GradientParams.self, forKey: .gradientParams) ?? GradientParams()
             self = .gradientLinear(params)
@@ -49,8 +52,9 @@ public enum LayerFill: Codable, Equatable, Sendable {
         case .color(let c):
             try container.encode("color", forKey: .type)
             try container.encode(c, forKey: .color)
-        case .dominantColor:
+        case .dominantColor(let params):
             try container.encode("dominant", forKey: .type)
+            try container.encode(params, forKey: .gradientParams)
         case .gradientLinear(let params):
             try container.encode("gradient_linear", forKey: .type)
             try container.encode(params, forKey: .gradientParams)
@@ -68,10 +72,18 @@ public enum LayerFill: Codable, Equatable, Sendable {
         }
     }
 
-    /// The gradient parameters, if this is a gradient fill.
+    /// Whether this fill uses dominant color extraction.
+    public var isDominant: Bool {
+        switch self {
+        case .dominantColor, .gradientLinear, .gradientRadial: return true
+        default: return false
+        }
+    }
+
+    /// The color adjustment parameters, if available.
     public var gradientParams: GradientParams? {
         switch self {
-        case .gradientLinear(let p), .gradientRadial(let p): return p
+        case .dominantColor(let p), .gradientLinear(let p), .gradientRadial(let p): return p
         default: return nil
         }
     }

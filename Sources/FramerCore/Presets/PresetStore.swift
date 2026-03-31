@@ -168,7 +168,7 @@ public final class PresetStore {
                 outputFormat: .jpeg(quality: 95),
                 layers: [
                     .border(BorderLayerParams(thickness: .pixels(4), color: .white)),
-                    .canvas(CanvasLayerParams(width: 1080, height: 1350, fill: .dominantColor)),
+                    .canvas(CanvasLayerParams(width: 1080, height: 1350, fill: .dominantColor())),
                     .caption(CaptionLayerParams(
                         mode: .template("{{camera}} | {{lens}}"),
                         fontName: "Courier New",

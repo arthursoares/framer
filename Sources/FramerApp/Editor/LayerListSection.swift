@@ -1265,7 +1265,7 @@ struct LayerFillPicker: View {
                 let existingParams = fill.gradientParams ?? GradientParams()
                 switch idx {
                 case 0: onChange(.color(.white))
-                case 1: onChange(.dominantColor)
+                case 1: onChange(.dominantColor(existingParams))
                 case 2: onChange(.gradientLinear(existingParams))
                 case 3: onChange(.gradientRadial(existingParams))
                 default: break
@@ -1280,6 +1280,7 @@ struct LayerFillPicker: View {
             set: { val in
                 let newParams = GradientParams(saturationShift: val, lightnessShift: params.lightnessShift)
                 switch fill {
+                case .dominantColor: onChange(.dominantColor(newParams))
                 case .gradientLinear: onChange(.gradientLinear(newParams))
                 case .gradientRadial: onChange(.gradientRadial(newParams))
                 default: break
@@ -1294,6 +1295,7 @@ struct LayerFillPicker: View {
             set: { val in
                 let newParams = GradientParams(saturationShift: params.saturationShift, lightnessShift: val)
                 switch fill {
+                case .dominantColor: onChange(.dominantColor(newParams))
                 case .gradientLinear: onChange(.gradientLinear(newParams))
                 case .gradientRadial: onChange(.gradientRadial(newParams))
                 default: break

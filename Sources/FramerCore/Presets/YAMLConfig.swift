@@ -291,8 +291,10 @@ public enum YAMLConfig {
         case .color(let c):
             schema.fill = "color"
             schema.fill_color = c.hex
-        case .dominantColor:
+        case .dominantColor(let p):
             schema.fill = "dominant"
+            if p.saturationShift != 0 { schema.gradient_saturation = p.saturationShift }
+            if p.lightnessShift != 0 { schema.gradient_lightness = p.lightnessShift }
         case .gradientLinear(let p):
             schema.fill = "gradient_linear"
             if p.saturationShift != 0 { schema.gradient_saturation = p.saturationShift }
@@ -441,7 +443,10 @@ public enum YAMLConfig {
     private static func decodeFill(_ schema: YAMLLayerSchema) -> LayerFill {
         switch schema.fill {
         case "dominant":
-            return .dominantColor
+            return .dominantColor(GradientParams(
+                saturationShift: schema.gradient_saturation ?? 0,
+                lightnessShift: schema.gradient_lightness ?? 0
+            ))
         case "gradient_linear":
             return .gradientLinear(GradientParams(
                 saturationShift: schema.gradient_saturation ?? 0,
