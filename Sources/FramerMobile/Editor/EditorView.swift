@@ -98,14 +98,17 @@ struct EditorView: View {
         ScrollView(.horizontal, showsIndicators: false) {
             HStack(spacing: 4) {
                 ForEach(Array(appState.library.enumerated()), id: \.element.id) { index, item in
-                    AsyncThumbnail(url: item.url)
-                        .frame(width: 44, height: 32)
-                        .clipShape(RoundedRectangle(cornerRadius: 3))
-                        .overlay(
-                            RoundedRectangle(cornerRadius: 3)
-                                .stroke(index == appState.selectedIndex ? Color.accent : .clear, lineWidth: 1.5)
-                        )
-                        .opacity(index == appState.selectedIndex ? 1.0 : 0.55)
+                    ZStack {
+                        Color.surface3
+                        AsyncThumbnail(url: item.url)
+                    }
+                    .frame(width: 44, height: 44)
+                    .clipShape(RoundedRectangle(cornerRadius: 4))
+                    .overlay(
+                        RoundedRectangle(cornerRadius: 4)
+                            .stroke(index == appState.selectedIndex ? Color.accent : .clear, lineWidth: 1.5)
+                    )
+                    .opacity(index == appState.selectedIndex ? 1.0 : 0.55)
                         .onTapGesture {
                             appState.selectedIndex = index
                         }
