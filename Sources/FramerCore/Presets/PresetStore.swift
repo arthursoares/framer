@@ -88,6 +88,44 @@ public final class PresetStore {
         }
     }
 
+    // MARK: - Import / Export
+
+    /// The directory where presets are stored.
+    public var storageDirectory: URL { directory }
+
+    /// Exports a preset as JSON data.
+    public func exportData(for preset: Preset) throws -> Data {
+        let encoder = JSONEncoder()
+        encoder.outputFormatting = [.prettyPrinted, .sortedKeys]
+        return try encoder.encode(preset)
+    }
+
+    /// Exports multiple presets as a JSON array.
+    public func exportAllData() throws -> Data {
+        let presets = try list()
+        let encoder = JSONEncoder()
+        encoder.outputFormatting = [.prettyPrinted, .sortedKeys]
+        return try encoder.encode(presets)
+    }
+
+    /// Imports presets from JSON data (single preset or array).
+    /// Returns the number of presets imported.
+    @discardableResult
+    public func importData(_ data: Data) throws -> Int {
+        let decoder = JSONDecoder()
+        // Try array first
+        if let presets = try? decoder.decode([Preset].self, from: data) {
+            for preset in presets {
+                try save(preset)
+            }
+            return presets.count
+        }
+        // Try single preset
+        let preset = try decoder.decode(Preset.self, from: data)
+        try save(preset)
+        return 1
+    }
+
     /// Creates a deterministic UUID from a name string (for stable YAML preset identity).
     private static func deterministicUUID(from name: String) -> UUID {
         let hash = Insecure.MD5.hash(data: Data(name.utf8))
