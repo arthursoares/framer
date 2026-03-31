@@ -133,8 +133,8 @@ public actor FrameProcessor {
                                   bitmapInfo: image.bitmapInfo.rawValue) else { return image }
         ctx.translateBy(x: CGFloat(newW) / 2, y: CGFloat(newH) / 2)
         ctx.rotate(by: -radians)
-        ctx.draw(image, in: CGRect(x: -image.width / 2, y: -image.height / 2,
-                                    width: image.width, height: image.height))
+        ctx.draw(image, in: CGRect(x: -CGFloat(image.width) / 2, y: -CGFloat(image.height) / 2,
+                                    width: CGFloat(image.width), height: CGFloat(image.height)))
         return ctx.makeImage() ?? image
     }
 

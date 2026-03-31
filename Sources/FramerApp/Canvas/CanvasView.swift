@@ -159,9 +159,12 @@ struct CanvasView: View {
             provider.loadItem(forTypeIdentifier: UTType.fileURL.identifier) { item, _ in
                 if let data = item as? Data,
                    let url = URL(dataRepresentation: data, relativeTo: nil) {
-                    _ = url.startAccessingSecurityScopedResource()
+                    let didAccess = url.startAccessingSecurityScopedResource()
                     DispatchQueue.main.async {
                         appState.addPhotos(from: [url])
+                        if didAccess {
+                            url.stopAccessingSecurityScopedResource()
+                        }
                     }
                 }
             }

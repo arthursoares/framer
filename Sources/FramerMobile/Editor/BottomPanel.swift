@@ -28,7 +28,7 @@ struct BottomPanel: View {
                     .padding(.vertical, 12)
             }
         }
-        .background(Color.surface1)
+        .background(Color.surface1.ignoresSafeArea(.container, edges: .bottom))
     }
 
     private func tabButton(_ title: String, tab: BottomTab) -> some View {

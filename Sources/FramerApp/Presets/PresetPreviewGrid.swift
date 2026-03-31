@@ -156,24 +156,21 @@ struct PresetPreviewGrid: View {
         let url = photo.url
         let rotation = photo.rotation
 
-        for preset in presets {
-            let presetID = preset.id
-            let config = preset.config
+        // Single task that renders presets serially to avoid saturating CPU
+        let task = Task {
+            try? await Task.sleep(for: .milliseconds(200))
+            guard !Task.isCancelled else { return }
 
-            let task = Task {
-                // Debounce
-                try? await Task.sleep(for: .milliseconds(200))
+            let processor = FrameProcessor()
+            for preset in presets {
                 guard !Task.isCancelled else { return }
-
-                let processor = FrameProcessor()
+                let presetID = preset.id
                 do {
                     let cgImage = try await Task.detached {
-                        try await processor.previewCGImage(for: url, config: config, rotation: rotation)
+                        try await processor.previewCGImage(for: url, config: preset.config, rotation: rotation)
                     }.value
                     guard !Task.isCancelled else { return }
 
-                    // Size in points (not pixels) — divide by screen scale so
-                    // SwiftUI renders at the correct dimensions on Retina displays.
                     let scale = NSScreen.main?.backingScaleFactor ?? 2.0
                     let preview = NSImage(cgImage: cgImage, size: NSSize(
                         width: CGFloat(cgImage.width) / scale,
@@ -186,8 +183,8 @@ struct PresetPreviewGrid: View {
                     // Silently fail — card shows placeholder
                 }
             }
-            renderTasks[presetID] = task
         }
+        renderTasks[UUID()] = task
     }
 
     // MARK: - Save Preset

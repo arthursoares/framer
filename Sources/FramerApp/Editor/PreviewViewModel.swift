@@ -30,7 +30,10 @@ final class PreviewViewModel {
         renderTask = Task {
             // Debounce: wait 150ms before rendering
             try? await Task.sleep(for: .milliseconds(150))
-            guard !Task.isCancelled else { return }
+            guard !Task.isCancelled else {
+                isLoading = false
+                return
+            }
 
             isLoading = true
             error = nil
@@ -54,7 +57,10 @@ final class PreviewViewModel {
                     height: CGFloat(cgPreview.height) / scale
                 ))
                 let original = await originalHandle.value
-                guard !Task.isCancelled else { return }
+                guard !Task.isCancelled else {
+                    isLoading = false
+                    return
+                }
                 originalImage = original
                 previewImage = preview
                 // Output size in actual pixels (not points)

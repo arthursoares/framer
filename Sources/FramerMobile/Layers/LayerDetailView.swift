@@ -700,12 +700,16 @@ private struct FillPicker: View {
 
 extension Color {
     var hexString: String? {
-        guard let cgColor = cgColor,
-              let components = cgColor.components,
-              components.count >= 3 else { return nil }
-        let r = Int(components[0] * 255)
-        let g = Int(components[1] * 255)
-        let b = Int(components[2] * 255)
+        guard let cgColor = cgColor?.converted(
+            to: CGColorSpace(name: CGColorSpace.sRGB)!,
+            intent: .defaultIntent,
+            options: nil
+        ),
+        let components = cgColor.components,
+        components.count >= 3 else { return nil }
+        let r = Int(max(0, min(255, components[0] * 255)))
+        let g = Int(max(0, min(255, components[1] * 255)))
+        let b = Int(max(0, min(255, components[2] * 255)))
         return String(format: "#%02X%02X%02X", r, g, b)
     }
 }

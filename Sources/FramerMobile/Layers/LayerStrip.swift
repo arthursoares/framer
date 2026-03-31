@@ -26,16 +26,6 @@ struct LayerStrip: View {
             .padding(.horizontal, 16)
         }
         .frame(maxHeight: 220)
-        .navigationDestination(for: UUID.self) { layerID in
-            if let index = layers.wrappedValue.firstIndex(where: { $0.id == layerID }) {
-                LayerDetailView(layer: Binding(
-                    get: { layers.wrappedValue[index] },
-                    set: { layers.wrappedValue[index] = $0 }
-                ), onDelete: {
-                    layers.wrappedValue.remove(at: index)
-                })
-            }
-        }
     }
 
     private var addLayerButton: some View {

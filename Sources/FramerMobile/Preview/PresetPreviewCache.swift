@@ -14,31 +14,28 @@ final class PresetPreviewCache {
 
         let url = photo.url
         let rotation = photo.rotation
+        let presetList = presets
 
-        for preset in presets {
-            let presetID = preset.id
-            let config = preset.config
-
-            let task = Task {
-                try? await Task.sleep(for: .milliseconds(200))
+        let task = Task {
+            try? await Task.sleep(for: .milliseconds(200))
+            guard !Task.isCancelled else { return }
+            let processor = FrameProcessor()
+            for preset in presetList {
                 guard !Task.isCancelled else { return }
-
-                let processor = FrameProcessor()
                 do {
                     let cgImage = try await Task.detached {
-                        try await processor.previewCGImage(for: url, config: config, rotation: rotation)
+                        try await processor.previewCGImage(for: url, config: preset.config, rotation: rotation)
                     }.value
                     guard !Task.isCancelled else { return }
-
                     let image = UIImage(cgImage: cgImage)
                     await MainActor.run {
-                        previews[presetID] = image
+                        previews[preset.id] = image
                     }
                 } catch {
                     // Silently fail — card shows placeholder
                 }
             }
-            renderTasks[presetID] = task
         }
+        renderTasks[UUID()] = task
     }
 }
