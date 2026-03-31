@@ -1,6 +1,7 @@
 // Sources/FramerCore/Processing/DitherRenderer.swift
 import Foundation
 import CoreGraphics
+import Accelerate
 
 // MARK: - DitherRenderer
 
@@ -143,32 +144,18 @@ public enum DitherRenderer {
         } else {
             scale = max(1, min(8, params.pixelScale))
         }
+        // Create working context — when scaling, draw directly into the work context
+        // (avoids a second CGContext allocation and redundant blit)
         let workW: Int
         let workH: Int
-        let workImage: CGImage
         if scale > 1 {
             workW = max(1, width / scale)
             workH = max(1, height / scale)
-            guard let ctx = CGContext(
-                data: nil, width: workW, height: workH,
-                bitsPerComponent: 8, bytesPerRow: workW * 4,
-                space: colorSpace, bitmapInfo: bitmapInfo
-            ) else {
-                throw FramerError.invalidImage(URL(fileURLWithPath: ""))
-            }
-            ctx.interpolationQuality = .high
-            ctx.draw(image, in: CGRect(x: 0, y: 0, width: workW, height: workH))
-            guard let downscaled = ctx.makeImage() else {
-                throw FramerError.invalidImage(URL(fileURLWithPath: ""))
-            }
-            workImage = downscaled
         } else {
             workW = width
             workH = height
-            workImage = image
         }
 
-        // Create working context and extract pixel data
         guard let ctx = CGContext(
             data: nil, width: workW, height: workH,
             bitsPerComponent: 8, bytesPerRow: workW * 4,
@@ -176,7 +163,8 @@ public enum DitherRenderer {
         ) else {
             throw FramerError.invalidImage(URL(fileURLWithPath: ""))
         }
-        ctx.draw(workImage, in: CGRect(x: 0, y: 0, width: workW, height: workH))
+        ctx.interpolationQuality = scale > 1 ? .high : .none
+        ctx.draw(image, in: CGRect(x: 0, y: 0, width: workW, height: workH))
 
         guard let data = ctx.data else {
             throw FramerError.invalidImage(URL(fileURLWithPath: ""))
@@ -252,48 +240,35 @@ public enum DitherRenderer {
 
     // MARK: - Pre-Processing
 
-    /// Apply unsharp mask sharpening to enhance edges before dithering.
-    /// Uses separable box blur (horizontal then vertical) for O(n) per pixel instead of O(n²).
+    /// Apply unsharp mask sharpening using Accelerate vImage for performance.
+    /// Uses 3×3 box convolution (equivalent to radius-1 blur) then unsharp mask.
     private static func applySharpen(
         pixels: UnsafeMutablePointer<UInt8>,
         width: Int, height: Int,
         amount: Double
     ) {
-        let count = width * height
-        let amount2 = amount * 2.0
+        let bytesPerRow = width * 4
+        var src = vImage_Buffer(data: pixels, height: vImagePixelCount(height),
+                                width: vImagePixelCount(width), rowBytes: bytesPerRow)
 
-        // Allocate blur buffer (one channel at a time to reduce memory)
-        let blurred = UnsafeMutablePointer<Double>.allocate(capacity: count)
-        let temp = UnsafeMutablePointer<Double>.allocate(capacity: count)
-        defer { blurred.deallocate(); temp.deallocate() }
+        // Allocate destination buffer for the blurred version
+        let blurData = UnsafeMutablePointer<UInt8>.allocate(capacity: bytesPerRow * height)
+        defer { blurData.deallocate() }
+        var dst = vImage_Buffer(data: blurData, height: vImagePixelCount(height),
+                                width: vImagePixelCount(width), rowBytes: bytesPerRow)
 
-        for c in 0..<3 {
-            // Extract channel
-            for i in 0..<count {
-                temp[i] = Double(pixels[i * 4 + c])
-            }
+        // 3×3 box blur via vImage (operates on all 4 channels at once)
+        vImageBoxConvolve_ARGB8888(&src, &dst, nil, 0, 0, 3, 3, nil, vImage_Flags(kvImageEdgeExtend))
 
-            // Horizontal box blur (radius 1)
-            for y in 0..<height {
-                let row = y * width
-                for x in 0..<width {
-                    let x0 = max(0, x - 1)
-                    let x2 = min(width - 1, x + 1)
-                    blurred[row + x] = (temp[row + x0] + temp[row + x] + temp[row + x2]) / 3.0
-                }
-            }
-
-            // Vertical box blur (radius 1) on the horizontally-blurred result
-            for y in 0..<height {
-                let y0 = max(0, y - 1) * width
-                let y1 = y * width
-                let y2 = min(height - 1, y + 1) * width
-                for x in 0..<width {
-                    let b = (blurred[y0 + x] + blurred[y1 + x] + blurred[y2 + x]) / 3.0
-                    let orig = temp[y1 + x]
-                    let sharpened = orig + amount2 * (orig - b)
-                    pixels[(y1 + x) * 4 + c] = UInt8(max(0, min(255, round(sharpened))))
-                }
+        // Unsharp mask: result = original + amount * (original - blurred)
+        let amount2 = Float(amount * 2.0)
+        let count = width * height * 4
+        for i in stride(from: 0, to: count, by: 4) {
+            for c in 0..<3 {
+                let orig = Float(pixels[i + c])
+                let blur = Float(blurData[i + c])
+                let sharpened = orig + amount2 * (orig - blur)
+                pixels[i + c] = UInt8(max(0, min(255, Int(sharpened + 0.5))))
             }
         }
     }
@@ -492,19 +467,76 @@ public enum DitherRenderer {
             }
         }
 
-        // Dither each channel independently
-        let rOut = ditherChannel(&rBuf, width: width, height: height,
-                                 algorithm: algorithm, bayerLevel: bayerLevel, levels: levels)
-        let gOut = ditherChannel(&gBuf, width: width, height: height,
-                                 algorithm: algorithm, bayerLevel: bayerLevel, levels: levels)
-        let bOut = ditherChannel(&bBuf, width: width, height: height,
-                                 algorithm: algorithm, bayerLevel: bayerLevel, levels: levels)
+        // Fast path: for ordered algorithms, fuse all 3 channels in a single pass
+        // (the threshold value is the same for R, G, B at each pixel)
+        let isOrdered = algorithm == .bayer || algorithm == .blueNoise ||
+                        algorithm == .halftone || algorithm == .whiteNoise
+        if isOrdered {
+            applyOrderedColorDitherFused(
+                pixels: pixels, rBuf: &rBuf, gBuf: &gBuf, bBuf: &bBuf,
+                width: width, height: height, algorithm: algorithm,
+                bayerLevel: bayerLevel, levels: levels
+            )
+        } else {
+            // Error diffusion: must process each channel independently
+            let rOut = ditherChannel(&rBuf, width: width, height: height,
+                                     algorithm: algorithm, bayerLevel: bayerLevel, levels: levels)
+            let gOut = ditherChannel(&gBuf, width: width, height: height,
+                                     algorithm: algorithm, bayerLevel: bayerLevel, levels: levels)
+            let bOut = ditherChannel(&bBuf, width: width, height: height,
+                                     algorithm: algorithm, bayerLevel: bayerLevel, levels: levels)
 
-        for i in 0..<count {
-            let idx = i * 4
-            pixels[idx] = rOut[i]
-            pixels[idx + 1] = gOut[i]
-            pixels[idx + 2] = bOut[i]
+            for i in 0..<count {
+                let idx = i * 4
+                pixels[idx] = rOut[i]
+                pixels[idx + 1] = gOut[i]
+                pixels[idx + 2] = bOut[i]
+            }
+        }
+    }
+
+    /// Fused ordered dither for all 3 color channels in a single pass.
+    /// The threshold at (x,y) is identical for R/G/B, so we compute it once
+    /// and apply to all three channels, cutting cache traversals by 3×.
+    private static func applyOrderedColorDitherFused(
+        pixels: UnsafeMutablePointer<UInt8>,
+        rBuf: inout [Double], gBuf: inout [Double], bBuf: inout [Double],
+        width: Int, height: Int,
+        algorithm: DitherAlgorithm, bayerLevel: Int, levels: Int
+    ) {
+        let maxLevel = Double(levels - 1)
+
+        for y in 0..<height {
+            let rowOff = y * width
+            for x in 0..<width {
+                let i = rowOff + x
+
+                // Compute threshold once for this pixel
+                let threshold: Double
+                switch algorithm {
+                case .bayer:
+                    let cached = cachedBayerMatrices[max(0, min(3, bayerLevel - 1))]
+                    let mask = cached.size - 1
+                    threshold = cached.data[(y & mask) * cached.size + (x & mask)] - 0.5
+                case .blueNoise:
+                    threshold = cachedBlueNoise[(y & 63) * 64 + (x & 63)] - 0.5
+                case .halftone:
+                    threshold = cachedHalftoneFlat[(y % 6) * 6 + (x % 6)] - 0.5
+                case .whiteNoise:
+                    threshold = seededRandom(x: x, y: y) - 0.5
+                default:
+                    threshold = 0 // should not reach here
+                }
+
+                // Apply to all 3 channels
+                let idx = i * 4
+                let rQ = round((rBuf[i] + threshold / maxLevel) * maxLevel) / maxLevel
+                let gQ = round((gBuf[i] + threshold / maxLevel) * maxLevel) / maxLevel
+                let bQ = round((bBuf[i] + threshold / maxLevel) * maxLevel) / maxLevel
+                pixels[idx] = linearToSRGBByte(rQ)
+                pixels[idx + 1] = linearToSRGBByte(gQ)
+                pixels[idx + 2] = linearToSRGBByte(bQ)
+            }
         }
     }
 
