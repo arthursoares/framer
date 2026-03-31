@@ -1,4 +1,10 @@
 name: Framer
+settings:
+  base:
+    DEAD_CODE_STRIPPING: YES
+    ENABLE_USER_SCRIPT_SANDBOXING: YES
+    SWIFT_EMIT_LOC_STRINGS: YES
+
 options:
   minimumXcodeGenVersion: "2.38"
   deploymentTarget:
