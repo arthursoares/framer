@@ -135,23 +135,20 @@ struct CanvasView: View {
         .onReceive(NotificationCenter.default.publisher(for: .framerRotateCCW)) { _ in
             for id in appState.selectedItems { appState.rotateItem(id, clockwise: false) }
         }
-        .onKeyPress(.space) {
-            showOriginal.toggle()
-            return .handled
-        }
-        .onKeyPress(.leftArrow) {
+        .onReceive(NotificationCenter.default.publisher(for: .framerPreviousPhoto)) { _ in
             navigateFilmstrip(forward: false)
-            return .handled
         }
-        .onKeyPress(.rightArrow) {
+        .onReceive(NotificationCenter.default.publisher(for: .framerNextPhoto)) { _ in
             navigateFilmstrip(forward: true)
-            return .handled
         }
         .focusable()
         .focused($isFocused)
         .focusEffectDisabled()
         .onAppear { isFocused = true }
-        .onTapGesture { isFocused = true }
+        .onKeyPress(.space) {
+            showOriginal.toggle()
+            return .handled
+        }
     }
 
     private func updatePreview() {

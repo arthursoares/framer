@@ -35,6 +35,18 @@ struct FramerCommands: Commands {
             .keyboardShortcut(.delete, modifiers: [])
         }
 
+        CommandMenu("Navigate") {
+            Button("Previous Photo") {
+                NotificationCenter.default.post(name: .framerPreviousPhoto, object: nil)
+            }
+            .keyboardShortcut(.leftArrow, modifiers: [])
+
+            Button("Next Photo") {
+                NotificationCenter.default.post(name: .framerNextPhoto, object: nil)
+            }
+            .keyboardShortcut(.rightArrow, modifiers: [])
+        }
+
         CommandMenu("Image") {
             Button("Rotate Clockwise") {
                 NotificationCenter.default.post(name: .framerRotateCW, object: nil)
@@ -58,4 +70,6 @@ extension Notification.Name {
     static let framerDeleteSelected = Notification.Name("framer.deleteSelected")
     static let framerRotateCW = Notification.Name("framer.rotateCW")
     static let framerRotateCCW = Notification.Name("framer.rotateCCW")
+    static let framerPreviousPhoto = Notification.Name("framer.previousPhoto")
+    static let framerNextPhoto = Notification.Name("framer.nextPhoto")
 }
