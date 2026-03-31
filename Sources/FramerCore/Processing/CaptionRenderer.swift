@@ -72,18 +72,22 @@ public enum CaptionRenderer {
         switch params.fontColorMode {
         case .fixed(let c):
             resolvedColor = c.cgColor
-        case .dominant:
+        case .dominant(let satShift, let lightShift):
             let img = sourceImage ?? image
             let dominant = ColorExtractor.extractDominantColor(from: img)
-            resolvedColor = dominant.cgColor
-        case .dominantInverted:
+            let adjusted = HSLColor(
+                h: dominant.h,
+                s: max(0, min(100, dominant.s + satShift)),
+                l: max(0, min(100, dominant.l + lightShift))
+            )
+            resolvedColor = adjusted.cgColor
+        case .dominantInverted(let satShift, let lightShift):
             let img = sourceImage ?? image
             let dominant = ColorExtractor.extractDominantColor(from: img)
-            // Invert: shift hue 180°, invert lightness
             let inverted = HSLColor(
                 h: dominant.h + 180 > 360 ? dominant.h - 180 : dominant.h + 180,
-                s: dominant.s,
-                l: 100 - dominant.l
+                s: max(0, min(100, dominant.s + satShift)),
+                l: max(0, min(100, 100 - dominant.l + lightShift))
             )
             resolvedColor = inverted.cgColor
         }

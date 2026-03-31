@@ -528,8 +528,8 @@ private struct CaptionControls: View {
                         set: { idx in
                             var p = params
                             switch idx {
-                            case 1: p.fontColorMode = .dominant
-                            case 2: p.fontColorMode = .dominantInverted
+                            case 1: p.fontColorMode = .dominant()
+                            case 2: p.fontColorMode = .dominantInverted()
                             default: p.fontColorMode = .fixed(p.fontColor)
                             }
                             onChange(p)
@@ -541,6 +541,38 @@ private struct CaptionControls: View {
                     }
                     .pickerStyle(.segmented)
                 }
+
+                // Saturation/lightness for dominant caption colors
+                if case .dominant(let sat, let light) = params.fontColorMode {
+                    captionAdjustmentSliders(sat: sat, light: light) { s, l in
+                        var p = params; p.fontColorMode = .dominant(saturationShift: s, lightnessShift: l); onChange(p)
+                    }
+                }
+                if case .dominantInverted(let sat, let light) = params.fontColorMode {
+                    captionAdjustmentSliders(sat: sat, light: light) { s, l in
+                        var p = params; p.fontColorMode = .dominantInverted(saturationShift: s, lightnessShift: l); onChange(p)
+                    }
+                }
+            }
+        }
+    }
+
+    @ViewBuilder
+    private func captionAdjustmentSliders(sat: Double, light: Double, onChange: @escaping (Double, Double) -> Void) -> some View {
+        ControlRow(label: "Saturation") {
+            HStack {
+                Slider(value: Binding(get: { sat }, set: { onChange($0, light) }), in: -50...50)
+                Text("\(Int(sat))")
+                    .font(AppFont.mono(12))
+                    .frame(width: 40, alignment: .trailing)
+            }
+        }
+        ControlRow(label: "Lightness") {
+            HStack {
+                Slider(value: Binding(get: { light }, set: { onChange(sat, $0) }), in: -50...50)
+                Text("\(Int(light))")
+                    .font(AppFont.mono(12))
+                    .frame(width: 40, alignment: .trailing)
             }
         }
     }
@@ -644,7 +676,7 @@ private struct DitherControls: View {
                         case 0: p.colorMode = .bw
                         case 1: p.colorMode = .twoTone(foreground: (try? CodableColor(hex: "#0251FF")) ?? .black, background: .black)
                         case 2: p.colorMode = .color(levels: 4)
-                        case 3: p.colorMode = .dominantTwoTone(flipped: false)
+                        case 3: p.colorMode = .dominantTwoTone(flipped: false, saturationShift: 0, lightnessShift: 0)
                         default: break
                         }
                         onChange(p)
@@ -700,14 +732,36 @@ private struct DitherControls: View {
                 }
             }
 
-            // Dominant two-tone flip
-            if case .dominantTwoTone(let flipped) = params.colorMode {
+            // Dominant two-tone controls
+            if case .dominantTwoTone(let flipped, let sat, let light) = params.colorMode {
                 ControlRow(label: "Flip Colors") {
                     Toggle("", isOn: Binding(
                         get: { flipped },
-                        set: { var p = params; p.colorMode = .dominantTwoTone(flipped: $0); onChange(p) }
+                        set: { var p = params; p.colorMode = .dominantTwoTone(flipped: $0, saturationShift: sat, lightnessShift: light); onChange(p) }
                     ))
                     .labelsHidden()
+                }
+                ControlRow(label: "Saturation") {
+                    HStack {
+                        Slider(value: Binding(
+                            get: { sat },
+                            set: { var p = params; p.colorMode = .dominantTwoTone(flipped: flipped, saturationShift: $0, lightnessShift: light); onChange(p) }
+                        ), in: -50...50)
+                        Text("\(Int(sat))")
+                            .font(AppFont.mono(12))
+                            .frame(width: 40, alignment: .trailing)
+                    }
+                }
+                ControlRow(label: "Lightness") {
+                    HStack {
+                        Slider(value: Binding(
+                            get: { light },
+                            set: { var p = params; p.colorMode = .dominantTwoTone(flipped: flipped, saturationShift: sat, lightnessShift: $0); onChange(p) }
+                        ), in: -50...50)
+                        Text("\(Int(light))")
+                            .font(AppFont.mono(12))
+                            .frame(width: 40, alignment: .trailing)
+                    }
                 }
             }
 

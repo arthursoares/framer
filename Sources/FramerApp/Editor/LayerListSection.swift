@@ -1504,6 +1504,47 @@ struct CaptionLayerControls: View {
             if case .fixed = params.fontColorMode {
                 ColorPickerWithHex("Color", selection: fontColorBinding)
             }
+
+            if case .dominant(let sat, let light) = params.fontColorMode {
+                captionColorAdjustmentSliders(saturation: sat, lightness: light) { s, l in
+                    var p = params; p.fontColorMode = .dominant(saturationShift: s, lightnessShift: l); onChange(p)
+                }
+            }
+            if case .dominantInverted(let sat, let light) = params.fontColorMode {
+                captionColorAdjustmentSliders(saturation: sat, lightness: light) { s, l in
+                    var p = params; p.fontColorMode = .dominantInverted(saturationShift: s, lightnessShift: l); onChange(p)
+                }
+            }
+        }
+    }
+
+    @ViewBuilder
+    private func captionColorAdjustmentSliders(saturation: Double, lightness: Double, onChange: @escaping (Double, Double) -> Void) -> some View {
+        VStack(alignment: .leading, spacing: 4) {
+            Text("Saturation")
+                .font(AppFont.controlLabel)
+                .foregroundStyle(Color.text2)
+            HStack {
+                Slider(value: Binding(get: { saturation }, set: { onChange($0, lightness) }), in: -50...50)
+                TextField("", value: Binding(get: { saturation }, set: { onChange($0, lightness) }), format: .number)
+                    .textFieldStyle(.roundedBorder)
+                    .frame(width: 50)
+                    .multilineTextAlignment(.trailing)
+                    .monospacedDigit()
+            }
+        }
+        VStack(alignment: .leading, spacing: 4) {
+            Text("Lightness")
+                .font(AppFont.controlLabel)
+                .foregroundStyle(Color.text2)
+            HStack {
+                Slider(value: Binding(get: { lightness }, set: { onChange(saturation, $0) }), in: -50...50)
+                TextField("", value: Binding(get: { lightness }, set: { onChange(saturation, $0) }), format: .number)
+                    .textFieldStyle(.roundedBorder)
+                    .frame(width: 50)
+                    .multilineTextAlignment(.trailing)
+                    .monospacedDigit()
+            }
         }
     }
 
@@ -1663,8 +1704,8 @@ struct CaptionLayerControls: View {
             set: { idx in
                 var p = params
                 switch idx {
-                case 1: p.fontColorMode = .dominant
-                case 2: p.fontColorMode = .dominantInverted
+                case 1: p.fontColorMode = .dominant()
+                case 2: p.fontColorMode = .dominantInverted()
                 default: p.fontColorMode = .fixed(params.fontColor)
                 }
                 onChange(p)
@@ -1839,9 +1880,31 @@ struct DitherLayerControls: View {
             ColorPickerWithHex("Background", selection: backgroundBinding(fg: fg, bg: bg))
         }
 
-        if case .dominantTwoTone(let flipped) = params.colorMode {
-            Toggle("Flip Colors", isOn: flippedBinding(flipped))
-                .caption("Swap foreground and background")
+        if case .dominantTwoTone(let flipped, let sat, let light) = params.colorMode {
+            Toggle("Flip Colors", isOn: Binding(
+                get: { flipped },
+                set: { var p = params; p.colorMode = .dominantTwoTone(flipped: $0, saturationShift: sat, lightnessShift: light); onChange(p) }
+            ))
+            .caption("Swap foreground and background")
+
+            VStack(alignment: .leading, spacing: 4) {
+                Text("Saturation")
+                    .font(AppFont.controlLabel)
+                    .foregroundStyle(Color.text2)
+                Slider(value: Binding(
+                    get: { sat },
+                    set: { var p = params; p.colorMode = .dominantTwoTone(flipped: flipped, saturationShift: $0, lightnessShift: light); onChange(p) }
+                ), in: -50...50)
+            }
+            VStack(alignment: .leading, spacing: 4) {
+                Text("Lightness")
+                    .font(AppFont.controlLabel)
+                    .foregroundStyle(Color.text2)
+                Slider(value: Binding(
+                    get: { light },
+                    set: { var p = params; p.colorMode = .dominantTwoTone(flipped: flipped, saturationShift: sat, lightnessShift: $0); onChange(p) }
+                ), in: -50...50)
+            }
         }
 
         if case .color(let levels) = params.colorMode {
