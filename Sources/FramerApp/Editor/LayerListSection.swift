@@ -21,7 +21,7 @@ struct LayerListSection: View {
                 .draggable(layer.id.uuidString) {
                     Label(layer.label, systemImage: layer.iconName)
                         .padding(6)
-                        .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 6))
+                        .background(Color.surface2, in: RoundedRectangle(cornerRadius: 6))
                 }
                 .dropDestination(for: String.self) { items, _ in
                     guard let droppedIDString = items.first,
@@ -45,7 +45,10 @@ struct LayerListSection: View {
 
             addLayerMenu
         } header: {
-            Text("Layers (\(layers.count))")
+            Text("LAYERS (\(layers.count))")
+                .font(AppFont.sectionHeader)
+                .tracking(1.5)
+                .foregroundStyle(Color.text3)
         }
     }
 
@@ -114,12 +117,13 @@ struct LayerListSection: View {
             }
         } label: {
             Label("Add Layer", systemImage: "plus.circle")
+                .foregroundStyle(Color.text2)
         }
     }
 
     private func removeLayer(at index: Int) {
         let removed = layers[index]
-        withAnimation(.easeInOut(duration: 0.2)) {
+        _ = withAnimation(.easeInOut(duration: 0.2)) {
             layers.remove(at: index)
         }
         undoManager?.registerUndo(withTarget: UndoProxy.shared) { @MainActor _ in
@@ -181,13 +185,19 @@ struct LayerRow: View {
     var onMoveDown: (() -> Void)?
 
     @State private var isHovering = false
+    @State private var isExpanded = false
 
     var body: some View {
-        DisclosureGroup {
-            layerControls
-                .padding(.top, 4)
-        } label: {
+        VStack(spacing: 0) {
+            // Tappable header row
             HStack(spacing: 6) {
+                // Disclosure chevron
+                Image(systemName: "chevron.right")
+                    .font(.system(size: 9, weight: .bold))
+                    .foregroundStyle(Color.text3)
+                    .rotationEffect(.degrees(isExpanded ? 90 : 0))
+                    .frame(width: 16, height: 16)
+
                 // Reorder buttons
                 VStack(spacing: 0) {
                     Button {
@@ -200,6 +210,7 @@ struct LayerRow: View {
                     }
                     .buttonStyle(.plain)
                     .disabled(onMoveUp == nil)
+                    .foregroundStyle(Color.text3)
                     .opacity(onMoveUp == nil ? 0.25 : 0.6)
                     .accessibilityLabel("Move layer up")
 
@@ -213,31 +224,34 @@ struct LayerRow: View {
                     }
                     .buttonStyle(.plain)
                     .disabled(onMoveDown == nil)
+                    .foregroundStyle(Color.text3)
                     .opacity(onMoveDown == nil ? 0.25 : 0.6)
                     .accessibilityLabel("Move layer down")
                 }
 
                 Image(systemName: layer.iconName)
-                    .foregroundStyle(.secondary)
+                    .foregroundStyle(Color.text2)
                     .frame(width: 20)
 
                 Text(layer.label)
+                    .font(AppFont.layerName)
+                    .foregroundStyle(Color.text0)
 
                 Spacer()
 
                 Text(layerSummary)
-                    .font(.caption.monospaced())
-                    .foregroundStyle(.tertiary)
+                    .font(AppFont.badgeSummary)
+                    .foregroundStyle(Color.text2)
                     .padding(.horizontal, 6)
                     .padding(.vertical, 2)
-                    .background(.quaternary, in: Capsule())
+                    .background(Color.surface4, in: Capsule())
 
                 Button {
                     onDelete()
                 } label: {
                     Image(systemName: "xmark")
                         .font(.caption2)
-                        .foregroundStyle(.secondary)
+                        .foregroundStyle(isHovering ? Color.error : Color.text3)
                         .frame(width: 20, height: 20)
                         .contentShape(Rectangle())
                 }
@@ -246,9 +260,38 @@ struct LayerRow: View {
                 .animation(.easeInOut(duration: 0.15), value: isHovering)
                 .accessibilityLabel("Delete layer")
             }
-            .padding(.vertical, 2)
+            .padding(.horizontal, 8)
+            .padding(.vertical, 8)
+            .contentShape(Rectangle())
+            .onTapGesture {
+                withAnimation(.easeInOut(duration: 0.15)) {
+                    isExpanded.toggle()
+                }
+            }
             .onHover { isHovering = $0 }
+
+            // Lazy controls — only built when expanded
+            if isExpanded {
+                VStack(alignment: .leading, spacing: 10) {
+                    layerControls
+                }
+                .padding(.top, 8)
+                .padding(.bottom, 12)
+                .padding(.leading, 20)
+                .padding(.trailing, 4)
+                .foregroundStyle(Color.text1)
+                .tint(Color.accent)
+                .transition(.opacity.combined(with: .move(edge: .top)))
+            }
         }
+        .background(
+            RoundedRectangle(cornerRadius: CornerRadius.md)
+                .fill(isExpanded ? Color.surface2 : (isHovering ? Color.surface2.opacity(0.5) : .clear))
+        )
+        .overlay(
+            RoundedRectangle(cornerRadius: CornerRadius.md)
+                .stroke(isExpanded ? Color.borderDefault : (isHovering ? Color.borderDefault : .clear), lineWidth: 1)
+        )
         .contextMenu {
             if let onMoveUp {
                 Button { onMoveUp() } label: {
@@ -339,8 +382,12 @@ struct BorderLayerControls: View {
     }
 
     var body: some View {
-        LabeledContent("Thickness") {
-            VStack(spacing: 4) {
+        VStack(alignment: .leading, spacing: 4) {
+            HStack {
+                Text("Thickness")
+                    .font(AppFont.controlLabel)
+                    .foregroundStyle(Color.text2)
+                Spacer()
                 Picker("", selection: $thicknessMode) {
                     ForEach(ThicknessMode.allCases, id: \.self) { mode in
                         Text(mode.rawValue).tag(mode)
@@ -349,18 +396,18 @@ struct BorderLayerControls: View {
                 .pickerStyle(.segmented)
                 .frame(width: 80)
                 .labelsHidden()
+            }
 
-                HStack {
-                    Slider(value: thicknessValue, in: thicknessRange)
-                    TextField("", value: thicknessValue, format: .number)
-                        .textFieldStyle(.roundedBorder)
-                        .frame(width: 55)
-                        .multilineTextAlignment(.trailing)
-                        .monospacedDigit()
-                    Text(thicknessMode.rawValue)
-                        .foregroundStyle(.secondary)
-                        .frame(width: 20)
-                }
+            HStack {
+                Slider(value: thicknessValue, in: thicknessRange)
+                TextField("", value: thicknessValue, format: .number)
+                    .textFieldStyle(.roundedBorder)
+                    .frame(width: 55)
+                    .multilineTextAlignment(.trailing)
+                    .monospacedDigit()
+                Text(thicknessMode.rawValue)
+                    .foregroundStyle(Color.text2)
+                    .frame(width: 20)
             }
         }
 
@@ -411,7 +458,10 @@ struct PaddingLayerControls: View {
     var onChange: (PaddingLayerParams) -> Void
 
     var body: some View {
-        LabeledContent("Thickness") {
+        VStack(alignment: .leading, spacing: 4) {
+            Text("Thickness")
+                .font(AppFont.controlLabel)
+                .foregroundStyle(Color.text2)
             HStack {
                 Slider(value: thicknessBinding, in: 0...400)
                 TextField("", value: thicknessBinding, format: .number)
@@ -420,7 +470,7 @@ struct PaddingLayerControls: View {
                     .multilineTextAlignment(.trailing)
                     .monospacedDigit()
                 Text("px")
-                    .foregroundStyle(.secondary)
+                    .foregroundStyle(Color.text2)
                     .frame(width: 20)
             }
         }
@@ -515,21 +565,29 @@ struct CanvasLayerControls: View {
     }
 
     private var pixelFields: some View {
-        HStack {
-            LabeledContent("Width") {
-                TextField("", value: widthBinding, format: .number)
-                    .frame(width: 60)
-                    .textFieldStyle(.roundedBorder)
-                    .monospacedDigit()
+        HStack(spacing: 12) {
+            VStack(alignment: .leading, spacing: 4) {
+                Text("Width")
+                    .font(AppFont.controlLabel)
+                    .foregroundStyle(Color.text2)
+                HStack(spacing: 4) {
+                    TextField("", value: widthBinding, format: .number)
+                        .textFieldStyle(.roundedBorder)
+                        .monospacedDigit()
+                    Text("px").foregroundStyle(Color.text2)
+                }
             }
-            Text("px").foregroundStyle(.secondary).frame(width: 20)
-            LabeledContent("Height") {
-                TextField("", value: heightBinding, format: .number)
-                    .frame(width: 60)
-                    .textFieldStyle(.roundedBorder)
-                    .monospacedDigit()
+            VStack(alignment: .leading, spacing: 4) {
+                Text("Height")
+                    .font(AppFont.controlLabel)
+                    .foregroundStyle(Color.text2)
+                HStack(spacing: 4) {
+                    TextField("", value: heightBinding, format: .number)
+                        .textFieldStyle(.roundedBorder)
+                        .monospacedDigit()
+                    Text("px").foregroundStyle(Color.text2)
+                }
             }
-            Text("px").foregroundStyle(.secondary).frame(width: 20)
         }
     }
 
@@ -549,7 +607,10 @@ struct CanvasLayerControls: View {
 
                 Spacer()
 
-                LabeledContent("DPI") {
+                VStack(alignment: .leading, spacing: 2) {
+                    Text("DPI")
+                        .font(AppFont.controlLabel)
+                        .foregroundStyle(Color.text2)
                     TextField("", value: $dpi, format: .number)
                         .frame(width: 50)
                         .textFieldStyle(.roundedBorder)
@@ -558,23 +619,31 @@ struct CanvasLayerControls: View {
                 }
             }
 
-            HStack {
-                LabeledContent("Width") {
-                    TextField("", value: $widthPhysical, format: .number.precision(.fractionLength(1)))
-                        .frame(width: 60)
-                        .textFieldStyle(.roundedBorder)
-                        .monospacedDigit()
-                        .onChange(of: widthPhysical) { _, _ in syncPhysicalToPixels() }
+            HStack(spacing: 12) {
+                VStack(alignment: .leading, spacing: 4) {
+                    Text("Width")
+                        .font(AppFont.controlLabel)
+                        .foregroundStyle(Color.text2)
+                    HStack(spacing: 4) {
+                        TextField("", value: $widthPhysical, format: .number.precision(.fractionLength(1)))
+                            .textFieldStyle(.roundedBorder)
+                            .monospacedDigit()
+                            .onChange(of: widthPhysical) { _, _ in syncPhysicalToPixels() }
+                        Text(physicalUnit.rawValue).foregroundStyle(Color.text2)
+                    }
                 }
-                Text(physicalUnit.rawValue).foregroundStyle(.secondary).frame(width: 24)
-                LabeledContent("Height") {
-                    TextField("", value: $heightPhysical, format: .number.precision(.fractionLength(1)))
-                        .frame(width: 60)
-                        .textFieldStyle(.roundedBorder)
-                        .monospacedDigit()
-                        .onChange(of: heightPhysical) { _, _ in syncPhysicalToPixels() }
+                VStack(alignment: .leading, spacing: 4) {
+                    Text("Height")
+                        .font(AppFont.controlLabel)
+                        .foregroundStyle(Color.text2)
+                    HStack(spacing: 4) {
+                        TextField("", value: $heightPhysical, format: .number.precision(.fractionLength(1)))
+                            .textFieldStyle(.roundedBorder)
+                            .monospacedDigit()
+                            .onChange(of: heightPhysical) { _, _ in syncPhysicalToPixels() }
+                        Text(physicalUnit.rawValue).foregroundStyle(Color.text2)
+                    }
                 }
-                Text(physicalUnit.rawValue).foregroundStyle(.secondary).frame(width: 24)
             }
         }
     }
@@ -585,8 +654,8 @@ struct CanvasLayerControls: View {
             HStack {
                 Spacer()
                 Text("\(params.width) x \(params.height) px")
-                    .font(.caption.monospaced())
-                    .foregroundStyle(.tertiary)
+                    .font(AppFont.mono(10))
+                    .foregroundStyle(Color.text3)
             }
         }
     }
@@ -691,16 +760,22 @@ struct ResizeLayerControls: View {
     var onChange: (ResizeLayerParams) -> Void
 
     var body: some View {
-        HStack {
-            LabeledContent("Max Width") {
+        HStack(spacing: 12) {
+            VStack(alignment: .leading, spacing: 4) {
+                Text("Max Width")
+                    .font(AppFont.controlLabel)
+                    .foregroundStyle(Color.text2)
                 TextField("", value: maxWidthBinding, format: .number)
-                    .frame(width: 60)
                     .textFieldStyle(.roundedBorder)
+                    .monospacedDigit()
             }
-            LabeledContent("Max Height") {
+            VStack(alignment: .leading, spacing: 4) {
+                Text("Max Height")
+                    .font(AppFont.controlLabel)
+                    .foregroundStyle(Color.text2)
                 TextField("", value: maxHeightBinding, format: .number)
-                    .frame(width: 60)
                     .textFieldStyle(.roundedBorder)
+                    .monospacedDigit()
             }
         }
     }
@@ -934,7 +1009,10 @@ struct OverlayLayerControls: View {
     }
 
     private var opacityControl: some View {
-        LabeledContent("Opacity") {
+        VStack(alignment: .leading, spacing: 4) {
+            Text("Opacity")
+                .font(AppFont.controlLabel)
+                .foregroundStyle(Color.text2)
             HStack {
                 Slider(value: opacityBinding, in: 0...100)
                 TextField("", value: opacityBinding, format: .number)
@@ -943,7 +1021,7 @@ struct OverlayLayerControls: View {
                     .multilineTextAlignment(.trailing)
                     .monospacedDigit()
                 Text("%")
-                    .foregroundStyle(.secondary)
+                    .foregroundStyle(Color.text2)
                     .frame(width: 20)
             }
         }
@@ -956,10 +1034,10 @@ struct OverlayLayerControls: View {
             }
         } label: {
             Label("Open Overlays Folder", systemImage: "folder")
-                .font(.caption)
+                .font(AppFont.controlLabel)
         }
         .buttonStyle(.plain)
-        .foregroundStyle(.secondary)
+        .foregroundStyle(Color.text2)
     }
 
     // MARK: - Thumbnail
@@ -1111,7 +1189,10 @@ struct LayerFillPicker: View {
         }
 
         if let params = fill.gradientParams {
-            LabeledContent("Saturation") {
+            VStack(alignment: .leading, spacing: 4) {
+                Text("Saturation")
+                    .font(AppFont.controlLabel)
+                    .foregroundStyle(Color.text2)
                 HStack {
                     Slider(value: saturationBinding(params), in: -50...50)
                     TextField("", value: saturationBinding(params), formatter: Self.signedFormatter)
@@ -1121,7 +1202,10 @@ struct LayerFillPicker: View {
                         .monospacedDigit()
                 }
             }
-            LabeledContent("Lightness") {
+            VStack(alignment: .leading, spacing: 4) {
+                Text("Lightness")
+                    .font(AppFont.controlLabel)
+                    .foregroundStyle(Color.text2)
                 HStack {
                     Slider(value: lightnessBinding(params), in: -50...50)
                     TextField("", value: lightnessBinding(params), formatter: Self.signedFormatter)
@@ -1262,7 +1346,10 @@ struct CaptionLayerControls: View {
             .pickerStyle(.segmented)
 
             // Offset X
-            LabeledContent("Offset X") {
+            VStack(alignment: .leading, spacing: 4) {
+                Text("Offset X")
+                    .font(AppFont.controlLabel)
+                    .foregroundStyle(Color.text2)
                 HStack {
                     Slider(value: offsetXBinding, in: -200...200)
                     TextField("", value: offsetXBinding, formatter: Self.signedIntFormatter)
@@ -1271,13 +1358,16 @@ struct CaptionLayerControls: View {
                         .multilineTextAlignment(.trailing)
                         .monospacedDigit()
                     Text("px")
-                        .foregroundStyle(.secondary)
+                        .foregroundStyle(Color.text2)
                         .frame(width: 20)
                 }
             }
 
             // Offset Y
-            LabeledContent("Offset Y") {
+            VStack(alignment: .leading, spacing: 4) {
+                Text("Offset Y")
+                    .font(AppFont.controlLabel)
+                    .foregroundStyle(Color.text2)
                 HStack {
                     Slider(value: offsetYBinding, in: -200...200)
                     TextField("", value: offsetYBinding, formatter: Self.signedIntFormatter)
@@ -1286,7 +1376,7 @@ struct CaptionLayerControls: View {
                         .multilineTextAlignment(.trailing)
                         .monospacedDigit()
                     Text("px")
-                        .foregroundStyle(.secondary)
+                        .foregroundStyle(Color.text2)
                         .frame(width: 20)
                 }
             }
@@ -1340,7 +1430,10 @@ struct CaptionLayerControls: View {
             }
 
             if case .fixed(let pts) = params.fontSize {
-                LabeledContent("Font Size") {
+                VStack(alignment: .leading, spacing: 4) {
+                    Text("Font Size")
+                        .font(AppFont.controlLabel)
+                        .foregroundStyle(Color.text2)
                     HStack {
                         Slider(value: fontSizeBinding(pts), in: 8...120)
                         TextField("", value: fontSizeBinding(pts), format: .number)
@@ -1349,19 +1442,25 @@ struct CaptionLayerControls: View {
                             .multilineTextAlignment(.trailing)
                             .monospacedDigit()
                         Text("pt")
-                            .foregroundStyle(.secondary)
+                            .foregroundStyle(Color.text2)
                             .frame(width: 20)
                     }
                 }
             }
 
             // Font color mode
-            Picker("Font Color", selection: fontColorModeIndex) {
-                Text("Custom").tag(0)
-                Text("Dominant").tag(1)
-                Text("Invert Dominant").tag(2)
+            VStack(alignment: .leading, spacing: 4) {
+                Text("Font Color")
+                    .font(AppFont.controlLabel)
+                    .foregroundStyle(Color.text2)
+                Picker("", selection: fontColorModeIndex) {
+                    Text("Custom").tag(0)
+                    Text("Dominant").tag(1)
+                    Text("Invert").tag(2)
+                }
+                .pickerStyle(.segmented)
+                .labelsHidden()
             }
-            .pickerStyle(.segmented)
 
             if case .fixed = params.fontColorMode {
                 ColorPickerWithHex("Color", selection: fontColorBinding)
@@ -1593,8 +1692,8 @@ struct TemplateTokenBar: View {
     private func tokenRow(_ category: TemplateToken.Category) -> some View {
         HStack(spacing: 4) {
             Text(category.rawValue)
-                .font(.caption2)
-                .foregroundStyle(.tertiary)
+                .font(AppFont.body(10))
+                .foregroundStyle(Color.text3)
                 .frame(width: 48, alignment: .trailing)
 
             FlowLayout(spacing: 4) {
@@ -1603,10 +1702,10 @@ struct TemplateTokenBar: View {
                         text.append(token.token)
                     } label: {
                         Text(token.label)
-                            .font(.caption)
+                            .font(AppFont.controlLabel)
                             .padding(.horizontal, 6)
                             .padding(.vertical, 2)
-                            .background(.quaternary, in: Capsule())
+                            .background(Color.surface4, in: Capsule())
                     }
                     .buttonStyle(.plain)
                     .help("Insert \(token.token)")
@@ -1714,17 +1813,26 @@ struct DitherLayerControls: View {
             )
         }
 
-        LabeledContent("Threshold: \(String(format: "%.2f", params.threshold))") {
+        VStack(alignment: .leading, spacing: 4) {
+            Text("Threshold: \(String(format: "%.2f", params.threshold))")
+                .font(AppFont.controlLabel)
+                .foregroundStyle(Color.text2)
             Slider(value: thresholdBinding, in: 0.1...0.9, step: 0.05)
         }
         .caption("Lower = darker, Higher = brighter")
 
-        LabeledContent("Sharpen: \(String(format: "%.0f%%", params.sharpen * 100))") {
+        VStack(alignment: .leading, spacing: 4) {
+            Text("Sharpen: \(String(format: "%.0f%%", params.sharpen * 100))")
+                .font(AppFont.controlLabel)
+                .foregroundStyle(Color.text2)
             Slider(value: sharpenBinding, in: 0...1, step: 0.1)
         }
         .caption("Pre-sharpen to preserve edge detail")
 
-        LabeledContent("Contrast: \(String(format: "%.0f%%", params.contrast * 100))") {
+        VStack(alignment: .leading, spacing: 4) {
+            Text("Contrast: \(String(format: "%.0f%%", params.contrast * 100))")
+                .font(AppFont.controlLabel)
+                .foregroundStyle(Color.text2)
             Slider(value: contrastBinding, in: 0...1, step: 0.1)
         }
         .caption("Boost contrast before dithering")
@@ -1876,8 +1984,8 @@ private extension View {
         VStack(alignment: .leading, spacing: 2) {
             self
             Text(text)
-                .font(.caption)
-                .foregroundStyle(.secondary)
+                .font(AppFont.controlLabel)
+                .foregroundStyle(Color.text2)
         }
     }
 }
