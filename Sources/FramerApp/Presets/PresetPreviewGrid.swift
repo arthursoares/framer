@@ -229,7 +229,7 @@ struct PresetPreviewGrid: View {
         if panel.runModal() == .OK {
             for url in panel.urls {
                 if let data = try? Data(contentsOf: url) {
-                    try? appState.presetStore.importData(data)
+                    _ = try? appState.presetStore.importData(data)
                 }
             }
             appState.loadPresets()
