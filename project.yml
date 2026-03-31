@@ -41,11 +41,53 @@ targets:
         Release:
           SWIFT_ACTIVE_COMPILATION_CONDITIONS: ""
 
+  FramerMobile:
+    type: application
+    platform: iOS
+    deploymentTarget: "17.0"
+    sources:
+      - path: Sources/FramerMobile
+      - path: assets/textures
+        type: folder
+        buildPhase: resources
+      - path: assets/fonts
+        type: folder
+        buildPhase: resources
+    dependencies:
+      - package: FramerCore
+        product: FramerCore
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: com.arthursoares.FramerMobile
+        MARKETING_VERSION: "1.0.0"
+        CURRENT_PROJECT_VERSION: "1"
+        INFOPLIST_KEY_CFBundleDisplayName: "Framer"
+        INFOPLIST_KEY_UILaunchScreen_Generation: YES
+        INFOPLIST_KEY_UISupportedInterfaceOrientations: "UIInterfaceOrientationPortrait"
+        INFOPLIST_KEY_NSPhotoLibraryUsageDescription: "Framer needs access to your photo library to select and process photos."
+        INFOPLIST_KEY_UIAppFonts: "[AtkinsonHyperlegibleNext-Regular.ttf, AtkinsonHyperlegibleNext-Medium.ttf, AtkinsonHyperlegibleNext-SemiBold.ttf, AtkinsonHyperlegibleNext-Bold.ttf, SourceCodePro-Regular.ttf, SourceCodePro-Medium.ttf]"
+        SWIFT_STRICT_CONCURRENCY: complete
+        GENERATE_INFOPLIST_FILE: YES
+      configs:
+        Debug:
+          SWIFT_ACTIVE_COMPILATION_CONDITIONS: DEBUG
+        Release:
+          SWIFT_ACTIVE_COMPILATION_CONDITIONS: ""
+
 schemes:
   Framer:
     build:
       targets:
         Framer: all
+    run:
+      config: Debug
+    archive:
+      config: Release
+
+  FramerMobile:
+    build:
+      targets:
+        FramerMobile: all
     run:
       config: Debug
     archive:

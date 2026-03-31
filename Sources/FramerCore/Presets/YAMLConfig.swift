@@ -168,10 +168,12 @@ public enum YAMLConfig {
             .appendingPathComponent(".framer.yaml")
         if let config = try? load(from: localURL) { return config }
 
-        // 4. ~/.config/framer/default.yaml
+        // 4. ~/.config/framer/default.yaml (macOS only)
+        #if os(macOS)
         let homeConfig = FileManager.default.homeDirectoryForCurrentUser
             .appendingPathComponent(".config/framer/default.yaml")
         if let config = try? load(from: homeConfig) { return config }
+        #endif
 
         return .default
     }
