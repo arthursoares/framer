@@ -48,12 +48,17 @@ final class PreviewViewModel {
                     Self.loadOriginal(from: itemURL, maxDimension: 1200)
                 }
                 let cgPreview = try await processor.previewCGImage(for: itemURL, config: config, rotation: itemRotation)
-                let preview = NSImage(cgImage: cgPreview, size: NSSize(width: cgPreview.width, height: cgPreview.height))
+                let scale = NSScreen.main?.backingScaleFactor ?? 2.0
+                let preview = NSImage(cgImage: cgPreview, size: NSSize(
+                    width: CGFloat(cgPreview.width) / scale,
+                    height: CGFloat(cgPreview.height) / scale
+                ))
                 let original = await originalHandle.value
                 guard !Task.isCancelled else { return }
                 originalImage = original
                 previewImage = preview
-                outputSize = preview.size
+                // Output size in actual pixels (not points)
+                outputSize = CGSize(width: cgPreview.width, height: cgPreview.height)
             } catch is CancellationError {
                 return
             } catch {
@@ -70,8 +75,12 @@ final class PreviewViewModel {
             return nil
         }
         let w = cgImage.width, h = cgImage.height
+        // NSImage size must be in points (pixels / scale) for correct Retina rendering
+        let screenScale = 2.0 // safe default; nonisolated can't access NSScreen
         guard max(w, h) > maxDimension else {
-            return NSImage(cgImage: cgImage, size: NSSize(width: w, height: h))
+            return NSImage(cgImage: cgImage, size: NSSize(
+                width: Double(w) / screenScale, height: Double(h) / screenScale
+            ))
         }
         let scale = Double(maxDimension) / Double(max(w, h))
         let newW = Int(Double(w) * scale)
@@ -82,8 +91,12 @@ final class PreviewViewModel {
                                   space: cgImage.colorSpace ?? CGColorSpaceCreateDeviceRGB(),
                                   bitmapInfo: cgImage.bitmapInfo.rawValue),
               let scaled = (ctx.draw(cgImage, in: CGRect(x: 0, y: 0, width: newW, height: newH)), ctx.makeImage()).1 else {
-            return NSImage(cgImage: cgImage, size: NSSize(width: w, height: h))
+            return NSImage(cgImage: cgImage, size: NSSize(
+                width: Double(w) / screenScale, height: Double(h) / screenScale
+            ))
         }
-        return NSImage(cgImage: scaled, size: NSSize(width: newW, height: newH))
+        return NSImage(cgImage: scaled, size: NSSize(
+            width: Double(newW) / screenScale, height: Double(newH) / screenScale
+        ))
     }
 }

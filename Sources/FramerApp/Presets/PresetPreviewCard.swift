@@ -10,18 +10,17 @@ struct PresetPreviewCard: View {
     var body: some View {
         Button(action: onTap) {
             VStack(spacing: 0) {
-                // Thumbnail area — 4:3 aspect ratio
+                // Thumbnail area — 1:1
                 ZStack {
                     Color.surface3
 
                     if let thumbnail {
                         Image(nsImage: thumbnail)
                             .resizable()
-                            .aspectRatio(contentMode: .fill)
+                            .aspectRatio(contentMode: .fit)
                     }
                 }
                 .aspectRatio(1, contentMode: .fit)
-                .clipped()
 
                 // Label strip
                 Text(preset.name)
