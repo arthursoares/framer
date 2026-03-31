@@ -198,36 +198,12 @@ struct LayerRow: View {
                     .rotationEffect(.degrees(isExpanded ? 90 : 0))
                     .frame(width: 16, height: 16)
 
-                // Reorder buttons
-                VStack(spacing: 0) {
-                    Button {
-                        withAnimation(.easeInOut(duration: 0.2)) { onMoveUp?() }
-                    } label: {
-                        Image(systemName: "chevron.up")
-                            .font(.caption2)
-                            .frame(width: 20, height: 16)
-                            .contentShape(Rectangle())
-                    }
-                    .buttonStyle(.plain)
-                    .disabled(onMoveUp == nil)
+                // Drag handle
+                Image(systemName: "line.3.horizontal")
+                    .font(.system(size: 11))
                     .foregroundStyle(Color.text3)
-                    .opacity(onMoveUp == nil ? 0.25 : 0.6)
-                    .accessibilityLabel("Move layer up")
-
-                    Button {
-                        withAnimation(.easeInOut(duration: 0.2)) { onMoveDown?() }
-                    } label: {
-                        Image(systemName: "chevron.down")
-                            .font(.caption2)
-                            .frame(width: 20, height: 16)
-                            .contentShape(Rectangle())
-                    }
-                    .buttonStyle(.plain)
-                    .disabled(onMoveDown == nil)
-                    .foregroundStyle(Color.text3)
-                    .opacity(onMoveDown == nil ? 0.25 : 0.6)
-                    .accessibilityLabel("Move layer down")
-                }
+                    .frame(width: 20)
+                    .opacity(0.6)
 
                 Image(systemName: layer.iconName)
                     .foregroundStyle(Color.text2)
