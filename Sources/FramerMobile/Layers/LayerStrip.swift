@@ -12,30 +12,22 @@ struct LayerStrip: View {
     }
 
     var body: some View {
-        VStack(spacing: 2) {
-            List {
+        ScrollView {
+            VStack(spacing: 4) {
                 ForEach(Array(layers.wrappedValue.enumerated()), id: \.element.id) { index, layer in
-                    NavigationLink(value: index) {
+                    NavigationLink(value: layer.id) {
                         LayerRow(layer: layer)
                     }
-                    .listRowBackground(Color.clear)
-                    .listRowSeparator(.hidden)
-                    .listRowInsets(EdgeInsets(top: 1, leading: 16, bottom: 1, trailing: 16))
+                    .buttonStyle(.plain)
                 }
-                .onMove { from, to in
-                    layers.wrappedValue.move(fromOffsets: from, toOffset: to)
-                }
-            }
-            .listStyle(.plain)
-            .scrollContentBackground(.hidden)
-            .environment(\.editMode, .constant(.active))
 
-            addLayerButton
-                .padding(.horizontal, 16)
+                addLayerButton
+            }
+            .padding(.horizontal, 16)
         }
         .frame(maxHeight: 220)
-        .navigationDestination(for: Int.self) { index in
-            if layers.wrappedValue.indices.contains(index) {
+        .navigationDestination(for: UUID.self) { layerID in
+            if let index = layers.wrappedValue.firstIndex(where: { $0.id == layerID }) {
                 LayerDetailView(layer: Binding(
                     get: { layers.wrappedValue[index] },
                     set: { layers.wrappedValue[index] = $0 }
@@ -108,10 +100,6 @@ struct LayerRow: View {
 
     var body: some View {
         HStack(spacing: 10) {
-            Image(systemName: "line.3.horizontal")
-                .font(.system(size: 12))
-                .foregroundStyle(Color.text3)
-
             Image(systemName: layer.iconName)
                 .foregroundStyle(Color.text2)
                 .frame(width: 20)
