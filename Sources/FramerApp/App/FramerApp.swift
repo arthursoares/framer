@@ -13,6 +13,7 @@ struct FramerApp: App {
         WindowGroup {
             ContentView()
                 .environment(appState)
+                .preferredColorScheme(.dark)
         }
         .commands {
             FramerCommands(appState: appState)

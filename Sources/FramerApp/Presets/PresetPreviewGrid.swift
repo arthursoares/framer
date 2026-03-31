@@ -22,12 +22,14 @@ struct PresetPreviewGrid: View {
                     onTap: {
                         appState.currentConfig = preset.config
                         appState.activePresetName = preset.name
+                        appState.appliedPresetConfig = preset.config
                     }
                 )
                 .contextMenu {
                     Button {
                         appState.currentConfig = preset.config
                         appState.activePresetName = preset.name
+                        appState.appliedPresetConfig = preset.config
                     } label: {
                         Label("Apply", systemImage: "checkmark.circle")
                     }
@@ -36,6 +38,7 @@ struct PresetPreviewGrid: View {
                         try? appState.presetStore.save(updated)
                         appState.loadPresets()
                         appState.activePresetName = preset.name
+                        appState.appliedPresetConfig = appState.currentConfig
                     } label: {
                         Label("Update with Current Settings", systemImage: "arrow.triangle.2.circlepath")
                     }
@@ -143,5 +146,6 @@ struct PresetPreviewGrid: View {
         try? appState.presetStore.save(preset)
         appState.loadPresets()
         appState.activePresetName = preset.name
+        appState.appliedPresetConfig = preset.config
     }
 }

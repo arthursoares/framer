@@ -4,6 +4,7 @@ import FramerCore
 struct ExifInfoBar: View {
     let exif: ExifData
     let config: ProcessingConfig
+    var outputSize: CGSize?
     @State private var showingInspector = false
 
     var captionText: String {
@@ -45,6 +46,19 @@ struct ExifInfoBar: View {
                 Text(captionText)
                     .font(AppFont.mono(11))
                     .foregroundStyle(Color.text1)
+            }
+
+            if let size = outputSize {
+                VStack(alignment: .trailing, spacing: 2) {
+                    Text("OUTPUT")
+                        .font(AppFont.sectionHeader)
+                        .tracking(1.5)
+                        .foregroundStyle(Color.text3)
+                    Text("\(Int(size.width))×\(Int(size.height))")
+                        .font(AppFont.mono(11))
+                        .foregroundStyle(Color.text1)
+                }
+                .padding(.leading, 12)
             }
 
             Button(action: { showingInspector.toggle() }) {

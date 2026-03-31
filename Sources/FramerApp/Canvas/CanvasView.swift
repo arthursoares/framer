@@ -5,7 +5,7 @@ import FramerCore
 struct CanvasView: View {
     @Environment(AppState.self) var appState
     @State private var viewModel = PreviewViewModel()
-    @State private var showOriginal = false
+    @Binding var showOriginal: Bool
     @State private var isDropTargeted = false
 
     var body: some View {
@@ -32,6 +32,18 @@ struct CanvasView: View {
                         .padding(32)
                         .shadow(color: .black.opacity(0.35), radius: 16, y: 4)
                         .shadow(color: .black.opacity(0.25), radius: 4, y: 1)
+                        .contextMenu {
+                            Button {
+                                for id in appState.selectedItems { appState.rotateItem(id, clockwise: true) }
+                            } label: {
+                                Label("Rotate Right", systemImage: "rotate.right")
+                            }
+                            Button {
+                                for id in appState.selectedItems { appState.rotateItem(id, clockwise: false) }
+                            } label: {
+                                Label("Rotate Left", systemImage: "rotate.left")
+                            }
+                        }
                 } else {
                     VStack(spacing: 16) {
                         Image(systemName: "photo.artframe")
@@ -60,19 +72,6 @@ struct CanvasView: View {
                     }
                 }
 
-                // Before/After toggle — top-left
-                if viewModel.previewImage != nil {
-                    VStack {
-                        HStack {
-                            BeforeAfterToggle(showOriginal: $showOriginal)
-                                .padding(.leading, 16)
-                                .padding(.top, 16)
-                            Spacer()
-                        }
-                        Spacer()
-                    }
-                }
-
                 // Drop target overlay
                 if isDropTargeted {
                     RoundedRectangle(cornerRadius: CornerRadius.lg)
@@ -81,25 +80,28 @@ struct CanvasView: View {
                         .padding(12)
                 }
 
-                // Floating filmstrip
-                if !appState.library.isEmpty {
-                    VStack {
-                        Spacer()
-                        FilmstripView()
-                            .padding(.leading, 14)
-                            .padding(.trailing, 294)
-                            .padding(.bottom, 14)
-                    }
-                }
             }
             .frame(maxWidth: .infinity, maxHeight: .infinity)
             .onDrop(of: [.fileURL], isTargeted: $isDropTargeted) { providers in
                 handleDrop(providers: providers)
             }
 
+            // Filmstrip
+            if !appState.library.isEmpty {
+                FilmstripView()
+                    .padding(.horizontal, 10)
+                    .padding(.vertical, 6)
+                    .background {
+                        Color.surface1
+                            .overlay(alignment: .top) {
+                                Rectangle().fill(Color.borderDefault).frame(height: 1)
+                            }
+                    }
+            }
+
             // EXIF bar
             if let exif = viewModel.exifData {
-                ExifInfoBar(exif: exif, config: appState.currentConfig)
+                ExifInfoBar(exif: exif, config: appState.currentConfig, outputSize: viewModel.outputSize)
                     .padding(.horizontal, 16)
                     .padding(.vertical, 8)
                     .background {
@@ -145,6 +147,7 @@ struct CanvasView: View {
             return .handled
         }
         .focusable()
+        .focusEffectDisabled()
     }
 
     private func updatePreview() {

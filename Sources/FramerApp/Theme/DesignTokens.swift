@@ -36,7 +36,14 @@ extension Color {
 enum AppFont {
     /// Atkinson Hyperlegible for UI text
     static func body(_ size: CGFloat, weight: Font.Weight = .regular) -> Font {
-        .custom("Atkinson Hyperlegible Next", size: size).weight(weight)
+        let name: String
+        switch weight {
+        case .bold: name = "AtkinsonHyperlegibleNext-Bold"
+        case .semibold: name = "AtkinsonHyperlegibleNext-SemiBold"
+        case .medium: name = "AtkinsonHyperlegibleNext-Medium"
+        default: name = "AtkinsonHyperlegibleNext-Regular"
+        }
+        return .custom(name, size: size)
     }
 
     /// Source Code Pro for data values
