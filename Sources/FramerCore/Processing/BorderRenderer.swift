@@ -336,7 +336,7 @@ public enum BorderRenderer {
         let bordered = try addBorder(to: image, thickness: borderPx, color: config.borderColor.cgColor)
 
         // Step 2: Wrap bordered image with padding (white / background)
-        let bgColor = resolveBackgroundColor(mode: config.backgroundMode, fallbackColor: .white, sourceImage: image)
+        let bgColor = resolveBackgroundColor(mode: config.backgroundMode, fallbackColor: CGColor(red: 1, green: 1, blue: 1, alpha: 1), sourceImage: image)
         let final: CGImage
         if padding > 0 {
             final = try addBorder(to: bordered, thickness: padding, color: bgColor)
@@ -362,7 +362,7 @@ public enum BorderRenderer {
         let padding = config.padding
         let padded: CGImage
         if padding > 0 {
-            padded = try addBorder(to: resized, thickness: padding, color: .white)
+            padded = try addBorder(to: resized, thickness: padding, color: CGColor(red: 1, green: 1, blue: 1, alpha: 1))
         } else {
             padded = resized
         }
@@ -372,7 +372,7 @@ public enum BorderRenderer {
         let bordered = try addBorder(to: padded, thickness: borderPx, color: config.borderColor.cgColor)
 
         // Step 4: Center on fixed 1080×1350 canvas
-        let bgFill = resolveBackground(mode: config.backgroundMode, fallbackColor: .white, sourceImage: image)
+        let bgFill = resolveBackground(mode: config.backgroundMode, fallbackColor: CGColor(red: 1, green: 1, blue: 1, alpha: 1), sourceImage: image)
         let (final, originX, originY) = try centerOnCanvas(
             bordered, width: instagramWidth, height: instagramHeight, background: bgFill
         )
