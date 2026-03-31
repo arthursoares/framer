@@ -12,22 +12,28 @@ struct LayerStrip: View {
     }
 
     var body: some View {
-        ScrollView {
-            VStack(spacing: 2) {
+        VStack(spacing: 2) {
+            List {
                 ForEach(Array(layers.wrappedValue.enumerated()), id: \.element.id) { index, layer in
                     NavigationLink(value: index) {
                         LayerRow(layer: layer)
                     }
+                    .listRowBackground(Color.clear)
+                    .listRowSeparator(.hidden)
+                    .listRowInsets(EdgeInsets(top: 1, leading: 16, bottom: 1, trailing: 16))
                 }
                 .onMove { from, to in
                     layers.wrappedValue.move(fromOffsets: from, toOffset: to)
                 }
-
-                addLayerButton
             }
-            .padding(.horizontal, 16)
+            .listStyle(.plain)
+            .scrollContentBackground(.hidden)
+            .environment(\.editMode, .constant(.active))
+
+            addLayerButton
+                .padding(.horizontal, 16)
         }
-        .frame(maxHeight: 200)
+        .frame(maxHeight: 220)
         .navigationDestination(for: Int.self) { index in
             if layers.wrappedValue.indices.contains(index) {
                 LayerDetailView(layer: Binding(
