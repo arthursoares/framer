@@ -1,10 +1,11 @@
 import SwiftUI
 
 struct PreviewArea: View {
+    @Environment(AppState.self) var appState
     let viewModel: PreviewViewModel
     @Binding var showingOriginal: Bool
-    let photoCount: Int
-    let currentIndex: Int
+
+    @State private var dragOffset: CGFloat = 0
 
     var body: some View {
         ZStack {
@@ -27,6 +28,7 @@ struct PreviewArea: View {
                     .aspectRatio(contentMode: .fit)
                     .padding(.horizontal, 20)
                     .shadow(color: .black.opacity(0.4), radius: 10, y: 4)
+                    .offset(x: dragOffset)
             } else {
                 VStack(spacing: 12) {
                     Image(systemName: "photo.artframe")
@@ -42,11 +44,11 @@ struct PreviewArea: View {
             }
 
             // Photo counter badge
-            if photoCount > 0 {
+            if appState.library.count > 0 {
                 VStack {
                     HStack {
                         Spacer()
-                        Text("\(currentIndex + 1) / \(photoCount)")
+                        Text("\(appState.selectedIndex + 1) / \(appState.library.count)")
                             .font(AppFont.mono(11))
                             .foregroundStyle(Color.text2)
                             .padding(.horizontal, 10)
@@ -76,10 +78,34 @@ struct PreviewArea: View {
             }
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
-        .simultaneousGesture(
-            DragGesture(minimumDistance: 0)
-                .onChanged { _ in showingOriginal = true }
-                .onEnded { _ in showingOriginal = false }
+        .contentShape(Rectangle())
+        // Swipe left/right to navigate photos
+        .gesture(
+            DragGesture(minimumDistance: 30)
+                .onChanged { value in
+                    dragOffset = value.translation.width * 0.4
+                }
+                .onEnded { value in
+                    let threshold: CGFloat = 60
+                    if value.translation.width < -threshold {
+                        // Swipe left → next photo
+                        if appState.selectedIndex < appState.library.count - 1 {
+                            appState.selectedIndex += 1
+                        }
+                    } else if value.translation.width > threshold {
+                        // Swipe right → previous photo
+                        if appState.selectedIndex > 0 {
+                            appState.selectedIndex -= 1
+                        }
+                    }
+                    withAnimation(.easeOut(duration: 0.15)) {
+                        dragOffset = 0
+                    }
+                }
         )
+        // Long press to show original
+        .onLongPressGesture(minimumDuration: 0.3, pressing: { pressing in
+            showingOriginal = pressing
+        }, perform: {})
     }
 }

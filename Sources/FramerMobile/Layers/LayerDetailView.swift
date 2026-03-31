@@ -2,13 +2,33 @@ import SwiftUI
 import FramerCore
 
 struct LayerDetailView: View {
+    @Environment(AppState.self) var appState
     @Binding var layer: CompositionLayer
     let onDelete: () -> Void
     @Environment(\.dismiss) private var dismiss
+    @State private var miniPreview: UIImage?
+    @State private var previewTask: Task<Void, Never>?
 
     var body: some View {
         ScrollView {
             VStack(alignment: .leading, spacing: 16) {
+                // Mini live preview
+                ZStack {
+                    Color.surface2
+                    if let miniPreview {
+                        Image(uiImage: miniPreview)
+                            .resizable()
+                            .aspectRatio(contentMode: .fit)
+                            .padding(12)
+                    } else {
+                        ProgressView()
+                            .tint(Color.text3)
+                    }
+                }
+                .frame(height: 180)
+                .clipShape(RoundedRectangle(cornerRadius: CornerRadius.lg))
+                .padding(.horizontal, 16)
+
                 // Layer header
                 HStack(spacing: 12) {
                     Image(systemName: layer.iconName)
@@ -52,6 +72,27 @@ struct LayerDetailView: View {
         .toolbarBackground(.visible, for: .navigationBar)
         .foregroundStyle(Color.text1)
         .tint(Color.accent)
+        .onChange(of: layer) { _, _ in updateMiniPreview() }
+        .onAppear { updateMiniPreview() }
+    }
+
+    private func updateMiniPreview() {
+        previewTask?.cancel()
+        previewTask = Task {
+            try? await Task.sleep(for: .milliseconds(150))
+            guard !Task.isCancelled, let photo = appState.selectedPhoto else { return }
+            let processor = FrameProcessor()
+            let url = photo.url
+            let config = appState.currentConfig
+            let rotation = photo.rotation
+            do {
+                let cgImage = try await Task.detached {
+                    try await processor.previewCGImage(for: url, config: config, rotation: rotation)
+                }.value
+                guard !Task.isCancelled else { return }
+                miniPreview = UIImage(cgImage: cgImage)
+            } catch { }
+        }
     }
 
     @ViewBuilder

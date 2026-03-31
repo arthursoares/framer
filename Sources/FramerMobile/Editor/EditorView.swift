@@ -9,6 +9,9 @@ struct EditorView: View {
     @State private var showingOriginal = false
     @State private var selectedPickerItems: [PhotosPickerItem] = []
     @State private var isLoadingPhotos = false
+    @State private var isExporting = false
+    @State private var exportProgress: Double = 0
+    @State private var exportTotal: Int = 0
 
     private var layersBinding: Binding<[CompositionLayer]> {
         Binding(
@@ -23,9 +26,7 @@ struct EditorView: View {
                 // Preview area
                 PreviewArea(
                     viewModel: viewModel,
-                    showingOriginal: $showingOriginal,
-                    photoCount: appState.library.count,
-                    currentIndex: appState.selectedIndex
+                    showingOriginal: $showingOriginal
                 )
 
                 // Photo filmstrip (when photos loaded)
@@ -78,7 +79,18 @@ struct EditorView: View {
                 }
                 ToolbarItem(placement: .topBarTrailing) {
                     if viewModel.previewImage != nil {
-                        Button(action: shareImage) {
+                        Menu {
+                            Button {
+                                shareImage()
+                            } label: {
+                                Label("Share Current", systemImage: "square.and.arrow.up")
+                            }
+                            Button {
+                                exportAllToPhotos()
+                            } label: {
+                                Label("Export All to Photos", systemImage: "photo.on.rectangle.angled")
+                            }
+                        } label: {
                             Image(systemName: "square.and.arrow.up")
                                 .foregroundStyle(Color.accent)
                         }
@@ -97,6 +109,22 @@ struct EditorView: View {
                             .tint(Color.accent)
                             .padding(24)
                             .background(Color.surface2, in: RoundedRectangle(cornerRadius: CornerRadius.lg))
+                    }
+            }
+            if isExporting {
+                Color.black.opacity(0.5)
+                    .ignoresSafeArea()
+                    .overlay {
+                        VStack(spacing: 12) {
+                            ProgressView(value: exportProgress, total: Double(exportTotal))
+                                .tint(Color.accent)
+                                .frame(width: 200)
+                            Text("Exporting \(Int(exportProgress))/\(exportTotal)...")
+                                .font(AppFont.body(13))
+                                .foregroundStyle(Color.text1)
+                        }
+                        .padding(24)
+                        .background(Color.surface2, in: RoundedRectangle(cornerRadius: CornerRadius.lg))
                     }
             }
         }
@@ -188,6 +216,43 @@ struct EditorView: View {
             }
             appState.addPhotos(newItems)
             selectedPickerItems.removeAll()
+        }
+    }
+
+    private func exportAllToPhotos() {
+        guard !appState.library.isEmpty else { return }
+        isExporting = true
+        exportProgress = 0
+        exportTotal = appState.library.count
+        let items = appState.library
+        let config = appState.currentConfig
+
+        Task {
+            defer { isExporting = false }
+            let processor = FrameProcessor()
+            var images: [UIImage] = []
+            for (i, item) in items.enumerated() {
+                do {
+                    let tempURL = FileManager.default.temporaryDirectory
+                        .appendingPathComponent(UUID().uuidString)
+                        .appendingPathExtension(config.outputFormat == .png ? "png" : "jpg")
+                    try await processor.process(input: item.url, output: tempURL, config: config, rotation: item.rotation)
+                    if let data = try? Data(contentsOf: tempURL), let img = UIImage(data: data) {
+                        images.append(img)
+                    }
+                    try? FileManager.default.removeItem(at: tempURL)
+                } catch { }
+                exportProgress = Double(i + 1)
+            }
+            guard !images.isEmpty else { return }
+            // Share all processed images
+            let activityVC = UIActivityViewController(activityItems: images, applicationActivities: nil)
+            guard let windowScene = UIApplication.shared.connectedScenes.first as? UIWindowScene,
+                  let rootVC = windowScene.windows.first?.rootViewController else { return }
+            var presenter = rootVC
+            while let presented = presenter.presentedViewController { presenter = presented }
+            activityVC.popoverPresentationController?.sourceView = presenter.view
+            presenter.present(activityVC, animated: true)
         }
     }
 
