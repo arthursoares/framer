@@ -1,7 +1,6 @@
 // Sources/FramerCore/Presets/YAMLConfig.swift
 // Stub — full implementation by presets-agent
 import Foundation
-import AppKit
 import Yams
 
 /// Reads and writes .framer.yaml config files — compatible with the Go CLI schema.

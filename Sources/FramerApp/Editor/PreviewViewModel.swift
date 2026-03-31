@@ -47,7 +47,8 @@ final class PreviewViewModel {
                 let originalHandle = Task.detached {
                     Self.loadOriginal(from: itemURL, maxDimension: 1200)
                 }
-                let preview = try await processor.previewImage(for: itemURL, config: config, rotation: itemRotation)
+                let cgPreview = try await processor.previewCGImage(for: itemURL, config: config, rotation: itemRotation)
+                let preview = NSImage(cgImage: cgPreview, size: NSSize(width: cgPreview.width, height: cgPreview.height))
                 let original = await originalHandle.value
                 guard !Task.isCancelled else { return }
                 originalImage = original

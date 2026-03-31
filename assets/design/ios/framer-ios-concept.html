@@ -1,0 +1,1362 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+<title>Framer iOS — UI Concept</title>
+<link href="https://fonts.googleapis.com/css2?family=Atkinson+Hyperlegible+Next:ital,wght@0,400;0,500;0,600;0,700;1,400&family=Source+Code+Pro:wght@300;400;500;600&display=swap" rel="stylesheet">
+<style>
+:root {
+  --surface-0: #0e0e10;
+  --surface-1: #141416;
+  --surface-2: #1a1a1e;
+  --surface-3: #222226;
+  --surface-4: #2a2a2f;
+  --text-0: #f0ede8;
+  --text-1: #b8b4ad;
+  --text-2: #7d7a74;
+  --text-3: #4e4c48;
+  --accent: #d4956a;
+  --accent-dim: #a06840;
+  --accent-glow: rgba(212,149,106,0.08);
+  --accent-subtle: rgba(212,149,106,0.15);
+  --success: #5e9f6d;
+  --error: #c75d5d;
+  --border: rgba(255,255,255,0.06);
+  --border-active: rgba(255,255,255,0.12);
+  --r-sm: 4px;
+  --r-md: 8px;
+  --r-lg: 14px;
+  --font-mono: 'Source Code Pro', ui-monospace, monospace;
+  --font-body: 'Atkinson Hyperlegible Next', 'Atkinson Hyperlegible', -apple-system, sans-serif;
+  --safe-bottom: 34px;
+}
+
+* { box-sizing: border-box; margin: 0; padding: 0; }
+
+body {
+  font-family: var(--font-body);
+  background: #000;
+  color: var(--text-0);
+  -webkit-font-smoothing: antialiased;
+  overflow: hidden;
+  height: 100vh;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+}
+
+/* ── iPhone Frame ────────────────────────── */
+.iphone-frame {
+  width: 393px;
+  height: 852px;
+  background: var(--surface-0);
+  border-radius: 48px;
+  overflow: hidden;
+  position: relative;
+  box-shadow:
+    0 0 0 3px #1a1a1e,
+    0 0 0 6px #333,
+    0 20px 60px rgba(0,0,0,0.6);
+}
+
+/* Dynamic Island */
+.dynamic-island {
+  position: absolute;
+  top: 11px;
+  left: 50%;
+  transform: translateX(-50%);
+  width: 126px;
+  height: 37px;
+  background: #000;
+  border-radius: 20px;
+  z-index: 200;
+}
+
+/* Status bar */
+.status-bar {
+  height: 59px;
+  display: flex;
+  align-items: flex-end;
+  justify-content: space-between;
+  padding: 0 32px 8px;
+  position: relative;
+  z-index: 100;
+}
+.status-time {
+  font-size: 15px;
+  font-weight: 600;
+  color: var(--text-0);
+}
+.status-icons {
+  display: flex;
+  gap: 5px;
+  align-items: center;
+  font-size: 12px;
+  color: var(--text-0);
+}
+
+/* Home indicator */
+.home-indicator {
+  position: absolute;
+  bottom: 8px;
+  left: 50%;
+  transform: translateX(-50%);
+  width: 134px;
+  height: 5px;
+  background: rgba(255,255,255,0.2);
+  border-radius: 3px;
+  z-index: 200;
+}
+
+/* ── Screen container — holds all views ──── */
+.screen {
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  display: flex;
+  flex-direction: column;
+}
+
+/* Only show active screen */
+.screen { display: none; }
+.screen.active { display: flex; }
+
+/* ════════════════════════════════════════════
+   SCREEN 1: EDITOR (main view)
+   ════════════════════════════════════════════ */
+
+/* Nav bar */
+.nav-bar {
+  height: 44px;
+  display: flex;
+  align-items: center;
+  padding: 0 16px;
+  margin-top: 59px;
+  flex-shrink: 0;
+}
+.nav-back {
+  font-size: 17px;
+  color: var(--accent);
+  background: none;
+  border: none;
+  cursor: pointer;
+  padding: 4px 0;
+  font-family: var(--font-body);
+}
+.nav-title {
+  flex: 1;
+  text-align: center;
+  font-size: 16px;
+  font-weight: 600;
+  color: var(--text-0);
+}
+.nav-action {
+  font-size: 15px;
+  font-weight: 600;
+  color: var(--accent);
+  background: none;
+  border: none;
+  cursor: pointer;
+  font-family: var(--font-body);
+}
+
+/* Preview area */
+.preview-area {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  position: relative;
+  background: var(--surface-0);
+  overflow: hidden;
+  /* Subtle warmth */
+  background:
+    radial-gradient(ellipse at 50% 40%, rgba(212,149,106,0.015) 0%, transparent 60%),
+    var(--surface-0);
+}
+
+.preview-photo {
+  position: relative;
+  max-width: calc(100% - 40px);
+  max-height: 100%;
+}
+
+.preview-framed {
+  background: #f5f0e8;
+  padding: 14px 14px 34px;
+  box-shadow: 0 4px 20px rgba(0,0,0,0.4);
+  position: relative;
+}
+.preview-framed svg { display: block; }
+.preview-framed .caption {
+  position: absolute;
+  bottom: 9px;
+  left: 0; right: 0;
+  text-align: center;
+  font-family: var(--font-mono);
+  font-size: 8px;
+  font-weight: 500;
+  letter-spacing: 2.5px;
+  color: #8a8580;
+  text-transform: uppercase;
+}
+
+/* Long-press hint */
+.preview-hint {
+  position: absolute;
+  top: 12px;
+  left: 50%;
+  transform: translateX(-50%);
+  font-size: 10px;
+  font-weight: 500;
+  color: var(--text-3);
+  background: rgba(14,14,16,0.7);
+  backdrop-filter: blur(8px);
+  padding: 4px 12px;
+  border-radius: 10px;
+  opacity: 0;
+  pointer-events: none;
+}
+.preview-area:active .preview-hint { opacity: 1; }
+
+/* Photo counter / swipe indicator */
+.photo-indicator {
+  position: absolute;
+  top: 10px;
+  right: 12px;
+  font-family: var(--font-mono);
+  font-size: 11px;
+  color: var(--text-2);
+  background: rgba(14,14,16,0.6);
+  backdrop-filter: blur(8px);
+  padding: 3px 10px;
+  border-radius: 10px;
+}
+
+/* ── Bottom controls area ────────────────── */
+.bottom-controls {
+  flex-shrink: 0;
+  background: var(--surface-1);
+  border-top: 1px solid var(--border);
+  padding-bottom: var(--safe-bottom);
+}
+
+/* Mode tabs: Presets | Layers */
+.mode-tabs {
+  display: flex;
+  padding: 8px 16px 0;
+  gap: 0;
+}
+.mode-tab {
+  flex: 1;
+  padding: 8px 0;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--text-3);
+  background: none;
+  border: none;
+  border-bottom: 2px solid transparent;
+  cursor: pointer;
+  font-family: var(--font-body);
+  text-align: center;
+}
+.mode-tab.active {
+  color: var(--accent);
+  border-bottom-color: var(--accent);
+}
+
+/* Preset strip */
+.preset-strip {
+  display: flex;
+  gap: 10px;
+  padding: 12px 16px 8px;
+  overflow-x: auto;
+  scrollbar-width: none;
+}
+.preset-strip::-webkit-scrollbar { display: none; }
+
+.preset-card {
+  flex-shrink: 0;
+  width: 72px;
+  cursor: pointer;
+  text-align: center;
+}
+.preset-card-img {
+  width: 72px;
+  height: 54px;
+  border-radius: var(--r-md);
+  overflow: hidden;
+  border: 2px solid transparent;
+  position: relative;
+  margin-bottom: 4px;
+}
+.preset-card.active .preset-card-img {
+  border-color: var(--accent);
+  box-shadow: 0 0 8px rgba(212,149,106,0.25);
+}
+.preset-card-img .pp-photo {
+  width: 100%;
+  height: 100%;
+  background: linear-gradient(135deg, #7B6AA8, #5E9A5C);
+}
+.preset-card-img .pp-border {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+}
+.pp-border.vintage { border: 4px solid #f5f0e8; border-bottom: 10px solid #f5f0e8; }
+.pp-border.vintage::after {
+  content: '—'; position: absolute; bottom: 0; left: 0; right: 0;
+  text-align: center; font-family: var(--font-mono); font-size: 4px; color: #aaa; letter-spacing: 1px;
+}
+.pp-border.insta { border: 3px solid #fff; }
+.pp-border.black { border: 2px solid #111; }
+.pp-border.dusty { border: 4px solid #e0d5c8; border-bottom: 10px solid #e0d5c8; }
+
+.preset-card-name {
+  font-size: 10px;
+  font-weight: 500;
+  color: var(--text-3);
+}
+.preset-card.active .preset-card-name { color: var(--accent); }
+
+.preset-card-check {
+  position: absolute;
+  top: 3px;
+  right: 3px;
+  width: 14px; height: 14px;
+  border-radius: 50%;
+  background: var(--accent);
+  color: var(--surface-0);
+  font-size: 8px;
+  font-weight: 700;
+  display: none;
+  align-items: center;
+  justify-content: center;
+}
+.preset-card.active .preset-card-check { display: flex; }
+
+/* ── Layer strip (compact, in bottom panel) ── */
+.layer-strip {
+  display: none;
+  flex-direction: column;
+  padding: 8px 0 4px;
+  max-height: 180px;
+  overflow-y: auto;
+  scrollbar-width: none;
+}
+.layer-strip::-webkit-scrollbar { display: none; }
+.layer-strip.visible { display: flex; }
+
+.layer-compact {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 9px 16px;
+  cursor: pointer;
+  border-bottom: 1px solid var(--border);
+}
+.layer-compact:last-child { border-bottom: none; }
+.layer-compact:active { background: var(--surface-2); }
+
+.layer-grip {
+  color: var(--text-3);
+  font-size: 12px;
+  cursor: grab;
+  padding: 2px;
+}
+
+.layer-compact-icon {
+  font-size: 14px;
+  color: var(--text-2);
+  width: 20px;
+  text-align: center;
+}
+
+.layer-compact-info {
+  flex: 1;
+}
+.layer-compact-name {
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--text-0);
+}
+.layer-compact-summary {
+  font-family: var(--font-mono);
+  font-size: 10px;
+  color: var(--text-3);
+  margin-top: 1px;
+}
+
+.layer-compact-toggle {
+  width: 36px; height: 20px;
+  border-radius: 10px;
+  background: var(--surface-4);
+  border: none;
+  cursor: pointer;
+  position: relative;
+  flex-shrink: 0;
+}
+.layer-compact-toggle::after {
+  content: '';
+  position: absolute;
+  top: 3px; left: 3px;
+  width: 14px; height: 14px;
+  border-radius: 50%;
+  background: var(--text-2);
+}
+.layer-compact-toggle.on { background: var(--accent-dim); }
+.layer-compact-toggle.on::after { left: auto; right: 3px; background: var(--text-0); }
+
+.layer-compact-chevron {
+  color: var(--text-3);
+  font-size: 14px;
+}
+
+/* Add layer button inline */
+.layer-add-row {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  padding: 10px 16px;
+  color: var(--text-3);
+  font-size: 13px;
+  font-weight: 500;
+  cursor: pointer;
+}
+.layer-add-row:active { color: var(--accent); }
+
+/* ── Bottom action bar ───────────────────── */
+.action-bar {
+  display: flex;
+  padding: 8px 16px;
+  gap: 10px;
+}
+
+.action-btn {
+  flex: 1;
+  padding: 12px 0;
+  border-radius: var(--r-lg);
+  border: none;
+  font-family: var(--font-body);
+  font-size: 15px;
+  font-weight: 600;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+}
+.action-btn.secondary {
+  background: var(--surface-3);
+  color: var(--text-1);
+}
+.action-btn.primary {
+  background: var(--accent);
+  color: var(--surface-0);
+}
+.action-btn.primary:active {
+  background: var(--accent-dim);
+}
+
+/* ════════════════════════════════════════════
+   SCREEN 2: LAYER DETAIL (push view)
+   ════════════════════════════════════════════ */
+.layer-detail-scroll {
+  flex: 1;
+  overflow-y: auto;
+  padding: 0 20px 20px;
+  margin-top: 59px;
+}
+
+.layer-detail-header {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 16px 0 20px;
+}
+.layer-detail-icon {
+  font-size: 24px;
+  color: var(--text-2);
+  width: 36px;
+  height: 36px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: var(--surface-3);
+  border-radius: var(--r-md);
+}
+.layer-detail-title {
+  font-size: 22px;
+  font-weight: 700;
+  color: var(--text-0);
+}
+
+/* Mini preview at top */
+.layer-detail-preview {
+  width: 100%;
+  height: 180px;
+  border-radius: var(--r-lg);
+  overflow: hidden;
+  background: var(--surface-2);
+  margin-bottom: 24px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+.layer-detail-preview .mini-frame {
+  background: #f5f0e8;
+  padding: 8px 8px 20px;
+  box-shadow: 0 2px 10px rgba(0,0,0,0.3);
+  position: relative;
+}
+.layer-detail-preview .mini-frame svg { display: block; }
+.layer-detail-preview .mini-caption {
+  position: absolute;
+  bottom: 5px; left: 0; right: 0;
+  text-align: center;
+  font-family: var(--font-mono);
+  font-size: 5px;
+  letter-spacing: 1.5px;
+  color: #999;
+  text-transform: uppercase;
+}
+
+/* Control groups */
+.control-group {
+  margin-bottom: 20px;
+}
+.control-group-label {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--text-3);
+  text-transform: uppercase;
+  letter-spacing: 1px;
+  margin-bottom: 10px;
+}
+
+.ios-control-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 14px 16px;
+  background: var(--surface-2);
+  margin-bottom: 1px;
+}
+.ios-control-row:first-of-type { border-radius: var(--r-lg) var(--r-lg) 0 0; }
+.ios-control-row:last-of-type { border-radius: 0 0 var(--r-lg) var(--r-lg); margin-bottom: 0; }
+.ios-control-row:only-of-type { border-radius: var(--r-lg); }
+
+.ios-control-label {
+  font-size: 15px;
+  color: var(--text-0);
+}
+.ios-control-value {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.ios-control-value .val {
+  font-family: var(--font-mono);
+  font-size: 14px;
+  color: var(--text-2);
+}
+
+/* iOS-style slider */
+.ios-slider-row {
+  padding: 14px 16px 18px;
+  background: var(--surface-2);
+  margin-bottom: 1px;
+}
+.ios-slider-row:first-of-type { border-radius: var(--r-lg) var(--r-lg) 0 0; }
+.ios-slider-row:last-of-type { border-radius: 0 0 var(--r-lg) var(--r-lg); margin-bottom: 0; }
+
+.ios-slider-header {
+  display: flex;
+  justify-content: space-between;
+  margin-bottom: 10px;
+}
+.ios-slider-label { font-size: 15px; color: var(--text-0); }
+.ios-slider-val {
+  font-family: var(--font-mono);
+  font-size: 14px;
+  color: var(--text-2);
+}
+
+input[type="range"] {
+  -webkit-appearance: none;
+  width: 100%;
+  height: 4px;
+  background: var(--surface-4);
+  border-radius: 2px;
+  outline: none;
+}
+input[type="range"]::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  width: 28px;
+  height: 28px;
+  border-radius: 50%;
+  background: #fff;
+  box-shadow: 0 1px 4px rgba(0,0,0,0.3), 0 0 1px rgba(0,0,0,0.1);
+  cursor: pointer;
+}
+
+/* Color swatch */
+.ios-color-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 10px 16px;
+  background: var(--surface-2);
+  border-radius: var(--r-lg);
+}
+.ios-color-swatch {
+  width: 32px;
+  height: 32px;
+  border-radius: var(--r-md);
+  border: 2px solid var(--border-active);
+}
+.ios-color-hex {
+  font-family: var(--font-mono);
+  font-size: 14px;
+  color: var(--text-1);
+}
+
+/* Segmented control */
+.ios-segment {
+  display: flex;
+  background: var(--surface-3);
+  border-radius: var(--r-md);
+  padding: 2px;
+  gap: 2px;
+}
+.ios-segment-btn {
+  flex: 1;
+  padding: 7px 0;
+  font-family: var(--font-body);
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--text-2);
+  background: transparent;
+  border: none;
+  border-radius: 6px;
+  cursor: pointer;
+  text-align: center;
+}
+.ios-segment-btn.active {
+  background: var(--surface-4);
+  color: var(--text-0);
+  box-shadow: 0 1px 3px rgba(0,0,0,0.2);
+}
+
+/* Delete layer */
+.delete-layer-btn {
+  width: 100%;
+  padding: 14px;
+  font-family: var(--font-body);
+  font-size: 15px;
+  font-weight: 500;
+  color: var(--error);
+  background: var(--surface-2);
+  border: none;
+  border-radius: var(--r-lg);
+  cursor: pointer;
+  margin-top: 24px;
+}
+
+/* ════════════════════════════════════════════
+   SCREEN 3: PHOTO PICKER (library)
+   ════════════════════════════════════════════ */
+.picker-grid {
+  flex: 1;
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 2px;
+  padding: 2px;
+  overflow-y: auto;
+  margin-top: 59px;
+}
+.picker-grid::-webkit-scrollbar { display: none; }
+
+.picker-photo {
+  aspect-ratio: 1;
+  overflow: hidden;
+  cursor: pointer;
+  position: relative;
+}
+.picker-photo .pp-img {
+  width: 100%;
+  height: 100%;
+}
+.picker-photo.selected::after {
+  content: '✓';
+  position: absolute;
+  bottom: 4px;
+  right: 4px;
+  width: 22px; height: 22px;
+  border-radius: 50%;
+  background: var(--accent);
+  color: var(--surface-0);
+  font-size: 11px; font-weight: 700;
+  display: flex; align-items: center; justify-content: center;
+  border: 2px solid var(--surface-0);
+}
+.picker-photo.selected {
+  opacity: 0.8;
+  outline: 3px solid var(--accent);
+  outline-offset: -3px;
+}
+
+.picker-bar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 12px 16px;
+  padding-bottom: calc(12px + var(--safe-bottom));
+  background: var(--surface-1);
+  border-top: 1px solid var(--border);
+}
+.picker-count {
+  font-size: 14px;
+  color: var(--text-2);
+}
+.picker-done-btn {
+  padding: 8px 24px;
+  border-radius: 20px;
+  background: var(--accent);
+  color: var(--surface-0);
+  font-family: var(--font-body);
+  font-size: 15px;
+  font-weight: 600;
+  border: none;
+  cursor: pointer;
+}
+
+/* ── Save preset card ─────────────────────── */
+.preset-save-img {
+  background: var(--surface-3);
+  border: 1px dashed var(--border-active);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+.preset-save-plus {
+  font-size: 24px;
+  color: var(--text-3);
+  font-weight: 300;
+}
+.preset-save-card:active .preset-save-plus { color: var(--accent); }
+.preset-save-card:active .preset-save-img { border-color: var(--accent-dim); }
+
+/* ── Save Preset Sheet ───────────────────── */
+.sheet-overlay {
+  position: absolute;
+  inset: 0;
+  background: rgba(0,0,0,0.5);
+  z-index: 300;
+  opacity: 0;
+  pointer-events: none;
+}
+.sheet-overlay.visible { opacity: 1; pointer-events: auto; }
+
+.save-sheet {
+  position: absolute;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  background: var(--surface-1);
+  border-radius: 16px 16px 0 0;
+  z-index: 310;
+  transform: translateY(100%);
+  padding-bottom: var(--safe-bottom);
+}
+.save-sheet.visible { transform: translateY(0); }
+
+.sheet-handle {
+  width: 36px;
+  height: 5px;
+  background: var(--surface-4);
+  border-radius: 3px;
+  margin: 8px auto 0;
+}
+
+.sheet-header {
+  display: flex;
+  align-items: center;
+  padding: 14px 16px 10px;
+}
+.sheet-cancel {
+  font-family: var(--font-body);
+  font-size: 15px;
+  color: var(--text-2);
+  background: none;
+  border: none;
+  cursor: pointer;
+}
+.sheet-title {
+  flex: 1;
+  text-align: center;
+  font-size: 16px;
+  font-weight: 600;
+}
+.sheet-save {
+  font-family: var(--font-body);
+  font-size: 15px;
+  font-weight: 600;
+  color: var(--accent);
+  background: none;
+  border: none;
+  cursor: pointer;
+}
+
+.sheet-body {
+  padding: 0 20px 16px;
+}
+
+.sheet-preview {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  padding: 14px;
+  background: var(--surface-2);
+  border-radius: var(--r-lg);
+  margin-bottom: 20px;
+}
+.sheet-preview-frame {
+  background: #f5f0e8;
+  padding: 4px 4px 10px;
+  border-radius: 3px;
+  box-shadow: 0 1px 4px rgba(0,0,0,0.2);
+  flex-shrink: 0;
+}
+.sheet-preview-frame svg { display: block; }
+.sheet-preview-label {
+  font-size: 13px;
+  color: var(--text-2);
+}
+
+.sheet-input-group {
+  margin-bottom: 18px;
+}
+.sheet-input-label {
+  display: block;
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--text-3);
+  text-transform: uppercase;
+  letter-spacing: 0.8px;
+  margin-bottom: 8px;
+}
+.sheet-input {
+  width: 100%;
+  padding: 12px 14px;
+  font-family: var(--font-body);
+  font-size: 16px;
+  background: var(--surface-2);
+  border: 1px solid var(--border);
+  border-radius: var(--r-lg);
+  color: var(--text-0);
+  outline: none;
+}
+.sheet-input:focus { border-color: var(--accent-dim); }
+.sheet-input::placeholder { color: var(--text-3); }
+
+.sheet-layers-summary {
+  margin-bottom: 4px;
+}
+.sheet-summary-label {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--text-3);
+  text-transform: uppercase;
+  letter-spacing: 0.8px;
+  margin-bottom: 8px;
+}
+.sheet-summary-items {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+.sheet-summary-chip {
+  font-family: var(--font-mono);
+  font-size: 11px;
+  color: var(--text-2);
+  background: var(--surface-3);
+  padding: 4px 10px;
+  border-radius: 10px;
+}
+
+/* ── Shared utility ──────────────────────── */
+.has-color { background: linear-gradient(135deg, var(--c1), var(--c2)); }
+
+/* Hide presets when layers tab active and vice versa */
+.preset-strip { display: flex; }
+.layer-strip { display: none; }
+.tab-layers .preset-strip { display: none !important; }
+.tab-layers .layer-strip { display: flex !important; }
+</style>
+</head>
+<body>
+
+<!-- ═══════════════════════════════════════════
+     SCREEN 1: EDITOR
+     ═══════════════════════════════════════════ -->
+<div class="iphone-frame">
+  <div class="dynamic-island"></div>
+  <div class="home-indicator"></div>
+
+  <!-- EDITOR SCREEN -->
+  <div class="screen active" id="editorScreen">
+    <div class="status-bar">
+      <span class="status-time">9:41</span>
+      <span class="status-icons">
+        <span>●●●●○</span>
+        <span style="font-size:11px">WiFi</span>
+        <span>🔋</span>
+      </span>
+    </div>
+
+    <!-- Nav -->
+    <div class="nav-bar">
+      <button class="nav-back" onclick="showScreen('pickerScreen')">‹ Photos</button>
+      <span class="nav-title">DSC_0234</span>
+      <button class="nav-action" onclick="showScreen('pickerScreen')">Done</button>
+    </div>
+
+    <!-- Preview -->
+    <div class="preview-area" id="previewArea">
+      <div class="photo-indicator">1 / 8</div>
+      <div class="preview-hint">Hold for original</div>
+      <div class="preview-photo">
+        <div class="preview-framed" id="previewFrame">
+          <svg width="300" height="200" viewBox="0 0 300 200">
+            <rect width="300" height="105" fill="#9a88c4"/>
+            <rect y="5" width="300" height="62" fill="#b4a0d8" opacity="0.5"/>
+            <rect y="135" width="300" height="65" fill="#dbd5c8"/>
+            <rect x="12" y="45" width="58" height="105" rx="29" ry="29" fill="#5cc44e"/>
+            <rect x="12" y="82" width="58" height="68" fill="#5cc44e"/>
+            <rect x="82" y="50" width="58" height="100" rx="29" ry="29" fill="#4ab03e"/>
+            <rect x="82" y="87" width="58" height="63" fill="#4ab03e"/>
+            <rect x="158" y="48" width="58" height="102" rx="29" ry="29" fill="#58c04a"/>
+            <rect x="158" y="85" width="58" height="65" fill="#58c04a"/>
+            <rect x="230" y="45" width="58" height="105" rx="29" ry="29" fill="#4dba40"/>
+            <rect x="230" y="82" width="58" height="68" fill="#4dba40"/>
+            <rect x="68" y="32" width="4" height="148" fill="#8a7ab0" opacity="0.7"/>
+            <rect x="143" y="32" width="4" height="148" fill="#8a7ab0" opacity="0.7"/>
+            <rect x="220" y="32" width="4" height="148" fill="#8a7ab0" opacity="0.7"/>
+          </svg>
+          <div class="caption">— mar '18 —</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Bottom controls -->
+    <div class="bottom-controls" id="bottomControls">
+      <!-- Mode tabs -->
+      <div class="mode-tabs">
+        <button class="mode-tab active" onclick="switchTab('presets')">Presets</button>
+        <button class="mode-tab" onclick="switchTab('layers')">Layers</button>
+      </div>
+
+      <!-- Preset strip -->
+      <div class="preset-strip" id="presetStrip">
+        <div class="preset-card active" data-preset="vintage">
+          <div class="preset-card-img">
+            <div class="pp-photo"></div>
+            <div class="pp-border vintage"></div>
+            <div class="preset-card-check">✓</div>
+          </div>
+          <div class="preset-card-name">Vintage</div>
+        </div>
+        <div class="preset-card" data-preset="insta">
+          <div class="preset-card-img">
+            <div class="pp-photo"></div>
+            <div class="pp-border insta"></div>
+            <div class="preset-card-check">✓</div>
+          </div>
+          <div class="preset-card-name">Instagram</div>
+        </div>
+        <div class="preset-card" data-preset="minimal">
+          <div class="preset-card-img">
+            <div class="pp-photo"></div>
+            <div class="pp-border black"></div>
+            <div class="preset-card-check">✓</div>
+          </div>
+          <div class="preset-card-name">Minimal</div>
+        </div>
+        <div class="preset-card" data-preset="none">
+          <div class="preset-card-img">
+            <div class="pp-photo"></div>
+            <div class="preset-card-check">✓</div>
+          </div>
+          <div class="preset-card-name">None</div>
+        </div>
+        <div class="preset-card" data-preset="dusty">
+          <div class="preset-card-img" style="filter:sepia(0.3) contrast(1.1)">
+            <div class="pp-photo"></div>
+            <div class="pp-border dusty"></div>
+            <div class="preset-card-check">✓</div>
+          </div>
+          <div class="preset-card-name">Dusty Film</div>
+        </div>
+        <div class="preset-card" data-preset="thick">
+          <div class="preset-card-img">
+            <div class="pp-photo"></div>
+            <div class="pp-border vintage" style="border-width:8px;border-bottom-width:16px;"></div>
+            <div class="preset-card-check">✓</div>
+          </div>
+          <div class="preset-card-name">Thick</div>
+        </div>
+        <div class="preset-card preset-save-card" onclick="showSaveSheet()">
+          <div class="preset-card-img preset-save-img">
+            <span class="preset-save-plus">+</span>
+          </div>
+          <div class="preset-card-name">Save</div>
+        </div>
+      </div>
+
+      <!-- Layer strip -->
+      <div class="layer-strip" id="layerStrip">
+        <div class="layer-compact" onclick="showScreen('layerDetail')">
+          <span class="layer-grip">☰</span>
+          <span class="layer-compact-icon">↔</span>
+          <div class="layer-compact-info">
+            <div class="layer-compact-name">Padding</div>
+            <div class="layer-compact-summary">4%</div>
+          </div>
+          <button class="layer-compact-toggle on" onclick="event.stopPropagation();this.classList.toggle('on')"></button>
+          <span class="layer-compact-chevron">›</span>
+        </div>
+        <div class="layer-compact" onclick="showScreen('layerDetail')">
+          <span class="layer-grip">☰</span>
+          <span class="layer-compact-icon">☐</span>
+          <div class="layer-compact-info">
+            <div class="layer-compact-name">Border</div>
+            <div class="layer-compact-summary">solid · #F5F0E8 · 5%</div>
+          </div>
+          <button class="layer-compact-toggle on" onclick="event.stopPropagation();this.classList.toggle('on')"></button>
+          <span class="layer-compact-chevron">›</span>
+        </div>
+        <div class="layer-compact" onclick="showScreen('layerDetail')">
+          <span class="layer-grip">☰</span>
+          <span class="layer-compact-icon">T</span>
+          <div class="layer-compact-info">
+            <div class="layer-compact-name">Caption</div>
+            <div class="layer-compact-summary">— {{mon}} '{{year2}} —</div>
+          </div>
+          <button class="layer-compact-toggle on" onclick="event.stopPropagation();this.classList.toggle('on')"></button>
+          <span class="layer-compact-chevron">›</span>
+        </div>
+        <div class="layer-compact" onclick="showScreen('layerDetail')">
+          <span class="layer-grip">☰</span>
+          <span class="layer-compact-icon">✦</span>
+          <div class="layer-compact-info">
+            <div class="layer-compact-name">Dust & Scratches</div>
+            <div class="layer-compact-summary">overlay · 30%</div>
+          </div>
+          <button class="layer-compact-toggle on" onclick="event.stopPropagation();this.classList.toggle('on')"></button>
+          <span class="layer-compact-chevron">›</span>
+        </div>
+        <div class="layer-compact" onclick="showScreen('layerDetail')">
+          <span class="layer-grip">☰</span>
+          <span class="layer-compact-icon">◌</span>
+          <div class="layer-compact-info">
+            <div class="layer-compact-name">Dither</div>
+            <div class="layer-compact-summary">disabled</div>
+          </div>
+          <button class="layer-compact-toggle" onclick="event.stopPropagation();this.classList.toggle('on')"></button>
+          <span class="layer-compact-chevron">›</span>
+        </div>
+        <div class="layer-add-row" onclick="void(0)">+ Add Layer</div>
+      </div>
+
+      <!-- Action bar -->
+      <div class="action-bar">
+        <button class="action-btn secondary" onclick="showScreen('pickerScreen')">Photos</button>
+        <button class="action-btn primary">Share</button>
+      </div>
+    </div>
+
+    <!-- Save Preset Sheet -->
+    <div class="sheet-overlay" id="saveSheetOverlay" onclick="hideSaveSheet()"></div>
+    <div class="save-sheet" id="saveSheet">
+      <div class="sheet-handle"></div>
+      <div class="sheet-header">
+        <button class="sheet-cancel" onclick="hideSaveSheet()">Cancel</button>
+        <span class="sheet-title">Save Preset</span>
+        <button class="sheet-save" id="sheetSaveBtn" onclick="savePreset()">Save</button>
+      </div>
+      <div class="sheet-body">
+        <div class="sheet-preview">
+          <div class="sheet-preview-frame">
+            <svg width="120" height="80" viewBox="0 0 300 200">
+              <rect width="300" height="105" fill="#9a88c4"/>
+              <rect y="5" width="300" height="62" fill="#b4a0d8" opacity="0.5"/>
+              <rect y="135" width="300" height="65" fill="#dbd5c8"/>
+              <rect x="12" y="45" width="58" height="105" rx="29" fill="#5cc44e"/>
+              <rect x="82" y="50" width="58" height="100" rx="29" fill="#4ab03e"/>
+              <rect x="158" y="48" width="58" height="102" rx="29" fill="#58c04a"/>
+              <rect x="230" y="45" width="58" height="105" rx="29" fill="#4dba40"/>
+            </svg>
+          </div>
+          <div class="sheet-preview-label">Current settings</div>
+        </div>
+        <div class="sheet-input-group">
+          <label class="sheet-input-label">Preset Name</label>
+          <input type="text" class="sheet-input" id="presetNameInput" placeholder="My Preset" autocomplete="off">
+        </div>
+        <div class="sheet-layers-summary">
+          <div class="sheet-summary-label">Layers</div>
+          <div class="sheet-summary-items">
+            <span class="sheet-summary-chip">Padding 4%</span>
+            <span class="sheet-summary-chip">Border 5%</span>
+            <span class="sheet-summary-chip">Caption</span>
+            <span class="sheet-summary-chip">Dust 30%</span>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ═══ SCREEN 2: LAYER DETAIL ═══ -->
+  <div class="screen" id="layerDetail">
+    <div class="status-bar">
+      <span class="status-time">9:41</span>
+      <span class="status-icons">
+        <span>●●●●○</span>
+        <span style="font-size:11px">WiFi</span>
+        <span>🔋</span>
+      </span>
+    </div>
+    <div class="nav-bar">
+      <button class="nav-back" onclick="showScreen('editorScreen')">‹ Layers</button>
+      <span class="nav-title"></span>
+      <button class="nav-action" onclick="showScreen('editorScreen')">Done</button>
+    </div>
+
+    <div class="layer-detail-scroll">
+      <!-- Mini preview -->
+      <div class="layer-detail-preview">
+        <div class="mini-frame">
+          <svg width="160" height="107" viewBox="0 0 300 200">
+            <rect width="300" height="105" fill="#9a88c4"/>
+            <rect y="5" width="300" height="62" fill="#b4a0d8" opacity="0.5"/>
+            <rect y="135" width="300" height="65" fill="#dbd5c8"/>
+            <rect x="12" y="45" width="58" height="105" rx="29" ry="29" fill="#5cc44e"/>
+            <rect x="12" y="82" width="58" height="68" fill="#5cc44e"/>
+            <rect x="82" y="50" width="58" height="100" rx="29" ry="29" fill="#4ab03e"/>
+            <rect x="82" y="87" width="58" height="63" fill="#4ab03e"/>
+            <rect x="158" y="48" width="58" height="102" rx="29" ry="29" fill="#58c04a"/>
+            <rect x="158" y="85" width="58" height="65" fill="#58c04a"/>
+            <rect x="230" y="45" width="58" height="105" rx="29" ry="29" fill="#4dba40"/>
+            <rect x="230" y="82" width="58" height="68" fill="#4dba40"/>
+          </svg>
+          <div class="mini-caption">— mar '18 —</div>
+        </div>
+      </div>
+
+      <div class="layer-detail-header">
+        <div class="layer-detail-icon">☐</div>
+        <div class="layer-detail-title">Border</div>
+      </div>
+
+      <!-- Style -->
+      <div class="control-group">
+        <div class="control-group-label">Style</div>
+        <div class="ios-segment">
+          <button class="ios-segment-btn active">Solid</button>
+          <button class="ios-segment-btn">Instagram</button>
+        </div>
+      </div>
+
+      <!-- Size -->
+      <div class="control-group">
+        <div class="control-group-label">Size</div>
+        <div class="ios-slider-row" style="border-radius:var(--r-lg);">
+          <div class="ios-slider-header">
+            <span class="ios-slider-label">Border Width</span>
+            <span class="ios-slider-val">5%</span>
+          </div>
+          <input type="range" min="1" max="20" value="5">
+        </div>
+      </div>
+
+      <!-- Color -->
+      <div class="control-group">
+        <div class="control-group-label">Color</div>
+        <div class="ios-color-row">
+          <div class="ios-color-swatch" style="background:#f5f0e8;"></div>
+          <span class="ios-color-hex">#F5F0E8</span>
+          <span style="color:var(--text-3);font-size:14px;">›</span>
+        </div>
+      </div>
+
+      <!-- Padding -->
+      <div class="control-group">
+        <div class="control-group-label">Inner Padding</div>
+        <div class="ios-slider-row" style="border-radius:var(--r-lg);">
+          <div class="ios-slider-header">
+            <span class="ios-slider-label">Amount</span>
+            <span class="ios-slider-val">0%</span>
+          </div>
+          <input type="range" min="0" max="10" value="0">
+        </div>
+      </div>
+
+      <button class="delete-layer-btn">Delete Layer</button>
+    </div>
+  </div>
+
+  <!-- ═══ SCREEN 3: PHOTO PICKER ═══ -->
+  <div class="screen" id="pickerScreen">
+    <div class="status-bar">
+      <span class="status-time">9:41</span>
+      <span class="status-icons">
+        <span>●●●●○</span>
+        <span style="font-size:11px">WiFi</span>
+        <span>🔋</span>
+      </span>
+    </div>
+    <div class="nav-bar">
+      <button class="nav-back" onclick="showScreen('editorScreen')">Cancel</button>
+      <span class="nav-title">Recents</span>
+      <button class="nav-action">Select</button>
+    </div>
+
+    <div class="picker-grid" id="pickerGrid"></div>
+
+    <div class="picker-bar">
+      <span class="picker-count" id="pickerCount">3 selected</span>
+      <button class="picker-done-btn" onclick="showScreen('editorScreen')">Done</button>
+    </div>
+  </div>
+</div>
+
+<script>
+// Screen navigation
+function showScreen(id) {
+  document.querySelectorAll('.screen').forEach(s => s.classList.remove('active'));
+  document.getElementById(id).classList.add('active');
+}
+
+// Tab switching
+function switchTab(tab) {
+  document.querySelectorAll('.mode-tab').forEach(t => t.classList.remove('active'));
+  const controls = document.getElementById('bottomControls');
+  if (tab === 'layers') {
+    document.querySelectorAll('.mode-tab')[1].classList.add('active');
+    controls.classList.add('tab-layers');
+  } else {
+    document.querySelectorAll('.mode-tab')[0].classList.add('active');
+    controls.classList.remove('tab-layers');
+  }
+}
+
+// Preset selection
+document.querySelectorAll('.preset-card:not(.preset-save-card)').forEach(card => {
+  card.addEventListener('click', () => {
+    document.querySelectorAll('.preset-card').forEach(c => c.classList.remove('active'));
+    card.classList.add('active');
+  });
+});
+
+// Save preset sheet
+function showSaveSheet() {
+  document.getElementById('saveSheetOverlay').classList.add('visible');
+  document.getElementById('saveSheet').classList.add('visible');
+  setTimeout(() => document.getElementById('presetNameInput').focus(), 100);
+}
+function hideSaveSheet() {
+  document.getElementById('saveSheetOverlay').classList.remove('visible');
+  document.getElementById('saveSheet').classList.remove('visible');
+  document.getElementById('presetNameInput').value = '';
+}
+function savePreset() {
+  const name = document.getElementById('presetNameInput').value.trim();
+  if (!name) return;
+  // Create new preset card
+  const strip = document.getElementById('presetStrip');
+  const saveCard = strip.querySelector('.preset-save-card');
+  const newCard = document.createElement('div');
+  newCard.className = 'preset-card';
+  newCard.dataset.preset = name.toLowerCase().replace(/\s/g, '-');
+  newCard.innerHTML = `
+    <div class="preset-card-img">
+      <div class="pp-photo"></div>
+      <div class="pp-border vintage"></div>
+      <div class="preset-card-check">✓</div>
+    </div>
+    <div class="preset-card-name">${name}</div>
+  `;
+  newCard.addEventListener('click', () => {
+    document.querySelectorAll('.preset-card').forEach(c => c.classList.remove('active'));
+    newCard.classList.add('active');
+  });
+  strip.insertBefore(newCard, saveCard);
+  // Select the new one
+  document.querySelectorAll('.preset-card').forEach(c => c.classList.remove('active'));
+  newCard.classList.add('active');
+  hideSaveSheet();
+  // Scroll to show new preset
+  newCard.scrollIntoView({ behavior: 'smooth', inline: 'center' });
+}
+
+// Segment buttons
+document.querySelectorAll('.ios-segment-btn').forEach(btn => {
+  btn.addEventListener('click', () => {
+    btn.parentElement.querySelectorAll('.ios-segment-btn').forEach(b => b.classList.remove('active'));
+    btn.classList.add('active');
+  });
+});
+
+// Long-press for original
+const previewArea = document.getElementById('previewArea');
+const previewFrame = document.getElementById('previewFrame');
+let pressTimer;
+previewArea.addEventListener('pointerdown', () => {
+  pressTimer = setTimeout(() => {
+    previewFrame.style.background = 'transparent';
+    previewFrame.style.padding = '0';
+    previewFrame.style.boxShadow = '0 4px 20px rgba(0,0,0,0.4)';
+    previewFrame.querySelector('.caption').style.display = 'none';
+  }, 300);
+});
+previewArea.addEventListener('pointerup', () => {
+  clearTimeout(pressTimer);
+  previewFrame.style.background = '#f5f0e8';
+  previewFrame.style.padding = '14px 14px 34px';
+  previewFrame.style.boxShadow = '0 4px 20px rgba(0,0,0,0.4)';
+  previewFrame.querySelector('.caption').style.display = '';
+});
+
+// Generate photo picker grid
+const grid = document.getElementById('pickerGrid');
+const colors = [
+  ['#8b6fba','#4ebd6a'], ['#c76d4e','#d4b06a'], ['#4a7fb5','#6bc5c7'],
+  ['#2e2e38','#5a4e6e'], ['#b54a6a','#d49c6a'], ['#3d6b4a','#a8c77a'],
+  ['#7a6040','#c4a870'], ['#5b5b8a','#9a7abf'], ['#8a5a4a','#c49070'],
+  ['#4a8a6a','#70c4a0'], ['#6a4a8a','#a070c4'], ['#8a6a4a','#c4a070'],
+  ['#4a6a8a','#70a0c4'], ['#8a4a6a','#c470a0'], ['#5a8a4a','#90c470'],
+  ['#7a5a8a','#b090c4'], ['#4a8a7a','#70c4b0'], ['#8a7a4a','#c4b070'],
+  ['#6a8a4a','#a0c470'], ['#8a4a4a','#c47070'], ['#4a4a8a','#7070c4'],
+  ['#6a7a4a','#a0b070'], ['#4a6a6a','#70a0a0'], ['#7a4a6a','#b070a0'],
+];
+const selected = [0, 1, 2]; // pre-selected
+colors.forEach((c, i) => {
+  const div = document.createElement('div');
+  div.className = 'picker-photo' + (selected.includes(i) ? ' selected' : '');
+  div.innerHTML = `<div class="pp-img has-color" style="--c1:${c[0]};--c2:${c[1]}"></div>`;
+  div.addEventListener('click', () => {
+    div.classList.toggle('selected');
+    const count = grid.querySelectorAll('.selected').length;
+    document.getElementById('pickerCount').textContent = count + ' selected';
+  });
+  grid.appendChild(div);
+});
+</script>
+</body>
+</html>

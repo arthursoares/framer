@@ -115,11 +115,12 @@ struct PresetPreviewGrid: View {
 
                 let processor = FrameProcessor()
                 do {
-                    let preview = try await Task.detached {
-                        try await processor.previewImage(for: url, config: config, rotation: rotation)
+                    let cgImage = try await Task.detached {
+                        try await processor.previewCGImage(for: url, config: config, rotation: rotation)
                     }.value
                     guard !Task.isCancelled else { return }
 
+                    let preview = NSImage(cgImage: cgImage, size: NSSize(width: cgImage.width, height: cgImage.height))
                     await MainActor.run {
                         presetPreviews[presetID] = preview
                     }
