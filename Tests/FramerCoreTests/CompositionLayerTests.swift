@@ -173,6 +173,18 @@ final class CompositionLayerTests: XCTestCase {
         XCTAssertEqual(layer, decoded)
     }
 
+    func test_disabledLayer_roundtripsJSON() throws {
+        let layer = CompositionLayer.border(BorderLayerParams(
+            enabled: false,
+            thickness: .pixels(12),
+            color: try CodableColor(hex: "#FFFFFF")
+        ))
+        let data = try JSONEncoder().encode(layer)
+        let decoded = try JSONDecoder().decode(CompositionLayer.self, from: data)
+        XCTAssertEqual(decoded.isEnabled, false)
+        XCTAssertEqual(layer, decoded)
+    }
+
     // MARK: - applyLayers
 
     func test_applyLayers_borderOnly_correctDimensions() throws {
@@ -195,6 +207,17 @@ final class CompositionLayerTests: XCTestCase {
         // 100 + 2*10 (border) + 2*20 (padding) = 160
         XCTAssertEqual(result.image.width, 160)
         XCTAssertEqual(result.image.height, 160)
+    }
+
+    func test_applyLayers_skipsDisabledLayer() throws {
+        let image = makeTestImage(width: 100, height: 100)
+        let layers: [CompositionLayer] = [
+            .border(BorderLayerParams(enabled: false, thickness: .pixels(10), color: try CodableColor(hex: "#FFFFFF"))),
+            .padding(PaddingLayerParams(thickness: 20, fill: .color(try CodableColor(hex: "#FFFFFF"))))
+        ]
+        let result = try BorderRenderer.applyLayers(layers, to: image, sourceImage: image, exif: ExifData())
+        XCTAssertEqual(result.image.width, 140)
+        XCTAssertEqual(result.image.height, 140)
     }
 
     func test_applyLayers_canvas_setsOriginAndSize() throws {

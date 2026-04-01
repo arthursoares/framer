@@ -235,6 +235,8 @@ struct LayerRow: View {
 
     @State private var isHovering = false
     @State private var isExpanded = false
+    @State private var isHoveringVisibilityToggle = false
+    @State private var isHoveringDelete = false
 
     var body: some View {
         VStack(spacing: 0) {
@@ -260,7 +262,7 @@ struct LayerRow: View {
 
                 Text(layer.label)
                     .font(AppFont.layerName)
-                    .foregroundStyle(Color.text0)
+                    .foregroundStyle(layer.isEnabled ? Color.text0 : Color.text2)
 
                 Spacer()
 
@@ -272,15 +274,29 @@ struct LayerRow: View {
                     .background(Color.surface4, in: Capsule())
 
                 Button {
+                    layer.isEnabled.toggle()
+                } label: {
+                    Image(systemName: layer.isEnabled ? "eye" : "eye.slash")
+                        .font(.caption)
+                        .foregroundStyle(isHoveringVisibilityToggle ? Color.text1 : (layer.isEnabled ? Color.text2 : Color.text3))
+                        .frame(width: 24, height: 20)
+                        .contentShape(Rectangle())
+                }
+                .buttonStyle(.plain)
+                .onHover { isHoveringVisibilityToggle = $0 }
+                .accessibilityLabel(layer.isEnabled ? "Disable layer" : "Enable layer")
+
+                Button {
                     onDelete()
                 } label: {
                     Image(systemName: "xmark")
                         .font(.caption2)
-                        .foregroundStyle(isHovering ? Color.error : Color.text3)
+                        .foregroundStyle(isHoveringDelete ? Color.error : Color.text3)
                         .frame(width: 20, height: 20)
                         .contentShape(Rectangle())
                 }
                 .buttonStyle(.plain)
+                .onHover { isHoveringDelete = $0 }
                 .opacity(isHovering ? 1 : 0.4)
                 .animation(.easeInOut(duration: 0.15), value: isHovering)
                 .accessibilityLabel("Delete layer")
@@ -313,6 +329,7 @@ struct LayerRow: View {
             RoundedRectangle(cornerRadius: CornerRadius.md)
                 .fill(isExpanded ? Color.surface2 : (isHovering ? Color.surface2.opacity(0.5) : .clear))
         )
+        .opacity(layer.isEnabled ? 1.0 : 0.65)
         .overlay(
             RoundedRectangle(cornerRadius: CornerRadius.md)
                 .stroke(isExpanded ? Color.borderDefault : (isHovering ? Color.borderDefault : .clear), lineWidth: 1)
@@ -327,6 +344,13 @@ struct LayerRow: View {
                 Button { onMoveDown() } label: {
                     Label("Move Down", systemImage: "chevron.down")
                 }
+            }
+            Divider()
+            Button {
+                layer.isEnabled.toggle()
+            } label: {
+                Label(layer.isEnabled ? "Disable Layer" : "Enable Layer",
+                      systemImage: layer.isEnabled ? "eye.slash" : "eye")
             }
             Divider()
             Button(role: .destructive) {
@@ -364,6 +388,9 @@ struct LayerRow: View {
     }
 
     private var layerSummary: String {
+        if !layer.isEnabled {
+            return "Disabled"
+        }
         switch layer {
         case .border(let p):
             switch p.thickness {

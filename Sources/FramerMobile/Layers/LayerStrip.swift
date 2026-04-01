@@ -148,13 +148,13 @@ struct LayerRow: View {
     var body: some View {
         HStack(spacing: 10) {
             Image(systemName: layer.iconName)
-                .foregroundStyle(Color.text2)
+                .foregroundStyle(layer.isEnabled ? Color.text2 : Color.text3)
                 .frame(width: 20)
 
             VStack(alignment: .leading, spacing: 2) {
                 Text(layer.label)
                     .font(AppFont.layerName)
-                    .foregroundStyle(Color.text0)
+                    .foregroundStyle(layer.isEnabled ? Color.text0 : Color.text2)
 
                 Text(layerSummary)
                     .font(AppFont.badgeSummary)
@@ -163,6 +163,10 @@ struct LayerRow: View {
 
             Spacer()
 
+            Image(systemName: layer.isEnabled ? "eye" : "eye.slash")
+                .font(.system(size: 12, weight: .medium))
+                .foregroundStyle(layer.isEnabled ? Color.text2 : Color.text3)
+
             Image(systemName: "chevron.right")
                 .font(.system(size: 11, weight: .semibold))
                 .foregroundStyle(Color.text3)
@@ -170,9 +174,11 @@ struct LayerRow: View {
         .padding(.horizontal, 12)
         .padding(.vertical, 10)
         .background(Color.surface2, in: RoundedRectangle(cornerRadius: CornerRadius.md))
+        .opacity(layer.isEnabled ? 1.0 : 0.65)
     }
 
     private var layerSummary: String {
+        if !layer.isEnabled { return "Disabled" }
         switch layer {
         case .border(let p):
             switch p.thickness {

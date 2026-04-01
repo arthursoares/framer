@@ -46,12 +46,27 @@ struct LayerDetailView: View {
                     Text(layer.label)
                         .font(AppFont.body(22, weight: .bold))
                         .foregroundStyle(Color.text0)
+
+                    Spacer()
+
+                    Button {
+                        layer.isEnabled.toggle()
+                    } label: {
+                        Image(systemName: layer.isEnabled ? "eye" : "eye.slash")
+                            .font(.system(size: 15, weight: .semibold))
+                            .foregroundStyle(layer.isEnabled ? Color.text1 : Color.text3)
+                            .frame(width: 36, height: 36)
+                            .background(Color.surface3, in: RoundedRectangle(cornerRadius: CornerRadius.md))
+                    }
+                    .buttonStyle(.plain)
                 }
                 .padding(.horizontal, 16)
 
                 // Layer-specific controls
                 layerControls
                     .padding(.horizontal, 16)
+                    .opacity(layer.isEnabled ? 1.0 : 0.55)
+                    .allowsHitTesting(layer.isEnabled)
 
                 Spacer(minLength: 20)
 
@@ -1020,11 +1035,11 @@ private struct DocumentPickerView: UIViewControllerRepresentable {
 
     func updateUIViewController(_ uiViewController: UIDocumentPickerViewController, context: Context) {}
 
-    func makeCoordinator() -> Coordinator {
+    fileprivate func makeCoordinator() -> Coordinator {
         Coordinator(onPick: onPick)
     }
 
-    private class Coordinator: NSObject, UIDocumentPickerDelegate {
+    fileprivate final class Coordinator: NSObject, UIDocumentPickerDelegate {
         var onPick: (URL) -> Void
 
         init(onPick: @escaping (URL) -> Void) {
