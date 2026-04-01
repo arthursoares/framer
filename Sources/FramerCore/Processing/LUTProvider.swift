@@ -130,7 +130,8 @@ public enum LUTProvider {
         var luts: [LUTInfo] = []
         if let enumerator = FileManager.default.enumerator(at: assetsDir, includingPropertiesForKeys: nil) {
             for case let fileURL as URL in enumerator {
-                if fileURL.pathExtension.lowercased() == "cube" {
+                let ext = fileURL.pathExtension.lowercased()
+                if ext == "cube" {
                     if let info = try? makeLUTInfo(from: fileURL, category: "bundled") {
                         luts.append(info)
                     }
@@ -148,7 +149,8 @@ public enum LUTProvider {
         var luts: [LUTInfo] = []
         if let enumerator = FileManager.default.enumerator(at: userDir, includingPropertiesForKeys: nil) {
             for case let fileURL as URL in enumerator {
-                if fileURL.pathExtension.lowercased() == "cube" {
+                let ext = fileURL.pathExtension.lowercased()
+                if ext == "cube" {
                     if let info = try? makeLUTInfo(from: fileURL, category: "user") {
                         luts.append(info)
                     }
