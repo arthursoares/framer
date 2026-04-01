@@ -2114,6 +2114,7 @@ struct LUTLayerControls: View {
         lutPicker
         lutThumbnailStrip
         intensityControl
+        importButtons
     }
 
     private var lutPicker: some View {
@@ -2157,6 +2158,28 @@ struct LUTLayerControls: View {
         }
     }
 
+    private var importButtons: some View {
+        HStack {
+            Button {
+                importLUT()
+            } label: {
+                Label("Import", systemImage: "square.and.arrow.down")
+                    .font(AppFont.controlLabel)
+            }
+            .buttonStyle(.plain)
+            .foregroundStyle(Color.text2)
+
+            Button {
+                openLUTsFolder()
+            } label: {
+                Label("Show Folder", systemImage: "folder")
+                    .font(AppFont.controlLabel)
+            }
+            .buttonStyle(.plain)
+            .foregroundStyle(Color.text2)
+        }
+    }
+
     private func lutThumb(_ lut: LUTInfo) -> some View {
         Button {
             selectLUT(lut)
@@ -2192,6 +2215,30 @@ struct LUTLayerControls: View {
 
     private func loadLUTs() {
         availableLUTs = LUTProvider.availableLUTs()
+    }
+
+    private func importLUT() {
+        let panel = NSOpenPanel()
+        panel.canChooseFiles = true
+        panel.canChooseDirectories = false
+        panel.allowsMultipleSelection = false
+        panel.message = "Select a .cube LUT file to import"
+        if panel.runModal() == .OK, let url = panel.url {
+            do {
+                let info = try LUTProvider.importLUT(from: url)
+                LUTProvider.invalidateCache()
+                loadLUTs()
+                selectLUT(info)
+            } catch {
+                // silently fail - user can still use bundled LUTs
+            }
+        }
+    }
+
+    private func openLUTsFolder() {
+        if let dir = LUTProvider.userLUTDirectory() {
+            NSWorkspace.shared.open(dir)
+        }
     }
 
     private var lutNameBinding: Binding<String> {
