@@ -31,6 +31,7 @@
 		758E594A560FD0C64D048985 /* FramerCore in Frameworks */ = {isa = PBXBuildFile; productRef = EEF28B51AF5CD9A4B0B9F055 /* FramerCore */; };
 		76AD7FBCC435AE552A02CA23 /* ExportBar.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2ECE914F3685664254BD04DB /* ExportBar.swift */; };
 		7E26ACB4EBE5DD197F9C9E0C /* ExifInfoBar.swift in Sources */ = {isa = PBXBuildFile; fileRef = 69843CE860C9D64774BF6A76 /* ExifInfoBar.swift */; };
+		83C339C5F6907392A7F11225 /* ImageThumbnailLoader.swift in Sources */ = {isa = PBXBuildFile; fileRef = D5BE1B7F799CD269EE2C1411 /* ImageThumbnailLoader.swift */; };
 		8B4266040896BBED84762794 /* textures in Resources */ = {isa = PBXBuildFile; fileRef = B1EC2164F8A3DF317311D2C8 /* textures */; };
 		9F2D984FABBFC95FBD860A67 /* fonts in Resources */ = {isa = PBXBuildFile; fileRef = F74958A269010D4B0BF9A7DE /* fonts */; };
 		AA43BBC52E8EC44FCDEA0FAB /* PresetStrip.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5DDCA19609CC41C63AACE7A7 /* PresetStrip.swift */; };
@@ -69,12 +70,13 @@
 		8A6E6F60B12048759BD1E60C /* PreviewViewModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PreviewViewModel.swift; sourceTree = "<group>"; };
 		99841491BD0A545FF7E469B5 /* FramerMobile.app */ = {isa = PBXFileReference; includeInIndex = 0; lastKnownFileType = wrapper.application; path = FramerMobile.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		9B9A4BC738FB9F539C9A7AFB /* Framer.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = Framer.app; sourceTree = BUILT_PRODUCTS_DIR; };
-		A9D4D6D84523CC9466E3CF9D /* framer */ = {isa = PBXFileReference; lastKnownFileType = folder; name = framer; path = .; sourceTree = SOURCE_ROOT; };
 		B1EC2164F8A3DF317311D2C8 /* textures */ = {isa = PBXFileReference; lastKnownFileType = folder; name = textures; path = assets/textures; sourceTree = SOURCE_ROOT; };
 		B2205885A0B72C7BB1800460 /* PreviewArea.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PreviewArea.swift; sourceTree = "<group>"; };
 		B7A795F9CA0BC01E3F2251A9 /* PreferencesView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PreferencesView.swift; sourceTree = "<group>"; };
 		C20010735E58CE243ED6744A /* FramerCommands.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FramerCommands.swift; sourceTree = "<group>"; };
+		C69326A95C1DCC513D982A18 /* framer-lut-layer */ = {isa = PBXFileReference; lastKnownFileType = folder; name = "framer-lut-layer"; path = .; sourceTree = SOURCE_ROOT; };
 		CE5B96A143FA192F9CB0A8C1 /* LayerStrip.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LayerStrip.swift; sourceTree = "<group>"; };
+		D5BE1B7F799CD269EE2C1411 /* ImageThumbnailLoader.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ImageThumbnailLoader.swift; sourceTree = "<group>"; };
 		E4A8C555BBECD2011E74D76D /* FramerApp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FramerApp.swift; sourceTree = "<group>"; };
 		EBB5F2F1E2A0DE99DC5BC5C5 /* FilmstripView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FilmstripView.swift; sourceTree = "<group>"; };
 		F0494695FD5895F111514FF4 /* CanvasView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CanvasView.swift; sourceTree = "<group>"; };
@@ -209,6 +211,7 @@
 				69843CE860C9D64774BF6A76 /* ExifInfoBar.swift */,
 				5924AD678D9A7C9ED1381741 /* FilmstripThumbnail.swift */,
 				EBB5F2F1E2A0DE99DC5BC5C5 /* FilmstripView.swift */,
+				D5BE1B7F799CD269EE2C1411 /* ImageThumbnailLoader.swift */,
 			);
 			path = Canvas;
 			sourceTree = "<group>";
@@ -243,7 +246,7 @@
 		BF7EB4914AD9DF4212A2FFEA /* Packages */ = {
 			isa = PBXGroup;
 			children = (
-				A9D4D6D84523CC9466E3CF9D /* framer */,
+				C69326A95C1DCC513D982A18 /* framer-lut-layer */,
 			);
 			name = Packages;
 			sourceTree = "<group>";
@@ -422,6 +425,7 @@
 				100AF36A76D44046D6CBA6AC /* FormatPicker.swift in Sources */,
 				DAF4447EF4E27C19DC3B3FF0 /* FramerApp.swift in Sources */,
 				B4A1B551F2C9370D7663CAEC /* FramerCommands.swift in Sources */,
+				83C339C5F6907392A7F11225 /* ImageThumbnailLoader.swift in Sources */,
 				5A2B972194FE5D29D42336D4 /* InspectorView.swift in Sources */,
 				469EBA583F3674764B8E843A /* LayerListSection.swift in Sources */,
 				D2E564203E647371EAED04D0 /* PreferencesView.swift in Sources */,

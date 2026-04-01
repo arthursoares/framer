@@ -2105,6 +2105,7 @@ private extension View {
 // MARK: - LUTLayerControls
 
 struct LUTLayerControls: View {
+    @Environment(AppState.self) private var appState
     var params: LUTLayerParams
     var onChange: (LUTLayerParams) -> Void
 
@@ -2120,7 +2121,17 @@ struct LUTLayerControls: View {
         }
         .task {
             loadLUTs()
-            await generateThumbnails()
+            await reloadThumbnailsForSelectedPhoto()
+        }
+        .onChange(of: appState.selectedPhoto?.id) { _, _ in
+            Task {
+                await reloadThumbnailsForSelectedPhoto()
+            }
+        }
+        .onChange(of: appState.selectedPhoto?.rotation) { _, _ in
+            Task {
+                await reloadThumbnailsForSelectedPhoto()
+            }
         }
     }
 
@@ -2133,12 +2144,22 @@ struct LUTLayerControls: View {
         }
     }
 
+    @MainActor
+    private func reloadThumbnailsForSelectedPhoto() async {
+        thumbnailCache = [:]
+        await generateThumbnails()
+    }
+
     private func generateThumbnails() async {
+        guard let sourceImage = await selectedPhotoThumbnail() else {
+            return
+        }
+
         let luts = availableLUTs
         for lut in luts {
             if thumbnailCache[lut.id] == nil {
                 let thumb = await Task.detached(priority: .userInitiated) {
-                    LUTProvider.thumbnail(for: lut, size: 48)
+                    LUTProvider.thumbnail(for: lut, sourceImage: sourceImage, size: 48)
                 }.value
                 if let thumb {
                     await MainActor.run {
@@ -2224,6 +2245,14 @@ struct LUTLayerControls: View {
                         Image(nsImage: NSImage(cgImage: thumb, size: NSSize(width: 48, height: 48)))
                             .resizable()
                             .aspectRatio(contentMode: .fill)
+                    } else if appState.selectedPhoto == nil {
+                        ZStack {
+                            Color.surface2
+                            Image(systemName: "photo")
+                                .font(.caption)
+                                .foregroundStyle(Color.text3)
+                        }
+                        .aspectRatio(contentMode: .fill)
                     } else {
                         ZStack {
                             Color.surface2
@@ -2260,6 +2289,18 @@ struct LUTLayerControls: View {
         availableLUTs = LUTProvider.availableLUTs()
     }
 
+    private func selectedPhotoThumbnail() async -> CGImage? {
+        guard let photo = appState.selectedPhoto else {
+            return nil
+        }
+
+        return await ImageThumbnailLoader.loadCGThumbnail(
+            from: photo.url,
+            maxPixelSize: 96,
+            rotation: photo.rotation
+        )
+    }
+
     private func importLUT() {
         let panel = NSOpenPanel()
         panel.canChooseFiles = true
@@ -2271,6 +2312,9 @@ struct LUTLayerControls: View {
                 let info = try LUTProvider.importLUT(from: url)
                 LUTProvider.invalidateCache()
                 loadLUTs()
+                Task {
+                    await reloadThumbnailsForSelectedPhoto()
+                }
                 selectLUT(info)
             } catch {
                 showImportError(error)
