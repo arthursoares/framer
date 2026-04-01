@@ -4,10 +4,16 @@ import CoreGraphics
 
 final class LUTProviderTests: XCTestCase {
     private var importedURL: URL?
+    private var metadataURL: URL? {
+        LUTProvider.userLUTDirectory()?.appendingPathComponent(".lut-metadata.json")
+    }
 
     override func tearDown() {
         if let importedURL {
             try? FileManager.default.removeItem(at: importedURL)
+        }
+        if let metadataURL {
+            try? FileManager.default.removeItem(at: metadataURL)
         }
         LUTProvider.clearThumbnailCache()
         LUTProvider.invalidateCache()
@@ -46,6 +52,33 @@ final class LUTProviderTests: XCTestCase {
         XCTAssertEqual(Set(pixels.map { $0.r }), [12])
         XCTAssertEqual(Set(pixels.map { $0.g }), [34])
         XCTAssertEqual(Set(pixels.map { $0.b }), [56])
+    }
+
+    func test_renameUserLUT_persistsCustomDisplayName() throws {
+        let lutName = "lut-provider-rename-\(UUID().uuidString)"
+        let sourceURL = FileManager.default.temporaryDirectory.appendingPathComponent("\(lutName).cube")
+        try makeIdentityCube(size: 2).write(to: sourceURL, atomically: true, encoding: .utf8)
+        let info = try LUTProvider.importLUT(from: sourceURL)
+        importedURL = LUTProvider.userLUTDirectory()?.appendingPathComponent("\(lutName).cube")
+
+        try LUTProvider.renameUserLUT(named: info.id, displayName: "My Favorite LUT")
+
+        let renamed = try XCTUnwrap(LUTProvider.availableLUTs().first(where: { $0.id == info.id }))
+        XCTAssertEqual(renamed.displayName, "My Favorite LUT")
+    }
+
+    func test_deleteUserLUT_removesFileAndListing() throws {
+        let lutName = "lut-provider-delete-\(UUID().uuidString)"
+        let sourceURL = FileManager.default.temporaryDirectory.appendingPathComponent("\(lutName).cube")
+        try makeIdentityCube(size: 2).write(to: sourceURL, atomically: true, encoding: .utf8)
+        let info = try LUTProvider.importLUT(from: sourceURL)
+        importedURL = LUTProvider.userLUTDirectory()?.appendingPathComponent("\(lutName).cube")
+
+        try LUTProvider.deleteUserLUT(named: info.id)
+
+        XCTAssertFalse(FileManager.default.fileExists(atPath: importedURL?.path ?? ""))
+        XCTAssertFalse(LUTProvider.availableLUTs().contains(where: { $0.id == info.id }))
+        importedURL = nil
     }
 
     private func makeCube(low: Float, high: Float) -> String {
