@@ -431,7 +431,11 @@ struct AsyncThumbnail: View {
     }
 
     private nonisolated static func loadThumbnail(from url: URL) async -> UIImage? {
-        await Task.detached {
+        if let cached = thumbnailCache.object(forKey: url as NSURL) {
+            return cached
+        }
+
+        return await Task.detached {
             guard let source = CGImageSourceCreateWithURL(url as CFURL, nil) else { return nil }
             let options: [CFString: Any] = [
                 kCGImageSourceCreateThumbnailFromImageAlways: true,
@@ -443,7 +447,15 @@ struct AsyncThumbnail: View {
             guard let cgImage = CGImageSourceCreateThumbnailAtIndex(source, 0, options as CFDictionary) else {
                 return nil
             }
-            return UIImage(cgImage: cgImage)
+            let image = UIImage(cgImage: cgImage)
+            thumbnailCache.setObject(image, forKey: url as NSURL)
+            return image
         }.value
     }
+
+    private nonisolated(unsafe) static let thumbnailCache: NSCache<NSURL, UIImage> = {
+        let cache = NSCache<NSURL, UIImage>()
+        cache.countLimit = 500
+        return cache
+    }()
 }

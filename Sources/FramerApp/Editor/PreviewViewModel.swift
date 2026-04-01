@@ -55,11 +55,15 @@ final class PreviewViewModel {
             defer { isLoading = false }
 
             do {
-                let exif = try? EXIFReader.read(from: item.url)
-                exifData = exif
-
                 let itemURL = item.url
                 let itemRotation = item.rotation
+
+                let exif = await processor.exifData(for: itemURL)
+                guard !Task.isCancelled else {
+                    return
+                }
+                exifData = exif
+
                 let cgPreview = try await processor.previewCGImage(for: itemURL, config: config, rotation: itemRotation)
                 let scale = NSScreen.main?.backingScaleFactor ?? 2.0
                 let preview = NSImage(cgImage: cgPreview, size: NSSize(
