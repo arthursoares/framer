@@ -2118,10 +2118,8 @@ struct LUTLayerControls: View {
             intensityControl
             importButtons
         }
-        .onAppear {
+        .task {
             loadLUTs()
-        }
-        .task(id: availableLUTs) {
             await generateThumbnails()
         }
     }
@@ -2136,7 +2134,8 @@ struct LUTLayerControls: View {
     }
 
     private func generateThumbnails() async {
-        for lut in availableLUTs {
+        let luts = availableLUTs
+        for lut in luts {
             if thumbnailCache[lut.id] == nil {
                 let thumb = await Task.detached(priority: .userInitiated) {
                     LUTProvider.thumbnail(for: lut, size: 48)

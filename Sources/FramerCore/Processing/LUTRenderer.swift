@@ -12,9 +12,10 @@ public enum LUTRenderer {
         intensity: Double,
         previewBaseDimension: Int? = nil
     ) throws -> CGImage {
-        if let gpuResult = LUTMetalRenderer.apply(to: image, lut: lut, intensity: intensity) {
-            return gpuResult
-        }
+        // Metal temporarily disabled until shader compilation is fixed
+        // if let gpuResult = LUTMetalRenderer.apply(to: image, lut: lut, intensity: intensity) {
+        //     return gpuResult
+        // }
 
         let width = image.width
         let height = image.height

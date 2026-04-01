@@ -30,27 +30,25 @@ public enum LUTMetalRenderer {
         float scale;
     };
 
-    float3 sampleLUT(texture3d<float4, access::sample> lutTex, float3 uvw, constexpr sampler s) {
-        return lutTex.sample(s, uvw).rgb;
-    }
+    constant sampler lutSampler(filter::linear, address::clamp_to_edge);
 
     kernel void applyLUT(
         texture2d<float, access::read> inputTex [[texture(0)]],
         texture2d<float, access::write> outputTex [[texture(1)]],
-        texture3d<float4, access::sample> lutTex [[texture(2)]],
+        texture3d<float, access::sample> lutTex [[texture(2)]],
         constant LUTParams& params [[buffer(0)]],
         uint2 gid [[thread_position_in_grid]]
     ) {
         if (gid.x >= inputTex.get_width() || gid.y >= inputTex.get_height()) return;
 
         float4 color = inputTex.read(gid);
+
         float3 uvw;
         uvw.r = (color.r - params.domainMin.r) * params.scale;
         uvw.g = (color.g - params.domainMin.g) * params.scale;
         uvw.b = (color.b - params.domainMin.b) * params.scale;
 
-        constexpr sampler lutSampler(filter::linear, address::clamp_to_edge);
-        float3 lutColor = sampleLUT(lutTex, uvw, lutSampler);
+        float3 lutColor = lutTex.sample(lutSampler, uvw).rgb;
 
         float3 result = mix(color.rgb, lutColor, params.intensity);
         outputTex.write(float4(result, color.a), gid);
