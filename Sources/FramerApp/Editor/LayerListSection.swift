@@ -2109,6 +2109,7 @@ struct LUTLayerControls: View {
     var onChange: (LUTLayerParams) -> Void
 
     @State private var availableLUTs: [LUTInfo] = []
+    @State private var thumbnailCache: [String: CGImage] = [:]
 
     var body: some View {
         VStack(spacing: 12) {
@@ -2120,6 +2121,9 @@ struct LUTLayerControls: View {
         .onAppear {
             loadLUTs()
         }
+        .task(id: availableLUTs) {
+            await generateThumbnails()
+        }
     }
 
     private var lutPicker: some View {
@@ -2127,6 +2131,21 @@ struct LUTLayerControls: View {
             Text("None").tag("")
             ForEach(availableLUTs) { lut in
                 Text(lut.displayName).tag(lut.id)
+            }
+        }
+    }
+
+    private func generateThumbnails() async {
+        for lut in availableLUTs {
+            if thumbnailCache[lut.id] == nil {
+                let thumb = await Task.detached(priority: .userInitiated) {
+                    LUTProvider.thumbnail(for: lut, size: 48)
+                }.value
+                if let thumb {
+                    await MainActor.run {
+                        thumbnailCache[lut.id] = thumb
+                    }
+                }
             }
         }
     }
@@ -2202,14 +2221,17 @@ struct LUTLayerControls: View {
         } label: {
             VStack(spacing: 2) {
                 Group {
-                    if let thumb = LUTProvider.thumbnail(for: lut, size: 48) {
+                    if let thumb = thumbnailCache[lut.id] {
                         Image(nsImage: NSImage(cgImage: thumb, size: NSSize(width: 48, height: 48)))
                             .resizable()
                             .aspectRatio(contentMode: .fill)
                     } else {
-                        Image(systemName: "photo.artframe")
-                            .resizable()
-                            .aspectRatio(contentMode: .fill)
+                        ZStack {
+                            Color.surface2
+                            ProgressView()
+                                .scaleEffect(0.5)
+                        }
+                        .aspectRatio(contentMode: .fill)
                     }
                 }
                 .frame(width: 48, height: 48)
