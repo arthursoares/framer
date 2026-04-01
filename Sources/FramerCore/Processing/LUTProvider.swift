@@ -197,9 +197,15 @@ public enum LUTProvider {
     }
 
     public static func invalidateCache() {
+        cacheLock.lock()
+        cache.removeAll()
+        cacheLock.unlock()
+
         lutsCacheLock.lock()
         lutsCache = nil
         lutsCacheLock.unlock()
+
+        clearThumbnailCache()
     }
 
     // MARK: - Private

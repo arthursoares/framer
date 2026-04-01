@@ -20,9 +20,10 @@ public struct LUT3D: Sendable {
     public func apply(r: Float, g: Float, b: Float) -> (Float, Float, Float) {
         let size = Float(self.size)
         let scale = (size - 1) / (domainMax.x - domainMin.x)
-        let rScaled = (r - domainMin.x) * scale
-        let gScaled = (g - domainMin.y) * scale
-        let bScaled = (b - domainMin.z) * scale
+        let maxIndex = size - 1
+        let rScaled = max(0, min(maxIndex, (r - domainMin.x) * scale))
+        let gScaled = max(0, min(maxIndex, (g - domainMin.y) * scale))
+        let bScaled = max(0, min(maxIndex, (b - domainMin.z) * scale))
 
         let r0 = max(0, min(Float(size - 1), floor(rScaled)))
         let g0 = max(0, min(Float(size - 1), floor(gScaled)))
@@ -120,6 +121,7 @@ public enum CubeFileParser {
 
     public static func parse(string: String) throws -> LUT3D {
         var size: Int?
+        var pending1DEntries = 0
         var domainMin: SIMD3<Float> = SIMD3(0, 0, 0)
         var domainMax: SIMD3<Float> = SIMD3(1, 1, 1)
         var hasDomainMin = false
@@ -154,6 +156,14 @@ public enum CubeFileParser {
             }
 
             if trimmed.hasPrefix("LUT_1D_SIZE") {
+                let parts = trimmed.split(whereSeparator: \.isWhitespace)
+                if parts.count < 2 {
+                    throw CubeFileParseError.invalidLine(trimmed)
+                }
+                guard let parsed1DSize = Int(parts[1]), parsed1DSize >= 2 else {
+                    throw CubeFileParseError.invalidLine(trimmed)
+                }
+                pending1DEntries = parsed1DSize
                 continue
             }
 
@@ -183,7 +193,7 @@ public enum CubeFileParser {
                 continue
             }
 
-            let parts = trimmed.split(separator: " ")
+            let parts = trimmed.split(whereSeparator: \.isWhitespace)
             guard parts.count >= 3 else {
                 if !trimmed.isEmpty {
                     throw CubeFileParseError.invalidLine(trimmed)
@@ -193,6 +203,12 @@ public enum CubeFileParser {
             guard let r = Float(parts[0]), let g = Float(parts[1]), let b = Float(parts[2]) else {
                 throw CubeFileParseError.invalidLine(trimmed)
             }
+
+            if pending1DEntries > 0 {
+                pending1DEntries -= 1
+                continue
+            }
+
             data.append(r)
             data.append(g)
             data.append(b)

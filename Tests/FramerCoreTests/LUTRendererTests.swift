@@ -83,6 +83,28 @@ final class LUTRendererTests: XCTestCase {
         return LUT3D(size: size, data: data)
     }
 
+    func makeRampLUT(
+        size: Int,
+        low: Float,
+        high: Float,
+        domainMin: SIMD3<Float>,
+        domainMax: SIMD3<Float>
+    ) -> LUT3D {
+        var data = [Float]()
+        data.reserveCapacity(size * size * size * 3)
+        for _ in 0..<size {
+            for _ in 0..<size {
+                for r in 0..<size {
+                    let value = r == 0 ? low : high
+                    data.append(value)
+                    data.append(value)
+                    data.append(value)
+                }
+            }
+        }
+        return LUT3D(size: size, data: data, domainMin: domainMin, domainMax: domainMax)
+    }
+
     // MARK: - Identity LUT Tests
 
     func test_lutRenderer_identity() throws {
@@ -189,6 +211,24 @@ final class LUTRendererTests: XCTestCase {
         XCTAssertEqual(resultPixels[0].r, 100, accuracy: 1)
         XCTAssertEqual(resultPixels[0].g, 150, accuracy: 1)
         XCTAssertEqual(resultPixels[0].b, 200, accuracy: 1)
+    }
+
+    func test_lutRenderer_clampsBelowDomainMin() throws {
+        let image = makeSolidImage(width: 1, height: 1, r: 0, g: 128, b: 128)
+        let lut = makeRampLUT(
+            size: 2,
+            low: 0.4,
+            high: 1.0,
+            domainMin: SIMD3<Float>(repeating: 0.5),
+            domainMax: SIMD3<Float>(repeating: 1.0)
+        )
+
+        let result = try LUTRenderer.apply(to: image, lut: lut, intensity: 1.0)
+        let pixel = try XCTUnwrap(extractPixels(from: result).first)
+
+        XCTAssertEqual(pixel.r, 102, accuracy: 1)
+        XCTAssertEqual(pixel.g, 102, accuracy: 1)
+        XCTAssertEqual(pixel.b, 102, accuracy: 1)
     }
 
     func test_lutRenderer_33sizeLUT() throws {
