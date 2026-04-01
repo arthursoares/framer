@@ -1,5 +1,9 @@
 // Sources/FramerCore/Processing/LUTProvider.swift
 import Foundation
+import CoreGraphics
+#if os(macOS)
+import AppKit
+#endif
 
 // MARK: - LUTInfo
 
@@ -25,6 +29,16 @@ public enum LUTProvider {
 
     private static var lutsCache: [LUTInfo]?
     private static let lutsCacheLock = NSLock()
+
+    #if os(macOS)
+    private static var thumbnailCache: NSCache<NSString, NSImage> = {
+        let cache = NSCache<NSString, NSImage>()
+        cache.countLimit = 50
+        return cache
+    }()
+    #endif
+
+    private static var sampleImage: CGImage?
 
     // MARK: - Discovery
 
@@ -76,6 +90,78 @@ public enum LUTProvider {
         } catch {
             return nil
         }
+    }
+
+    // MARK: - Thumbnail Generation
+
+    public static func thumbnail(for lutInfo: LUTInfo, size: Int = 48) -> CGImage? {
+        let cacheKey = "\(lutInfo.id)_\(size)" as NSString
+
+        #if os(macOS)
+        if let cached = thumbnailCache.object(forKey: cacheKey) {
+            return cached.cgImage(forProposedRect: nil, context: nil, hints: nil)
+        }
+        #endif
+
+        guard let lut = loadLUT(named: lutInfo.id) else {
+            return nil
+        }
+
+        let sample = getSampleImage(size: size)
+        guard let sample = sample else {
+            return nil
+        }
+
+        do {
+            let rendered = try LUTRenderer.apply(to: sample, lut: lut, intensity: 1.0, previewBaseDimension: nil)
+            #if os(macOS)
+            let nsImage = NSImage(cgImage: rendered, size: NSSize(width: size, height: size))
+            thumbnailCache.setObject(nsImage, forKey: cacheKey)
+            #endif
+            return rendered
+        } catch {
+            return nil
+        }
+    }
+
+    public static func clearThumbnailCache() {
+        #if os(macOS)
+        thumbnailCache.removeAllObjects()
+        #endif
+    }
+
+    private static func getSampleImage(size: Int) -> CGImage? {
+        if let existing = sampleImage, existing.width == size {
+            return existing
+        }
+
+        let colorSpace = CGColorSpaceCreateDeviceRGB()
+        let bitmapInfo = CGImageAlphaInfo.premultipliedLast.rawValue
+
+        guard let ctx = CGContext(
+            data: nil, width: size, height: size,
+            bitsPerComponent: 8, bytesPerRow: size * 4,
+            space: colorSpace, bitmapInfo: bitmapInfo
+        ) else {
+            return nil
+        }
+
+        let data = ctx.data!.bindMemory(to: UInt8.self, capacity: size * size * 4)
+
+        for y in 0..<size {
+            for x in 0..<size {
+                let idx = (y * size + x) * 4
+                let t = Double(x) / Double(size - 1)
+                let s = Double(y) / Double(size - 1)
+                data[idx] = UInt8(t * 255)
+                data[idx + 1] = UInt8(s * 255)
+                data[idx + 2] = UInt8(((t + s) / 2) * 255)
+                data[idx + 3] = 255
+            }
+        }
+
+        sampleImage = ctx.makeImage()
+        return sampleImage
     }
 
     // MARK: - User Management

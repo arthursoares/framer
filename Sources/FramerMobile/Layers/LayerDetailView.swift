@@ -903,27 +903,33 @@ private struct LUTControls: View {
 
     @State private var availableLUTs: [LUTInfo] = []
     @State private var showingPicker = false
+    @State private var showingError = false
+    @State private var errorMessage = ""
 
     var body: some View {
         VStack(spacing: 8) {
-            ControlRow(label: "LUT") {
-                Picker("", selection: Binding(
-                    get: { params.lutFileName },
-                    set: { newValue in
-                        var p = params
-                        p.lutFileName = newValue
-                        if let lut = availableLUTs.first(where: { $0.id == newValue }) {
-                            p.lutName = lut.displayName
+            if availableLUTs.isEmpty {
+                emptyState
+            } else {
+                ControlRow(label: "LUT") {
+                    Picker("", selection: Binding(
+                        get: { params.lutFileName },
+                        set: { newValue in
+                            var p = params
+                            p.lutFileName = newValue
+                            if let lut = availableLUTs.first(where: { $0.id == newValue }) {
+                                p.lutName = lut.displayName
+                            }
+                            onChange(p)
                         }
-                        onChange(p)
+                    )) {
+                        Text("None").tag("")
+                        ForEach(availableLUTs, id: \.id) { lut in
+                            Text(lut.displayName).tag(lut.id)
+                        }
                     }
-                )) {
-                    Text("None").tag("")
-                    ForEach(availableLUTs, id: \.id) { lut in
-                        Text(lut.displayName).tag(lut.id)
-                    }
+                    .pickerStyle(.menu)
                 }
-                .pickerStyle(.menu)
             }
 
             ControlRow(label: "Intensity") {
@@ -957,6 +963,27 @@ private struct LUTControls: View {
         .onAppear {
             loadLUTs()
         }
+        .alert("Import Error", isPresented: $showingError) {
+            Button("OK", role: .cancel) {}
+        } message: {
+            Text(errorMessage)
+        }
+    }
+
+    private var emptyState: some View {
+        VStack(spacing: 8) {
+            Image(systemName: "photo.on.rectangle.angled")
+                .font(.system(size: 32))
+                .foregroundStyle(Color.text3)
+            Text("No LUTs available")
+                .font(AppFont.controlLabel)
+                .foregroundStyle(Color.text3)
+            Text("Import .cube files to get started")
+                .font(.caption)
+                .foregroundStyle(Color.text3)
+        }
+        .frame(maxWidth: .infinity)
+        .padding(.vertical, 16)
     }
 
     private func loadLUTs() {
@@ -973,7 +1000,8 @@ private struct LUTControls: View {
             p.lutFileName = info.id
             onChange(p)
         } catch {
-            // silently fail
+            errorMessage = "Failed to import LUT: \(error.localizedDescription)"
+            showingError = true
         }
     }
 }
