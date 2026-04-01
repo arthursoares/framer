@@ -95,7 +95,7 @@ public enum LUTProvider {
 
         invalidateCache()
 
-        return try lutInfo(from: destURL, category: "user")
+        return try makeLUTInfo(from: destURL, category: "user")
     }
 
     public static func userLUTDirectory() -> URL? {
@@ -128,16 +128,11 @@ public enum LUTProvider {
         }
 
         var luts: [LUTInfo] = []
-        let categories = ["film", "creative"]
-
-        for category in categories {
-            let categoryDir = assetsDir.appendingPathComponent(category, isDirectory: true)
-            if let enumerator = FileManager.default.enumerator(at: categoryDir, includingPropertiesForKeys: nil) {
-                for case let fileURL as URL in enumerator {
-                    if fileURL.pathExtension.lowercased() == "cube" {
-                        if let info = try? lutInfo(from: fileURL, category: category) {
-                            luts.append(info)
-                        }
+        if let enumerator = FileManager.default.enumerator(at: assetsDir, includingPropertiesForKeys: nil) {
+            for case let fileURL as URL in enumerator {
+                if fileURL.pathExtension.lowercased() == "cube" {
+                    if let info = try? makeLUTInfo(from: fileURL, category: "bundled") {
+                        luts.append(info)
                     }
                 }
             }
@@ -154,7 +149,7 @@ public enum LUTProvider {
         if let enumerator = FileManager.default.enumerator(at: userDir, includingPropertiesForKeys: nil) {
             for case let fileURL as URL in enumerator {
                 if fileURL.pathExtension.lowercased() == "cube" {
-                    if let info = try? lutInfo(from: fileURL, category: "user") {
+                    if let info = try? makeLUTInfo(from: fileURL, category: "user") {
                         luts.append(info)
                     }
                 }
@@ -168,7 +163,7 @@ public enum LUTProvider {
         return luts.first { $0.id == named }?.url
     }
 
-    private static func lutInfo(from url: URL, category: String) throws -> LUTInfo {
+    private static func makeLUTInfo(from url: URL, category: String) throws -> LUTInfo {
         let fileName = url.deletingPathExtension().lastPathComponent
         let id = fileName
 
