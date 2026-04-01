@@ -31,9 +31,7 @@ final class AppState {
     }
 
     var selectedPhoto: PhotoItem? {
-        selectedItems.first.flatMap { id in
-            library.first { $0.id == id }
-        }
+        library.first { selectedItems.contains($0.id) }
     }
 
     // MARK: - Export
@@ -160,7 +158,8 @@ final class AppState {
     func retryJob(_ job: ExportJob) {
         guard case .failed = job.status else { return }
         exportQueue.removeAll { $0.id == job.id }
-        exportItems(job.items, to: job.outputDirectory)
+        let suffix = job.label ?? Self.exportSuffix(presetName: activePresetName)
+        exportItems(job.items, to: job.outputDirectory, config: job.config, suffix: suffix)
     }
 
     /// Sanitized filename suffix from preset name, falling back to "framed".

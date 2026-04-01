@@ -135,7 +135,7 @@ public enum TextureFrameProvider {
     /// Returns a cached thumbnail, loading from disk if needed.
     /// Thread-safe — safe to call from any thread.
     public static func cachedThumbnail(for overlay: OverlayInfo, maxSize: Int = 80) -> CGImage? {
-        let key = overlay.id as NSString
+        let key = "\(overlay.id)_\(maxSize)" as NSString
         if let cached = _thumbnailCache.object(forKey: key) {
             return cached.image
         }

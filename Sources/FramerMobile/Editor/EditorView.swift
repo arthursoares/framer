@@ -198,7 +198,15 @@ struct EditorView: View {
                         Divider()
                         Button(role: .destructive) {
                             withAnimation {
+                                let removedIndex = appState.library.firstIndex(where: { $0.id == item.id })
                                 appState.library.removeAll { $0.id == item.id }
+                                if let removedIndex {
+                                    if removedIndex < appState.selectedIndex {
+                                        appState.selectedIndex -= 1
+                                    } else if removedIndex == appState.selectedIndex {
+                                        appState.selectedIndex = min(appState.selectedIndex, max(0, appState.library.count - 1))
+                                    }
+                                }
                                 if appState.selectedIndex >= appState.library.count {
                                     appState.selectedIndex = max(0, appState.library.count - 1)
                                 }
@@ -227,7 +235,10 @@ struct EditorView: View {
     }
 
     private func regeneratePresetPreviews() {
-        guard let photo = appState.selectedPhoto else { return }
+        guard let photo = appState.selectedPhoto else {
+            presetCache.clear()
+            return
+        }
         presetCache.regenerate(for: photo, presets: appState.presets)
     }
 
@@ -265,23 +276,25 @@ struct EditorView: View {
         Task {
             defer { isExporting = false }
             let processor = FrameProcessor()
-            var images: [UIImage] = []
+            var exportedFiles: [URL] = []
             for (i, item) in items.enumerated() {
                 do {
                     let tempURL = FileManager.default.temporaryDirectory
                         .appendingPathComponent(UUID().uuidString)
                         .appendingPathExtension(config.outputFormat == .png ? "png" : "jpg")
                     try await processor.process(input: item.url, output: tempURL, config: config, rotation: item.rotation)
-                    if let data = try? Data(contentsOf: tempURL), let img = UIImage(data: data) {
-                        images.append(img)
-                    }
-                    try? FileManager.default.removeItem(at: tempURL)
+                    exportedFiles.append(tempURL)
                 } catch { }
                 exportProgress = Double(i + 1)
             }
-            guard !images.isEmpty else { return }
+            guard !exportedFiles.isEmpty else { return }
             // Share all processed images
-            let activityVC = UIActivityViewController(activityItems: images, applicationActivities: nil)
+            let activityVC = UIActivityViewController(activityItems: exportedFiles, applicationActivities: nil)
+            activityVC.completionWithItemsHandler = { _, _, _, _ in
+                for file in exportedFiles {
+                    try? FileManager.default.removeItem(at: file)
+                }
+            }
             guard let windowScene = UIApplication.shared.connectedScenes.first as? UIWindowScene,
                   let rootVC = windowScene.windows.first?.rootViewController else { return }
             var presenter = rootVC

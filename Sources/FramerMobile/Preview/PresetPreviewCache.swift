@@ -7,10 +7,14 @@ final class PresetPreviewCache {
     var previews: [UUID: UIImage] = [:]
     private var renderTasks: [UUID: Task<Void, Never>] = [:]
 
-    func regenerate(for photo: PhotoItem, presets: [Preset]) {
+    func clear() {
         for (_, task) in renderTasks { task.cancel() }
         renderTasks.removeAll()
         previews.removeAll()
+    }
+
+    func regenerate(for photo: PhotoItem, presets: [Preset]) {
+        clear()
 
         let url = photo.url
         let rotation = photo.rotation

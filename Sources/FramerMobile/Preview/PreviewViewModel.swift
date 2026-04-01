@@ -14,21 +14,28 @@ final class PreviewViewModel {
     private let processor = FrameProcessor()
 
     func updatePreview(for item: PhotoItem?, config: ProcessingConfig) {
+        renderTask?.cancel()
+
         guard let item else {
+            renderTask = nil
             previewImage = nil
             originalImage = nil
             error = nil
             outputSize = nil
+            isLoading = false
             return
         }
 
-        renderTask?.cancel()
         renderTask = Task {
             try? await Task.sleep(for: .milliseconds(150))
-            guard !Task.isCancelled else { return }
+            guard !Task.isCancelled else {
+                isLoading = false
+                return
+            }
 
             isLoading = true
             error = nil
+            defer { isLoading = false }
 
             do {
                 let itemURL = item.url
@@ -36,10 +43,13 @@ final class PreviewViewModel {
                 let originalHandle = Task.detached {
                     Self.loadOriginal(from: itemURL, maxDimension: 1200)
                 }
+                defer { originalHandle.cancel() }
                 let cgPreview = try await processor.previewCGImage(for: itemURL, config: config, rotation: itemRotation)
                 let preview = UIImage(cgImage: cgPreview)
                 let original = await originalHandle.value
-                guard !Task.isCancelled else { return }
+                guard !Task.isCancelled else {
+                    return
+                }
                 originalImage = original
                 previewImage = preview
                 outputSize = CGSize(width: cgPreview.width, height: cgPreview.height)
@@ -48,7 +58,6 @@ final class PreviewViewModel {
             } catch {
                 self.error = error.localizedDescription
             }
-            isLoading = false
         }
     }
 

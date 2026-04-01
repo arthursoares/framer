@@ -17,16 +17,19 @@ final class PreviewViewModel {
     private let processor = FrameProcessor()
 
     func updatePreview(for item: PhotoItem?, config: ProcessingConfig) {
+        renderTask?.cancel()
+
         guard let item else {
+            renderTask = nil
             previewImage = nil
             originalImage = nil
             exifData = nil
             error = nil
             outputSize = nil
+            isLoading = false
             return
         }
 
-        renderTask?.cancel()
         renderTask = Task {
             // Debounce: wait 150ms before rendering
             try? await Task.sleep(for: .milliseconds(150))
@@ -37,6 +40,7 @@ final class PreviewViewModel {
 
             isLoading = true
             error = nil
+            defer { isLoading = false }
 
             do {
                 let exif = try? EXIFReader.read(from: item.url)
@@ -50,6 +54,7 @@ final class PreviewViewModel {
                 let originalHandle = Task.detached {
                     Self.loadOriginal(from: itemURL, maxDimension: 1200)
                 }
+                defer { originalHandle.cancel() }
                 let cgPreview = try await processor.previewCGImage(for: itemURL, config: config, rotation: itemRotation)
                 let scale = NSScreen.main?.backingScaleFactor ?? 2.0
                 let preview = NSImage(cgImage: cgPreview, size: NSSize(
@@ -58,7 +63,6 @@ final class PreviewViewModel {
                 ))
                 let original = await originalHandle.value
                 guard !Task.isCancelled else {
-                    isLoading = false
                     return
                 }
                 originalImage = original
@@ -70,7 +74,6 @@ final class PreviewViewModel {
             } catch {
                 self.error = error.localizedDescription
             }
-            isLoading = false
         }
     }
 
