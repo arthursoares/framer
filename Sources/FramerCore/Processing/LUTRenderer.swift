@@ -12,11 +12,6 @@ public enum LUTRenderer {
         intensity: Double,
         previewBaseDimension: Int? = nil
     ) throws -> CGImage {
-        // Metal GPU disabled - shader returning incorrect values, fix needed
-        // if let gpuResult = LUTMetalRenderer.apply(to: image, lut: lut, intensity: intensity) {
-        //     return gpuResult
-        // }
-
         let width = image.width
         let height = image.height
         guard width > 0, height > 0 else {
@@ -25,24 +20,55 @@ public enum LUTRenderer {
 
         let colorSpace = CGColorSpaceCreateDeviceRGB()
         let bitmapInfo = CGImageAlphaInfo.premultipliedLast.rawValue
+        let scale = workScale(width: width, height: height, previewBaseDimension: previewBaseDimension)
+        let workImage = try makeWorkImage(
+            from: image,
+            width: width,
+            height: height,
+            scale: scale,
+            colorSpace: colorSpace,
+            bitmapInfo: bitmapInfo
+        )
 
-        let scale: Int
-        if let previewBase = previewBaseDimension {
-            let currentMax = max(width, height)
-            scale = max(1, min(8, Int(round(Double(currentMax) / Double(previewBase)))))
-        } else {
-            scale = 1
+        if let gpuResult = LUTMetalRenderer.apply(to: workImage, lut: lut, intensity: intensity) {
+            return try finalizeResult(
+                gpuResult,
+                originalWidth: width,
+                originalHeight: height,
+                scale: scale,
+                colorSpace: colorSpace,
+                bitmapInfo: bitmapInfo
+            )
         }
 
-        let workW: Int
-        let workH: Int
-        if scale > 1 {
-            workW = max(1, width / scale)
-            workH = max(1, height / scale)
-        } else {
-            workW = width
-            workH = height
+        return try applyCPU(to: image, lut: lut, intensity: intensity, previewBaseDimension: previewBaseDimension)
+    }
+
+    static func applyCPU(
+        to image: CGImage,
+        lut: LUT3D,
+        intensity: Double,
+        previewBaseDimension: Int? = nil
+    ) throws -> CGImage {
+        let width = image.width
+        let height = image.height
+        guard width > 0, height > 0 else {
+            throw FramerError.invalidImage(URL(fileURLWithPath: ""))
         }
+
+        let colorSpace = CGColorSpaceCreateDeviceRGB()
+        let bitmapInfo = CGImageAlphaInfo.premultipliedLast.rawValue
+        let scale = workScale(width: width, height: height, previewBaseDimension: previewBaseDimension)
+        let workImage = try makeWorkImage(
+            from: image,
+            width: width,
+            height: height,
+            scale: scale,
+            colorSpace: colorSpace,
+            bitmapInfo: bitmapInfo
+        )
+        let workW = workImage.width
+        let workH = workImage.height
 
         guard let ctx = CGContext(
             data: nil, width: workW, height: workH,
@@ -51,8 +77,7 @@ public enum LUTRenderer {
         ) else {
             throw FramerError.invalidImage(URL(fileURLWithPath: ""))
         }
-        ctx.interpolationQuality = scale > 1 ? .high : .none
-        ctx.draw(image, in: CGRect(x: 0, y: 0, width: workW, height: workH))
+        ctx.draw(workImage, in: CGRect(x: 0, y: 0, width: workW, height: workH))
 
         guard let data = ctx.data else {
             throw FramerError.invalidImage(URL(fileURLWithPath: ""))
@@ -97,23 +122,77 @@ public enum LUTRenderer {
             throw FramerError.invalidImage(URL(fileURLWithPath: ""))
         }
 
-        if scale > 1 {
-            guard let outCtx = CGContext(
-                data: nil, width: width, height: height,
-                bitsPerComponent: 8, bytesPerRow: width * 4,
-                space: colorSpace, bitmapInfo: bitmapInfo
-            ) else {
-                throw FramerError.invalidImage(URL(fileURLWithPath: ""))
-            }
-            outCtx.interpolationQuality = .none
-            outCtx.draw(result, in: CGRect(x: 0, y: 0, width: width, height: height))
-            guard let upscaled = outCtx.makeImage() else {
-                throw FramerError.invalidImage(URL(fileURLWithPath: ""))
-            }
-            return upscaled
+        return try finalizeResult(
+            result,
+            originalWidth: width,
+            originalHeight: height,
+            scale: scale,
+            colorSpace: colorSpace,
+            bitmapInfo: bitmapInfo
+        )
+    }
+
+    private static func workScale(width: Int, height: Int, previewBaseDimension: Int?) -> Int {
+        if let previewBase = previewBaseDimension {
+            let currentMax = max(width, height)
+            return max(1, min(8, Int(round(Double(currentMax) / Double(previewBase)))))
+        }
+        return 1
+    }
+
+    private static func makeWorkImage(
+        from image: CGImage,
+        width: Int,
+        height: Int,
+        scale: Int,
+        colorSpace: CGColorSpace,
+        bitmapInfo: UInt32
+    ) throws -> CGImage {
+        let workW = scale > 1 ? max(1, width / scale) : width
+        let workH = scale > 1 ? max(1, height / scale) : height
+
+        guard let ctx = CGContext(
+            data: nil, width: workW, height: workH,
+            bitsPerComponent: 8, bytesPerRow: workW * 4,
+            space: colorSpace, bitmapInfo: bitmapInfo
+        ) else {
+            throw FramerError.invalidImage(URL(fileURLWithPath: ""))
         }
 
-        return result
+        ctx.interpolationQuality = scale > 1 ? .high : .none
+        ctx.draw(image, in: CGRect(x: 0, y: 0, width: workW, height: workH))
+
+        guard let workImage = ctx.makeImage() else {
+            throw FramerError.invalidImage(URL(fileURLWithPath: ""))
+        }
+        return workImage
+    }
+
+    private static func finalizeResult(
+        _ result: CGImage,
+        originalWidth: Int,
+        originalHeight: Int,
+        scale: Int,
+        colorSpace: CGColorSpace,
+        bitmapInfo: UInt32
+    ) throws -> CGImage {
+        guard scale > 1 else { return result }
+
+        guard let outCtx = CGContext(
+            data: nil, width: originalWidth, height: originalHeight,
+            bitsPerComponent: 8, bytesPerRow: originalWidth * 4,
+            space: colorSpace, bitmapInfo: bitmapInfo
+        ) else {
+            throw FramerError.invalidImage(URL(fileURLWithPath: ""))
+        }
+
+        outCtx.interpolationQuality = .none
+        outCtx.draw(result, in: CGRect(x: 0, y: 0, width: originalWidth, height: originalHeight))
+
+        guard let upscaled = outCtx.makeImage() else {
+            throw FramerError.invalidImage(URL(fileURLWithPath: ""))
+        }
+        return upscaled
     }
 
     private static func applyLUTFull(

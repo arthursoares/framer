@@ -246,4 +246,110 @@ final class LUTRendererTests: XCTestCase {
             XCTAssertEqual(res.b, orig.b, accuracy: 2)
         }
     }
+
+    func test_lutMetalRenderer_matchesCPU_identityLUT() throws {
+        guard LUTMetalRenderer.isAvailable else {
+            throw XCTSkip("Metal unavailable on this test host")
+        }
+
+        let image = makeGradientImage(width: 16, height: 16)
+        let lut = makeIdentityLUT(size: 33)
+
+        let cpu = try LUTRenderer.applyCPU(to: image, lut: lut, intensity: 1.0)
+        let gpu = try XCTUnwrap(LUTMetalRenderer.apply(to: image, lut: lut, intensity: 1.0))
+
+        let cpuPixels = extractPixels(from: cpu)
+        let gpuPixels = extractPixels(from: gpu)
+
+        XCTAssertEqual(cpuPixels.count, gpuPixels.count)
+        for (c, g) in zip(cpuPixels, gpuPixels) {
+            XCTAssertEqual(g.r, c.r, accuracy: 1)
+            XCTAssertEqual(g.g, c.g, accuracy: 1)
+            XCTAssertEqual(g.b, c.b, accuracy: 1)
+        }
+    }
+
+    func test_lutMetalRenderer_matchesCPU_nonDefaultDomain() throws {
+        guard LUTMetalRenderer.isAvailable else {
+            throw XCTSkip("Metal unavailable on this test host")
+        }
+
+        let image = makeSolidImage(width: 8, height: 8, r: 0, g: 128, b: 255)
+        let lut = makeRampLUT(
+            size: 2,
+            low: 0.25,
+            high: 0.9,
+            domainMin: SIMD3<Float>(0.2, 0.3, 0.4),
+            domainMax: SIMD3<Float>(0.8, 0.9, 1.0)
+        )
+
+        let cpu = try LUTRenderer.applyCPU(to: image, lut: lut, intensity: 1.0)
+        let gpu = try XCTUnwrap(LUTMetalRenderer.apply(to: image, lut: lut, intensity: 1.0))
+
+        let cpuPixels = extractPixels(from: cpu)
+        let gpuPixels = extractPixels(from: gpu)
+
+        XCTAssertEqual(cpuPixels.count, gpuPixels.count)
+        for (c, g) in zip(cpuPixels, gpuPixels) {
+            XCTAssertEqual(g.r, c.r, accuracy: 1)
+            XCTAssertEqual(g.g, c.g, accuracy: 1)
+            XCTAssertEqual(g.b, c.b, accuracy: 1)
+        }
+    }
+
+    func test_lutMetalRenderer_matchesCPU_partialIntensity() throws {
+        guard LUTMetalRenderer.isAvailable else {
+            throw XCTSkip("Metal unavailable on this test host")
+        }
+
+        let image = makeSolidImage(width: 8, height: 8, r: 64, g: 128, b: 192)
+        let lut = makeRampLUT(
+            size: 2,
+            low: 0.1,
+            high: 0.95,
+            domainMin: SIMD3<Float>(repeating: 0),
+            domainMax: SIMD3<Float>(repeating: 1)
+        )
+
+        let cpu = try LUTRenderer.applyCPU(to: image, lut: lut, intensity: 0.35)
+        let gpu = try XCTUnwrap(LUTMetalRenderer.apply(to: image, lut: lut, intensity: 0.35))
+
+        let cpuPixels = extractPixels(from: cpu)
+        let gpuPixels = extractPixels(from: gpu)
+
+        XCTAssertEqual(cpuPixels.count, gpuPixels.count)
+        for (c, g) in zip(cpuPixels, gpuPixels) {
+            XCTAssertEqual(g.r, c.r, accuracy: 1)
+            XCTAssertEqual(g.g, c.g, accuracy: 1)
+            XCTAssertEqual(g.b, c.b, accuracy: 1)
+        }
+    }
+
+    func test_lutRenderer_publicApply_matchesCPU_withPreviewBaseDimension() throws {
+        guard LUTMetalRenderer.isAvailable else {
+            throw XCTSkip("Metal unavailable on this test host")
+        }
+
+        let image = makeGradientImage(width: 64, height: 64)
+        let lut = makeRampLUT(
+            size: 2,
+            low: 0.15,
+            high: 0.85,
+            domainMin: SIMD3<Float>(repeating: 0),
+            domainMax: SIMD3<Float>(repeating: 1)
+        )
+
+        let cpu = try LUTRenderer.applyCPU(to: image, lut: lut, intensity: 0.6, previewBaseDimension: 32)
+        let gpu = try LUTRenderer.apply(to: image, lut: lut, intensity: 0.6, previewBaseDimension: 32)
+
+        let cpuPixels = extractPixels(from: cpu)
+        let gpuPixels = extractPixels(from: gpu)
+
+        XCTAssertEqual(cpuPixels.count, gpuPixels.count)
+        for (c, g) in zip(cpuPixels, gpuPixels) {
+            XCTAssertEqual(g.r, c.r, accuracy: 1)
+            XCTAssertEqual(g.g, c.g, accuracy: 1)
+            XCTAssertEqual(g.b, c.b, accuracy: 1)
+        }
+    }
 }
