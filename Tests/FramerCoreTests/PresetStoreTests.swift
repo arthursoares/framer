@@ -68,6 +68,22 @@ final class PresetStoreTests: XCTestCase {
         XCTAssertEqual(decoded.noMetadata, true)
     }
 
+    func test_yamlConfig_preservesDisabledLayers() throws {
+        let config = ProcessingConfig(
+            layers: [
+                .border(BorderLayerParams(enabled: false, thickness: .pixels(12), color: .white)),
+                .lut(LUTLayerParams(enabled: true, lutName: "Film", lutFileName: "film.cube", intensity: 0.8))
+            ]
+        )
+
+        let yaml = try YAMLConfig.encode(config)
+        let decoded = try YAMLConfig.decode(yaml)
+
+        XCTAssertEqual(decoded.layers?.count, 2)
+        XCTAssertEqual(decoded.layers?.first?.isEnabled, false)
+        XCTAssertEqual(decoded.layers?.last?.isEnabled, true)
+    }
+
     func test_yamlConfig_print10x15BackwardCompat() throws {
         let yaml = """
         border_style: print10x15

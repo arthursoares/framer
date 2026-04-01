@@ -160,6 +160,11 @@ Measured on `2026-04-01` with `docs/sample.jpg` (`3000x1987`) and `assets/luts/A
 
 The automatic path uses Metal when available and falls back to CPU otherwise.
 
+Next LUT performance step:
+- Preview still blocks on GPU readback and `CGImage` reconstruction after the Metal pass.
+- The next high-impact optimization is to present preview output closer to a Metal texture so the preview path no longer has to read pixels back to CPU on every LUT change.
+- That work is intentionally deferred because it touches preview/UI architecture, not just LUT internals.
+
 ## License
 
 This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.

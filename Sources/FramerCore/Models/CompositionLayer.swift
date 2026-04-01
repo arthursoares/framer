@@ -93,68 +93,137 @@ public enum LayerFill: Codable, Equatable, Sendable {
 
 public struct BorderLayerParams: Identifiable, Codable, Equatable, Sendable {
     public let id: UUID
+    public var enabled: Bool
     public var thickness: BorderSize
     public var color: CodableColor
 
     public init(
         id: UUID = UUID(),
+        enabled: Bool = true,
         thickness: BorderSize = .pixels(20),
         color: CodableColor = .white
     ) {
         self.id = id
+        self.enabled = enabled
         self.thickness = thickness
         self.color = color
+    }
+
+    private enum CodingKeys: String, CodingKey {
+        case id, enabled, thickness, color
+    }
+
+    public init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        self.init(
+            id: try container.decode(UUID.self, forKey: .id),
+            enabled: try container.decodeIfPresent(Bool.self, forKey: .enabled) ?? true,
+            thickness: try container.decode(BorderSize.self, forKey: .thickness),
+            color: try container.decode(CodableColor.self, forKey: .color)
+        )
     }
 }
 
 public struct PaddingLayerParams: Identifiable, Codable, Equatable, Sendable {
     public let id: UUID
+    public var enabled: Bool
     public var thickness: Int
     public var fill: LayerFill
 
     public init(
         id: UUID = UUID(),
+        enabled: Bool = true,
         thickness: Int = 150,
         fill: LayerFill = .color(.white)
     ) {
         self.id = id
+        self.enabled = enabled
         self.thickness = thickness
         self.fill = fill
+    }
+
+    private enum CodingKeys: String, CodingKey {
+        case id, enabled, thickness, fill
+    }
+
+    public init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        self.init(
+            id: try container.decode(UUID.self, forKey: .id),
+            enabled: try container.decodeIfPresent(Bool.self, forKey: .enabled) ?? true,
+            thickness: try container.decode(Int.self, forKey: .thickness),
+            fill: try container.decode(LayerFill.self, forKey: .fill)
+        )
     }
 }
 
 public struct CanvasLayerParams: Identifiable, Codable, Equatable, Sendable {
     public let id: UUID
+    public var enabled: Bool
     public var width: Int
     public var height: Int
     public var fill: LayerFill
 
     public init(
         id: UUID = UUID(),
+        enabled: Bool = true,
         width: Int = 1080,
         height: Int = 1350,
         fill: LayerFill = .color(.white)
     ) {
         self.id = id
+        self.enabled = enabled
         self.width = width
         self.height = height
         self.fill = fill
+    }
+
+    private enum CodingKeys: String, CodingKey {
+        case id, enabled, width, height, fill
+    }
+
+    public init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        self.init(
+            id: try container.decode(UUID.self, forKey: .id),
+            enabled: try container.decodeIfPresent(Bool.self, forKey: .enabled) ?? true,
+            width: try container.decode(Int.self, forKey: .width),
+            height: try container.decode(Int.self, forKey: .height),
+            fill: try container.decode(LayerFill.self, forKey: .fill)
+        )
     }
 }
 
 public struct ResizeLayerParams: Identifiable, Codable, Equatable, Sendable {
     public let id: UUID
+    public var enabled: Bool
     public var maxWidth: Int
     public var maxHeight: Int
 
     public init(
         id: UUID = UUID(),
+        enabled: Bool = true,
         maxWidth: Int = 1000,
         maxHeight: Int = 1000
     ) {
         self.id = id
+        self.enabled = enabled
         self.maxWidth = maxWidth
         self.maxHeight = maxHeight
+    }
+
+    private enum CodingKeys: String, CodingKey {
+        case id, enabled, maxWidth, maxHeight
+    }
+
+    public init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        self.init(
+            id: try container.decode(UUID.self, forKey: .id),
+            enabled: try container.decodeIfPresent(Bool.self, forKey: .enabled) ?? true,
+            maxWidth: try container.decode(Int.self, forKey: .maxWidth),
+            maxHeight: try container.decode(Int.self, forKey: .maxHeight)
+        )
     }
 }
 
@@ -223,6 +292,7 @@ public enum OverlayBlendMode: String, Codable, CaseIterable, Sendable {
 
 public struct OverlayLayerParams: Identifiable, Codable, Equatable, Sendable {
     public let id: UUID
+    public var enabled: Bool
     public var overlayName: String
     public var kind: OverlayKind
     public var blendMode: OverlayBlendMode
@@ -230,16 +300,34 @@ public struct OverlayLayerParams: Identifiable, Codable, Equatable, Sendable {
 
     public init(
         id: UUID = UUID(),
+        enabled: Bool = true,
         overlayName: String = "",
         kind: OverlayKind = .frame,
         blendMode: OverlayBlendMode? = nil,
         opacity: Double = 100
     ) {
         self.id = id
+        self.enabled = enabled
         self.overlayName = overlayName
         self.kind = kind
         self.blendMode = blendMode ?? OverlayBlendMode.defaultFor(kind)
         self.opacity = opacity
+    }
+
+    private enum CodingKeys: String, CodingKey {
+        case id, enabled, overlayName, kind, blendMode, opacity
+    }
+
+    public init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        self.init(
+            id: try container.decode(UUID.self, forKey: .id),
+            enabled: try container.decodeIfPresent(Bool.self, forKey: .enabled) ?? true,
+            overlayName: try container.decode(String.self, forKey: .overlayName),
+            kind: try container.decode(OverlayKind.self, forKey: .kind),
+            blendMode: try container.decodeIfPresent(OverlayBlendMode.self, forKey: .blendMode),
+            opacity: try container.decode(Double.self, forKey: .opacity)
+        )
     }
 }
 
@@ -252,14 +340,30 @@ public enum OrientationTarget: String, Codable, CaseIterable, Sendable {
 
 public struct OrientationLayerParams: Identifiable, Codable, Equatable, Sendable {
     public let id: UUID
+    public var enabled: Bool
     public var target: OrientationTarget
 
     public init(
         id: UUID = UUID(),
+        enabled: Bool = true,
         target: OrientationTarget = .landscape
     ) {
         self.id = id
+        self.enabled = enabled
         self.target = target
+    }
+
+    private enum CodingKeys: String, CodingKey {
+        case id, enabled, target
+    }
+
+    public init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        self.init(
+            id: try container.decode(UUID.self, forKey: .id),
+            enabled: try container.decodeIfPresent(Bool.self, forKey: .enabled) ?? true,
+            target: try container.decode(OrientationTarget.self, forKey: .target)
+        )
     }
 }
 
@@ -314,6 +418,7 @@ public enum CaptionColorMode: Codable, Equatable, Sendable {
 
 public struct CaptionLayerParams: Identifiable, Codable, Equatable, Sendable {
     public let id: UUID
+    public var enabled: Bool
     public var mode: CaptionMode
     public var fontName: String
     public var fontSize: FontSize
@@ -335,6 +440,7 @@ public struct CaptionLayerParams: Identifiable, Codable, Equatable, Sendable {
 
     public init(
         id: UUID = UUID(),
+        enabled: Bool = true,
         mode: CaptionMode = .template(" - {{mon}} '{{year2}} -"),
         fontName: String = "Courier New",
         fontSize: FontSize = .auto,
@@ -347,6 +453,7 @@ public struct CaptionLayerParams: Identifiable, Codable, Equatable, Sendable {
         offsetY: Int = 0
     ) {
         self.id = id
+        self.enabled = enabled
         self.mode = mode
         self.fontName = fontName
         self.fontSize = fontSize
@@ -359,13 +466,14 @@ public struct CaptionLayerParams: Identifiable, Codable, Equatable, Sendable {
     }
 
     private enum CodingKeys: String, CodingKey {
-        case id, mode, fontName, fontSize, fontStyle, fontColor, fontColorMode
+        case id, enabled, mode, fontName, fontSize, fontStyle, fontColor, fontColorMode
         case alignment, position, offsetX, offsetY
     }
 
     public init(from decoder: Decoder) throws {
         let container = try decoder.container(keyedBy: CodingKeys.self)
         id = try container.decode(UUID.self, forKey: .id)
+        enabled = try container.decodeIfPresent(Bool.self, forKey: .enabled) ?? true
         mode = try container.decode(CaptionMode.self, forKey: .mode)
         fontName = try container.decode(String.self, forKey: .fontName)
         fontSize = try container.decode(FontSize.self, forKey: .fontSize)
@@ -387,6 +495,7 @@ public struct CaptionLayerParams: Identifiable, Codable, Equatable, Sendable {
     public func encode(to encoder: Encoder) throws {
         var container = encoder.container(keyedBy: CodingKeys.self)
         try container.encode(id, forKey: .id)
+        try container.encode(enabled, forKey: .enabled)
         try container.encode(mode, forKey: .mode)
         try container.encode(fontName, forKey: .fontName)
         try container.encode(fontSize, forKey: .fontSize)
@@ -489,6 +598,7 @@ public enum DitherColorMode: Codable, Equatable, Sendable {
 
 public struct DitherLayerParams: Identifiable, Codable, Equatable, Sendable {
     public let id: UUID
+    public var enabled: Bool
     public var algorithm: DitherAlgorithm
     public var colorMode: DitherColorMode
     public var bayerLevel: Int
@@ -505,6 +615,7 @@ public struct DitherLayerParams: Identifiable, Codable, Equatable, Sendable {
 
     public init(
         id: UUID = UUID(),
+        enabled: Bool = true,
         algorithm: DitherAlgorithm = .atkinson,
         colorMode: DitherColorMode = .bw,
         bayerLevel: Int = 2,
@@ -514,6 +625,7 @@ public struct DitherLayerParams: Identifiable, Codable, Equatable, Sendable {
         contrast: Double = 0
     ) {
         self.id = id
+        self.enabled = enabled
         self.algorithm = algorithm
         self.colorMode = colorMode
         self.bayerLevel = max(1, min(4, bayerLevel))
@@ -522,12 +634,32 @@ public struct DitherLayerParams: Identifiable, Codable, Equatable, Sendable {
         self.sharpen = max(0, min(1, sharpen))
         self.contrast = max(0, min(1, contrast))
     }
+
+    private enum CodingKeys: String, CodingKey {
+        case id, enabled, algorithm, colorMode, bayerLevel, pixelScale, threshold, sharpen, contrast
+    }
+
+    public init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        self.init(
+            id: try container.decode(UUID.self, forKey: .id),
+            enabled: try container.decodeIfPresent(Bool.self, forKey: .enabled) ?? true,
+            algorithm: try container.decode(DitherAlgorithm.self, forKey: .algorithm),
+            colorMode: try container.decode(DitherColorMode.self, forKey: .colorMode),
+            bayerLevel: try container.decode(Int.self, forKey: .bayerLevel),
+            pixelScale: try container.decode(Int.self, forKey: .pixelScale),
+            threshold: try container.decode(Double.self, forKey: .threshold),
+            sharpen: try container.decode(Double.self, forKey: .sharpen),
+            contrast: try container.decode(Double.self, forKey: .contrast)
+        )
+    }
 }
 
 // MARK: - Aspect Ratio
 
 public struct AspectRatioLayerParams: Identifiable, Codable, Equatable, Sendable {
     public let id: UUID
+    public var enabled: Bool
     public var ratioWidth: Int
     public var ratioHeight: Int
     public var offsetX: Double  // -1.0 (left) to 1.0 (right), 0 = center
@@ -535,16 +667,34 @@ public struct AspectRatioLayerParams: Identifiable, Codable, Equatable, Sendable
 
     public init(
         id: UUID = UUID(),
+        enabled: Bool = true,
         ratioWidth: Int = 1,
         ratioHeight: Int = 1,
         offsetX: Double = 0,
         offsetY: Double = 0
     ) {
         self.id = id
+        self.enabled = enabled
         self.ratioWidth = max(1, ratioWidth)
         self.ratioHeight = max(1, ratioHeight)
         self.offsetX = max(-1, min(1, offsetX))
         self.offsetY = max(-1, min(1, offsetY))
+    }
+
+    private enum CodingKeys: String, CodingKey {
+        case id, enabled, ratioWidth, ratioHeight, offsetX, offsetY
+    }
+
+    public init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        self.init(
+            id: try container.decode(UUID.self, forKey: .id),
+            enabled: try container.decodeIfPresent(Bool.self, forKey: .enabled) ?? true,
+            ratioWidth: try container.decode(Int.self, forKey: .ratioWidth),
+            ratioHeight: try container.decode(Int.self, forKey: .ratioHeight),
+            offsetX: try container.decodeIfPresent(Double.self, forKey: .offsetX) ?? 0,
+            offsetY: try container.decodeIfPresent(Double.self, forKey: .offsetY) ?? 0
+        )
     }
 
     /// Compute the crop rect for a given image size.
@@ -588,20 +738,38 @@ public struct AspectRatioLayerParams: Identifiable, Codable, Equatable, Sendable
 
 public struct LUTLayerParams: Identifiable, Codable, Equatable, Sendable {
     public let id: UUID
+    public var enabled: Bool
     public var lutName: String
     public var lutFileName: String
     public var intensity: Double
 
     public init(
         id: UUID = UUID(),
+        enabled: Bool = true,
         lutName: String = "",
         lutFileName: String = "",
         intensity: Double = 1.0
     ) {
         self.id = id
+        self.enabled = enabled
         self.lutName = lutName
         self.lutFileName = lutFileName
         self.intensity = max(0, min(1, intensity))
+    }
+
+    private enum CodingKeys: String, CodingKey {
+        case id, enabled, lutName, lutFileName, intensity
+    }
+
+    public init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        self.init(
+            id: try container.decode(UUID.self, forKey: .id),
+            enabled: try container.decodeIfPresent(Bool.self, forKey: .enabled) ?? true,
+            lutName: try container.decodeIfPresent(String.self, forKey: .lutName) ?? "",
+            lutFileName: try container.decodeIfPresent(String.self, forKey: .lutFileName) ?? "",
+            intensity: try container.decodeIfPresent(Double.self, forKey: .intensity) ?? 1.0
+        )
     }
 }
 
@@ -646,6 +814,57 @@ public enum CompositionLayer: Identifiable, Codable, Equatable, Sendable {
         case .dither: return "Dither"
         case .aspectRatio: return "Aspect Ratio"
         case .lut: return "LUT"
+        }
+    }
+
+    public var isEnabled: Bool {
+        get {
+            switch self {
+            case .border(let p): return p.enabled
+            case .padding(let p): return p.enabled
+            case .canvas(let p): return p.enabled
+            case .resize(let p): return p.enabled
+            case .overlay(let p): return p.enabled
+            case .orientation(let p): return p.enabled
+            case .caption(let p): return p.enabled
+            case .dither(let p): return p.enabled
+            case .aspectRatio(let p): return p.enabled
+            case .lut(let p): return p.enabled
+            }
+        }
+        set {
+            switch self {
+            case .border(var p):
+                p.enabled = newValue
+                self = .border(p)
+            case .padding(var p):
+                p.enabled = newValue
+                self = .padding(p)
+            case .canvas(var p):
+                p.enabled = newValue
+                self = .canvas(p)
+            case .resize(var p):
+                p.enabled = newValue
+                self = .resize(p)
+            case .overlay(var p):
+                p.enabled = newValue
+                self = .overlay(p)
+            case .orientation(var p):
+                p.enabled = newValue
+                self = .orientation(p)
+            case .caption(var p):
+                p.enabled = newValue
+                self = .caption(p)
+            case .dither(var p):
+                p.enabled = newValue
+                self = .dither(p)
+            case .aspectRatio(var p):
+                p.enabled = newValue
+                self = .aspectRatio(p)
+            case .lut(var p):
+                p.enabled = newValue
+                self = .lut(p)
+            }
         }
     }
 
