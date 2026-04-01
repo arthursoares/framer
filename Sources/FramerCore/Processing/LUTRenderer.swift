@@ -44,6 +44,15 @@ public enum LUTRenderer {
         return try applyCPU(to: image, lut: lut, intensity: intensity, previewBaseDimension: previewBaseDimension)
     }
 
+    public static func applyCPUReference(
+        to image: CGImage,
+        lut: LUT3D,
+        intensity: Double,
+        previewBaseDimension: Int? = nil
+    ) throws -> CGImage {
+        try applyCPU(to: image, lut: lut, intensity: intensity, previewBaseDimension: previewBaseDimension)
+    }
+
     static func applyCPU(
         to image: CGImage,
         lut: LUT3D,

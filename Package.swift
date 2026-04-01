@@ -31,5 +31,9 @@ let package = Package(
             dependencies: ["FramerCore"],
             resources: [.copy("Resources")]
         ),
+        .testTarget(
+            name: "FramerCLITests",
+            dependencies: ["FramerCLI"]
+        ),
     ]
 )
