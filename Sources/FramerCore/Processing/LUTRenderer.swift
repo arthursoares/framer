@@ -136,17 +136,18 @@ public enum LUTRenderer {
             let gIn = Float(pixels[idx + 1]) / 255.0
             let bIn = Float(pixels[idx + 2]) / 255.0
 
-            let rScaled = (rIn - domainMin.x) * scaleX
-            let gScaled = (gIn - domainMin.y) * scaleY
-            let bScaled = (bIn - domainMin.z) * scaleZ
+            let maxIndex = Float(lutSize - 1)
+            let rScaled = max(0, min(maxIndex, (rIn - domainMin.x) * scaleX))
+            let gScaled = max(0, min(maxIndex, (gIn - domainMin.y) * scaleY))
+            let bScaled = max(0, min(maxIndex, (bIn - domainMin.z) * scaleZ))
 
-            let r0 = max(0, min(Float(lutSize - 1), floor(rScaled)))
-            let g0 = max(0, min(Float(lutSize - 1), floor(gScaled)))
-            let b0 = max(0, min(Float(lutSize - 1), floor(bScaled)))
+            let r0 = floor(rScaled)
+            let g0 = floor(gScaled)
+            let b0 = floor(bScaled)
 
-            let r1 = min(Float(lutSize - 1), r0 + 1)
-            let g1 = min(Float(lutSize - 1), g0 + 1)
-            let b1 = min(Float(lutSize - 1), b0 + 1)
+            let r1 = min(maxIndex, r0 + 1)
+            let g1 = min(maxIndex, g0 + 1)
+            let b1 = min(maxIndex, b0 + 1)
 
             let rFrac = rScaled - r0
             let gFrac = gScaled - g0
@@ -259,17 +260,18 @@ public enum LUTRenderer {
             let gIn = Float(pixels[idx + 1]) / 255.0
             let bIn = Float(pixels[idx + 2]) / 255.0
 
-            let rScaled = (rIn - domainMin.x) * scaleX
-            let gScaled = (gIn - domainMin.y) * scaleY
-            let bScaled = (bIn - domainMin.z) * scaleZ
+            let maxIndex = Float(lutSize - 1)
+            let rScaled = max(0, min(maxIndex, (rIn - domainMin.x) * scaleX))
+            let gScaled = max(0, min(maxIndex, (gIn - domainMin.y) * scaleY))
+            let bScaled = max(0, min(maxIndex, (bIn - domainMin.z) * scaleZ))
 
-            let r0 = max(0, min(Float(lutSize - 1), floor(rScaled)))
-            let g0 = max(0, min(Float(lutSize - 1), floor(gScaled)))
-            let b0 = max(0, min(Float(lutSize - 1), floor(bScaled)))
+            let r0 = floor(rScaled)
+            let g0 = floor(gScaled)
+            let b0 = floor(bScaled)
 
-            let r1 = min(Float(lutSize - 1), r0 + 1)
-            let g1 = min(Float(lutSize - 1), g0 + 1)
-            let b1 = min(Float(lutSize - 1), b0 + 1)
+            let r1 = min(maxIndex, r0 + 1)
+            let g1 = min(maxIndex, g0 + 1)
+            let b1 = min(maxIndex, b0 + 1)
 
             let rFrac = rScaled - r0
             let gFrac = gScaled - g0

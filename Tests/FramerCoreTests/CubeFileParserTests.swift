@@ -194,6 +194,30 @@ final class CubeFileParserTests: XCTestCase {
         XCTAssertEqual(lut.data.count, 8 * 3)
     }
 
+    func test_cubeParser_hybrid1DAnd3D_skips1DSection() throws {
+        let cube = """
+        TITLE "Hybrid LUT"
+        LUT_1D_SIZE 2
+        0.1 0.1 0.1
+        0.2 0.2 0.2
+        LUT_3D_SIZE 2
+        0.0 0.0 0.0
+        1.0 0.0 0.0
+        0.0 1.0 0.0
+        1.0 1.0 0.0
+        0.0 0.0 1.0
+        1.0 0.0 1.0
+        0.0 1.0 1.0
+        1.0 1.0 1.0
+        """
+
+        let lut = try CubeFileParser.parse(string: cube)
+        XCTAssertEqual(lut.size, 2)
+        XCTAssertEqual(lut.data[0], 0.0, accuracy: 0.0001)
+        XCTAssertEqual(lut.data[1], 0.0, accuracy: 0.0001)
+        XCTAssertEqual(lut.data[2], 0.0, accuracy: 0.0001)
+    }
+
     func test_cubeParser_domainOutOfOrder() throws {
         let cube = """
         LUT_3D_SIZE 2
@@ -268,5 +292,28 @@ final class CubeFileParserTests: XCTestCase {
         XCTAssertEqual(r1, 1, accuracy: 0.001)
         XCTAssertEqual(g1, 1, accuracy: 0.001)
         XCTAssertEqual(b1, 1, accuracy: 0.001)
+    }
+
+    func test_lut3D_clampsBelowDomainMin() throws {
+        let lut = LUT3D(
+            size: 2,
+            data: [
+                0.4, 0.4, 0.4,
+                1.0, 1.0, 1.0,
+                0.4, 0.4, 0.4,
+                1.0, 1.0, 1.0,
+                0.4, 0.4, 0.4,
+                1.0, 1.0, 1.0,
+                0.4, 0.4, 0.4,
+                1.0, 1.0, 1.0
+            ],
+            domainMin: SIMD3<Float>(repeating: 0.5),
+            domainMax: SIMD3<Float>(repeating: 1.0)
+        )
+
+        let (r, g, b) = lut.apply(r: 0.0, g: 0.5, b: 0.5)
+        XCTAssertEqual(r, 0.4, accuracy: 0.001)
+        XCTAssertEqual(g, 0.4, accuracy: 0.001)
+        XCTAssertEqual(b, 0.4, accuracy: 0.001)
     }
 }
