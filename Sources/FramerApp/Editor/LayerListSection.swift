@@ -155,6 +155,12 @@ struct LayerListSection: View {
             } label: {
                 Label("Wet Plate", systemImage: "drop.halffull")
             }
+            Divider()
+            Button {
+                addLayer(.lut(LUTLayerParams()))
+            } label: {
+                Label("LUT", systemImage: "photo.artframe")
+            }
         } label: {
             Label("Add Layer", systemImage: "plus.circle")
                 .foregroundStyle(Color.text2)
@@ -352,6 +358,8 @@ struct LayerRow: View {
             DitherLayerControls(params: params) { layer = .dither($0) }
         case .aspectRatio(let params):
             AspectRatioLayerControls(params: params) { layer = .aspectRatio($0) }
+        case .lut(let params):
+            LUTLayerControls(params: params) { layer = .lut($0) }
         }
     }
 
@@ -383,6 +391,8 @@ struct LayerRow: View {
             return p.algorithm.label
         case .aspectRatio(let p):
             return "\(p.ratioWidth):\(p.ratioHeight)"
+        case .lut(let p):
+            return p.lutName.isEmpty ? "None" : p.lutName
         }
     }
 }
@@ -2089,6 +2099,144 @@ private extension View {
                 .font(AppFont.controlLabel)
                 .foregroundStyle(Color.text2)
         }
+    }
+}
+
+// MARK: - LUTLayerControls
+
+struct LUTLayerControls: View {
+    var params: LUTLayerParams
+    var onChange: (LUTLayerParams) -> Void
+
+    @State private var availableLUTs: [LUTInfo] = []
+    @State private var selectedCategory: String = "film"
+
+    private let categories = ["film", "creative", "user"]
+
+    var body: some View {
+        categoryPicker
+        lutPicker
+        lutThumbnailStrip
+        intensityControl
+    }
+
+    private var categoryPicker: some View {
+        Picker("Category", selection: $selectedCategory) {
+            Text("Film").tag("film")
+            Text("Creative").tag("creative")
+            Text("User").tag("user")
+        }
+        .pickerStyle(.segmented)
+        .onAppear {
+            loadLUTs()
+        }
+        .onChange(of: selectedCategory) { _, _ in
+            loadLUTs()
+        }
+    }
+
+    private var lutPicker: some View {
+        Picker("LUT", selection: lutNameBinding) {
+            Text("None").tag("")
+            ForEach(filteredLUTs) { lut in
+                Text(lut.displayName).tag(lut.id)
+            }
+        }
+    }
+
+    @ViewBuilder
+    private var lutThumbnailStrip: some View {
+        if !filteredLUTs.isEmpty {
+            ScrollView(.horizontal, showsIndicators: false) {
+                HStack(spacing: 6) {
+                    ForEach(filteredLUTs) { lut in
+                        lutThumb(lut)
+                    }
+                }
+                .padding(.vertical, 4)
+            }
+        }
+    }
+
+    private var intensityControl: some View {
+        VStack(alignment: .leading, spacing: 4) {
+            HStack {
+                Text("Intensity")
+                    .font(AppFont.controlLabel)
+                    .foregroundStyle(Color.text2)
+                Spacer()
+                Text("\(Int(params.intensity * 100))%")
+                    .font(AppFont.controlLabel)
+                    .foregroundStyle(Color.text2)
+            }
+            Slider(value: intensityBinding, in: 0...1, step: 0.05)
+        }
+    }
+
+    private func lutThumb(_ lut: LUTInfo) -> some View {
+        Button {
+            selectLUT(lut)
+        } label: {
+            VStack(spacing: 2) {
+                RoundedRectangle(cornerRadius: 4)
+                    .fill(Color.surface2)
+                    .frame(width: 48, height: 48)
+                    .overlay(
+                        Image(systemName: "photo.artframe")
+                            .foregroundStyle(Color.text3)
+                    )
+                    .overlay(
+                        RoundedRectangle(cornerRadius: 4)
+                            .stroke(params.lutFileName == lut.id ? Color.accent : Color.clear, lineWidth: 2)
+                    )
+                Text(lut.displayName)
+                    .font(.caption2)
+                    .foregroundStyle(Color.text2)
+                    .lineLimit(1)
+                    .frame(width: 48)
+            }
+        }
+        .buttonStyle(.plain)
+    }
+
+    private func selectLUT(_ lut: LUTInfo) {
+        var p = params
+        p.lutName = lut.displayName
+        p.lutFileName = lut.id
+        onChange(p)
+    }
+
+    private func loadLUTs() {
+        availableLUTs = LUTProvider.availableLUTs()
+    }
+
+    private var filteredLUTs: [LUTInfo] {
+        availableLUTs.filter { $0.category == selectedCategory }
+    }
+
+    private var lutNameBinding: Binding<String> {
+        Binding(
+            get: { params.lutFileName },
+            set: { newValue in
+                var p = params
+                p.lutFileName = newValue
+                if let lut = availableLUTs.first(where: { $0.id == newValue }) {
+                    p.lutName = lut.displayName
+                }
+                onChange(p)
+            }
+        )
+    }
+
+    private var intensityBinding: Binding<Double> {
+        Binding(
+            get: { params.intensity },
+            set: { newValue in
+                var p = params
+                p.intensity = newValue
+                onChange(p)
+            }
+        )
     }
 }
 

@@ -122,6 +122,8 @@ struct LayerDetailView: View {
             DitherControls(params: params) { layer = .dither($0) }
         case .overlay(let params):
             OverlayControls(params: params) { layer = .overlay($0) }
+        case .lut(let params):
+            LUTControls(params: params) { layer = .lut($0) }
         }
     }
 }
@@ -890,6 +892,74 @@ private struct FillPicker: View {
                 }
             }
         }
+    }
+}
+
+// MARK: - LUT Controls
+
+private struct LUTControls: View {
+    var params: LUTLayerParams
+    var onChange: (LUTLayerParams) -> Void
+
+    @State private var availableLUTs: [LUTInfo] = []
+    @State private var selectedCategory: String = "film"
+
+    private let categories = ["film", "creative", "user"]
+
+    var body: some View {
+        VStack(spacing: 8) {
+            ControlRow(label: "Category") {
+                Picker("", selection: $selectedCategory) {
+                    Text("Film").tag("film")
+                    Text("Creative").tag("creative")
+                    Text("User").tag("user")
+                }
+                .pickerStyle(.segmented)
+                .onAppear {
+                    loadLUTs()
+                }
+            }
+
+            ControlRow(label: "LUT") {
+                Picker("", selection: Binding(
+                    get: { params.lutFileName },
+                    set: { newValue in
+                        var p = params
+                        p.lutFileName = newValue
+                        if let lut = availableLUTs.first(where: { $0.id == newValue }) {
+                            p.lutName = lut.displayName
+                        }
+                        onChange(p)
+                    }
+                )) {
+                    Text("None").tag("")
+                    ForEach(filteredLUTs, id: \.id) { lut in
+                        Text(lut.displayName).tag(lut.id)
+                    }
+                }
+                .pickerStyle(.menu)
+            }
+
+            ControlRow(label: "Intensity") {
+                HStack {
+                    Slider(value: Binding(
+                        get: { params.intensity },
+                        set: { var p = params; p.intensity = $0; onChange(p) }
+                    ), in: 0...1)
+                    Text("\(Int(params.intensity * 100))%")
+                        .font(AppFont.mono(12))
+                        .frame(width: 50, alignment: .trailing)
+                }
+            }
+        }
+    }
+
+    private func loadLUTs() {
+        availableLUTs = LUTProvider.availableLUTs()
+    }
+
+    private var filteredLUTs: [LUTInfo] {
+        availableLUTs.filter { $0.category == selectedCategory }
     }
 }
 
