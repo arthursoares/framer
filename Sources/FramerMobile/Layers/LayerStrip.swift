@@ -120,6 +120,10 @@ struct LayerStrip: View {
             Button { addLayer(.overlay(OverlayLayerParams(kind: .wetPlate))) } label: {
                 Label("Wet Plate", systemImage: "drop.halffull")
             }
+            Divider()
+            Button { addLayer(.lut(LUTLayerParams())) } label: {
+                Label("LUT", systemImage: "photo.artframe")
+            }
         } label: {
             HStack {
                 Image(systemName: "plus.circle")
@@ -190,6 +194,7 @@ struct LayerRow: View {
             }
         case .dither(let p): return p.algorithm.label
         case .aspectRatio(let p): return "\(p.ratioWidth):\(p.ratioHeight)"
+        case .lut(let p): return p.lutName.isEmpty ? "None" : p.lutName
         }
     }
 }
