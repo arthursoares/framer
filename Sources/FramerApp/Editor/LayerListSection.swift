@@ -2133,7 +2133,21 @@ struct LUTLayerControls: View {
 
     @ViewBuilder
     private var lutThumbnailStrip: some View {
-        if !availableLUTs.isEmpty {
+        if availableLUTs.isEmpty {
+            VStack(spacing: 8) {
+                Image(systemName: "photo.on.rectangle.angled")
+                    .font(.system(size: 32))
+                    .foregroundStyle(Color.text3)
+                Text("No LUTs available")
+                    .font(AppFont.controlLabel)
+                    .foregroundStyle(Color.text3)
+                Text("Import .cube files to get started")
+                    .font(.caption)
+                    .foregroundStyle(Color.text3)
+            }
+            .frame(maxWidth: .infinity)
+            .padding(.vertical, 16)
+        } else {
             ScrollView(.horizontal, showsIndicators: false) {
                 HStack(spacing: 6) {
                     ForEach(availableLUTs) { lut in
@@ -2187,17 +2201,23 @@ struct LUTLayerControls: View {
             selectLUT(lut)
         } label: {
             VStack(spacing: 2) {
-                RoundedRectangle(cornerRadius: 4)
-                    .fill(Color.surface2)
-                    .frame(width: 48, height: 48)
-                    .overlay(
+                Group {
+                    if let thumb = LUTProvider.thumbnail(for: lut, size: 48) {
+                        Image(nsImage: NSImage(cgImage: thumb, size: NSSize(width: 48, height: 48)))
+                            .resizable()
+                            .aspectRatio(contentMode: .fill)
+                    } else {
                         Image(systemName: "photo.artframe")
-                            .foregroundStyle(Color.text3)
-                    )
-                    .overlay(
-                        RoundedRectangle(cornerRadius: 4)
-                            .stroke(params.lutFileName == lut.id ? Color.accent : Color.clear, lineWidth: 2)
-                    )
+                            .resizable()
+                            .aspectRatio(contentMode: .fill)
+                    }
+                }
+                .frame(width: 48, height: 48)
+                .clipShape(RoundedRectangle(cornerRadius: 4))
+                .overlay(
+                    RoundedRectangle(cornerRadius: 4)
+                        .stroke(params.lutFileName == lut.id ? Color.accent : Color.clear, lineWidth: 2)
+                )
                 Text(lut.displayName)
                     .font(.caption2)
                     .foregroundStyle(Color.text2)
@@ -2232,9 +2252,18 @@ struct LUTLayerControls: View {
                 loadLUTs()
                 selectLUT(info)
             } catch {
-                // silently fail - user can still use bundled LUTs
+                showImportError(error)
             }
         }
+    }
+
+    private func showImportError(_ error: Error) {
+        let alert = NSAlert()
+        alert.messageText = "Import Failed"
+        alert.informativeText = error.localizedDescription
+        alert.alertStyle = .warning
+        alert.addButton(withTitle: "OK")
+        alert.runModal()
     }
 
     private func openLUTsFolder() {
