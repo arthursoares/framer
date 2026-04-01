@@ -19,6 +19,7 @@ final class PresetPreviewCache {
         let url = photo.url
         let rotation = photo.rotation
         let presetList = presets
+        let compactPreviewMaxDimension = 320
 
         let task = Task {
             try? await Task.sleep(for: .milliseconds(200))
@@ -28,7 +29,12 @@ final class PresetPreviewCache {
                 guard !Task.isCancelled else { return }
                 do {
                     let cgImage = try await Task.detached {
-                        try await processor.previewCGImage(for: url, config: preset.config, rotation: rotation)
+                        try await processor.previewCGImage(
+                            for: url,
+                            config: preset.config,
+                            rotation: rotation,
+                            maxDimension: compactPreviewMaxDimension
+                        )
                     }.value
                     guard !Task.isCancelled else { return }
                     let image = UIImage(cgImage: cgImage)

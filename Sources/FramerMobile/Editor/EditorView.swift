@@ -1,5 +1,6 @@
 import SwiftUI
 import PhotosUI
+import ImageIO
 import FramerCore
 
 struct EditorView: View {
@@ -12,6 +13,8 @@ struct EditorView: View {
     @State private var isExporting = false
     @State private var exportProgress: Double = 0
     @State private var exportTotal: Int = 0
+    @State private var loadPhotosTask: Task<Void, Never>?
+    @State private var exportStatusMessage: String?
 
     private var layersBinding: Binding<[CompositionLayer]> {
         Binding(
@@ -76,6 +79,7 @@ struct EditorView: View {
                         Image(systemName: "photo.on.rectangle")
                             .foregroundStyle(Color.accent)
                     }
+                    .accessibilityLabel("Add Photos")
                 }
                 ToolbarItem(placement: .topBarTrailing) {
                     if appState.selectedPhoto != nil {
@@ -87,6 +91,7 @@ struct EditorView: View {
                             Image(systemName: "rotate.right")
                                 .foregroundStyle(Color.text2)
                         }
+                        .accessibilityLabel("Rotate Clockwise")
                     }
                 }
                 ToolbarItem(placement: .topBarTrailing) {
@@ -98,14 +103,15 @@ struct EditorView: View {
                                 Label("Share Current", systemImage: "square.and.arrow.up")
                             }
                             Button {
-                                exportAllToPhotos()
+                                shareAllProcessed()
                             } label: {
-                                Label("Export All to Photos", systemImage: "photo.on.rectangle.angled")
+                                Label("Share All Processed", systemImage: "photo.on.rectangle.angled")
                             }
                         } label: {
                             Image(systemName: "square.and.arrow.up")
                                 .foregroundStyle(Color.accent)
                         }
+                        .accessibilityLabel("Share")
                     }
                 }
             }
@@ -147,6 +153,11 @@ struct EditorView: View {
             }
             loadPhotos(from: items)
         }
+        .onChange(of: showingOriginal) { _, isShowingOriginal in
+            if isShowingOriginal {
+                viewModel.loadOriginalIfNeeded(for: appState.selectedPhoto)
+            }
+        }
         .onChange(of: appState.selectedIndex) { _, _ in
             showingOriginal = false
             updatePreview()
@@ -162,6 +173,20 @@ struct EditorView: View {
             updatePreview()
             regeneratePresetPreviews()
         }
+        .onDisappear {
+            loadPhotosTask?.cancel()
+        }
+        .alert(
+            "Export",
+            isPresented: Binding(
+                get: { exportStatusMessage != nil },
+                set: { if !$0 { exportStatusMessage = nil } }
+            )
+        ) {
+            Button("OK", role: .cancel) {}
+        } message: {
+            Text(exportStatusMessage ?? "")
+        }
     }
 
     // MARK: - Photo Filmstrip
@@ -170,20 +195,25 @@ struct EditorView: View {
         ScrollView(.horizontal, showsIndicators: false) {
             HStack(spacing: 4) {
                 ForEach(Array(appState.library.enumerated()), id: \.element.id) { index, item in
-                    ZStack {
-                        Color.surface3
-                        AsyncThumbnail(url: item.url)
-                    }
-                    .frame(width: 44, height: 44)
-                    .clipShape(RoundedRectangle(cornerRadius: 4))
-                    .overlay(
-                        RoundedRectangle(cornerRadius: 4)
-                            .stroke(index == appState.selectedIndex ? Color.accent : .clear, lineWidth: 1.5)
-                    )
-                    .opacity(index == appState.selectedIndex ? 1.0 : 0.55)
-                    .onTapGesture {
+                    Button {
                         appState.selectedIndex = index
+                    } label: {
+                        ZStack {
+                            Color.surface3
+                            AsyncThumbnail(url: item.url)
+                        }
+                        .frame(width: 44, height: 44)
+                        .clipShape(RoundedRectangle(cornerRadius: 4))
+                        .overlay(
+                            RoundedRectangle(cornerRadius: 4)
+                                .stroke(index == appState.selectedIndex ? Color.accent : .clear, lineWidth: 1.5)
+                        )
+                        .opacity(index == appState.selectedIndex ? 1.0 : 0.55)
                     }
+                    .buttonStyle(.plain)
+                    .accessibilityLabel("Photo \(index + 1)")
+                    .accessibilityHint("Select photo")
+                    .accessibilityValue(index == appState.selectedIndex ? "Selected" : "")
                     .contextMenu {
                         Button {
                             appState.rotateItem(item.id, clockwise: true)
@@ -231,7 +261,11 @@ struct EditorView: View {
     // MARK: - Actions
 
     private func updatePreview() {
-        viewModel.updatePreview(for: appState.selectedPhoto, config: appState.currentConfig)
+        viewModel.updatePreview(
+            for: appState.selectedPhoto,
+            config: appState.currentConfig,
+            includeOriginal: showingOriginal
+        )
     }
 
     private func regeneratePresetPreviews() {
@@ -243,11 +277,16 @@ struct EditorView: View {
     }
 
     private func loadPhotos(from items: [PhotosPickerItem]) {
+        loadPhotosTask?.cancel()
         isLoadingPhotos = true
-        Task {
-            defer { isLoadingPhotos = false }
+        loadPhotosTask = Task {
+            defer {
+                isLoadingPhotos = false
+                loadPhotosTask = nil
+            }
             var newItems: [PhotoItem] = []
             for item in items {
+                guard !Task.isCancelled else { return }
                 if let data = try? await item.loadTransferable(type: Data.self) {
                     let tempURL = FileManager.default.temporaryDirectory
                         .appendingPathComponent(UUID().uuidString)
@@ -260,12 +299,13 @@ struct EditorView: View {
                     }
                 }
             }
+            guard !Task.isCancelled else { return }
             appState.addPhotos(newItems)
             selectedPickerItems.removeAll()
         }
     }
 
-    private func exportAllToPhotos() {
+    private func shareAllProcessed() {
         guard !appState.library.isEmpty else { return }
         isExporting = true
         exportProgress = 0
@@ -275,19 +315,55 @@ struct EditorView: View {
 
         Task {
             defer { isExporting = false }
-            let processor = FrameProcessor()
             var exportedFiles: [URL] = []
-            for (i, item) in items.enumerated() {
-                do {
-                    let tempURL = FileManager.default.temporaryDirectory
-                        .appendingPathComponent(UUID().uuidString)
-                        .appendingPathExtension(config.outputFormat == .png ? "png" : "jpg")
-                    try await processor.process(input: item.url, output: tempURL, config: config, rotation: item.rotation)
-                    exportedFiles.append(tempURL)
-                } catch { }
-                exportProgress = Double(i + 1)
+            var failedCount = 0
+            var completedCount = 0
+            let maxConcurrency = Self.shareAllConcurrency(itemCount: items.count)
+
+            await withTaskGroup(of: URL?.self) { group in
+                var nextIndex = 0
+
+                func enqueue() {
+                    guard nextIndex < items.count else { return }
+                    let item = items[nextIndex]
+                    nextIndex += 1
+                    group.addTask {
+                        let processor = FrameProcessor()
+                        let tempURL = FileManager.default.temporaryDirectory
+                            .appendingPathComponent(UUID().uuidString)
+                            .appendingPathExtension(config.outputFormat == .png ? "png" : "jpg")
+                        do {
+                            try await processor.process(input: item.url, output: tempURL, config: config, rotation: item.rotation)
+                            return tempURL
+                        } catch {
+                            return nil
+                        }
+                    }
+                }
+
+                for _ in 0..<maxConcurrency {
+                    enqueue()
+                }
+
+                while let result = await group.next() {
+                    completedCount += 1
+                    exportProgress = Double(completedCount)
+                    if let url = result {
+                        exportedFiles.append(url)
+                    } else {
+                        failedCount += 1
+                    }
+                    enqueue()
+                }
             }
-            guard !exportedFiles.isEmpty else { return }
+
+            guard !exportedFiles.isEmpty else {
+                exportStatusMessage = "Could not process any photos for sharing."
+                return
+            }
+            if failedCount > 0 {
+                exportStatusMessage = "Processed \(exportedFiles.count) of \(items.count) photos. \(failedCount) failed."
+            }
             // Share all processed images
             let activityVC = UIActivityViewController(activityItems: exportedFiles, applicationActivities: nil)
             activityVC.completionWithItemsHandler = { _, _, _, _ in
@@ -296,12 +372,23 @@ struct EditorView: View {
                 }
             }
             guard let windowScene = UIApplication.shared.connectedScenes.first as? UIWindowScene,
-                  let rootVC = windowScene.windows.first?.rootViewController else { return }
+                  let rootVC = windowScene.windows.first?.rootViewController else {
+                for file in exportedFiles {
+                    try? FileManager.default.removeItem(at: file)
+                }
+                exportStatusMessage = "Unable to present share sheet."
+                return
+            }
             var presenter = rootVC
             while let presented = presenter.presentedViewController { presenter = presented }
             activityVC.popoverPresentationController?.sourceView = presenter.view
             presenter.present(activityVC, animated: true)
         }
+    }
+
+    private nonisolated static func shareAllConcurrency(itemCount: Int) -> Int {
+        guard itemCount > 0 else { return 1 }
+        return min(2, itemCount)
     }
 
     private func shareImage() {
@@ -345,13 +432,18 @@ struct AsyncThumbnail: View {
 
     private nonisolated static func loadThumbnail(from url: URL) async -> UIImage? {
         await Task.detached {
-            guard let data = try? Data(contentsOf: url),
-                  let full = UIImage(data: data) else { return nil }
-            let maxDim: CGFloat = 100
-            let scale = min(maxDim / full.size.width, maxDim / full.size.height, 1.0)
-            let size = CGSize(width: full.size.width * scale, height: full.size.height * scale)
-            let renderer = UIGraphicsImageRenderer(size: size)
-            return renderer.image { _ in full.draw(in: CGRect(origin: .zero, size: size)) }
+            guard let source = CGImageSourceCreateWithURL(url as CFURL, nil) else { return nil }
+            let options: [CFString: Any] = [
+                kCGImageSourceCreateThumbnailFromImageAlways: true,
+                kCGImageSourceCreateThumbnailWithTransform: true,
+                kCGImageSourceShouldCache: false,
+                kCGImageSourceShouldCacheImmediately: false,
+                kCGImageSourceThumbnailMaxPixelSize: 200
+            ]
+            guard let cgImage = CGImageSourceCreateThumbnailAtIndex(source, 0, options as CFDictionary) else {
+                return nil
+            }
+            return UIImage(cgImage: cgImage)
         }.value
     }
 }

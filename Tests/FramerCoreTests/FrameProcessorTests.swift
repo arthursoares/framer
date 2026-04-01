@@ -45,4 +45,12 @@ final class FrameProcessorTests: XCTestCase {
         try await processor.process(input: sampleURL, output: outputURL, config: config)
         XCTAssertTrue(FileManager.default.fileExists(atPath: outputURL.path))
     }
+
+    func test_previewCGImage_customMaxDimensionProducesSmallerResult() async throws {
+        let processor = FrameProcessor()
+        let full = try await processor.previewCGImage(for: sampleURL, config: .default)
+        let compact = try await processor.previewCGImage(for: sampleURL, config: .default, maxDimension: 320)
+
+        XCTAssertLessThan(max(compact.width, compact.height), max(full.width, full.height))
+    }
 }
