@@ -108,6 +108,14 @@ public enum LUTMetalRenderer {
         lut: LUT3D,
         intensity: Double
     ) -> CGImage? {
+        applyProfiled(to: image, lut: lut, intensity: intensity)?.image
+    }
+
+    public static func applyProfiled(
+        to image: CGImage,
+        lut: LUT3D,
+        intensity: Double
+    ) -> ProfiledResult? {
         initialize()
         guard let context else { return nil }
 
@@ -119,9 +127,11 @@ public enum LUTMetalRenderer {
             return nil
         }
 
+        let uploadStart = DispatchTime.now().uptimeNanoseconds
         guard upload(image: image, to: inputTexture) else {
             return nil
         }
+        let uploadEnd = DispatchTime.now().uptimeNanoseconds
 
         var params = LUTParamsMetal(
             lutSize: Int32(lut.size),
@@ -134,6 +144,7 @@ public enum LUTMetalRenderer {
             )
         )
 
+        let gpuStart = DispatchTime.now().uptimeNanoseconds
         guard let commandBuffer = context.commandQueue.makeCommandBuffer(),
               let encoder = commandBuffer.makeComputeCommandEncoder() else {
             return nil
@@ -160,8 +171,22 @@ public enum LUTMetalRenderer {
 
         commandBuffer.commit()
         commandBuffer.waitUntilCompleted()
+        let gpuEnd = DispatchTime.now().uptimeNanoseconds
 
-        return makeCGImage(from: outputTexture, width: width, height: height)
+        let readbackStart = DispatchTime.now().uptimeNanoseconds
+        guard let image = makeCGImage(from: outputTexture, width: width, height: height) else {
+            return nil
+        }
+        let readbackEnd = DispatchTime.now().uptimeNanoseconds
+
+        return ProfiledResult(
+            image: image,
+            timings: StageTimings(
+                uploadMS: milliseconds(from: uploadStart, to: uploadEnd),
+                gpuMS: milliseconds(from: gpuStart, to: gpuEnd),
+                readbackMS: milliseconds(from: readbackStart, to: readbackEnd)
+            )
+        )
     }
 
     private static func upload(image: CGImage, to texture: MTLTexture) -> Bool {
@@ -363,5 +388,34 @@ public enum LUTMetalRenderer {
     #else
     public static var isAvailable: Bool { false }
     public static func apply(to image: CGImage, lut: LUT3D, intensity: Double) -> CGImage? { nil }
+    public static func applyProfiled(to image: CGImage, lut: LUT3D, intensity: Double) -> ProfiledResult? { nil }
     #endif
+
+    public struct StageTimings: Sendable {
+        public let uploadMS: Double
+        public let gpuMS: Double
+        public let readbackMS: Double
+
+        public init(uploadMS: Double, gpuMS: Double, readbackMS: Double) {
+            self.uploadMS = uploadMS
+            self.gpuMS = gpuMS
+            self.readbackMS = readbackMS
+        }
+
+        public var totalMS: Double { uploadMS + gpuMS + readbackMS }
+    }
+
+    public struct ProfiledResult: Sendable {
+        public let image: CGImage
+        public let timings: StageTimings
+
+        public init(image: CGImage, timings: StageTimings) {
+            self.image = image
+            self.timings = timings
+        }
+    }
+
+    private static func milliseconds(from start: UInt64, to end: UInt64) -> Double {
+        Double(end - start) / 1_000_000.0
+    }
 }

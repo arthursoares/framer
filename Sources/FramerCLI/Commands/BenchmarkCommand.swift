@@ -76,6 +76,11 @@ struct BenchmarkCommand: ParsableCommand {
             if LUTMetalRenderer.isAvailable {
                 let speedup = cpuStats.meanMS / autoStats.meanMS
                 print(String(format: "  speedup: %.2fx", speedup))
+
+                let metalStageStats = try measureMetalStages(image: image, lut: lut3D)
+                print(stageStatsLine(name: "upload", stats: metalStageStats.upload))
+                print(stageStatsLine(name: "gpu", stats: metalStageStats.gpu))
+                print(stageStatsLine(name: "readback", stats: metalStageStats.readback))
             }
         }
 
@@ -116,7 +121,54 @@ struct BenchmarkCommand: ParsableCommand {
                 stats.maxMS
             )
         }
+
+        private func stageStatsLine(name: String, stats: BenchmarkStats) -> String {
+            String(
+                format: "    %@: mean %.2f ms | median %.2f ms | min %.2f ms | max %.2f ms",
+                name,
+                stats.meanMS,
+                stats.medianMS,
+                stats.minMS,
+                stats.maxMS
+            )
+        }
+
+        private func measureMetalStages(image: CGImage, lut: LUT3D) throws -> MetalStageStats {
+            for _ in 0..<warmup {
+                guard LUTMetalRenderer.applyProfiled(to: image, lut: lut, intensity: intensity) != nil else {
+                    throw ValidationError("Metal LUT renderer failed during warmup")
+                }
+            }
+
+            var upload: [Double] = []
+            var gpu: [Double] = []
+            var readback: [Double] = []
+            upload.reserveCapacity(iterations)
+            gpu.reserveCapacity(iterations)
+            readback.reserveCapacity(iterations)
+
+            for _ in 0..<iterations {
+                guard let result = LUTMetalRenderer.applyProfiled(to: image, lut: lut, intensity: intensity) else {
+                    throw ValidationError("Metal LUT renderer failed during staged benchmark")
+                }
+                upload.append(result.timings.uploadMS)
+                gpu.append(result.timings.gpuMS)
+                readback.append(result.timings.readbackMS)
+            }
+
+            return MetalStageStats(
+                upload: BenchmarkStats(samplesMS: upload),
+                gpu: BenchmarkStats(samplesMS: gpu),
+                readback: BenchmarkStats(samplesMS: readback)
+            )
+        }
     }
+}
+
+private struct MetalStageStats {
+    let upload: BenchmarkStats
+    let gpu: BenchmarkStats
+    let readback: BenchmarkStats
 }
 
 private struct BenchmarkStats {
