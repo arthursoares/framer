@@ -924,9 +924,6 @@ private struct LUTControls: View {
                     }
                 }
                 .pickerStyle(.menu)
-                .onAppear {
-                    loadLUTs()
-                }
             }
 
             ControlRow(label: "Intensity") {
@@ -956,6 +953,9 @@ private struct LUTControls: View {
                     importLUT(from: url)
                 }
             }
+        }
+        .onAppear {
+            loadLUTs()
         }
     }
 

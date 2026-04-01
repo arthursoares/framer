@@ -2111,10 +2111,15 @@ struct LUTLayerControls: View {
     @State private var availableLUTs: [LUTInfo] = []
 
     var body: some View {
-        lutPicker
-        lutThumbnailStrip
-        intensityControl
-        importButtons
+        VStack(spacing: 12) {
+            lutPicker
+            lutThumbnailStrip
+            intensityControl
+            importButtons
+        }
+        .onAppear {
+            loadLUTs()
+        }
     }
 
     private var lutPicker: some View {
@@ -2123,9 +2128,6 @@ struct LUTLayerControls: View {
             ForEach(availableLUTs) { lut in
                 Text(lut.displayName).tag(lut.id)
             }
-        }
-        .onAppear {
-            loadLUTs()
         }
     }
 
