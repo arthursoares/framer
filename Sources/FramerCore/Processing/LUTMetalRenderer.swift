@@ -41,17 +41,17 @@ public enum LUTMetalRenderer {
     ) {
         if (gid.x >= inputTex.get_width() || gid.y >= inputTex.get_height()) return;
 
-        float4 color = inputTex.read(gid);
+        float4 color = inputTex.read(gid) / 255.0;
 
         float3 uvw;
         uvw.r = (color.r - params.domainMin.r) * params.scale;
         uvw.g = (color.g - params.domainMin.g) * params.scale;
         uvw.b = (color.b - params.domainMin.b) * params.scale;
 
-        float3 lutColor = lutTex.sample(lutSampler, uvw).rgb;
+        float3 lutColor = lutTex.sample(lutSampler, uvw).rgb / 255.0;
 
         float3 result = mix(color.rgb, lutColor, params.intensity);
-        outputTex.write(float4(result, color.a), gid);
+        outputTex.write(float4(result * 255.0, color.a * 255.0), gid);
     }
     """
 
@@ -134,7 +134,7 @@ public enum LUTMetalRenderer {
         let width = image.width
         let height = image.height
         let descriptor = MTLTextureDescriptor.texture2DDescriptor(
-            pixelFormat: .rgba32Float,
+            pixelFormat: .rgba8Unorm,
             width: width,
             height: height,
             mipmapped: false
@@ -143,15 +143,15 @@ public enum LUTMetalRenderer {
         guard let texture = device.makeTexture(descriptor: descriptor) else { return nil }
 
         let colorSpace = CGColorSpaceCreateDeviceRGB()
-        var pixelData = [Float](repeating: 0, count: width * height * 4)
+        var pixelData = [UInt8](repeating: 0, count: width * height * 4)
         guard let context = CGContext(
             data: &pixelData,
             width: width,
             height: height,
-            bitsPerComponent: 32,
-            bytesPerRow: width * 16,
+            bitsPerComponent: 8,
+            bytesPerRow: width * 4,
             space: colorSpace,
-            bitmapInfo: CGImageAlphaInfo.premultipliedLast.rawValue | CGBitmapInfo.byteOrder32Big.rawValue
+            bitmapInfo: CGImageAlphaInfo.premultipliedLast.rawValue
         ) else { return nil }
         context.draw(image, in: CGRect(x: 0, y: 0, width: width, height: height))
 
@@ -159,14 +159,14 @@ public enum LUTMetalRenderer {
             region: MTLRegionMake2D(0, 0, width, height),
             mipmapLevel: 0,
             withBytes: pixelData,
-            bytesPerRow: width * 16
+            bytesPerRow: width * 4
         )
         return texture
     }
 
     private static func createOutputTexture(width: Int, height: Int, device: MTLDevice) -> MTLTexture? {
         let descriptor = MTLTextureDescriptor.texture2DDescriptor(
-            pixelFormat: .rgba32Float,
+            pixelFormat: .rgba8Unorm,
             width: width,
             height: height,
             mipmapped: false
@@ -178,7 +178,7 @@ public enum LUTMetalRenderer {
     private static func createLUTTexture(lutData: [Float], size: Int, device: MTLDevice) -> MTLTexture? {
         let descriptor = MTLTextureDescriptor()
         descriptor.textureType = MTLTextureType.type3D
-        descriptor.pixelFormat = MTLPixelFormat.rgba32Float
+        descriptor.pixelFormat = .rgba8Unorm
         descriptor.width = size
         descriptor.height = size
         descriptor.depth = size
@@ -187,12 +187,12 @@ public enum LUTMetalRenderer {
 
         guard let texture = device.makeTexture(descriptor: descriptor) else { return nil }
 
-        var rgbaData = [Float](repeating: 0, count: size * size * size * 4)
+        var rgbaData = [UInt8](repeating: 0, count: size * size * size * 4)
         for i in 0..<(size * size * size) {
-            rgbaData[i * 4] = lutData[i * 3]
-            rgbaData[i * 4 + 1] = lutData[i * 3 + 1]
-            rgbaData[i * 4 + 2] = lutData[i * 3 + 2]
-            rgbaData[i * 4 + 3] = 1.0
+            rgbaData[i * 4] = UInt8(max(0, min(255, Int(lutData[i * 3] * 255))))
+            rgbaData[i * 4 + 1] = UInt8(max(0, min(255, Int(lutData[i * 3 + 1] * 255))))
+            rgbaData[i * 4 + 2] = UInt8(max(0, min(255, Int(lutData[i * 3 + 2] * 255))))
+            rgbaData[i * 4 + 3] = 255
         }
 
         texture.replace(
@@ -203,8 +203,8 @@ public enum LUTMetalRenderer {
             mipmapLevel: 0,
             slice: 0,
             withBytes: &rgbaData,
-            bytesPerRow: size * 4 * MemoryLayout<Float>.size,
-            bytesPerImage: size * size * 4 * MemoryLayout<Float>.size
+            bytesPerRow: size * 4,
+            bytesPerImage: size * size * 4
         )
         return texture
     }
