@@ -43,9 +43,14 @@ public enum EXIFReader {
         if let exp = exif?[kCGImagePropertyExifExposureTime as String] as? Double {
             if exp >= 1 {
                 data.shutterSpeed = "\(Int(exp))s"
-            } else {
-                let denom = Int(round(1.0 / exp))
-                data.shutterSpeed = "1/\(denom)"
+            } else if exp > 0 {
+                let reciprocal = 1.0 / exp
+                if reciprocal.isFinite {
+                    let denom = Int(round(reciprocal))
+                    if denom > 0 {
+                        data.shutterSpeed = "1/\(denom)"
+                    }
+                }
             }
         }
 

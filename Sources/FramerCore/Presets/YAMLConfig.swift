@@ -408,7 +408,11 @@ public enum YAMLConfig {
                 let bg = (schema.dither_bg.flatMap { try? CodableColor(hex: $0) }) ?? .white
                 colorMode = .twoTone(foreground: fg, background: bg)
             case "dominantTwoTone":
-                colorMode = .dominantTwoTone(flipped: schema.dither_flipped ?? false)
+                colorMode = .dominantTwoTone(
+                    flipped: schema.dither_flipped ?? false,
+                    saturationShift: schema.gradient_saturation ?? 0,
+                    lightnessShift: schema.gradient_lightness ?? 0
+                )
             case "color":
                 colorMode = .color(levels: schema.color_levels ?? 4)
             default:
