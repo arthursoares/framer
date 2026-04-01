@@ -584,6 +584,27 @@ public struct AspectRatioLayerParams: Identifiable, Codable, Equatable, Sendable
     }
 }
 
+// MARK: - LUT
+
+public struct LUTLayerParams: Identifiable, Codable, Equatable, Sendable {
+    public let id: UUID
+    public var lutName: String
+    public var lutFileName: String
+    public var intensity: Double
+
+    public init(
+        id: UUID = UUID(),
+        lutName: String = "",
+        lutFileName: String = "",
+        intensity: Double = 1.0
+    ) {
+        self.id = id
+        self.lutName = lutName
+        self.lutFileName = lutFileName
+        self.intensity = max(0, min(1, intensity))
+    }
+}
+
 // MARK: - CompositionLayer
 
 public enum CompositionLayer: Identifiable, Codable, Equatable, Sendable {
@@ -596,6 +617,7 @@ public enum CompositionLayer: Identifiable, Codable, Equatable, Sendable {
     case caption(CaptionLayerParams)
     case dither(DitherLayerParams)
     case aspectRatio(AspectRatioLayerParams)
+    case lut(LUTLayerParams)
 
     public var id: UUID {
         switch self {
@@ -608,6 +630,7 @@ public enum CompositionLayer: Identifiable, Codable, Equatable, Sendable {
         case .caption(let p): return p.id
         case .dither(let p): return p.id
         case .aspectRatio(let p): return p.id
+        case .lut(let p): return p.id
         }
     }
 
@@ -622,6 +645,7 @@ public enum CompositionLayer: Identifiable, Codable, Equatable, Sendable {
         case .caption: return "Caption"
         case .dither: return "Dither"
         case .aspectRatio: return "Aspect Ratio"
+        case .lut: return "LUT"
         }
     }
 
@@ -636,6 +660,14 @@ public enum CompositionLayer: Identifiable, Codable, Equatable, Sendable {
         case .caption: return "textformat"
         case .dither: return "circle.dotted"
         case .aspectRatio: return "crop"
+        case .lut: return "photo.artframe"
+        }
+    }
+
+    public var layerSummary: String {
+        switch self {
+        case .lut(let p): return p.lutName.isEmpty ? "None" : p.lutName
+        default: return ""
         }
     }
 
@@ -667,6 +699,8 @@ public enum CompositionLayer: Identifiable, Codable, Equatable, Sendable {
             self = .dither(try container.decode(DitherLayerParams.self, forKey: .params))
         case "aspectRatio":
             self = .aspectRatio(try container.decode(AspectRatioLayerParams.self, forKey: .params))
+        case "lut":
+            self = .lut(try container.decode(LUTLayerParams.self, forKey: .params))
         default:
             throw DecodingError.dataCorruptedError(
                 forKey: .type, in: container,
@@ -704,6 +738,9 @@ public enum CompositionLayer: Identifiable, Codable, Equatable, Sendable {
             try container.encode(p, forKey: .params)
         case .aspectRatio(let p):
             try container.encode("aspectRatio", forKey: .type)
+            try container.encode(p, forKey: .params)
+        case .lut(let p):
+            try container.encode("lut", forKey: .type)
             try container.encode(p, forKey: .params)
         }
     }

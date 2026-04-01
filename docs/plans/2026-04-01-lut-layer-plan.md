@@ -63,6 +63,7 @@ public struct LUTLayerParams: Identifiable, Codable, Equatable, Sendable {
 Add to `CompositionLayer` extension:
 - `label` → `"LUT"`
 - `iconName` → `"photo.artframe"` (SF Symbol - NOT `"camera.filters"` which doesn't exist)
+- `layerSummary` → `lutName` (e.g., `"Portra 400"`) for badge display
 
 ---
 
@@ -113,6 +114,8 @@ public enum LUTProvider {
 }
 ```
 
+Thread safety: Use `NSLock` + `NSCache< String, LUT3D>` for parsed LUT caching, same pattern as `TextureFrameProvider`.
+
 ### LUT3D (parsed cube data)
 
 ```swift
@@ -142,7 +145,8 @@ public enum LUTRenderer {
     public static func apply(
         to image: CGImage,
         lut: LUT3D,
-        intensity: Double
+        intensity: Double,
+        previewBaseDimension: Int? = nil
     ) throws -> CGImage
 }
 ```
@@ -160,9 +164,13 @@ In `applyLayers()`, handle `.lut` like other per-pixel layers:
 
 ```swift
 case .lut(let params):
-    guard let lut = LUTProvider.loadLUT(named: params.lutFileName) else { break }
-    current = try LUTRenderer.apply(to: current, lut: lut, intensity: params.intensity)
+    guard let lut = LUTProvider.loadLUT(named: params.lutFileName) else {
+        throw FramerError.unsupportedFormat("LUT not found: \(params.lutFileName)")
+    }
+    current = try LUTRenderer.apply(to: current, lut: lut, intensity: params.intensity, previewBaseDimension: previewBaseDimension)
 ```
+
+Note: `previewBaseDimension` is passed for performance optimization (renders at preview resolution, not full resolution).
 
 ---
 
@@ -192,6 +200,41 @@ Parsing rules:
 
 ---
 
+## 5b. YAML Schema Changes
+
+In `YAMLLayerSchema`, add new fields:
+
+```swift
+struct YAMLLayerSchema: Codable {
+    // ... existing fields ...
+    var lut_name: String?
+    var lut_filename: String?
+    var intensity: Double?
+}
+```
+
+In `encodeLayers()`:
+```swift
+case .lut(let p):
+    var schema = YAMLLayerSchema(type: "lut")
+    schema.lut_name = p.lutName
+    schema.lut_filename = p.lutFileName
+    schema.intensity = p.intensity
+    return schema
+```
+
+In `decodeLayers()`:
+```swift
+case "lut":
+    return .lut(LUTLayerParams(
+        lutName: schema.lut_name ?? "",
+        lutFileName: schema.lut_filename ?? "",
+        intensity: schema.intensity ?? 1.0
+    ))
+```
+
+---
+
 ## 6. UI — macOS (LayerListSection)
 
 ### LUT layer controls
@@ -214,7 +257,7 @@ Parsing rules:
 ```
 
 Components:
-- **Category picker** — dropdown: Film, Creative, User
+- **Category picker** — segmented picker (like `OverlayLayerControls`), NOT dropdown: Film, Creative, User
 - **LUT grid** — thumbnail previews of each LUT applied to the current photo (like preset grid, but smaller — 4 columns)
 - **Intensity slider** — 0–100%, default 100%
 - **Import button** — opens file picker for .cube files, copies to user LUT directory
@@ -241,7 +284,8 @@ Same controls adapted for touch:
 |------|---------|
 | `Sources/FramerCore/Processing/CubeFileParser.swift` | Parse .cube files into LUT3D |
 | `Sources/FramerCore/Processing/LUTRenderer.swift` | Apply 3D LUT to CGImage |
-| `Sources/FramerCore/Processing/LUTProvider.swift` | Discover bundled + user LUTs |
+| `Sources/FramerCore/Processing/LUTProvider.swift` | Discover bundled + user LUTs (thread-safe with NSLock) |
+| `assets/luts/` | **NEW** - Create directory structure |
 | `assets/luts/film/*.cube` | Bundled film emulation LUTs |
 | `assets/luts/creative/*.cube` | Bundled creative LUTs |
 
@@ -249,13 +293,15 @@ Same controls adapted for touch:
 
 | File | Changes |
 |------|---------|
-| `Sources/FramerCore/Models/CompositionLayer.swift` | Add `.lut(LUTLayerParams)` case |
-| `Sources/FramerCore/Processing/BorderRenderer.swift` | Handle `.lut` in `applyLayers` |
-| `Sources/FramerApp/Editor/LayerListSection.swift` | Add `LUTLayerControls` view |
-| `Sources/FramerMobile/Layers/LayerDetailView.swift` | Add `LUTControls` view |
+| `Sources/FramerCore/Models/CompositionLayer.swift` | Add `.lut(LUTLayerParams)` case, `layerSummary`, iconName |
+| `Sources/FramerCore/Processing/BorderRenderer.swift` | Handle `.lut` in `applyLayers` with error propagation |
+| `Sources/FramerApp/Editor/LayerListSection.swift` | Add `case .lut` in `layerControls` switch, add `LUTLayerControls` view |
+| `Sources/FramerApp/Editor/LayerRow.swift` | Add `case .lut` in `layerSummary` switch |
+| `Sources/FramerMobile/Layers/LayerDetailView.swift` | Add `case .lut` in `layerControls` switch, add `LUTControls` view |
+| `Sources/FramerMobile/Layers/LayerRow.swift` | Add `case .lut` in `layerSummary` switch |
 | `Sources/FramerMobile/Layers/LayerStrip.swift` | Add LUT to add-layer menu |
-| `project.yml` | Add `assets/luts` as folder resource for both targets |
-| `Sources/FramerCore/Presets/YAMLConfig.swift` | Encode/decode LUT layer in YAML |
+| `project.yml` | Create `assets/luts/` directory and add as folder resource for both targets |
+| `Sources/FramerCore/Presets/YAMLConfig.swift` | Add `lut_name`, `lut_filename`, `intensity` fields to `YAMLLayerSchema`; encode/decode `.lut` case |
 
 ---
 
@@ -274,13 +320,13 @@ Target: 7–10 film emulations + 3–5 creative looks for the initial release.
 
 1. **CubeFileParser** — parse .cube files, unit tests with sample data
 2. **LUT3D + LUTRenderer** — trilinear interpolation, apply to CGImage, unit tests
-3. **LUTProvider** — scan bundled + user directories, caching
+3. **LUTProvider** — scan bundled + user directories, caching, thread-safe (NSLock)
 4. **CompositionLayer.lut** — model, encoding/decoding, update BorderRenderer
-5. **Bundle sample .cube files** — add to assets/luts/, update project.yml
-6. **macOS UI** — LUTLayerControls with category picker, thumbnail grid, intensity slider
-7. **iOS UI** — LUTControls in LayerDetailView
-8. **Import** — file picker on both platforms, copy to user LUT directory
-9. **YAML config** — encode/decode for CLI compatibility
+5. **Create assets/luts/** — directory structure, add .cube files, update project.yml
+6. **YAML config** — encode/decode for CLI compatibility
+7. **macOS UI** — LUTLayerControls with category picker, thumbnail grid, intensity slider, LayerRow.lut case
+8. **iOS UI** — LUTControls in LayerDetailView, LayerRow.lut case, LayerStrip menu item
+9. **Import** — file picker on both platforms, copy to user LUT directory
 10. **Polish** — thumbnail caching, empty states, error handling
 
 Each step is a separate commit. The app remains functional throughout.
@@ -300,3 +346,4 @@ Each step is a separate commit. The app remains functional throughout.
 | `test_lutRenderer_intensity1` | Intensity 1 returns full LUT |
 | `test_lutProvider_bundled` | Find bundled LUTs |
 | `test_lutLayer_roundtripsJSON` | Encode/decode LUTLayerParams |
+| `test_lutLayer_roundtripsYAML` | YAML encode/decode roundtrip for CLI |

@@ -493,6 +493,26 @@ final class CompositionLayerTests: XCTestCase {
         XCTAssertEqual(layer, decoded)
     }
 
+    // MARK: - LUT Layer
+
+    func test_lutLayer_roundtripsJSON() throws {
+        let layer = CompositionLayer.lut(LUTLayerParams(
+            lutName: "Portra 400",
+            lutFileName: "portra_400",
+            intensity: 0.85
+        ))
+        let data = try JSONEncoder().encode(layer)
+        let decoded = try JSONDecoder().decode(CompositionLayer.self, from: data)
+        XCTAssertEqual(layer, decoded)
+        if case .lut(let p) = decoded {
+            XCTAssertEqual(p.lutName, "Portra 400")
+            XCTAssertEqual(p.lutFileName, "portra_400")
+            XCTAssertEqual(p.intensity, 0.85)
+        } else {
+            XCTFail("Expected lut layer")
+        }
+    }
+
     func test_aspectRatio_cropRect_landscapeToSquare() {
         let params = AspectRatioLayerParams(ratioWidth: 1, ratioHeight: 1)
         let rect = params.cropRect(for: CGSize(width: 200, height: 100))

@@ -66,6 +66,9 @@ public enum YAMLConfig {
         var ratio: String?
         var offset_x: Double?
         var offset_y: Double?
+        var lut_name: String?
+        var lut_filename: String?
+        var intensity: Double?
     }
 
     public static func encode(_ config: ProcessingConfig) throws -> String {
@@ -287,6 +290,13 @@ public enum YAMLConfig {
             if p.offsetX != 0 { schema.offset_x = p.offsetX }
             if p.offsetY != 0 { schema.offset_y = p.offsetY }
             return schema
+
+        case .lut(let p):
+            var schema = YAMLLayerSchema(type: "lut")
+            schema.lut_name = p.lutName
+            schema.lut_filename = p.lutFileName
+            schema.intensity = p.intensity
+            return schema
         }
     }
 
@@ -431,6 +441,13 @@ public enum YAMLConfig {
                 ratioHeight: rh,
                 offsetX: schema.offset_x ?? 0,
                 offsetY: schema.offset_y ?? 0
+            ))
+
+        case "lut":
+            return .lut(LUTLayerParams(
+                lutName: schema.lut_name ?? "",
+                lutFileName: schema.lut_filename ?? "",
+                intensity: schema.intensity ?? 1.0
             ))
 
         default:
