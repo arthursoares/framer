@@ -124,6 +124,20 @@ public enum LUTProvider {
         }
     }
 
+    public static func thumbnail(for lutInfo: LUTInfo, sourceImage: CGImage, size: Int = 48) -> CGImage? {
+        guard let lut = loadLUT(named: lutInfo.id) else {
+            return nil
+        }
+
+        let image = resizedThumbnailSource(from: sourceImage, maxDimension: size)
+
+        do {
+            return try LUTRenderer.apply(to: image, lut: lut, intensity: 1.0, previewBaseDimension: nil)
+        } catch {
+            return nil
+        }
+    }
+
     public static func clearThumbnailCache() {
         #if os(macOS)
         thumbnailCache.removeAllObjects()
@@ -162,6 +176,34 @@ public enum LUTProvider {
 
         sampleImage = ctx.makeImage()
         return sampleImage
+    }
+
+    private static func resizedThumbnailSource(from image: CGImage, maxDimension: Int) -> CGImage {
+        let width = image.width
+        let height = image.height
+        guard max(width, height) > maxDimension else {
+            return image
+        }
+
+        let scale = CGFloat(maxDimension) / CGFloat(max(width, height))
+        let newWidth = max(1, Int((CGFloat(width) * scale).rounded(.toNearestOrAwayFromZero)))
+        let newHeight = max(1, Int((CGFloat(height) * scale).rounded(.toNearestOrAwayFromZero)))
+
+        guard let ctx = CGContext(
+            data: nil,
+            width: newWidth,
+            height: newHeight,
+            bitsPerComponent: image.bitsPerComponent,
+            bytesPerRow: 0,
+            space: image.colorSpace ?? CGColorSpaceCreateDeviceRGB(),
+            bitmapInfo: image.bitmapInfo.rawValue
+        ) else {
+            return image
+        }
+
+        ctx.interpolationQuality = .high
+        ctx.draw(image, in: CGRect(x: 0, y: 0, width: newWidth, height: newHeight))
+        return ctx.makeImage() ?? image
     }
 
     // MARK: - User Management
