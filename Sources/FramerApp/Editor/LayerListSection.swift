@@ -2111,6 +2111,8 @@ struct LUTLayerControls: View {
 
     @State private var availableLUTs: [LUTInfo] = []
     @State private var thumbnailCache: [String: CGImage] = [:]
+    @State private var renamingLUT: LUTInfo?
+    @State private var renameText = ""
 
     var body: some View {
         VStack(spacing: 12) {
@@ -2132,6 +2134,20 @@ struct LUTLayerControls: View {
             Task {
                 await reloadThumbnailsForSelectedPhoto()
             }
+        }
+        .alert("Rename LUT", isPresented: Binding(
+            get: { renamingLUT != nil },
+            set: { if !$0 { renamingLUT = nil } }
+        )) {
+            TextField("LUT name", text: $renameText)
+            Button("Cancel", role: .cancel) {
+                renamingLUT = nil
+            }
+            Button("Rename") {
+                renameSelectedLUT()
+            }
+        } message: {
+            Text("Enter a new name for this LUT.")
         }
     }
 
@@ -2276,6 +2292,22 @@ struct LUTLayerControls: View {
             }
         }
         .buttonStyle(.plain)
+        .contextMenu {
+            if lut.category == "user" {
+                Button {
+                    renameText = lut.displayName
+                    renamingLUT = lut
+                } label: {
+                    Label("Rename", systemImage: "pencil")
+                }
+
+                Button(role: .destructive) {
+                    deleteLUT(lut)
+                } label: {
+                    Label("Remove", systemImage: "trash")
+                }
+            }
+        }
     }
 
     private func selectLUT(_ lut: LUTInfo) {
@@ -2322,9 +2354,65 @@ struct LUTLayerControls: View {
         }
     }
 
+    private func renameSelectedLUT() {
+        guard let lut = renamingLUT else { return }
+
+        do {
+            try LUTProvider.renameUserLUT(named: lut.id, displayName: renameText)
+            loadLUTs()
+            Task {
+                await reloadThumbnailsForSelectedPhoto()
+            }
+            if params.lutFileName == lut.id,
+               let refreshed = availableLUTs.first(where: { $0.id == lut.id }) {
+                selectLUT(refreshed)
+            }
+        } catch {
+            showLUTManagementError(error)
+        }
+
+        renamingLUT = nil
+    }
+
+    private func deleteLUT(_ lut: LUTInfo) {
+        let alert = NSAlert()
+        alert.messageText = "Remove LUT?"
+        alert.informativeText = "This will remove \"\(lut.displayName)\" from your imported LUTs."
+        alert.alertStyle = .warning
+        alert.addButton(withTitle: "Remove")
+        alert.addButton(withTitle: "Cancel")
+        guard alert.runModal() == .alertFirstButtonReturn else { return }
+
+        do {
+            try LUTProvider.deleteUserLUT(named: lut.id)
+            loadLUTs()
+            Task {
+                await reloadThumbnailsForSelectedPhoto()
+            }
+
+            if params.lutFileName == lut.id {
+                var p = params
+                p.lutName = ""
+                p.lutFileName = ""
+                onChange(p)
+            }
+        } catch {
+            showLUTManagementError(error)
+        }
+    }
+
     private func showImportError(_ error: Error) {
         let alert = NSAlert()
         alert.messageText = "Import Failed"
+        alert.informativeText = error.localizedDescription
+        alert.alertStyle = .warning
+        alert.addButton(withTitle: "OK")
+        alert.runModal()
+    }
+
+    private func showLUTManagementError(_ error: Error) {
+        let alert = NSAlert()
+        alert.messageText = "LUT Update Failed"
         alert.informativeText = error.localizedDescription
         alert.alertStyle = .warning
         alert.addButton(withTitle: "OK")

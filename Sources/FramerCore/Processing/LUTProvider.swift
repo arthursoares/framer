@@ -40,6 +40,10 @@ public enum LUTProvider {
 
     private static var sampleImage: CGImage?
 
+    private struct UserLUTMetadata: Codable {
+        var displayNames: [String: String] = [:]
+    }
+
     // MARK: - Discovery
 
     public static func availableLUTs() -> [LUTInfo] {
@@ -226,6 +230,43 @@ public enum LUTProvider {
         return try makeLUTInfo(from: destURL, category: "user")
     }
 
+    public static func renameUserLUT(named id: String, displayName: String) throws {
+        guard let info = availableLUTs().first(where: { $0.id == id }) else {
+            throw LUTProviderError.lutNotFound
+        }
+        guard info.category == "user" else {
+            throw LUTProviderError.readOnlyLUT
+        }
+
+        var metadata = loadUserMetadata()
+        let trimmed = displayName.trimmingCharacters(in: .whitespacesAndNewlines)
+        if trimmed.isEmpty {
+            metadata.displayNames.removeValue(forKey: id)
+        } else {
+            metadata.displayNames[id] = trimmed
+        }
+        try saveUserMetadata(metadata)
+        invalidateCache()
+    }
+
+    public static func deleteUserLUT(named id: String) throws {
+        guard let info = availableLUTs().first(where: { $0.id == id }) else {
+            throw LUTProviderError.lutNotFound
+        }
+        guard info.category == "user" else {
+            throw LUTProviderError.readOnlyLUT
+        }
+
+        if FileManager.default.fileExists(atPath: info.url.path) {
+            try FileManager.default.removeItem(at: info.url)
+        }
+
+        var metadata = loadUserMetadata()
+        metadata.displayNames.removeValue(forKey: id)
+        try saveUserMetadata(metadata)
+        invalidateCache()
+    }
+
     public static func userLUTDirectory() -> URL? {
         let fileManager = FileManager.default
         if let appSupport = fileManager.urls(for: .applicationSupportDirectory, in: .userDomainMask).first {
@@ -318,7 +359,34 @@ public enum LUTProvider {
             }
         }
 
+        if category == "user",
+           let customName = loadUserMetadata().displayNames[id],
+           !customName.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+            displayName = customName
+        }
+
         return LUTInfo(id: id, displayName: displayName, category: category, url: url)
+    }
+
+    private static func userMetadataURL() -> URL? {
+        userLUTDirectory()?.appendingPathComponent(".lut-metadata.json")
+    }
+
+    private static func loadUserMetadata() -> UserLUTMetadata {
+        guard let url = userMetadataURL(),
+              let data = try? Data(contentsOf: url),
+              let metadata = try? JSONDecoder().decode(UserLUTMetadata.self, from: data) else {
+            return UserLUTMetadata()
+        }
+        return metadata
+    }
+
+    private static func saveUserMetadata(_ metadata: UserLUTMetadata) throws {
+        guard let url = userMetadataURL() else {
+            throw LUTProviderError.userDirectoryUnavailable
+        }
+        let data = try JSONEncoder().encode(metadata)
+        try data.write(to: url, options: .atomic)
     }
 }
 
@@ -326,11 +394,17 @@ public enum LUTProvider {
 
 public enum LUTProviderError: LocalizedError {
     case userDirectoryUnavailable
+    case readOnlyLUT
+    case lutNotFound
 
     public var errorDescription: String? {
         switch self {
         case .userDirectoryUnavailable:
             return "Could not access user LUT directory"
+        case .readOnlyLUT:
+            return "Bundled LUTs cannot be modified"
+        case .lutNotFound:
+            return "Could not find the selected LUT"
         }
     }
 }
