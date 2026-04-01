@@ -14,13 +14,18 @@ final class PreviewViewModel {
     var outputSize: CGSize?
 
     private var renderTask: Task<Void, Never>?
+    private var originalLoadTask: Task<Void, Never>?
+    private var originalImageURL: URL?
     private let processor = FrameProcessor()
 
-    func updatePreview(for item: PhotoItem?, config: ProcessingConfig) {
+    func updatePreview(for item: PhotoItem?, config: ProcessingConfig, includeOriginal: Bool = false) {
         renderTask?.cancel()
 
         guard let item else {
             renderTask = nil
+            originalLoadTask?.cancel()
+            originalLoadTask = nil
+            originalImageURL = nil
             previewImage = nil
             originalImage = nil
             exifData = nil
@@ -28,6 +33,13 @@ final class PreviewViewModel {
             outputSize = nil
             isLoading = false
             return
+        }
+
+        if originalImageURL != item.url {
+            originalLoadTask?.cancel()
+            originalLoadTask = nil
+            originalImageURL = nil
+            originalImage = nil
         }
 
         renderTask = Task {
@@ -46,34 +58,54 @@ final class PreviewViewModel {
                 let exif = try? EXIFReader.read(from: item.url)
                 exifData = exif
 
-                // Run original decode and preview render concurrently.
-                // loadOriginal is CPU-bound and synchronous, so push it onto a
-                // detached task to avoid blocking the MainActor executor.
                 let itemURL = item.url
                 let itemRotation = item.rotation
-                let originalHandle = Task.detached {
-                    Self.loadOriginal(from: itemURL, maxDimension: 1200)
-                }
-                defer { originalHandle.cancel() }
                 let cgPreview = try await processor.previewCGImage(for: itemURL, config: config, rotation: itemRotation)
                 let scale = NSScreen.main?.backingScaleFactor ?? 2.0
                 let preview = NSImage(cgImage: cgPreview, size: NSSize(
                     width: CGFloat(cgPreview.width) / scale,
                     height: CGFloat(cgPreview.height) / scale
                 ))
-                let original = await originalHandle.value
                 guard !Task.isCancelled else {
                     return
                 }
-                originalImage = original
                 previewImage = preview
                 // Output size in actual pixels (not points)
                 outputSize = CGSize(width: cgPreview.width, height: cgPreview.height)
+                if includeOriginal {
+                    loadOriginalIfNeeded(for: item)
+                }
             } catch is CancellationError {
                 return
             } catch {
                 self.error = error.localizedDescription
             }
+        }
+    }
+
+    func loadOriginalIfNeeded(for item: PhotoItem?) {
+        guard let item else {
+            originalLoadTask?.cancel()
+            originalLoadTask = nil
+            originalImageURL = nil
+            originalImage = nil
+            return
+        }
+
+        if originalImageURL == item.url, originalImage != nil {
+            return
+        }
+
+        originalLoadTask?.cancel()
+        let itemURL = item.url
+        originalImageURL = itemURL
+        originalLoadTask = Task {
+            let original = await Task.detached {
+                Self.loadOriginal(from: itemURL, maxDimension: 1200)
+            }.value
+            guard !Task.isCancelled, originalImageURL == itemURL else { return }
+            originalImage = original
+            originalLoadTask = nil
         }
     }
 
