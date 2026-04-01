@@ -8,6 +8,8 @@ public actor FrameProcessor {
     public static let presetThumbnailMaxDimension = 320
 
     public init() {}
+    private var exifCache: [URL: ExifData] = [:]
+    private let maxExifCacheEntries = 256
 
     // MARK: - Preview (downscaled, no disk I/O)
 
@@ -29,7 +31,7 @@ public actor FrameProcessor {
         }
         let cgImage = downscale(rotated, maxDimension: previewMax)
         try Task.checkCancellation()
-        let exif = (try? EXIFReader.read(from: url)) ?? ExifData()
+        let exif = exifData(for: url)
 
         let borderResult: BorderResult
         if let layers = config.layers {
@@ -58,7 +60,7 @@ public actor FrameProcessor {
 
     public func process(input: URL, output: URL, config: ProcessingConfig, rotation: Int = 0) throws {
         let cgImage = applyRotation(try loadImage(from: input), degrees: rotation)
-        let exif = (try? EXIFReader.read(from: input)) ?? ExifData()
+        let exif = exifData(for: input)
 
         // Compute the preview base dimension so DitherRenderer can match pixel scale
         let previewBase = previewMaxDimension(for: config, imageWidth: cgImage.width, imageHeight: cgImage.height)
@@ -78,6 +80,21 @@ public actor FrameProcessor {
             borderStyle: config.borderStyle,
             preserveMetadata: !config.noMetadata
         )
+    }
+
+    // MARK: - EXIF Cache
+
+    public func exifData(for url: URL) -> ExifData {
+        if let cached = exifCache[url] {
+            return cached
+        }
+
+        let exif = (try? EXIFReader.read(from: url)) ?? ExifData()
+        if exifCache.count >= maxExifCacheEntries {
+            exifCache.removeAll(keepingCapacity: true)
+        }
+        exifCache[url] = exif
+        return exif
     }
 
     // MARK: - Helpers
