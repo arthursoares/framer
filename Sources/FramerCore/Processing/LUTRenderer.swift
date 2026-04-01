@@ -30,7 +30,20 @@ public enum LUTRenderer {
             bitmapInfo: bitmapInfo
         )
 
-        if let gpuResult = LUTMetalRenderer.apply(to: workImage, lut: lut, intensity: intensity) {
+        let previewInputKey = previewBaseDimension.map { _ in
+            LUTMetalRenderer.PreviewInputCacheKey(
+                sourceImageIdentity: imageIdentity(image),
+                width: workImage.width,
+                height: workImage.height
+            )
+        }
+
+        if let gpuResult = LUTMetalRenderer.apply(
+            to: workImage,
+            lut: lut,
+            intensity: intensity,
+            previewInputKey: previewInputKey
+        ) {
             return try finalizeResult(
                 gpuResult,
                 originalWidth: width,
@@ -202,6 +215,10 @@ public enum LUTRenderer {
             throw FramerError.invalidImage(URL(fileURLWithPath: ""))
         }
         return upscaled
+    }
+
+    private static func imageIdentity(_ image: CGImage) -> UInt {
+        UInt(bitPattern: Unmanaged.passUnretained(image).toOpaque())
     }
 
     private static func applyLUTFull(

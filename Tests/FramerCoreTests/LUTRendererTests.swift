@@ -357,4 +357,47 @@ final class LUTRendererTests: XCTestCase {
             XCTAssertEqual(g.a, c.a)
         }
     }
+
+    func test_lutMetalRenderer_reusesPreviewInputTextureForRepeatedPreviewRenders() throws {
+        guard LUTMetalRenderer.isAvailable else {
+            throw XCTSkip("Metal unavailable on this test host")
+        }
+
+        let image = makeGradientImage(width: 16, height: 16)
+        let lut = makeIdentityLUT(size: 33)
+        let previewKey = LUTMetalRenderer.PreviewInputCacheKey(
+            sourceImageIdentity: UInt(bitPattern: Unmanaged.passUnretained(image).toOpaque()),
+            width: image.width,
+            height: image.height
+        )
+
+        let first = try XCTUnwrap(
+            LUTMetalRenderer.applyProfiled(
+                to: image,
+                lut: lut,
+                intensity: 1.0,
+                previewInputKey: previewKey
+            )
+        )
+        let second = try XCTUnwrap(
+            LUTMetalRenderer.applyProfiled(
+                to: image,
+                lut: lut,
+                intensity: 1.0,
+                previewInputKey: previewKey
+            )
+        )
+
+        XCTAssertFalse(first.timings.reusedInputTexture)
+        XCTAssertTrue(second.timings.reusedInputTexture)
+        let firstPixels = extractPixels(from: first.image)
+        let secondPixels = extractPixels(from: second.image)
+        XCTAssertEqual(firstPixels.count, secondPixels.count)
+        for (firstPixel, secondPixel) in zip(firstPixels, secondPixels) {
+            XCTAssertEqual(firstPixel.r, secondPixel.r)
+            XCTAssertEqual(firstPixel.g, secondPixel.g)
+            XCTAssertEqual(firstPixel.b, secondPixel.b)
+            XCTAssertEqual(firstPixel.a, secondPixel.a)
+        }
+    }
 }
