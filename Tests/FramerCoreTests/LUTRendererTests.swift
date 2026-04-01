@@ -47,7 +47,7 @@ final class LUTRendererTests: XCTestCase {
         return ctx.makeImage()!
     }
 
-    func extractPixels(from image: CGImage) -> [(r: UInt8, g: UInt8, b: UInt8)] {
+    func extractPixels(from image: CGImage) -> [(r: UInt8, g: UInt8, b: UInt8, a: UInt8)] {
         let width = image.width
         let height = image.height
         let colorSpace = CGColorSpaceCreateDeviceRGB()
@@ -59,11 +59,11 @@ final class LUTRendererTests: XCTestCase {
         )!
         ctx.draw(image, in: CGRect(x: 0, y: 0, width: width, height: height))
         let data = ctx.data!.bindMemory(to: UInt8.self, capacity: width * height * 4)
-        var result = [(r: UInt8, g: UInt8, b: UInt8)]()
+        var result = [(r: UInt8, g: UInt8, b: UInt8, a: UInt8)]()
         result.reserveCapacity(width * height)
         for i in 0..<(width * height) {
             let idx = i * 4
-            result.append((r: data[idx], g: data[idx + 1], b: data[idx + 2]))
+            result.append((r: data[idx], g: data[idx + 1], b: data[idx + 2], a: data[idx + 3]))
         }
         return result
     }
@@ -211,6 +211,7 @@ final class LUTRendererTests: XCTestCase {
         XCTAssertEqual(resultPixels[0].r, 100, accuracy: 1)
         XCTAssertEqual(resultPixels[0].g, 150, accuracy: 1)
         XCTAssertEqual(resultPixels[0].b, 200, accuracy: 1)
+        XCTAssertEqual(resultPixels[0].a, 255)
     }
 
     func test_lutRenderer_clampsBelowDomainMin() throws {
@@ -263,9 +264,10 @@ final class LUTRendererTests: XCTestCase {
 
         XCTAssertEqual(cpuPixels.count, gpuPixels.count)
         for (c, g) in zip(cpuPixels, gpuPixels) {
-            XCTAssertEqual(g.r, c.r, accuracy: 1)
-            XCTAssertEqual(g.g, c.g, accuracy: 1)
-            XCTAssertEqual(g.b, c.b, accuracy: 1)
+            XCTAssertEqual(g.r, c.r)
+            XCTAssertEqual(g.g, c.g)
+            XCTAssertEqual(g.b, c.b)
+            XCTAssertEqual(g.a, c.a)
         }
     }
 
@@ -291,9 +293,10 @@ final class LUTRendererTests: XCTestCase {
 
         XCTAssertEqual(cpuPixels.count, gpuPixels.count)
         for (c, g) in zip(cpuPixels, gpuPixels) {
-            XCTAssertEqual(g.r, c.r, accuracy: 1)
-            XCTAssertEqual(g.g, c.g, accuracy: 1)
-            XCTAssertEqual(g.b, c.b, accuracy: 1)
+            XCTAssertEqual(g.r, c.r)
+            XCTAssertEqual(g.g, c.g)
+            XCTAssertEqual(g.b, c.b)
+            XCTAssertEqual(g.a, c.a)
         }
     }
 
@@ -319,9 +322,10 @@ final class LUTRendererTests: XCTestCase {
 
         XCTAssertEqual(cpuPixels.count, gpuPixels.count)
         for (c, g) in zip(cpuPixels, gpuPixels) {
-            XCTAssertEqual(g.r, c.r, accuracy: 1)
-            XCTAssertEqual(g.g, c.g, accuracy: 1)
-            XCTAssertEqual(g.b, c.b, accuracy: 1)
+            XCTAssertEqual(g.r, c.r)
+            XCTAssertEqual(g.g, c.g)
+            XCTAssertEqual(g.b, c.b)
+            XCTAssertEqual(g.a, c.a)
         }
     }
 
@@ -347,9 +351,10 @@ final class LUTRendererTests: XCTestCase {
 
         XCTAssertEqual(cpuPixels.count, gpuPixels.count)
         for (c, g) in zip(cpuPixels, gpuPixels) {
-            XCTAssertEqual(g.r, c.r, accuracy: 1)
-            XCTAssertEqual(g.g, c.g, accuracy: 1)
-            XCTAssertEqual(g.b, c.b, accuracy: 1)
+            XCTAssertEqual(g.r, c.r)
+            XCTAssertEqual(g.g, c.g)
+            XCTAssertEqual(g.b, c.b)
+            XCTAssertEqual(g.a, c.a)
         }
     }
 }
