@@ -181,6 +181,18 @@ public enum BorderRenderer {
                     i += 1; continue
                 }
                 current = cropped
+
+            case .lut(let params):
+                guard !params.lutFileName.isEmpty,
+                      let lut = LUTProvider.loadLUT(named: params.lutFileName) else {
+                    i += 1; continue
+                }
+                current = try LUTRenderer.apply(
+                    to: current,
+                    lut: lut,
+                    intensity: params.intensity,
+                    previewBaseDimension: previewBaseDimension
+                )
             }
             i += 1
         }
