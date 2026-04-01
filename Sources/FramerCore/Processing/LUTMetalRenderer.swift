@@ -106,15 +106,17 @@ public enum LUTMetalRenderer {
     public static func apply(
         to image: CGImage,
         lut: LUT3D,
-        intensity: Double
+        intensity: Double,
+        previewInputKey: PreviewInputCacheKey? = nil
     ) -> CGImage? {
-        applyProfiled(to: image, lut: lut, intensity: intensity)?.image
+        applyProfiled(to: image, lut: lut, intensity: intensity, previewInputKey: previewInputKey)?.image
     }
 
     public static func applyProfiled(
         to image: CGImage,
         lut: LUT3D,
-        intensity: Double
+        intensity: Double,
+        previewInputKey: PreviewInputCacheKey? = nil
     ) -> ProfiledResult? {
         initialize()
         guard let context else { return nil }
@@ -127,9 +129,25 @@ public enum LUTMetalRenderer {
             return nil
         }
 
+        let textureKey = TextureKey(width: width, height: height)
         let uploadStart = DispatchTime.now().uptimeNanoseconds
-        guard upload(image: image, to: inputTexture) else {
-            return nil
+        let reusedInputTexture: Bool
+        if let previewInputKey {
+            guard let didReuseInputTexture = context.preparePreviewInputTexture(
+                image: image,
+                texture: inputTexture,
+                textureKey: textureKey,
+                previewInputKey: previewInputKey
+            ) else {
+                return nil
+            }
+            reusedInputTexture = didReuseInputTexture
+        } else {
+            context.invalidatePreviewInputCache()
+            reusedInputTexture = false
+            guard upload(image: image, to: inputTexture) else {
+                return nil
+            }
         }
         let uploadEnd = DispatchTime.now().uptimeNanoseconds
 
@@ -184,7 +202,8 @@ public enum LUTMetalRenderer {
             timings: StageTimings(
                 uploadMS: milliseconds(from: uploadStart, to: uploadEnd),
                 gpuMS: milliseconds(from: gpuStart, to: gpuEnd),
-                readbackMS: milliseconds(from: readbackStart, to: readbackEnd)
+                readbackMS: milliseconds(from: readbackStart, to: readbackEnd),
+                reusedInputTexture: reusedInputTexture
             )
         )
     }
@@ -251,6 +270,7 @@ public enum LUTMetalRenderer {
         private var inputTextures: [TextureKey: MTLTexture] = [:]
         private var outputTextures: [TextureKey: MTLTexture] = [:]
         private var lutTextures: [LUTCacheKey: MTLTexture] = [:]
+        private var previewInputCache: PreviewInputEntry?
 
         init(device: MTLDevice, commandQueue: MTLCommandQueue, pipelineState: MTLComputePipelineState) {
             self.device = device
@@ -264,6 +284,34 @@ public enum LUTMetalRenderer {
 
         func outputTexture(width: Int, height: Int) -> MTLTexture? {
             cachedTexture(for: TextureKey(width: width, height: height), cache: &outputTextures, usage: [.shaderRead, .shaderWrite])
+        }
+
+        func preparePreviewInputTexture(
+            image: CGImage,
+            texture: MTLTexture,
+            textureKey: TextureKey,
+            previewInputKey: PreviewInputCacheKey
+        ) -> Bool? {
+            cacheLock.lock()
+            let cacheHit = previewInputCache?.previewInputKey == previewInputKey && previewInputCache?.textureKey == textureKey
+            cacheLock.unlock()
+
+            if cacheHit {
+                return true
+            }
+
+            guard LUTMetalRenderer.upload(image: image, to: texture) else { return nil }
+
+            cacheLock.lock()
+            previewInputCache = PreviewInputEntry(previewInputKey: previewInputKey, textureKey: textureKey)
+            cacheLock.unlock()
+            return false
+        }
+
+        func invalidatePreviewInputCache() {
+            cacheLock.lock()
+            previewInputCache = nil
+            cacheLock.unlock()
         }
 
         func lutTexture(for lut: LUT3D) -> MTLTexture? {
@@ -346,6 +394,23 @@ public enum LUTMetalRenderer {
         let height: Int
     }
 
+    public struct PreviewInputCacheKey: Hashable, Sendable {
+        let sourceImageIdentity: UInt
+        let width: Int
+        let height: Int
+
+        public init(sourceImageIdentity: UInt, width: Int, height: Int) {
+            self.sourceImageIdentity = sourceImageIdentity
+            self.width = width
+            self.height = height
+        }
+    }
+
+    private struct PreviewInputEntry {
+        let previewInputKey: PreviewInputCacheKey
+        let textureKey: TextureKey
+    }
+
     private struct LUTCacheKey: Hashable {
         let size: Int
         let domainMin: SIMD3<UInt32>
@@ -387,19 +452,24 @@ public enum LUTMetalRenderer {
     }
     #else
     public static var isAvailable: Bool { false }
-    public static func apply(to image: CGImage, lut: LUT3D, intensity: Double) -> CGImage? { nil }
-    public static func applyProfiled(to image: CGImage, lut: LUT3D, intensity: Double) -> ProfiledResult? { nil }
+    public struct PreviewInputCacheKey: Hashable, Sendable {
+        public init(sourceImageIdentity: UInt, width: Int, height: Int) {}
+    }
+    public static func apply(to image: CGImage, lut: LUT3D, intensity: Double, previewInputKey: PreviewInputCacheKey? = nil) -> CGImage? { nil }
+    public static func applyProfiled(to image: CGImage, lut: LUT3D, intensity: Double, previewInputKey: PreviewInputCacheKey? = nil) -> ProfiledResult? { nil }
     #endif
 
     public struct StageTimings: Sendable {
         public let uploadMS: Double
         public let gpuMS: Double
         public let readbackMS: Double
+        public let reusedInputTexture: Bool
 
-        public init(uploadMS: Double, gpuMS: Double, readbackMS: Double) {
+        public init(uploadMS: Double, gpuMS: Double, readbackMS: Double, reusedInputTexture: Bool = false) {
             self.uploadMS = uploadMS
             self.gpuMS = gpuMS
             self.readbackMS = readbackMS
+            self.reusedInputTexture = reusedInputTexture
         }
 
         public var totalMS: Double { uploadMS + gpuMS + readbackMS }
