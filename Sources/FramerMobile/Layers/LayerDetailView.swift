@@ -902,24 +902,9 @@ private struct LUTControls: View {
     var onChange: (LUTLayerParams) -> Void
 
     @State private var availableLUTs: [LUTInfo] = []
-    @State private var selectedCategory: String = "film"
-
-    private let categories = ["film", "creative", "user"]
 
     var body: some View {
         VStack(spacing: 8) {
-            ControlRow(label: "Category") {
-                Picker("", selection: $selectedCategory) {
-                    Text("Film").tag("film")
-                    Text("Creative").tag("creative")
-                    Text("User").tag("user")
-                }
-                .pickerStyle(.segmented)
-                .onAppear {
-                    loadLUTs()
-                }
-            }
-
             ControlRow(label: "LUT") {
                 Picker("", selection: Binding(
                     get: { params.lutFileName },
@@ -933,11 +918,14 @@ private struct LUTControls: View {
                     }
                 )) {
                     Text("None").tag("")
-                    ForEach(filteredLUTs, id: \.id) { lut in
+                    ForEach(availableLUTs, id: \.id) { lut in
                         Text(lut.displayName).tag(lut.id)
                     }
                 }
                 .pickerStyle(.menu)
+                .onAppear {
+                    loadLUTs()
+                }
             }
 
             ControlRow(label: "Intensity") {
@@ -956,10 +944,6 @@ private struct LUTControls: View {
 
     private func loadLUTs() {
         availableLUTs = LUTProvider.availableLUTs()
-    }
-
-    private var filteredLUTs: [LUTInfo] {
-        availableLUTs.filter { $0.category == selectedCategory }
     }
 }
 

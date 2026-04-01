@@ -2109,47 +2109,31 @@ struct LUTLayerControls: View {
     var onChange: (LUTLayerParams) -> Void
 
     @State private var availableLUTs: [LUTInfo] = []
-    @State private var selectedCategory: String = "film"
-
-    private let categories = ["film", "creative", "user"]
 
     var body: some View {
-        categoryPicker
         lutPicker
         lutThumbnailStrip
         intensityControl
     }
 
-    private var categoryPicker: some View {
-        Picker("Category", selection: $selectedCategory) {
-            Text("Film").tag("film")
-            Text("Creative").tag("creative")
-            Text("User").tag("user")
-        }
-        .pickerStyle(.segmented)
-        .onAppear {
-            loadLUTs()
-        }
-        .onChange(of: selectedCategory) { _, _ in
-            loadLUTs()
-        }
-    }
-
     private var lutPicker: some View {
         Picker("LUT", selection: lutNameBinding) {
             Text("None").tag("")
-            ForEach(filteredLUTs) { lut in
+            ForEach(availableLUTs) { lut in
                 Text(lut.displayName).tag(lut.id)
             }
+        }
+        .onAppear {
+            loadLUTs()
         }
     }
 
     @ViewBuilder
     private var lutThumbnailStrip: some View {
-        if !filteredLUTs.isEmpty {
+        if !availableLUTs.isEmpty {
             ScrollView(.horizontal, showsIndicators: false) {
                 HStack(spacing: 6) {
-                    ForEach(filteredLUTs) { lut in
+                    ForEach(availableLUTs) { lut in
                         lutThumb(lut)
                     }
                 }
@@ -2208,10 +2192,6 @@ struct LUTLayerControls: View {
 
     private func loadLUTs() {
         availableLUTs = LUTProvider.availableLUTs()
-    }
-
-    private var filteredLUTs: [LUTInfo] {
-        availableLUTs.filter { $0.category == selectedCategory }
     }
 
     private var lutNameBinding: Binding<String> {
