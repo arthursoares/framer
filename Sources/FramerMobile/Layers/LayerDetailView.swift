@@ -146,17 +146,7 @@ struct LayerDetailView: View {
         case .lut(let params):
             LUTControls(params: params) { layer = .lut($0) }
         case .shader(let params):
-            VStack(spacing: 8) {
-                ControlRow(label: "Shader") {
-                    Text(params.style.label)
-                        .font(AppFont.controlLabel)
-                        .foregroundStyle(Color.text1)
-                }
-                Text("Shader controls will be added in a later task.")
-                    .font(AppFont.body(12))
-                    .foregroundStyle(Color.text3)
-                    .frame(maxWidth: .infinity, alignment: .leading)
-            }
+            ShaderControls(params: params) { layer = .shader($0) }
         }
     }
 }
@@ -931,6 +921,270 @@ private struct FillPicker: View {
                         .font(AppFont.mono(12))
                         .frame(width: 40, alignment: .trailing)
                 }
+            }
+        }
+    }
+}
+
+// MARK: - Shader Controls
+
+private struct ShaderControls: View {
+    var params: ShaderLayerParams
+    var onChange: (ShaderLayerParams) -> Void
+
+    var body: some View {
+        VStack(spacing: 8) {
+            ControlRow(label: "Style") {
+                Picker("", selection: Binding(
+                    get: { params.style },
+                    set: { onChange(params.withStyle($0)) }
+                )) {
+                    ForEach(ShaderStyle.allCases, id: \.self) { style in
+                        Text(style.label).tag(style)
+                    }
+                }
+                .pickerStyle(.menu)
+            }
+
+            sliderRow(
+                label: "Intensity",
+                value: params.intensity,
+                range: 0...1,
+                step: 0.05
+            ) { value in
+                var updated = params
+                updated.intensity = value
+                onChange(updated)
+            }
+
+            switch params.params {
+            case .ascii(let asciiParams):
+                asciiControls(asciiParams)
+            case .crimewave(let crimewaveParams):
+                crimewaveControls(crimewaveParams)
+            case .narc(let narcParams):
+                narcControls(narcParams)
+            case .shiba(let shibaParams):
+                shibaControls(shibaParams)
+            case .pixelSort(let pixelSortParams):
+                pixelSortControls(pixelSortParams)
+            case .distantPast(let distantPastParams):
+                distantPastControls(distantPastParams)
+            }
+        }
+    }
+
+    @ViewBuilder
+    private func asciiControls(_ asciiParams: ASCIIShaderParams) -> some View {
+        sliderRow(label: "Cell Size", value: Double(asciiParams.cellSize), range: 4...24, step: 1) { value in
+            onChange(params.withParams(.ascii(ASCIIShaderParams(
+                cellSize: Int(value.rounded()),
+                edgeBias: asciiParams.edgeBias,
+                foreground: asciiParams.foreground,
+                background: asciiParams.background,
+                invert: asciiParams.invert
+            ))))
+        }
+
+        sliderRow(label: "Edge Bias", value: asciiParams.edgeBias, range: 0...1, step: 0.05) { value in
+            onChange(params.withParams(.ascii(ASCIIShaderParams(
+                cellSize: asciiParams.cellSize,
+                edgeBias: value,
+                foreground: asciiParams.foreground,
+                background: asciiParams.background,
+                invert: asciiParams.invert
+            ))))
+        }
+
+        ControlRow(label: "Foreground") {
+            ColorPicker("", selection: Binding(
+                get: { Color(cgColor: asciiParams.foreground.cgColor) },
+                set: { value in
+                    guard let hex = value.hexString, let color = try? CodableColor(hex: hex) else { return }
+                    onChange(params.withParams(.ascii(ASCIIShaderParams(
+                        cellSize: asciiParams.cellSize,
+                        edgeBias: asciiParams.edgeBias,
+                        foreground: color,
+                        background: asciiParams.background,
+                        invert: asciiParams.invert
+                    ))))
+                }
+            ))
+            .labelsHidden()
+            .accessibilityLabel("ASCII Foreground")
+        }
+
+        ControlRow(label: "Background") {
+            ColorPicker("", selection: Binding(
+                get: { Color(cgColor: asciiParams.background.cgColor) },
+                set: { value in
+                    guard let hex = value.hexString, let color = try? CodableColor(hex: hex) else { return }
+                    onChange(params.withParams(.ascii(ASCIIShaderParams(
+                        cellSize: asciiParams.cellSize,
+                        edgeBias: asciiParams.edgeBias,
+                        foreground: asciiParams.foreground,
+                        background: color,
+                        invert: asciiParams.invert
+                    ))))
+                }
+            ))
+            .labelsHidden()
+            .accessibilityLabel("ASCII Background")
+        }
+
+        ControlRow(label: "Invert") {
+            Toggle("", isOn: Binding(
+                get: { asciiParams.invert },
+                set: { value in
+                    onChange(params.withParams(.ascii(ASCIIShaderParams(
+                        cellSize: asciiParams.cellSize,
+                        edgeBias: asciiParams.edgeBias,
+                        foreground: asciiParams.foreground,
+                        background: asciiParams.background,
+                        invert: value
+                    ))))
+                }
+            ))
+            .labelsHidden()
+            .accessibilityLabel("Invert ASCII")
+        }
+    }
+
+    @ViewBuilder
+    private func crimewaveControls(_ crimewaveParams: CrimewaveShaderParams) -> some View {
+        styleSliderRows(
+            [("Neon", crimewaveParams.neon, 0...1, 0.05),
+             ("Softness", crimewaveParams.softness, 0...1, 0.05),
+             ("Contrast", crimewaveParams.contrast, 0.8...1.8, 0.05),
+             ("Grain", crimewaveParams.grain, 0...1, 0.05)]
+        ) { label, value in
+            var updated = crimewaveParams
+            switch label {
+            case "Neon": updated.neon = value
+            case "Softness": updated.softness = value
+            case "Contrast": updated.contrast = value
+            default: updated.grain = value
+            }
+            onChange(params.withParams(.crimewave(updated)))
+        }
+    }
+
+    @ViewBuilder
+    private func narcControls(_ narcParams: NarcShaderParams) -> some View {
+        styleSliderRows(
+            [("Contrast", narcParams.contrast, 0.8...1.8, 0.05),
+             ("Crush", narcParams.crush, 0...1, 0.05),
+             ("Temperature", narcParams.temperature, -0.5...0.5, 0.05),
+             ("Grain", narcParams.grain, 0...1, 0.05)]
+        ) { label, value in
+            var updated = narcParams
+            switch label {
+            case "Contrast": updated.contrast = value
+            case "Crush": updated.crush = value
+            case "Temperature": updated.temperature = value
+            default: updated.grain = value
+            }
+            onChange(params.withParams(.narc(updated)))
+        }
+    }
+
+    @ViewBuilder
+    private func shibaControls(_ shibaParams: ShibaShaderParams) -> some View {
+        styleSliderRows(
+            [("Warmth", shibaParams.warmth, -0.2...0.8, 0.05),
+             ("Softness", shibaParams.softness, 0...1, 0.05),
+             ("Saturation", shibaParams.saturation, 0...1, 0.05),
+             ("Grain", shibaParams.grain, 0...1, 0.05)]
+        ) { label, value in
+            var updated = shibaParams
+            switch label {
+            case "Warmth": updated.warmth = value
+            case "Softness": updated.softness = value
+            case "Saturation": updated.saturation = value
+            default: updated.grain = value
+            }
+            onChange(params.withParams(.shiba(updated)))
+        }
+    }
+
+    @ViewBuilder
+    private func pixelSortControls(_ pixelSortParams: PixelSortShaderParams) -> some View {
+        ControlRow(label: "Direction") {
+            Picker("", selection: Binding(
+                get: { pixelSortParams.direction },
+                set: { value in
+                    var updated = pixelSortParams
+                    updated.direction = value
+                    onChange(params.withParams(.pixelSort(updated)))
+                }
+            )) {
+                ForEach(PixelSortDirection.allCases, id: \.self) { direction in
+                    Text(direction.rawValue.capitalized).tag(direction)
+                }
+            }
+            .pickerStyle(.segmented)
+        }
+
+        sliderRow(label: "Threshold", value: pixelSortParams.threshold, range: 0...1, step: 0.05) { value in
+            var updated = pixelSortParams
+            updated.threshold = value
+            onChange(params.withParams(.pixelSort(updated)))
+        }
+        sliderRow(label: "Span", value: Double(pixelSortParams.span), range: 4...64, step: 1) { value in
+            var updated = pixelSortParams
+            updated.span = Int(value.rounded())
+            onChange(params.withParams(.pixelSort(updated)))
+        }
+        sliderRow(label: "Amount", value: pixelSortParams.amount, range: 0...1, step: 0.05) { value in
+            var updated = pixelSortParams
+            updated.amount = value
+            onChange(params.withParams(.pixelSort(updated)))
+        }
+    }
+
+    @ViewBuilder
+    private func distantPastControls(_ distantPastParams: DistantPastShaderParams) -> some View {
+        styleSliderRows(
+            [("Palette Depth", Double(distantPastParams.paletteDepth), 2...12, 1),
+             ("Fade", distantPastParams.fade, 0...1, 0.05),
+             ("Softness", distantPastParams.softness, 0...1, 0.05),
+             ("Grain", distantPastParams.grain, 0...1, 0.05)]
+        ) { label, value in
+            var updated = distantPastParams
+            switch label {
+            case "Palette Depth": updated.paletteDepth = Int(value.rounded())
+            case "Fade": updated.fade = value
+            case "Softness": updated.softness = value
+            default: updated.grain = value
+            }
+            onChange(params.withParams(.distantPast(updated)))
+        }
+    }
+
+    @ViewBuilder
+    private func styleSliderRows(
+        _ rows: [(String, Double, ClosedRange<Double>, Double)],
+        onSet: @escaping (String, Double) -> Void
+    ) -> some View {
+        ForEach(rows, id: \.0) { row in
+            sliderRow(label: row.0, value: row.1, range: row.2, step: row.3) { onSet(row.0, $0) }
+        }
+    }
+
+    private func sliderRow(
+        label: String,
+        value: Double,
+        range: ClosedRange<Double>,
+        step: Double,
+        onSet: @escaping @Sendable (Double) -> Void
+    ) -> some View {
+        ControlRow(label: label) {
+            HStack {
+                Slider(value: Binding(get: { value }, set: onSet), in: range, step: step)
+                Text(step >= 1 ? "\(Int(value.rounded()))" : String(format: "%.2f", value))
+                    .font(AppFont.mono(12))
+                    .foregroundStyle(Color.text1)
+                    .frame(width: 52, alignment: .trailing)
             }
         }
     }

@@ -255,6 +255,13 @@ final class CompositionLayerTests: XCTestCase {
         XCTAssertEqual(layer, decoded)
     }
 
+    func test_shaderLayer_defaults_to_ascii_style() {
+        let params = ShaderLayerParams()
+        XCTAssertEqual(params.style, .ascii)
+        XCTAssertEqual(params.intensity, 1.0)
+        XCTAssertEqual(params.params, .ascii(ASCIIShaderParams()))
+    }
+
     // MARK: - applyLayers
 
     func test_applyLayers_borderOnly_correctDimensions() throws {

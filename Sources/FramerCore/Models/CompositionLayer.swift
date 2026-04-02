@@ -1017,10 +1017,14 @@ public struct ShaderLayerParams: Identifiable, Codable, Equatable, Sendable {
         self.id = id
         self.enabled = enabled
         self.style = style
-        if let params, params.style == style {
-            self.params = params
+        if let params {
+            if params.style == style {
+                self.params = params
+            } else {
+                assertionFailure("ShaderLayerParams params must match style")
+                self.params = ShaderStyleParams.default(for: style)
+            }
         } else {
-            assertionFailure("ShaderLayerParams params must match style")
             self.params = ShaderStyleParams.default(for: style)
         }
         self.intensity = max(0, min(1, intensity))
@@ -1041,6 +1045,26 @@ public struct ShaderLayerParams: Identifiable, Codable, Equatable, Sendable {
             style: decodedStyle,
             intensity: try container.decodeIfPresent(Double.self, forKey: .intensity) ?? 1.0,
             params: decodedParams
+        )
+    }
+
+    public func withStyle(_ style: ShaderStyle) -> ShaderLayerParams {
+        ShaderLayerParams(
+            id: id,
+            enabled: enabled,
+            style: style,
+            intensity: intensity,
+            params: style == self.style ? params : ShaderStyleParams.default(for: style)
+        )
+    }
+
+    public func withParams(_ params: ShaderStyleParams) -> ShaderLayerParams {
+        ShaderLayerParams(
+            id: id,
+            enabled: enabled,
+            style: params.style,
+            intensity: intensity,
+            params: params
         )
     }
 }
