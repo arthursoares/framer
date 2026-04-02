@@ -35,7 +35,11 @@ extension Color {
 
 enum AppFont {
     /// Atkinson Hyperlegible for UI text
-    static func body(_ size: CGFloat, weight: Font.Weight = .regular) -> Font {
+    static func body(
+        _ size: CGFloat,
+        weight: Font.Weight = .regular,
+        relativeTo textStyle: Font.TextStyle = .body
+    ) -> Font {
         let name: String
         switch weight {
         case .bold: name = "AtkinsonHyperlegibleNext-Bold"
@@ -43,17 +47,21 @@ enum AppFont {
         case .medium: name = "AtkinsonHyperlegibleNext-Medium"
         default: name = "AtkinsonHyperlegibleNext-Regular"
         }
-        return .custom(name, size: size)
+        return .custom(name, size: size, relativeTo: textStyle)
     }
 
     /// Source Code Pro for data values
-    static func mono(_ size: CGFloat, weight: Font.Weight = .regular) -> Font {
+    static func mono(
+        _ size: CGFloat,
+        weight: Font.Weight = .regular,
+        relativeTo textStyle: Font.TextStyle = .body
+    ) -> Font {
         let name: String
         switch weight {
         case .medium, .semibold, .bold: name = "SourceCodePro-Medium"
         default: name = "SourceCodePro-Regular"
         }
-        return .custom(name, size: size)
+        return .custom(name, size: size, relativeTo: textStyle)
     }
 
     // iOS-adapted presets (slightly larger than macOS for touch)

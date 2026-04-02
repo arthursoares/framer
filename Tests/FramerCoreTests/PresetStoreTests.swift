@@ -84,6 +84,35 @@ final class PresetStoreTests: XCTestCase {
         XCTAssertEqual(decoded.layers?.last?.isEnabled, true)
     }
 
+    func test_yamlConfig_dominantTwoTonePreservesColorShifts() throws {
+        var config = ProcessingConfig.default
+        config.layers = [
+            .dither(DitherLayerParams(
+                algorithm: .atkinson,
+                colorMode: .dominantTwoTone(
+                    flipped: true,
+                    saturationShift: 12,
+                    lightnessShift: -8
+                )
+            ))
+        ]
+
+        let yaml = try YAMLConfig.encode(config)
+        let decoded = try YAMLConfig.decode(yaml)
+
+        guard
+            let layers = decoded.layers,
+            case .dither(let params) = layers.first,
+            case .dominantTwoTone(let flipped, let saturationShift, let lightnessShift) = params.colorMode
+        else {
+            return XCTFail("Expected dither dominantTwoTone layer")
+        }
+
+        XCTAssertTrue(flipped)
+        XCTAssertEqual(saturationShift, 12, accuracy: 0.0001)
+        XCTAssertEqual(lightnessShift, -8, accuracy: 0.0001)
+    }
+
     func test_yamlConfig_print10x15BackwardCompat() throws {
         let yaml = """
         border_style: print10x15

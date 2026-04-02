@@ -33,7 +33,7 @@ let package = Package(
         ),
         .testTarget(
             name: "FramerCLITests",
-            dependencies: ["FramerCLI"]
+            dependencies: ["FramerCLI", "FramerCore"]
         ),
     ]
 )

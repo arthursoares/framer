@@ -130,6 +130,7 @@ public enum DitherRenderer {
         guard width > 0, height > 0 else {
             throw FramerError.invalidImage(URL(fileURLWithPath: ""))
         }
+        try Task.checkCancellation()
 
         let colorSpace = CGColorSpaceCreateDeviceRGB()
         let bitmapInfo = CGImageAlphaInfo.premultipliedLast.rawValue
@@ -178,6 +179,7 @@ public enum DitherRenderer {
         if params.contrast > 0 {
             applyContrast(pixels: pixels, count: workW * workH, amount: params.contrast)
         }
+        try Task.checkCancellation()
 
         // Apply dithering algorithm
         let threshold = max(0.1, min(0.9, params.threshold))
@@ -195,6 +197,7 @@ public enum DitherRenderer {
                 levels: max(2, min(8, levels)), threshold: threshold
             )
         }
+        try Task.checkCancellation()
 
         // Apply color mapping for two-tone modes
         switch params.colorMode {
@@ -213,6 +216,8 @@ public enum DitherRenderer {
         default:
             break
         }
+
+        try Task.checkCancellation()
 
         guard let dithered = ctx.makeImage() else {
             throw FramerError.invalidImage(URL(fileURLWithPath: ""))
@@ -345,6 +350,7 @@ public enum DitherRenderer {
         if abs(offset) < 0.001 {
             // No threshold offset: direct LUT lookup
             for i in 0..<count {
+                if (i & 0x3FFF) == 0 { try Task.checkCancellation() }
                 let idx = i * 4
                 lumBuf[i] = luminanceLUT(r: pixels[idx], g: pixels[idx + 1], b: pixels[idx + 2])
             }
@@ -352,6 +358,7 @@ public enum DitherRenderer {
             // With threshold offset in sRGB space
             let offsetScaled = offset * 255.0
             for i in 0..<count {
+                if (i & 0x3FFF) == 0 { try Task.checkCancellation() }
                 let idx = i * 4
                 let rAdj = max(0, min(255, Int(Double(pixels[idx]) + offsetScaled)))
                 let gAdj = max(0, min(255, Int(Double(pixels[idx + 1]) + offsetScaled)))
@@ -370,6 +377,7 @@ public enum DitherRenderer {
             let size = cached.size
             let mask = size - 1  // size is always power of 2
             for y in 0..<height {
+                if (y & 31) == 0 { try Task.checkCancellation() }
                 let yOff = (y & mask) * size
                 let rowOff = y * width
                 for x in 0..<width {
@@ -379,14 +387,15 @@ public enum DitherRenderer {
             }
 
         case .floydSteinberg:
-            output = floydSteinbergDither(lumBuf: &lumBuf, width: width, height: height)
+            output = try floydSteinbergDither(lumBuf: &lumBuf, width: width, height: height)
 
         case .atkinson:
-            output = atkinsonDither(lumBuf: &lumBuf, width: width, height: height)
+            output = try atkinsonDither(lumBuf: &lumBuf, width: width, height: height)
 
         case .blueNoise:
             let noise = cachedBlueNoise
             for y in 0..<height {
+                if (y & 31) == 0 { try Task.checkCancellation() }
                 let yOff = (y & 63) * 64  // 64 = blue noise size, & 63 = % 64
                 let rowOff = y * width
                 for x in 0..<width {
@@ -396,11 +405,12 @@ public enum DitherRenderer {
             }
 
         case .artisticDrip:
-            output = artisticDripDither(lumBuf: &lumBuf, width: width, height: height)
+            output = try artisticDripDither(lumBuf: &lumBuf, width: width, height: height)
 
         case .halftone:
             let matData = cachedHalftoneFlat
             for y in 0..<height {
+                if (y & 31) == 0 { try Task.checkCancellation() }
                 let yOff = (y % 6) * 6
                 let rowOff = y * width
                 for x in 0..<width {
@@ -410,17 +420,18 @@ public enum DitherRenderer {
             }
 
         case .stucki:
-            output = stuckiDither(lumBuf: &lumBuf, width: width, height: height)
+            output = try stuckiDither(lumBuf: &lumBuf, width: width, height: height)
 
         case .whiteNoise:
-            output = whiteNoiseDither(lumBuf: &lumBuf, width: width, height: height)
+            output = try whiteNoiseDither(lumBuf: &lumBuf, width: width, height: height)
 
         case .riemersma:
-            output = riemersmaDither(lumBuf: &lumBuf, width: width, height: height)
+            output = try riemersmaDither(lumBuf: &lumBuf, width: width, height: height)
         }
 
         // Write back to pixel buffer
         for i in 0..<count {
+            if (i & 0x3FFF) == 0 { try Task.checkCancellation() }
             let idx = i * 4
             let v = output[i]
             pixels[idx] = v
@@ -450,6 +461,7 @@ public enum DitherRenderer {
         if abs(offset) < 0.001 {
             // No offset: direct LUT
             for i in 0..<count {
+                if (i & 0x3FFF) == 0 { try Task.checkCancellation() }
                 let idx = i * 4
                 rBuf[i] = sRGBToLinearLUT[Int(pixels[idx])]
                 gBuf[i] = sRGBToLinearLUT[Int(pixels[idx + 1])]
@@ -457,6 +469,7 @@ public enum DitherRenderer {
             }
         } else {
             for i in 0..<count {
+                if (i & 0x3FFF) == 0 { try Task.checkCancellation() }
                 let idx = i * 4
                 let rAdj = max(0, min(255, Int(Double(pixels[idx]) + offset * 255.0)))
                 let gAdj = max(0, min(255, Int(Double(pixels[idx + 1]) + offset * 255.0)))
@@ -472,21 +485,22 @@ public enum DitherRenderer {
         let isOrdered = algorithm == .bayer || algorithm == .blueNoise ||
                         algorithm == .halftone || algorithm == .whiteNoise
         if isOrdered {
-            applyOrderedColorDitherFused(
+            try applyOrderedColorDitherFused(
                 pixels: pixels, rBuf: &rBuf, gBuf: &gBuf, bBuf: &bBuf,
                 width: width, height: height, algorithm: algorithm,
                 bayerLevel: bayerLevel, levels: levels
             )
         } else {
             // Error diffusion: must process each channel independently
-            let rOut = ditherChannel(&rBuf, width: width, height: height,
-                                     algorithm: algorithm, bayerLevel: bayerLevel, levels: levels)
-            let gOut = ditherChannel(&gBuf, width: width, height: height,
-                                     algorithm: algorithm, bayerLevel: bayerLevel, levels: levels)
-            let bOut = ditherChannel(&bBuf, width: width, height: height,
-                                     algorithm: algorithm, bayerLevel: bayerLevel, levels: levels)
+            let rOut = try ditherChannel(&rBuf, width: width, height: height,
+                                         algorithm: algorithm, bayerLevel: bayerLevel, levels: levels)
+            let gOut = try ditherChannel(&gBuf, width: width, height: height,
+                                         algorithm: algorithm, bayerLevel: bayerLevel, levels: levels)
+            let bOut = try ditherChannel(&bBuf, width: width, height: height,
+                                         algorithm: algorithm, bayerLevel: bayerLevel, levels: levels)
 
             for i in 0..<count {
+                if (i & 0x3FFF) == 0 { try Task.checkCancellation() }
                 let idx = i * 4
                 pixels[idx] = rOut[i]
                 pixels[idx + 1] = gOut[i]
@@ -503,10 +517,11 @@ public enum DitherRenderer {
         rBuf: inout [Double], gBuf: inout [Double], bBuf: inout [Double],
         width: Int, height: Int,
         algorithm: DitherAlgorithm, bayerLevel: Int, levels: Int
-    ) {
+    ) throws {
         let maxLevel = Double(levels - 1)
 
         for y in 0..<height {
+            if (y & 31) == 0 { try Task.checkCancellation() }
             let rowOff = y * width
             for x in 0..<width {
                 let i = rowOff + x
@@ -547,7 +562,7 @@ public enum DitherRenderer {
         algorithm: DitherAlgorithm,
         bayerLevel: Int,
         levels: Int
-    ) -> [UInt8] {
+    ) throws -> [UInt8] {
         let count = width * height
         var output = [UInt8](repeating: 0, count: count)
         let maxLevel = Double(levels - 1)
@@ -559,6 +574,7 @@ public enum DitherRenderer {
             let size = cached.size
             let mask = size - 1
             for y in 0..<height {
+                if (y & 31) == 0 { try Task.checkCancellation() }
                 let yOff = (y & mask) * size
                 let rowOff = y * width
                 for x in 0..<width {
@@ -571,13 +587,13 @@ public enum DitherRenderer {
             }
 
         case .floydSteinberg:
-            serpentineErrorDiffusion(
+            try serpentineErrorDiffusion(
                 errors: &buf, output: &output, width: width, height: height,
                 maxLevel: maxLevel, distribute: distributeFloydSteinberg
             )
 
         case .atkinson:
-            serpentineErrorDiffusion(
+            try serpentineErrorDiffusion(
                 errors: &buf, output: &output, width: width, height: height,
                 maxLevel: maxLevel, distribute: distributeAtkinson
             )
@@ -585,6 +601,7 @@ public enum DitherRenderer {
         case .blueNoise:
             let noise = cachedBlueNoise
             for y in 0..<height {
+                if (y & 31) == 0 { try Task.checkCancellation() }
                 let yOff = (y & 63) * 64
                 let rowOff = y * width
                 for x in 0..<width {
@@ -597,7 +614,7 @@ public enum DitherRenderer {
             }
 
         case .artisticDrip:
-            serpentineErrorDiffusion(
+            try serpentineErrorDiffusion(
                 errors: &buf, output: &output, width: width, height: height,
                 maxLevel: maxLevel, distribute: distributeArtisticDrip
             )
@@ -605,6 +622,7 @@ public enum DitherRenderer {
         case .halftone:
             let matData = cachedHalftoneFlat
             for y in 0..<height {
+                if (y & 31) == 0 { try Task.checkCancellation() }
                 let yOff = (y % 6) * 6
                 let rowOff = y * width
                 for x in 0..<width {
@@ -617,13 +635,14 @@ public enum DitherRenderer {
             }
 
         case .stucki:
-            serpentineErrorDiffusion(
+            try serpentineErrorDiffusion(
                 errors: &buf, output: &output, width: width, height: height,
                 maxLevel: maxLevel, distribute: distributeStucki
             )
 
         case .whiteNoise:
             for y in 0..<height {
+                if (y & 31) == 0 { try Task.checkCancellation() }
                 let rowOff = y * width
                 for x in 0..<width {
                     let i = rowOff + x
@@ -635,7 +654,7 @@ public enum DitherRenderer {
             }
 
         case .riemersma:
-            riemersmaChannelDither(buf: &buf, output: &output, width: width, height: height, maxLevel: maxLevel)
+            try riemersmaChannelDither(buf: &buf, output: &output, width: width, height: height, maxLevel: maxLevel)
         }
 
         return output
@@ -648,8 +667,9 @@ public enum DitherRenderer {
         width: Int, height: Int,
         maxLevel: Double,
         distribute: (inout [Double], Int, Int, Int, Int, Double, Bool) -> Void
-    ) {
+    ) throws {
         for y in 0..<height {
+            if (y & 31) == 0 { try Task.checkCancellation() }
             let leftToRight = (y % 2 == 0)
             let xRange = leftToRight ? stride(from: 0, to: width, by: 1) : stride(from: width - 1, to: -1, by: -1)
             for x in xRange {
@@ -812,11 +832,12 @@ public enum DitherRenderer {
     private static func floydSteinbergDither(
         lumBuf: inout [Double],
         width: Int, height: Int
-    ) -> [UInt8] {
+    ) throws -> [UInt8] {
         let count = width * height
         var output = [UInt8](repeating: 0, count: count)
 
         for y in 0..<height {
+            if (y & 31) == 0 { try Task.checkCancellation() }
             let leftToRight = (y % 2 == 0)
             let xRange = leftToRight
                 ? stride(from: 0, to: width, by: 1)
@@ -859,11 +880,12 @@ public enum DitherRenderer {
     private static func atkinsonDither(
         lumBuf: inout [Double],
         width: Int, height: Int
-    ) -> [UInt8] {
+    ) throws -> [UInt8] {
         let count = width * height
         var output = [UInt8](repeating: 0, count: count)
 
         for y in 0..<height {
+            if (y & 31) == 0 { try Task.checkCancellation() }
             let leftToRight = (y % 2 == 0)
             let xRange = leftToRight
                 ? stride(from: 0, to: width, by: 1)
@@ -901,11 +923,12 @@ public enum DitherRenderer {
     private static func artisticDripDither(
         lumBuf: inout [Double],
         width: Int, height: Int
-    ) -> [UInt8] {
+    ) throws -> [UInt8] {
         let count = width * height
         var output = [UInt8](repeating: 0, count: count)
 
         for y in 0..<height {
+            if (y & 31) == 0 { try Task.checkCancellation() }
             let leftToRight = (y % 2 == 0)
             let xRange = leftToRight
                 ? stride(from: 0, to: width, by: 1)
@@ -954,11 +977,12 @@ public enum DitherRenderer {
     private static func stuckiDither(
         lumBuf: inout [Double],
         width: Int, height: Int
-    ) -> [UInt8] {
+    ) throws -> [UInt8] {
         let count = width * height
         var output = [UInt8](repeating: 0, count: count)
 
         for y in 0..<height {
+            if (y & 31) == 0 { try Task.checkCancellation() }
             let leftToRight = (y % 2 == 0)
             let xRange = leftToRight
                 ? stride(from: 0, to: width, by: 1)
@@ -1009,11 +1033,12 @@ public enum DitherRenderer {
     private static func whiteNoiseDither(
         lumBuf: inout [Double],
         width: Int, height: Int
-    ) -> [UInt8] {
+    ) throws -> [UInt8] {
         let count = width * height
         var output = [UInt8](repeating: 0, count: count)
 
         for y in 0..<height {
+            if (y & 31) == 0 { try Task.checkCancellation() }
             let rowOff = y * width
             for x in 0..<width {
                 let i = rowOff + x
@@ -1040,7 +1065,7 @@ public enum DitherRenderer {
     private static func riemersmaDither(
         lumBuf: inout [Double],
         width: Int, height: Int
-    ) -> [UInt8] {
+    ) throws -> [UInt8] {
         let count = width * height
         var output = [UInt8](repeating: 0, count: count)
 
@@ -1052,7 +1077,8 @@ public enum DitherRenderer {
         let weights = riemersmaWeights.weights
         let totalWeight = riemersmaWeights.totalWeight
 
-        for packed in path {
+        for (step, packed) in path.enumerated() {
+            if (step & 0x1FFF) == 0 { try Task.checkCancellation() }
             let x = Int(packed & 0xFFFF)
             let y = Int(packed >> 16)
             let i = y * width + x
@@ -1082,7 +1108,7 @@ public enum DitherRenderer {
         output: inout [UInt8],
         width: Int, height: Int,
         maxLevel: Double
-    ) {
+    ) throws {
         let path = cachedHilbertPath(width: width, height: height)
 
         let historySize = riemersmaHistorySize
@@ -1091,7 +1117,8 @@ public enum DitherRenderer {
         let weights = riemersmaWeights.weights
         let totalWeight = riemersmaWeights.totalWeight
 
-        for packed in path {
+        for (step, packed) in path.enumerated() {
+            if (step & 0x1FFF) == 0 { try Task.checkCancellation() }
             let x = Int(packed & 0xFFFF)
             let y = Int(packed >> 16)
             let i = y * width + x

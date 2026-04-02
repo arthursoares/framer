@@ -31,7 +31,7 @@ struct ProcessCommand: AsyncParsableCommand {
     @Option(help: "Post-process command ({file} = output path)") var postProcess: String?
     @Option(help: "Background color (hex, e.g. #FFFFFF)") var backgroundColor: String?
     @Option(help: "Outer padding in pixels (print style)") var outerPadding: Int?
-    @Option(help: "Caption padding in pixels (print style)") var captionPadding: Int?
+    @Option(help: "Legacy alias for outer padding in print style") var captionPadding: Int?
     @Flag(help: "Do not preserve EXIF metadata") var noMetadata = false
     @Option(help: "Print width in mm (default 148)") var printWidth: Double?
     @Option(help: "Print height in mm (default 100)") var printHeight: Double?
@@ -72,11 +72,10 @@ struct ProcessCommand: AsyncParsableCommand {
         if let t = borderThickness { cfg.borderThickness = BorderSize(string: t) }
         if let c = borderColor, let color = try? CodableColor(hex: c) { cfg.borderColor = color }
         if let p = padding { cfg.padding = p }
-        if let q = quality { cfg.outputFormat = .jpeg(quality: q) }
-        if outputFormat == "png" { cfg.outputFormat = .png }
+        try Self.applyOutputFormatOverride(outputFormat, quality: quality, config: &cfg)
         if let pp = postProcess { cfg.postProcess = pp }
         if let bg = backgroundColor, let color = try? CodableColor(hex: bg) { cfg.backgroundColor = color }
-        if let op = outerPadding { cfg.outerPadding = op }
+        Self.applyPaddingOverrides(outerPadding: outerPadding, captionPadding: captionPadding, config: &cfg)
         if noMetadata { cfg.noMetadata = true }
 
         // Build caption layer from CLI flags
@@ -127,7 +126,7 @@ struct ProcessCommand: AsyncParsableCommand {
             guard let outputDir = output else {
                 throw ValidationError("--output is required for directory processing")
             }
-            let workerCount = workers ?? ProcessInfo.processInfo.processorCount
+            let workerCount = try Self.validatedWorkers(workers)
             try await batchProcess(directory: inputURL, outputDir: outputDir, config: cfg, workers: workerCount)
         } else {
             let outURL: URL
@@ -146,6 +145,10 @@ struct ProcessCommand: AsyncParsableCommand {
     }
 
     private func batchProcess(directory: URL, outputDir: String, config: ProcessingConfig, workers: Int) async throws {
+        guard workers > 0 else {
+            throw ValidationError("--workers must be at least 1")
+        }
+
         let fm = FileManager.default
         let outDir = URL(fileURLWithPath: outputDir)
         try fm.createDirectory(at: outDir, withIntermediateDirectories: true)
@@ -198,6 +201,43 @@ struct ProcessCommand: AsyncParsableCommand {
         print("Done: \(total) images processed to \(outDir.path)")
     }
 
+    static func validatedWorkers(_ workers: Int?) throws -> Int {
+        let defaultWorkers = max(1, ProcessInfo.processInfo.processorCount)
+        let resolved = workers ?? defaultWorkers
+        guard resolved > 0 else {
+            throw ValidationError("--workers must be at least 1")
+        }
+        return resolved
+    }
+
+    static func applyOutputFormatOverride(
+        _ outputFormat: String?,
+        quality: Int?,
+        config: inout ProcessingConfig
+    ) throws {
+        if let quality {
+            config.outputFormat = .jpeg(quality: quality)
+        }
+
+        guard let outputFormat else { return }
+        switch outputFormat.lowercased() {
+        case "png":
+            config.outputFormat = .png
+        case "jpeg", "jpg":
+            let resolvedQuality: Int
+            if let quality {
+                resolvedQuality = quality
+            } else if case .jpeg(let existingQuality) = config.outputFormat {
+                resolvedQuality = existingQuality
+            } else {
+                resolvedQuality = 100
+            }
+            config.outputFormat = .jpeg(quality: resolvedQuality)
+        default:
+            throw ValidationError("--output-format must be 'jpeg' or 'png'")
+        }
+    }
+
     static func outputName(for input: URL, in dir: URL, style: BorderStyle, format: OutputFormat) -> URL {
         let stem = input.deletingPathExtension().lastPathComponent
         let ext: String
@@ -214,9 +254,25 @@ struct ProcessCommand: AsyncParsableCommand {
         return dir.appendingPathComponent("\(stem)\(suffix).\(ext)")
     }
 
+    static func applyPaddingOverrides(
+        outerPadding: Int?,
+        captionPadding: Int?,
+        config: inout ProcessingConfig
+    ) {
+        if let outerPadding {
+            config.outerPadding = outerPadding
+        } else if let captionPadding {
+            config.outerPadding = captionPadding
+        }
+    }
+
+    static func shellQuote(_ value: String) -> String {
+        "'\(value.replacingOccurrences(of: "'", with: "'\"'\"'"))'"
+    }
+
     static func runPostProcess(_ command: String?, file: URL) {
         guard let cmd = command, !cmd.isEmpty else { return }
-        let quoted = file.path.contains(" ") ? "\"\(file.path)\"" : file.path
+        let quoted = shellQuote(file.path)
         let resolved = cmd.replacingOccurrences(of: "{file}", with: quoted)
         let proc = Process()
         proc.launchPath = "/bin/sh"
