@@ -8,14 +8,19 @@ final class PresetPreviewCache {
     private var renderTasks: [UUID: Task<Void, Never>] = [:]
     private let maxConcurrentPresetRenders = 4
 
-    func regenerate(for photo: PhotoItem, presets: [Preset]) {
+    func clear() {
         for (_, task) in renderTasks { task.cancel() }
         renderTasks.removeAll()
         previews.removeAll()
+    }
+
+    func regenerate(for photo: PhotoItem, presets: [Preset]) {
+        clear()
 
         let url = photo.url
         let rotation = photo.rotation
         let presetList = presets
+        let compactPreviewMaxDimension = 320
 
         let task = Task {
             try? await Task.sleep(for: .milliseconds(200))
@@ -33,7 +38,12 @@ final class PresetPreviewCache {
                         guard !Task.isCancelled else { return }
                         do {
                             let cgImage = try await Task.detached {
-                                try await processor.presetThumbnailCGImage(for: url, config: preset.config, rotation: rotation)
+                                try await processor.previewCGImage(
+                                    for: url,
+                                    config: preset.config,
+                                    rotation: rotation,
+                                    maxDimension: compactPreviewMaxDimension
+                                )
                             }.value
                             guard !Task.isCancelled else { return }
                             let image = UIImage(cgImage: cgImage)

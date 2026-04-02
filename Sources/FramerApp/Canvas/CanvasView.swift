@@ -117,6 +117,11 @@ struct CanvasView: View {
             showOriginal = false
             updatePreview()
         }
+        .onChange(of: showOriginal) { _, isShowingOriginal in
+            if isShowingOriginal {
+                viewModel.loadOriginalIfNeeded(for: appState.selectedPhoto)
+            }
+        }
         .onChange(of: appState.currentConfig) { _, _ in updatePreview() }
         .onChange(of: appState.selectedPhoto?.rotation) { _, _ in updatePreview() }
         .onAppear { updatePreview() }
@@ -152,7 +157,11 @@ struct CanvasView: View {
     }
 
     private func updatePreview() {
-        viewModel.updatePreview(for: appState.selectedPhoto, config: appState.currentConfig)
+        viewModel.updatePreview(
+            for: appState.selectedPhoto,
+            config: appState.currentConfig,
+            includeOriginal: showOriginal
+        )
     }
 
     private func handleDrop(providers: [NSItemProvider]) -> Bool {
@@ -186,7 +195,7 @@ struct CanvasView: View {
 
     private func navigateFilmstrip(forward: Bool) {
         guard !appState.library.isEmpty else { return }
-        let currentID = appState.selectedItems.first
+        let currentID = appState.selectedPhoto?.id
         let currentIndex = currentID.flatMap { id in appState.library.firstIndex(where: { $0.id == id }) }
         let nextIndex: Int
         if let idx = currentIndex {

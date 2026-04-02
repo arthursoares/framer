@@ -106,9 +106,15 @@ struct LayerDetailView: View {
             let url = photo.url
             let config = appState.currentConfig
             let rotation = photo.rotation
+            let compactPreviewMaxDimension = 320
             do {
                 let cgImage = try await Task.detached {
-                    try await processor.previewCGImage(for: url, config: config, rotation: rotation)
+                    try await processor.previewCGImage(
+                        for: url,
+                        config: config,
+                        rotation: rotation,
+                        maxDimension: compactPreviewMaxDimension
+                    )
                 }.value
                 guard !Task.isCancelled else { return }
                 miniPreview = UIImage(cgImage: cgImage)
@@ -203,6 +209,7 @@ private struct BorderControls: View {
             ControlRow(label: "Color") {
                 ColorPicker("", selection: colorBinding)
                     .labelsHidden()
+                    .accessibilityLabel("Border Color")
             }
         }
     }
@@ -714,6 +721,7 @@ private struct DitherControls: View {
                         set: { var p = params; p.bayerLevel = $0; onChange(p) }
                     ), in: 1...4)
                     .labelsHidden()
+                    .accessibilityLabel("Bayer Level")
                 }
             }
 
@@ -723,6 +731,7 @@ private struct DitherControls: View {
                     set: { var p = params; p.pixelScale = $0; onChange(p) }
                 ), in: 1...8)
                 .labelsHidden()
+                .accessibilityLabel("Pixel Scale")
             }
 
             // Two-Tone color pickers
@@ -736,6 +745,7 @@ private struct DitherControls: View {
                         }
                     ))
                     .labelsHidden()
+                    .accessibilityLabel("Foreground Color")
                 }
                 ControlRow(label: "Background") {
                     ColorPicker("", selection: Binding(
@@ -746,6 +756,7 @@ private struct DitherControls: View {
                         }
                     ))
                     .labelsHidden()
+                    .accessibilityLabel("Background Color")
                 }
             }
 
@@ -757,6 +768,7 @@ private struct DitherControls: View {
                         set: { var p = params; p.colorMode = .dominantTwoTone(flipped: $0, saturationShift: sat, lightnessShift: light); onChange(p) }
                     ))
                     .labelsHidden()
+                    .accessibilityLabel("Flip Colors")
                 }
                 ControlRow(label: "Saturation") {
                     HStack {
@@ -790,6 +802,7 @@ private struct DitherControls: View {
                         set: { var p = params; p.colorMode = .color(levels: $0); onChange(p) }
                     ), in: 2...8)
                     .labelsHidden()
+                    .accessibilityLabel("Color Levels")
                 }
             }
 
@@ -863,6 +876,7 @@ private struct FillPicker: View {
                     }
                 ))
                 .labelsHidden()
+                .accessibilityLabel("Fill Color")
             }
         }
 

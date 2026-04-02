@@ -156,6 +156,7 @@ struct PresetPreviewGrid: View {
         let presets = appState.presets
         let url = photo.url
         let rotation = photo.rotation
+        let compactPreviewMaxDimension = 320
 
         let task = Task {
             try? await Task.sleep(for: .milliseconds(200))
@@ -174,7 +175,12 @@ struct PresetPreviewGrid: View {
                         guard !Task.isCancelled else { return }
                         do {
                             let cgImage = try await Task.detached {
-                                try await processor.presetThumbnailCGImage(for: url, config: preset.config, rotation: rotation)
+                                try await processor.previewCGImage(
+                                    for: url,
+                                    config: preset.config,
+                                    rotation: rotation,
+                                    maxDimension: compactPreviewMaxDimension
+                                )
                             }.value
                             guard !Task.isCancelled else { return }
 
