@@ -194,13 +194,19 @@ final class PresetStoreTests: XCTestCase {
         store.initializeDefaults()
 
         let all = try store.list()
-        XCTAssertEqual(all.count, 5)
+        XCTAssertEqual(all.count, 11)
         let names = Set(all.map(\.name))
         XCTAssertTrue(names.contains("film"))
         XCTAssertTrue(names.contains("instagram"))
         XCTAssertTrue(names.contains("minimal"))
         XCTAssertTrue(names.contains("print 10x15"))
         XCTAssertTrue(names.contains("dark gradient"))
+        XCTAssertTrue(names.contains("Shader ASCII"))
+        XCTAssertTrue(names.contains("Shader Crimewave"))
+        XCTAssertTrue(names.contains("Shader Narc"))
+        XCTAssertTrue(names.contains("Shader Shiba"))
+        XCTAssertTrue(names.contains("Shader Pixel Sort"))
+        XCTAssertTrue(names.contains("Shader Distant Past"))
     }
 
     func test_listPresets_mixedJSONAndYAML() throws {
@@ -211,7 +217,7 @@ final class PresetStoreTests: XCTestCase {
         try store.save(jsonPreset)
 
         let all = try store.list()
-        XCTAssertEqual(all.count, 6)
+        XCTAssertEqual(all.count, 12)
     }
 
     func test_initializeDefaults_creates5Files() throws {
@@ -221,7 +227,7 @@ final class PresetStoreTests: XCTestCase {
         let files = try FileManager.default.contentsOfDirectory(at: tempDir,
                                                                  includingPropertiesForKeys: nil)
         let yamlFiles = files.filter { $0.pathExtension == "yaml" }
-        XCTAssertEqual(yamlFiles.count, 5)
+        XCTAssertEqual(yamlFiles.count, 11)
 
         let names = Set(yamlFiles.map { $0.deletingPathExtension().lastPathComponent })
         XCTAssertTrue(names.contains("film"))
@@ -229,6 +235,37 @@ final class PresetStoreTests: XCTestCase {
         XCTAssertTrue(names.contains("minimal"))
         XCTAssertTrue(names.contains("print 10x15"))
         XCTAssertTrue(names.contains("dark gradient"))
+        XCTAssertTrue(names.contains("Shader ASCII"))
+        XCTAssertTrue(names.contains("Shader Crimewave"))
+        XCTAssertTrue(names.contains("Shader Narc"))
+        XCTAssertTrue(names.contains("Shader Shiba"))
+        XCTAssertTrue(names.contains("Shader Pixel Sort"))
+        XCTAssertTrue(names.contains("Shader Distant Past"))
+    }
+
+    func test_initializeDefaults_includesShaderPresets() throws {
+        let store = PresetStore(directory: tempDir)
+        store.initializeDefaults()
+
+        let all = try store.list()
+        let names = Set(all.map(\.name))
+
+        XCTAssertTrue(names.contains("Shader ASCII"))
+        XCTAssertTrue(names.contains("Shader Crimewave"))
+        XCTAssertTrue(names.contains("Shader Narc"))
+        XCTAssertTrue(names.contains("Shader Shiba"))
+        XCTAssertTrue(names.contains("Shader Pixel Sort"))
+        XCTAssertTrue(names.contains("Shader Distant Past"))
+    }
+
+    func test_initializeDefaults_createsShaderPresetFiles() throws {
+        let store = PresetStore(directory: tempDir)
+        store.initializeDefaults()
+
+        let files = try FileManager.default.contentsOfDirectory(at: tempDir, includingPropertiesForKeys: nil)
+        let yamlFiles = files.filter { $0.pathExtension == "yaml" }
+
+        XCTAssertEqual(yamlFiles.count, 11)
     }
 
     func test_initializeDefaults_doesNotOverwrite() throws {
