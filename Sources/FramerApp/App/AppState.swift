@@ -19,6 +19,7 @@ final class AppState {
     var presets: [Preset] = []
     var presetStore = PresetStore()
     var exportQueue: [ExportJob] = []
+    private var exportTasks: [UUID: Task<Void, Never>] = [:]
 
 
     init() {
@@ -31,9 +32,7 @@ final class AppState {
     }
 
     var selectedPhoto: PhotoItem? {
-        selectedItems.first.flatMap { id in
-            library.first { $0.id == id }
-        }
+        library.first { selectedItems.contains($0.id) }
     }
 
     // MARK: - Export
@@ -55,8 +54,9 @@ final class AppState {
         exportQueue.append(job)
         let jobId = job.id
 
-        Task {
-            let maxConcurrency = ProcessInfo.processInfo.processorCount
+        let task = Task {
+            defer { exportTasks.removeValue(forKey: jobId) }
+            let maxConcurrency = Self.recommendedExportConcurrency(itemCount: items.count)
             var completed = 0
             var failedCount = 0
 
@@ -70,6 +70,7 @@ final class AppState {
                     index += 1
                     _ = idx  // suppress unused warning; index tracks insertion order, not used inside closure
                     group.addTask {
+                        if Task.isCancelled { return false }
                         let processor = FrameProcessor()
                         let outURL = Self.outputURL(for: item, config: config, directory: directory, suffix: suffix)
                         do {
@@ -83,6 +84,11 @@ final class AppState {
 
                 // Drain results and feed remaining items one-for-one
                 for await success in group {
+                    if Task.isCancelled {
+                        group.cancelAll()
+                        break
+                    }
+
                     completed += 1
                     if !success { failedCount += 1 }
 
@@ -95,6 +101,7 @@ final class AppState {
                         let item = items[index]
                         index += 1
                         group.addTask {
+                            if Task.isCancelled { return false }
                             let processor = FrameProcessor()
                             let outURL = Self.outputURL(for: item, config: config, directory: directory, suffix: suffix)
                             do {
@@ -109,11 +116,16 @@ final class AppState {
             }
 
             if let qIdx = exportQueue.firstIndex(where: { $0.id == jobId }) {
-                exportQueue[qIdx].status = failedCount > 0
-                    ? .failed("\(failedCount) of \(items.count) failed")
-                    : .done
+                if Task.isCancelled {
+                    exportQueue[qIdx].status = .cancelled
+                } else {
+                    exportQueue[qIdx].status = failedCount > 0
+                        ? .failed("\(failedCount) of \(items.count) failed")
+                        : .done
+                }
             }
         }
+        exportTasks[jobId] = task
     }
 
     nonisolated static func outputURL(for item: PhotoItem, config: ProcessingConfig, directory: URL, suffix: String) -> URL {
@@ -160,7 +172,17 @@ final class AppState {
     func retryJob(_ job: ExportJob) {
         guard case .failed = job.status else { return }
         exportQueue.removeAll { $0.id == job.id }
-        exportItems(job.items, to: job.outputDirectory)
+        let suffix = job.label ?? Self.exportSuffix(presetName: activePresetName)
+        exportItems(job.items, to: job.outputDirectory, config: job.config, suffix: suffix)
+    }
+
+    func cancelJob(_ job: ExportJob) {
+        guard case .running = job.status else { return }
+        exportTasks[job.id]?.cancel()
+        exportTasks.removeValue(forKey: job.id)
+        if let idx = exportQueue.firstIndex(where: { $0.id == job.id }) {
+            exportQueue[idx].status = .cancelled
+        }
     }
 
     /// Sanitized filename suffix from preset name, falling back to "framed".
@@ -172,6 +194,16 @@ final class AppState {
             .replacingOccurrences(of: "[^a-z0-9]+", with: "_", options: .regularExpression)
             .trimmingCharacters(in: CharacterSet(charactersIn: "_"))
         return sanitized.isEmpty ? "framed" : sanitized
+    }
+
+    nonisolated static func recommendedExportConcurrency(
+        itemCount: Int,
+        cpuCount: Int = ProcessInfo.processInfo.activeProcessorCount
+    ) -> Int {
+        guard itemCount > 0 else { return 1 }
+        let available = max(1, cpuCount)
+        let uiFriendlyCap = min(6, max(1, available - 1))
+        return min(itemCount, uiFriendlyCap)
     }
 }
 
@@ -196,6 +228,6 @@ struct ExportJob: Identifiable {
     var status: JobStatus = .queued
 
     enum JobStatus: Equatable {
-        case queued, running, done, failed(String)
+        case queued, running, done, cancelled, failed(String)
     }
 }

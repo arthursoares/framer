@@ -106,6 +106,7 @@ struct ExportBar: View {
     private var queueIndicator: some View {
         let running = appState.exportQueue.filter { $0.status == .running }
         let failed = appState.exportQueue.filter { if case .failed = $0.status { return true }; return false }
+        let cancelled = appState.exportQueue.filter { $0.status == .cancelled }
 
         HStack(spacing: 4) {
             if let job = running.first {
@@ -120,6 +121,10 @@ struct ExportBar: View {
                 Image(systemName: "exclamationmark.triangle.fill")
                     .font(.system(size: 10))
                     .foregroundStyle(Color.error)
+            } else if !cancelled.isEmpty {
+                Image(systemName: "xmark.circle.fill")
+                    .font(.system(size: 10))
+                    .foregroundStyle(Color.text3)
             } else {
                 Image(systemName: "checkmark.circle.fill")
                     .font(.system(size: 10))
@@ -273,9 +278,9 @@ struct ExportQueuePopover: View {
                     .tracking(1.5)
                     .foregroundStyle(Color.text3)
                 Spacer()
-                if appState.exportQueue.contains(where: { $0.status == .done }) {
+                if appState.exportQueue.contains(where: { $0.status == .done || $0.status == .cancelled }) {
                     Button("Clear") {
-                        appState.exportQueue.removeAll { $0.status == .done }
+                        appState.exportQueue.removeAll { $0.status == .done || $0.status == .cancelled }
                     }
                     .font(AppFont.body(10))
                     .foregroundStyle(Color.text2)
@@ -325,6 +330,16 @@ struct ExportQueuePopover: View {
                 }
                 .buttonStyle(.plain)
             }
+            if job.status == .running {
+                Button {
+                    appState.cancelJob(job)
+                } label: {
+                    Image(systemName: "xmark.circle")
+                        .font(.system(size: 10))
+                        .foregroundStyle(Color.text2)
+                }
+                .buttonStyle(.plain)
+            }
             if case .failed = job.status {
                 Button {
                     appState.retryJob(job)
@@ -354,6 +369,10 @@ struct ExportQueuePopover: View {
             Image(systemName: "checkmark.circle.fill")
                 .font(.system(size: 10))
                 .foregroundStyle(Color.success)
+        case .cancelled:
+            Image(systemName: "xmark.circle.fill")
+                .font(.system(size: 10))
+                .foregroundStyle(Color.text3)
         case .failed:
             Image(systemName: "exclamationmark.triangle.fill")
                 .font(.system(size: 10))

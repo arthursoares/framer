@@ -11,44 +11,88 @@ final class PreviewViewModel {
     var outputSize: CGSize?
 
     private var renderTask: Task<Void, Never>?
+    private var originalLoadTask: Task<Void, Never>?
+    private var originalImageURL: URL?
     private let processor = FrameProcessor()
 
-    func updatePreview(for item: PhotoItem?, config: ProcessingConfig) {
+    func updatePreview(for item: PhotoItem?, config: ProcessingConfig, includeOriginal: Bool = false) {
+        renderTask?.cancel()
+
         guard let item else {
+            renderTask = nil
+            originalLoadTask?.cancel()
+            originalLoadTask = nil
+            originalImageURL = nil
             previewImage = nil
             originalImage = nil
             error = nil
             outputSize = nil
+            isLoading = false
             return
         }
 
-        renderTask?.cancel()
+        if originalImageURL != item.url {
+            originalLoadTask?.cancel()
+            originalLoadTask = nil
+            originalImageURL = nil
+            originalImage = nil
+        }
+
         renderTask = Task {
             try? await Task.sleep(for: .milliseconds(150))
-            guard !Task.isCancelled else { return }
+            guard !Task.isCancelled else {
+                isLoading = false
+                return
+            }
 
             isLoading = true
             error = nil
+            defer { isLoading = false }
 
             do {
                 let itemURL = item.url
                 let itemRotation = item.rotation
-                let originalHandle = Task.detached {
-                    Self.loadOriginal(from: itemURL, maxDimension: 1200)
-                }
                 let cgPreview = try await processor.previewCGImage(for: itemURL, config: config, rotation: itemRotation)
                 let preview = UIImage(cgImage: cgPreview)
-                let original = await originalHandle.value
-                guard !Task.isCancelled else { return }
-                originalImage = original
+                guard !Task.isCancelled else {
+                    return
+                }
                 previewImage = preview
                 outputSize = CGSize(width: cgPreview.width, height: cgPreview.height)
+                if includeOriginal {
+                    loadOriginalIfNeeded(for: item)
+                }
             } catch is CancellationError {
                 return
             } catch {
                 self.error = error.localizedDescription
             }
-            isLoading = false
+        }
+    }
+
+    func loadOriginalIfNeeded(for item: PhotoItem?) {
+        guard let item else {
+            originalLoadTask?.cancel()
+            originalLoadTask = nil
+            originalImageURL = nil
+            originalImage = nil
+            return
+        }
+
+        if originalImageURL == item.url, originalImage != nil {
+            return
+        }
+
+        originalLoadTask?.cancel()
+        let itemURL = item.url
+        originalImageURL = itemURL
+        originalLoadTask = Task {
+            let original = await Task.detached {
+                Self.loadOriginal(from: itemURL, maxDimension: 1200)
+            }.value
+            guard !Task.isCancelled, originalImageURL == itemURL else { return }
+            originalImage = original
+            originalLoadTask = nil
         }
     }
 

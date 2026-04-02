@@ -58,7 +58,8 @@ struct FilmstripView: View {
                     .padding(.horizontal, 10)
                 }
                 .onChange(of: appState.selectedItems) { _, newValue in
-                    if let first = newValue.first {
+                    guard !newValue.isEmpty else { return }
+                    if let first = appState.selectedPhoto?.id {
                         withAnimation {
                             proxy.scrollTo(first, anchor: .center)
                         }

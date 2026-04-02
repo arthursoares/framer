@@ -32,19 +32,19 @@ struct FramerCommands: Commands {
             Button("Delete Selected") {
                 NotificationCenter.default.post(name: .framerDeleteSelected, object: nil)
             }
-            .keyboardShortcut(.delete, modifiers: [])
+            .keyboardShortcut(.delete, modifiers: .command)
         }
 
         CommandMenu("Navigate") {
             Button("Previous Photo") {
                 NotificationCenter.default.post(name: .framerPreviousPhoto, object: nil)
             }
-            .keyboardShortcut(.leftArrow, modifiers: [])
+            .keyboardShortcut("[", modifiers: .command)
 
             Button("Next Photo") {
                 NotificationCenter.default.post(name: .framerNextPhoto, object: nil)
             }
-            .keyboardShortcut(.rightArrow, modifiers: [])
+            .keyboardShortcut("]", modifiers: .command)
         }
 
         CommandMenu("Image") {
