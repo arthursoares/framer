@@ -55,11 +55,13 @@ public enum ShaderRenderer {
         let grain = ShaderPrimitives.clamp01(params.grain)
 
         for y in 0..<height {
+            try Task.checkCancellation()
             for x in 0..<width {
                 let idx = (y * width + x) * 4
                 let originalR = pixels[idx]
                 let originalG = pixels[idx + 1]
                 let originalB = pixels[idx + 2]
+                let originalA = pixels[idx + 3]
 
                 let reducedR = ShaderPrimitives.reducePaletteComponent(originalR, levels: levels)
                 let reducedG = ShaderPrimitives.reducePaletteComponent(originalG, levels: levels)
@@ -83,7 +85,7 @@ public enum ShaderRenderer {
                 pixels[idx] = ShaderPrimitives.mix(originalR, grainedR, intensity: intensity)
                 pixels[idx + 1] = ShaderPrimitives.mix(originalG, grainedG, intensity: intensity)
                 pixels[idx + 2] = ShaderPrimitives.mix(originalB, grainedB, intensity: intensity)
-                pixels[idx + 3] = 255
+                pixels[idx + 3] = originalA
             }
         }
 
