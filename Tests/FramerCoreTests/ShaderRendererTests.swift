@@ -151,18 +151,52 @@ final class ShaderRendererTests: XCTestCase {
         XCTAssertNotEqual(pixelData(for: normal), pixelData(for: inverted))
     }
 
-    func test_asciiShader_previewDimensionScalesCellSize() throws {
+    func downscale(_ image: CGImage, maxDimension: Int) -> CGImage {
+        let width = image.width
+        let height = image.height
+        guard max(width, height) > maxDimension else { return image }
+
+        let scale = Double(maxDimension) / Double(max(width, height))
+        let newWidth = max(1, Int((Double(width) * scale).rounded()))
+        let newHeight = max(1, Int((Double(height) * scale).rounded()))
+        let colorSpace = CGColorSpaceCreateDeviceRGB()
+        let bitmapInfo = CGImageAlphaInfo.premultipliedLast.rawValue
+        let ctx = CGContext(
+            data: nil,
+            width: newWidth,
+            height: newHeight,
+            bitsPerComponent: 8,
+            bytesPerRow: newWidth * 4,
+            space: colorSpace,
+            bitmapInfo: bitmapInfo
+        )!
+        ctx.interpolationQuality = .high
+        ctx.draw(image, in: CGRect(x: 0, y: 0, width: newWidth, height: newHeight))
+        return ctx.makeImage()!
+    }
+
+    func test_asciiShader_previewDimensionMatchesPreviewSampling() throws {
         let image = makeColorGridImage(width: 64, height: 64)
         let params = ShaderLayerParams(
             style: .ascii,
             intensity: 1.0,
-            params: .ascii(ASCIIShaderParams(cellSize: 4, edgeBias: 0.0, foreground: .white, background: .black, invert: false))
+            params: .ascii(ASCIIShaderParams(cellSize: 4, edgeBias: 0.4, foreground: .white, background: .black, invert: false))
         )
 
-        let scaled = try ShaderRenderer.apply(to: image, params: params, previewBaseDimension: 32)
+        let previewInput = downscale(image, maxDimension: 32)
+        let previewOutput = try ShaderRenderer.apply(to: previewInput, params: params)
+        let exportOutput = try ShaderRenderer.apply(to: image, params: params, previewBaseDimension: 32)
 
-        XCTAssertEqual(packedColorAt(scaled, x: 1, y: 1), packedColorAt(scaled, x: 6, y: 6))
-        XCTAssertEqual(packedColorAt(scaled, x: 9, y: 1), packedColorAt(scaled, x: 14, y: 6))
+        for previewY in stride(from: 2, to: previewOutput.height, by: 4) {
+            for previewX in stride(from: 2, to: previewOutput.width, by: 4) {
+                let exportX = min(exportOutput.width - 1, previewX * 2)
+                let exportY = min(exportOutput.height - 1, previewY * 2)
+                XCTAssertEqual(
+                    packedColorAt(previewOutput, x: previewX, y: previewY),
+                    packedColorAt(exportOutput, x: exportX, y: exportY)
+                )
+            }
+        }
     }
 
     func test_distantPastShader_reducesColorVariety() throws {
