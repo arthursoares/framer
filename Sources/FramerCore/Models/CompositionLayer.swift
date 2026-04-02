@@ -798,9 +798,12 @@ public enum ShaderStyle: String, Codable, CaseIterable, Sendable {
 public enum ASCIIColorMode: Codable, Equatable, Sendable {
     case manual(foreground: CodableColor, background: CodableColor)
     case dominantTwoTone(flipped: Bool = false, saturationShift: Double = 0, lightnessShift: Double = 0)
+    case source(background: CodableColor = .black)
+    case gradient(color1: CodableColor, color2: CodableColor, background: CodableColor = .black)
 
     private enum CodingKeys: String, CodingKey {
         case type, foreground, background, flipped, saturationShift, lightnessShift
+        case color1, color2
     }
 
     public init(from decoder: Decoder) throws {
@@ -817,6 +820,16 @@ public enum ASCIIColorMode: Codable, Equatable, Sendable {
                 flipped: try container.decodeIfPresent(Bool.self, forKey: .flipped) ?? false,
                 saturationShift: try container.decodeIfPresent(Double.self, forKey: .saturationShift) ?? 0,
                 lightnessShift: try container.decodeIfPresent(Double.self, forKey: .lightnessShift) ?? 0
+            )
+        case "source":
+            self = .source(
+                background: try container.decodeIfPresent(CodableColor.self, forKey: .background) ?? .black
+            )
+        case "gradient":
+            self = .gradient(
+                color1: try container.decodeIfPresent(CodableColor.self, forKey: .color1) ?? .black,
+                color2: try container.decodeIfPresent(CodableColor.self, forKey: .color2) ?? .white,
+                background: try container.decodeIfPresent(CodableColor.self, forKey: .background) ?? .black
             )
         default:
             self = .manual(foreground: .white, background: .black)
@@ -835,6 +848,14 @@ public enum ASCIIColorMode: Codable, Equatable, Sendable {
             if flipped { try container.encode(true, forKey: .flipped) }
             if saturationShift != 0 { try container.encode(saturationShift, forKey: .saturationShift) }
             if lightnessShift != 0 { try container.encode(lightnessShift, forKey: .lightnessShift) }
+        case .source(let background):
+            try container.encode("source", forKey: .type)
+            try container.encode(background, forKey: .background)
+        case .gradient(let color1, let color2, let background):
+            try container.encode("gradient", forKey: .type)
+            try container.encode(color1, forKey: .color1)
+            try container.encode(color2, forKey: .color2)
+            try container.encode(background, forKey: .background)
         }
     }
 }
@@ -844,6 +865,8 @@ public struct ASCIIShaderParams: Codable, Equatable, Sendable {
     public var edgeBias: Double
     public var colorMode: ASCIIColorMode
     public var invert: Bool
+    public var exposure: Double
+    public var attenuation: Double
 
     public init(
         cellSize: Int = 10,
@@ -851,16 +874,21 @@ public struct ASCIIShaderParams: Codable, Equatable, Sendable {
         colorMode: ASCIIColorMode? = nil,
         foreground: CodableColor = .white,
         background: CodableColor = .black,
-        invert: Bool = false
+        invert: Bool = false,
+        exposure: Double = 1.0,
+        attenuation: Double = 1.0
     ) {
         self.cellSize = cellSize
         self.edgeBias = edgeBias
         self.colorMode = colorMode ?? .manual(foreground: foreground, background: background)
         self.invert = invert
+        self.exposure = exposure
+        self.attenuation = attenuation
     }
 
     private enum CodingKeys: String, CodingKey {
         case cellSize, edgeBias, colorMode, foreground, background, invert
+        case exposure, attenuation
     }
 
     public init(from decoder: Decoder) throws {
@@ -879,7 +907,9 @@ public struct ASCIIShaderParams: Codable, Equatable, Sendable {
             cellSize: try container.decodeIfPresent(Int.self, forKey: .cellSize) ?? 10,
             edgeBias: try container.decodeIfPresent(Double.self, forKey: .edgeBias) ?? 0.5,
             colorMode: decodedColorMode,
-            invert: try container.decodeIfPresent(Bool.self, forKey: .invert) ?? false
+            invert: try container.decodeIfPresent(Bool.self, forKey: .invert) ?? false,
+            exposure: try container.decodeIfPresent(Double.self, forKey: .exposure) ?? 1.0,
+            attenuation: try container.decodeIfPresent(Double.self, forKey: .attenuation) ?? 1.0
         )
     }
 
@@ -889,6 +919,8 @@ public struct ASCIIShaderParams: Codable, Equatable, Sendable {
         try container.encode(edgeBias, forKey: .edgeBias)
         try container.encode(colorMode, forKey: .colorMode)
         try container.encode(invert, forKey: .invert)
+        if exposure != 1.0 { try container.encode(exposure, forKey: .exposure) }
+        if attenuation != 1.0 { try container.encode(attenuation, forKey: .attenuation) }
     }
 }
 

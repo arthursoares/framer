@@ -80,6 +80,10 @@ public enum YAMLConfig {
         var shader_saturation_shift: Double?
         var shader_lightness_shift: Double?
         var shader_invert: Bool?
+        var shader_exposure: Double?
+        var shader_attenuation: Double?
+        var shader_color1: String?
+        var shader_color2: String?
         var shader_neon: Double?
         var shader_softness: Double?
         var shader_contrast: Double?
@@ -536,8 +540,18 @@ public enum YAMLConfig {
                 if flipped { schema.shader_flipped = true }
                 if saturationShift != 0 { schema.shader_saturation_shift = saturationShift }
                 if lightnessShift != 0 { schema.shader_lightness_shift = lightnessShift }
+            case .source(let background):
+                schema.shader_color_mode = "source"
+                schema.shader_background = background.hex
+            case .gradient(let color1, let color2, let background):
+                schema.shader_color_mode = "gradient"
+                schema.shader_color1 = color1.hex
+                schema.shader_color2 = color2.hex
+                schema.shader_background = background.hex
             }
             schema.shader_invert = p.invert
+            if p.exposure != 1.0 { schema.shader_exposure = p.exposure }
+            if p.attenuation != 1.0 { schema.shader_attenuation = p.attenuation }
         case .crimewave(let p):
             schema.shader_neon = p.neon
             schema.shader_softness = p.softness
@@ -577,6 +591,16 @@ public enum YAMLConfig {
                     saturationShift: schema.shader_saturation_shift ?? 0,
                     lightnessShift: schema.shader_lightness_shift ?? 0
                 )
+            case "source":
+                colorMode = .source(
+                    background: (schema.shader_background.flatMap { try? CodableColor(hex: $0) }) ?? .black
+                )
+            case "gradient":
+                colorMode = .gradient(
+                    color1: (schema.shader_color1.flatMap { try? CodableColor(hex: $0) }) ?? .black,
+                    color2: (schema.shader_color2.flatMap { try? CodableColor(hex: $0) }) ?? .white,
+                    background: (schema.shader_background.flatMap { try? CodableColor(hex: $0) }) ?? .black
+                )
             default:
                 colorMode = .manual(
                     foreground: (schema.shader_foreground.flatMap { try? CodableColor(hex: $0) }) ?? .white,
@@ -587,7 +611,9 @@ public enum YAMLConfig {
                 cellSize: schema.shader_cell_size ?? 10,
                 edgeBias: schema.shader_edge_bias ?? 0.5,
                 colorMode: colorMode,
-                invert: schema.shader_invert ?? false
+                invert: schema.shader_invert ?? false,
+                exposure: schema.shader_exposure ?? 1.0,
+                attenuation: schema.shader_attenuation ?? 1.0
             ))
         case .crimewave:
             return .crimewave(CrimewaveShaderParams(
