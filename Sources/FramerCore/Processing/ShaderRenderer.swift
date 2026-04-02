@@ -16,9 +16,11 @@ public enum ShaderRenderer {
                 params: params,
                 previewBaseDimension: previewBaseDimension
             )
+        case .pixelSort:
+            return try ShaderPixelSortRenderer.apply(to: image, params: params)
         case .distantPast(let shaderParams):
             return try applyDistantPast(to: image, params: shaderParams, intensity: params.intensity)
-        case .crimewave, .narc, .shiba, .pixelSort:
+        case .crimewave, .narc, .shiba:
             return image
         }
     }
