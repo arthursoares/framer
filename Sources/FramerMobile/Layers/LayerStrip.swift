@@ -124,6 +124,9 @@ struct LayerStrip: View {
             Button { addLayer(.lut(LUTLayerParams())) } label: {
                 Label("LUT", systemImage: "photo.artframe")
             }
+            Button { addLayer(.shader(ShaderLayerParams())) } label: {
+                Label("Shader", systemImage: "sparkles.rectangle.stack")
+            }
         } label: {
             HStack {
                 Image(systemName: "plus.circle")
