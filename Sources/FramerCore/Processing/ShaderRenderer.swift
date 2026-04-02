@@ -18,11 +18,95 @@ public enum ShaderRenderer {
             )
         case .pixelSort:
             return try ShaderPixelSortRenderer.apply(to: image, params: params)
+        case .crimewave(let shaderParams):
+            return try applyCrimewave(to: image, params: shaderParams, intensity: params.intensity)
+        case .narc(let shaderParams):
+            return try applyNarc(to: image, params: shaderParams, intensity: params.intensity)
+        case .shiba(let shaderParams):
+            return try applyShiba(to: image, params: shaderParams, intensity: params.intensity)
         case .distantPast(let shaderParams):
             return try applyDistantPast(to: image, params: shaderParams, intensity: params.intensity)
-        case .crimewave, .narc, .shiba:
-            return image
         }
+    }
+
+    private static func applyCrimewave(
+        to image: CGImage,
+        params: CrimewaveShaderParams,
+        intensity: Double
+    ) throws -> CGImage {
+        let ctx = try ShaderPrimitives.renderToRGBAContext(image)
+        guard let data = ctx.data else {
+            throw FramerError.invalidImage(URL(fileURLWithPath: ""))
+        }
+        let pixels = data.bindMemory(to: UInt8.self, capacity: image.width * image.height * 4)
+
+        ShaderPrimitives.adjustContrastAndCrush(pixels, width: image.width, height: image.height, contrast: params.contrast)
+        ShaderPrimitives.adjustSaturation(pixels, width: image.width, height: image.height, amount: 1.0 + params.neon * 0.8)
+        ShaderPrimitives.applyChannelBias(
+            pixels,
+            width: image.width,
+            height: image.height,
+            red: params.neon * 10.0,
+            green: -params.neon * 8.0,
+            blue: params.neon * 22.0
+        )
+        ShaderPrimitives.applyBoxBlur(
+            pixels,
+            width: image.width,
+            height: image.height,
+            radius: 2,
+            mixAmount: params.softness * 0.65
+        )
+        ShaderPrimitives.addDeterministicGrain(pixels, width: image.width, height: image.height, amount: params.grain)
+        return try mixStylizedContext(ctx, with: image, intensity: intensity)
+    }
+
+    private static func applyNarc(
+        to image: CGImage,
+        params: NarcShaderParams,
+        intensity: Double
+    ) throws -> CGImage {
+        let ctx = try ShaderPrimitives.renderToRGBAContext(image)
+        guard let data = ctx.data else {
+            throw FramerError.invalidImage(URL(fileURLWithPath: ""))
+        }
+        let pixels = data.bindMemory(to: UInt8.self, capacity: image.width * image.height * 4)
+
+        ShaderPrimitives.adjustContrastAndCrush(
+            pixels,
+            width: image.width,
+            height: image.height,
+            contrast: params.contrast * 1.08,
+            crush: min(1.0, params.crush + 0.1)
+        )
+        ShaderPrimitives.adjustTemperature(pixels, width: image.width, height: image.height, amount: params.temperature)
+        ShaderPrimitives.adjustSaturation(pixels, width: image.width, height: image.height, amount: 1.02)
+        ShaderPrimitives.addDeterministicGrain(pixels, width: image.width, height: image.height, amount: params.grain * 1.1)
+        return try mixStylizedContext(ctx, with: image, intensity: intensity)
+    }
+
+    private static func applyShiba(
+        to image: CGImage,
+        params: ShibaShaderParams,
+        intensity: Double
+    ) throws -> CGImage {
+        let ctx = try ShaderPrimitives.renderToRGBAContext(image)
+        guard let data = ctx.data else {
+            throw FramerError.invalidImage(URL(fileURLWithPath: ""))
+        }
+        let pixels = data.bindMemory(to: UInt8.self, capacity: image.width * image.height * 4)
+
+        ShaderPrimitives.adjustTemperature(pixels, width: image.width, height: image.height, amount: params.warmth)
+        ShaderPrimitives.adjustSaturation(pixels, width: image.width, height: image.height, amount: 1.0 + params.saturation)
+        ShaderPrimitives.applyBoxBlur(
+            pixels,
+            width: image.width,
+            height: image.height,
+            radius: 1,
+            mixAmount: params.softness * 0.55
+        )
+        ShaderPrimitives.addDeterministicGrain(pixels, width: image.width, height: image.height, amount: params.grain * 0.6)
+        return try mixStylizedContext(ctx, with: image, intensity: intensity)
     }
 
     private static func applyDistantPast(
@@ -32,28 +116,7 @@ public enum ShaderRenderer {
     ) throws -> CGImage {
         let width = image.width
         let height = image.height
-        guard width > 0, height > 0 else {
-            throw FramerError.invalidImage(URL(fileURLWithPath: ""))
-        }
-
-        let colorSpace = CGColorSpaceCreateDeviceRGB()
-        let bitmapInfo = CGImageAlphaInfo.premultipliedLast.rawValue
-
-        guard let ctx = CGContext(
-            data: nil,
-            width: width,
-            height: height,
-            bitsPerComponent: 8,
-            bytesPerRow: width * 4,
-            space: colorSpace,
-            bitmapInfo: bitmapInfo
-        ) else {
-            throw FramerError.invalidImage(URL(fileURLWithPath: ""))
-        }
-
-        ctx.interpolationQuality = .high
-        ctx.draw(image, in: CGRect(x: 0, y: 0, width: width, height: height))
-
+        let ctx = try ShaderPrimitives.renderToRGBAContext(image)
         guard let data = ctx.data else {
             throw FramerError.invalidImage(URL(fileURLWithPath: ""))
         }
@@ -87,7 +150,7 @@ public enum ShaderRenderer {
                 let softenedB = ShaderPrimitives.mix(reducedB, monochrome, intensity: fade * softness)
 
                 let noiseSeed = ((x &* 31) &+ (y &* 17)) & 255
-                let grainOffset = Int(Double(noiseSeed) / 255.0 * 32.0 * grain) - Int(16.0 * grain)
+                let grainOffset = Int(Double(noiseSeed) / 255.0 * 18.0 * grain) - Int(9.0 * grain)
                 let grainedR = UInt8(max(0, min(255, Int(softenedR) + grainOffset)))
                 let grainedG = UInt8(max(0, min(255, Int(softenedG) + grainOffset)))
                 let grainedB = UInt8(max(0, min(255, Int(softenedB) + grainOffset)))
@@ -99,10 +162,64 @@ public enum ShaderRenderer {
             }
         }
 
+        ShaderPrimitives.applyFadeTowardLuminance(
+            pixels,
+            width: width,
+            height: height,
+            amount: min(1.0, fade * 0.8 + softness * 0.2)
+        )
+        ShaderPrimitives.applyBoxBlur(
+            pixels,
+            width: width,
+            height: height,
+            radius: 3,
+            mixAmount: min(1.0, 0.5 + softness * 0.95 + fade * 0.4)
+        )
+
         guard let result = ctx.makeImage() else {
             throw FramerError.invalidImage(URL(fileURLWithPath: ""))
         }
 
+        return result
+    }
+
+    private static func mixStylizedContext(
+        _ stylizedContext: CGContext,
+        with originalImage: CGImage,
+        intensity: Double
+    ) throws -> CGImage {
+        guard let stylized = stylizedContext.makeImage() else {
+            throw FramerError.invalidImage(URL(fileURLWithPath: ""))
+        }
+
+        let width = originalImage.width
+        let height = originalImage.height
+        let originalCtx = try ShaderPrimitives.renderToRGBAContext(originalImage)
+        let stylizedCtx = try ShaderPrimitives.renderToRGBAContext(stylized)
+        let mixedCtx = try ShaderPrimitives.renderToRGBAContext(originalImage)
+        guard
+            let originalData = originalCtx.data,
+            let stylizedData = stylizedCtx.data,
+            let mixedData = mixedCtx.data
+        else {
+            throw FramerError.invalidImage(URL(fileURLWithPath: ""))
+        }
+
+        let originalPixels = originalData.bindMemory(to: UInt8.self, capacity: width * height * 4)
+        let stylizedPixels = stylizedData.bindMemory(to: UInt8.self, capacity: width * height * 4)
+        let mixedPixels = mixedData.bindMemory(to: UInt8.self, capacity: width * height * 4)
+
+        for i in 0..<(width * height) {
+            let idx = i * 4
+            mixedPixels[idx] = ShaderPrimitives.mix(originalPixels[idx], stylizedPixels[idx], intensity: intensity)
+            mixedPixels[idx + 1] = ShaderPrimitives.mix(originalPixels[idx + 1], stylizedPixels[idx + 1], intensity: intensity)
+            mixedPixels[idx + 2] = ShaderPrimitives.mix(originalPixels[idx + 2], stylizedPixels[idx + 2], intensity: intensity)
+            mixedPixels[idx + 3] = originalPixels[idx + 3]
+        }
+
+        guard let result = mixedCtx.makeImage() else {
+            throw FramerError.invalidImage(URL(fileURLWithPath: ""))
+        }
         return result
     }
 }

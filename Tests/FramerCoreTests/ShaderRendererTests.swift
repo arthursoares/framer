@@ -100,6 +100,79 @@ final class ShaderRendererTests: XCTestCase {
         return ctx.makeImage()!
     }
 
+    func makePortraitReferenceImage(width: Int, height: Int) -> CGImage {
+        let colorSpace = CGColorSpaceCreateDeviceRGB()
+        let bitmapInfo = CGImageAlphaInfo.premultipliedLast.rawValue
+        let ctx = CGContext(
+            data: nil,
+            width: width,
+            height: height,
+            bitsPerComponent: 8,
+            bytesPerRow: width * 4,
+            space: colorSpace,
+            bitmapInfo: bitmapInfo
+        )!
+
+        let data = ctx.data!.bindMemory(to: UInt8.self, capacity: width * height * 4)
+        let centerX = Double(width) * 0.5
+        let centerY = Double(height) * 0.46
+        let faceRadiusX = Double(width) * 0.24
+        let faceRadiusY = Double(height) * 0.3
+
+        for y in 0..<height {
+            for x in 0..<width {
+                let idx = (y * width + x) * 4
+                let nx = Double(x) / Double(max(1, width - 1))
+                let ny = Double(y) / Double(max(1, height - 1))
+
+                var r = 28.0 + nx * 70.0 + ny * 35.0
+                var g = 24.0 + nx * 32.0 + ny * 26.0
+                var b = 42.0 + nx * 18.0 + ny * 54.0
+
+                let dx = (Double(x) - centerX) / faceRadiusX
+                let dy = (Double(y) - centerY) / faceRadiusY
+                let faceDistance = dx * dx + dy * dy
+                if faceDistance < 1.0 {
+                    let faceMask = 1.0 - faceDistance
+                    r += 150.0 * faceMask
+                    g += 105.0 * faceMask
+                    b += 82.0 * faceMask
+
+                    let eyeBand = abs(Double(y) - Double(height) * 0.4)
+                    if eyeBand < Double(height) * 0.03 && abs(Double(x) - centerX) > Double(width) * 0.05 {
+                        r -= 36.0 * faceMask
+                        g -= 28.0 * faceMask
+                        b -= 24.0 * faceMask
+                    }
+
+                    if Double(y) > Double(height) * 0.56 {
+                        let mouthMask = max(0.0, 1.0 - abs(Double(y) - Double(height) * 0.64) / (Double(height) * 0.035))
+                        r += 22.0 * mouthMask * faceMask
+                        g -= 8.0 * mouthMask * faceMask
+                        b -= 10.0 * mouthMask * faceMask
+                    }
+                }
+
+                let vignette = 1.0 - min(1.0, hypot(nx - 0.5, ny - 0.5) * 1.15)
+                r += vignette * 18.0
+                g += vignette * 10.0
+                b += vignette * 8.0
+
+                let texture = Double(((x &* 17) ^ (y &* 29) ^ ((x + y) &* 11)) & 15) - 7.0
+                r += texture * 1.8
+                g += texture * 1.3
+                b += texture * 1.1
+
+                data[idx] = UInt8(max(0, min(255, Int(r.rounded()))))
+                data[idx + 1] = UInt8(max(0, min(255, Int(g.rounded()))))
+                data[idx + 2] = UInt8(max(0, min(255, Int(b.rounded()))))
+                data[idx + 3] = 255
+            }
+        }
+
+        return ctx.makeImage()!
+    }
+
     func uniqueColorCount(in image: CGImage) -> Int {
         let width = image.width
         let height = image.height
@@ -181,6 +254,85 @@ final class ShaderRendererTests: XCTestCase {
             let b = Double(pixels[idx + 2])
             return (0.299 * r) + (0.587 * g) + (0.114 * b)
         }
+    }
+
+    func averageRGB(in image: CGImage) -> (r: Double, g: Double, b: Double) {
+        let pixels = pixelData(for: image)
+        var r = 0.0
+        var g = 0.0
+        var b = 0.0
+        let count = image.width * image.height
+        for idx in stride(from: 0, to: pixels.count, by: 4) {
+            r += Double(pixels[idx])
+            g += Double(pixels[idx + 1])
+            b += Double(pixels[idx + 2])
+        }
+        return (r / Double(count), g / Double(count), b / Double(count))
+    }
+
+    func averageSaturation(in image: CGImage) -> Double {
+        let pixels = pixelData(for: image)
+        var total = 0.0
+        let count = image.width * image.height
+        for idx in stride(from: 0, to: pixels.count, by: 4) {
+            let r = Double(pixels[idx]) / 255.0
+            let g = Double(pixels[idx + 1]) / 255.0
+            let b = Double(pixels[idx + 2]) / 255.0
+            let maxValue = max(r, g, b)
+            let minValue = min(r, g, b)
+            let delta = maxValue - minValue
+            total += maxValue == 0 ? 0 : delta / maxValue
+        }
+        return total / Double(count)
+    }
+
+    func luminanceValues(in image: CGImage) -> [Double] {
+        let pixels = pixelData(for: image)
+        var values: [Double] = []
+        values.reserveCapacity(image.width * image.height)
+        for idx in stride(from: 0, to: pixels.count, by: 4) {
+            let r = Double(pixels[idx])
+            let g = Double(pixels[idx + 1])
+            let b = Double(pixels[idx + 2])
+            values.append((0.299 * r) + (0.587 * g) + (0.114 * b))
+        }
+        return values
+    }
+
+    func averageBottomQuartileLuminance(in image: CGImage) -> Double {
+        let sorted = luminanceValues(in: image).sorted()
+        let quartileCount = max(1, sorted.count / 4)
+        let slice = sorted.prefix(quartileCount)
+        return slice.reduce(0.0, +) / Double(slice.count)
+    }
+
+    func luminanceStandardDeviation(in image: CGImage) -> Double {
+        let values = luminanceValues(in: image)
+        let mean = values.reduce(0.0, +) / Double(values.count)
+        let variance = values.reduce(0.0) { partial, value in
+            let delta = value - mean
+            return partial + delta * delta
+        } / Double(values.count)
+        return sqrt(variance)
+    }
+
+    func averageNeighborDelta(in image: CGImage) -> Double {
+        let pixels = pixelData(for: image)
+        let width = image.width
+        let height = image.height
+        var total = 0.0
+        var count = 0
+        for y in 0..<height {
+            for x in 0..<(width - 1) {
+                let idxA = (y * width + x) * 4
+                let idxB = (y * width + x + 1) * 4
+                total += abs(Double(pixels[idxA]) - Double(pixels[idxB]))
+                total += abs(Double(pixels[idxA + 1]) - Double(pixels[idxB + 1]))
+                total += abs(Double(pixels[idxA + 2]) - Double(pixels[idxB + 2]))
+                count += 3
+            }
+        }
+        return total / Double(max(1, count))
     }
 
     func test_asciiShader_preservesDimensions() throws {
@@ -301,6 +453,66 @@ final class ShaderRendererTests: XCTestCase {
         XCTAssertEqual(result.width, image.width)
         XCTAssertEqual(result.height, image.height)
         XCTAssertLessThan(uniqueColorCount(in: result), uniqueColorCount(in: image))
+    }
+
+    func test_crimewaveShader_pushesNeonBias() throws {
+        let image = makePortraitReferenceImage(width: 160, height: 200)
+        let params = ShaderLayerParams(
+            style: .crimewave,
+            intensity: 1.0,
+            params: .crimewave(CrimewaveShaderParams())
+        )
+
+        let output = try ShaderRenderer.apply(to: image, params: params)
+        let sourceRGB = averageRGB(in: image)
+        let outputRGB = averageRGB(in: output)
+
+        XCTAssertGreaterThan(averageSaturation(in: output), averageSaturation(in: image))
+        XCTAssertGreaterThan(outputRGB.b - outputRGB.g, sourceRGB.b - sourceRGB.g)
+    }
+
+    func test_narcShader_increasesTonalCrush() throws {
+        let image = makePortraitReferenceImage(width: 160, height: 200)
+        let params = ShaderLayerParams(
+            style: .narc,
+            intensity: 1.0,
+            params: .narc(NarcShaderParams())
+        )
+
+        let output = try ShaderRenderer.apply(to: image, params: params)
+
+        XCTAssertLessThan(averageBottomQuartileLuminance(in: output), averageBottomQuartileLuminance(in: image))
+        XCTAssertGreaterThan(luminanceStandardDeviation(in: output), luminanceStandardDeviation(in: image))
+    }
+
+    func test_shibaShader_warmsImage() throws {
+        let image = makePortraitReferenceImage(width: 160, height: 200)
+        let params = ShaderLayerParams(
+            style: .shiba,
+            intensity: 1.0,
+            params: .shiba(ShibaShaderParams())
+        )
+
+        let output = try ShaderRenderer.apply(to: image, params: params)
+        let sourceRGB = averageRGB(in: image)
+        let outputRGB = averageRGB(in: output)
+
+        XCTAssertGreaterThan(outputRGB.r - outputRGB.b, sourceRGB.r - sourceRGB.b)
+        XCTAssertGreaterThan(averageSaturation(in: output), averageSaturation(in: image))
+    }
+
+    func test_distantPastShader_reducesPaletteAndSoftens() throws {
+        let image = makePortraitReferenceImage(width: 160, height: 200)
+        let params = ShaderLayerParams(
+            style: .distantPast,
+            intensity: 1.0,
+            params: .distantPast(DistantPastShaderParams())
+        )
+
+        let output = try ShaderRenderer.apply(to: image, params: params)
+
+        XCTAssertLessThan(uniqueColorCount(in: output), uniqueColorCount(in: image))
+        XCTAssertLessThan(averageNeighborDelta(in: output), averageNeighborDelta(in: image))
     }
 
     func test_pixelSortShader_reordersPixelsAboveThreshold() throws {
