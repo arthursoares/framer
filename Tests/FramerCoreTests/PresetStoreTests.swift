@@ -158,6 +158,38 @@ final class PresetStoreTests: XCTestCase {
         XCTAssertEqual(decoded.layers?.first?.isEnabled, false)
     }
 
+    func test_yamlConfig_asciiShaderDominantTwoTonePreservesColorShifts() throws {
+        var config = ProcessingConfig.default
+        config.layers = [
+            .shader(ShaderLayerParams(
+                style: .ascii,
+                intensity: 0.9,
+                params: .ascii(ASCIIShaderParams(
+                    cellSize: 9,
+                    edgeBias: 0.35,
+                    colorMode: .dominantTwoTone(flipped: true, saturationShift: 18, lightnessShift: -12),
+                    invert: false
+                ))
+            ))
+        ]
+
+        let yaml = try YAMLConfig.encode(config)
+        let decoded = try YAMLConfig.decode(yaml)
+
+        guard
+            let layer = decoded.layers?.first,
+            case .shader(let params) = layer,
+            case .ascii(let asciiParams) = params.params,
+            case .dominantTwoTone(let flipped, let saturationShift, let lightnessShift) = asciiParams.colorMode
+        else {
+            return XCTFail("Expected ascii shader with dominant two-tone color mode")
+        }
+
+        XCTAssertTrue(flipped)
+        XCTAssertEqual(saturationShift, 18, accuracy: 0.0001)
+        XCTAssertEqual(lightnessShift, -12, accuracy: 0.0001)
+    }
+
     func test_yamlConfig_print10x15BackwardCompat() throws {
         let yaml = """
         border_style: print10x15
@@ -289,6 +321,10 @@ final class PresetStoreTests: XCTestCase {
             XCTAssertEqual(params.intensity, 1.0)
             XCTAssertEqual(asciiParams.cellSize, 8)
             XCTAssertEqual(asciiParams.edgeBias, 0.45, accuracy: 0.0001)
+            XCTAssertEqual(
+                asciiParams.colorMode,
+                .dominantTwoTone(flipped: false, saturationShift: 8, lightnessShift: -6)
+            )
         } else {
             XCTFail("Shader ASCII preset did not decode to expected shader config")
         }

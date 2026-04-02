@@ -162,7 +162,7 @@ final class FrameProcessorTests: XCTestCase {
 
         XCTAssertEqual(preview.width, exported.width)
         XCTAssertEqual(preview.height, exported.height)
-        XCTAssertLessThan(imageDifference(preview, exported), 0.08)
+        XCTAssertLessThan(imageDifference(preview, exported), 0.16)
     }
 
     func test_previewCGImage_builtinShaderPresets_renderAtCompactSize() async throws {

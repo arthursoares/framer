@@ -73,8 +73,12 @@ public enum YAMLConfig {
         var shader_style: String?
         var shader_cell_size: Int?
         var shader_edge_bias: Double?
+        var shader_color_mode: String?
         var shader_foreground: String?
         var shader_background: String?
+        var shader_flipped: Bool?
+        var shader_saturation_shift: Double?
+        var shader_lightness_shift: Double?
         var shader_invert: Bool?
         var shader_neon: Double?
         var shader_softness: Double?
@@ -522,8 +526,17 @@ public enum YAMLConfig {
         case .ascii(let p):
             schema.shader_cell_size = p.cellSize
             schema.shader_edge_bias = p.edgeBias
-            schema.shader_foreground = p.foreground.hex
-            schema.shader_background = p.background.hex
+            switch p.colorMode {
+            case .manual(let foreground, let background):
+                schema.shader_color_mode = "manual"
+                schema.shader_foreground = foreground.hex
+                schema.shader_background = background.hex
+            case .dominantTwoTone(let flipped, let saturationShift, let lightnessShift):
+                schema.shader_color_mode = "dominantTwoTone"
+                if flipped { schema.shader_flipped = true }
+                if saturationShift != 0 { schema.shader_saturation_shift = saturationShift }
+                if lightnessShift != 0 { schema.shader_lightness_shift = lightnessShift }
+            }
             schema.shader_invert = p.invert
         case .crimewave(let p):
             schema.shader_neon = p.neon
@@ -556,11 +569,24 @@ public enum YAMLConfig {
     private static func decodeShaderParams(style: ShaderStyle, schema: YAMLLayerSchema) -> ShaderStyleParams {
         switch style {
         case .ascii:
+            let colorMode: ASCIIColorMode
+            switch schema.shader_color_mode ?? "manual" {
+            case "dominantTwoTone":
+                colorMode = .dominantTwoTone(
+                    flipped: schema.shader_flipped ?? false,
+                    saturationShift: schema.shader_saturation_shift ?? 0,
+                    lightnessShift: schema.shader_lightness_shift ?? 0
+                )
+            default:
+                colorMode = .manual(
+                    foreground: (schema.shader_foreground.flatMap { try? CodableColor(hex: $0) }) ?? .white,
+                    background: (schema.shader_background.flatMap { try? CodableColor(hex: $0) }) ?? .black
+                )
+            }
             return .ascii(ASCIIShaderParams(
                 cellSize: schema.shader_cell_size ?? 10,
                 edgeBias: schema.shader_edge_bias ?? 0.5,
-                foreground: (schema.shader_foreground.flatMap { try? CodableColor(hex: $0) }) ?? .white,
-                background: (schema.shader_background.flatMap { try? CodableColor(hex: $0) }) ?? .black,
+                colorMode: colorMode,
                 invert: schema.shader_invert ?? false
             ))
         case .crimewave:

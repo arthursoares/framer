@@ -795,25 +795,100 @@ public enum ShaderStyle: String, Codable, CaseIterable, Sendable {
     }
 }
 
+public enum ASCIIColorMode: Codable, Equatable, Sendable {
+    case manual(foreground: CodableColor, background: CodableColor)
+    case dominantTwoTone(flipped: Bool = false, saturationShift: Double = 0, lightnessShift: Double = 0)
+
+    private enum CodingKeys: String, CodingKey {
+        case type, foreground, background, flipped, saturationShift, lightnessShift
+    }
+
+    public init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        let type = try container.decodeIfPresent(String.self, forKey: .type) ?? "manual"
+        switch type {
+        case "manual":
+            self = .manual(
+                foreground: try container.decodeIfPresent(CodableColor.self, forKey: .foreground) ?? .white,
+                background: try container.decodeIfPresent(CodableColor.self, forKey: .background) ?? .black
+            )
+        case "dominantTwoTone":
+            self = .dominantTwoTone(
+                flipped: try container.decodeIfPresent(Bool.self, forKey: .flipped) ?? false,
+                saturationShift: try container.decodeIfPresent(Double.self, forKey: .saturationShift) ?? 0,
+                lightnessShift: try container.decodeIfPresent(Double.self, forKey: .lightnessShift) ?? 0
+            )
+        default:
+            self = .manual(foreground: .white, background: .black)
+        }
+    }
+
+    public func encode(to encoder: Encoder) throws {
+        var container = encoder.container(keyedBy: CodingKeys.self)
+        switch self {
+        case .manual(let foreground, let background):
+            try container.encode("manual", forKey: .type)
+            try container.encode(foreground, forKey: .foreground)
+            try container.encode(background, forKey: .background)
+        case .dominantTwoTone(let flipped, let saturationShift, let lightnessShift):
+            try container.encode("dominantTwoTone", forKey: .type)
+            if flipped { try container.encode(true, forKey: .flipped) }
+            if saturationShift != 0 { try container.encode(saturationShift, forKey: .saturationShift) }
+            if lightnessShift != 0 { try container.encode(lightnessShift, forKey: .lightnessShift) }
+        }
+    }
+}
+
 public struct ASCIIShaderParams: Codable, Equatable, Sendable {
     public var cellSize: Int
     public var edgeBias: Double
-    public var foreground: CodableColor
-    public var background: CodableColor
+    public var colorMode: ASCIIColorMode
     public var invert: Bool
 
     public init(
         cellSize: Int = 10,
         edgeBias: Double = 0.5,
+        colorMode: ASCIIColorMode? = nil,
         foreground: CodableColor = .white,
         background: CodableColor = .black,
         invert: Bool = false
     ) {
         self.cellSize = cellSize
         self.edgeBias = edgeBias
-        self.foreground = foreground
-        self.background = background
+        self.colorMode = colorMode ?? .manual(foreground: foreground, background: background)
         self.invert = invert
+    }
+
+    private enum CodingKeys: String, CodingKey {
+        case cellSize, edgeBias, colorMode, foreground, background, invert
+    }
+
+    public init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        let decodedColorMode: ASCIIColorMode
+        if let explicitMode = try container.decodeIfPresent(ASCIIColorMode.self, forKey: .colorMode) {
+            decodedColorMode = explicitMode
+        } else {
+            decodedColorMode = .manual(
+                foreground: try container.decodeIfPresent(CodableColor.self, forKey: .foreground) ?? .white,
+                background: try container.decodeIfPresent(CodableColor.self, forKey: .background) ?? .black
+            )
+        }
+
+        self.init(
+            cellSize: try container.decodeIfPresent(Int.self, forKey: .cellSize) ?? 10,
+            edgeBias: try container.decodeIfPresent(Double.self, forKey: .edgeBias) ?? 0.5,
+            colorMode: decodedColorMode,
+            invert: try container.decodeIfPresent(Bool.self, forKey: .invert) ?? false
+        )
+    }
+
+    public func encode(to encoder: Encoder) throws {
+        var container = encoder.container(keyedBy: CodingKeys.self)
+        try container.encode(cellSize, forKey: .cellSize)
+        try container.encode(edgeBias, forKey: .edgeBias)
+        try container.encode(colorMode, forKey: .colorMode)
+        try container.encode(invert, forKey: .invert)
     }
 }
 

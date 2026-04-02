@@ -204,7 +204,8 @@ public enum BorderRenderer {
                 current = try ShaderRenderer.apply(
                     to: current,
                     params: params,
-                    previewBaseDimension: previewBaseDimension
+                    previewBaseDimension: previewBaseDimension,
+                    sourceImage: sourceImage
                 )
             }
             i += 1
