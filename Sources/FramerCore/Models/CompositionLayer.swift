@@ -773,6 +773,278 @@ public struct LUTLayerParams: Identifiable, Codable, Equatable, Sendable {
     }
 }
 
+// MARK: - Shader
+
+public enum ShaderStyle: String, Codable, CaseIterable, Sendable {
+    case ascii
+    case crimewave
+    case narc
+    case shiba
+    case pixelSort
+    case distantPast
+
+    public var label: String {
+        switch self {
+        case .ascii: return "ASCII"
+        case .crimewave: return "Crimewave"
+        case .narc: return "Narc"
+        case .shiba: return "Shiba"
+        case .pixelSort: return "Pixel Sort"
+        case .distantPast: return "Distant Past"
+        }
+    }
+}
+
+public struct ASCIIShaderParams: Codable, Equatable, Sendable {
+    public var cellSize: Int
+    public var edgeBias: Double
+    public var foreground: CodableColor
+    public var background: CodableColor
+    public var invert: Bool
+
+    public init(
+        cellSize: Int = 10,
+        edgeBias: Double = 0.5,
+        foreground: CodableColor = .white,
+        background: CodableColor = .black,
+        invert: Bool = false
+    ) {
+        self.cellSize = cellSize
+        self.edgeBias = edgeBias
+        self.foreground = foreground
+        self.background = background
+        self.invert = invert
+    }
+}
+
+public struct CrimewaveShaderParams: Codable, Equatable, Sendable {
+    public var neon: Double
+    public var softness: Double
+    public var contrast: Double
+    public var grain: Double
+
+    public init(
+        neon: Double = 0.7,
+        softness: Double = 0.4,
+        contrast: Double = 1.15,
+        grain: Double = 0.2
+    ) {
+        self.neon = neon
+        self.softness = softness
+        self.contrast = contrast
+        self.grain = grain
+    }
+}
+
+public struct NarcShaderParams: Codable, Equatable, Sendable {
+    public var contrast: Double
+    public var crush: Double
+    public var temperature: Double
+    public var grain: Double
+
+    public init(
+        contrast: Double = 1.25,
+        crush: Double = 0.35,
+        temperature: Double = -0.1,
+        grain: Double = 0.25
+    ) {
+        self.contrast = contrast
+        self.crush = crush
+        self.temperature = temperature
+        self.grain = grain
+    }
+}
+
+public struct ShibaShaderParams: Codable, Equatable, Sendable {
+    public var warmth: Double
+    public var softness: Double
+    public var saturation: Double
+    public var grain: Double
+
+    public init(
+        warmth: Double = 0.2,
+        softness: Double = 0.3,
+        saturation: Double = 0.15,
+        grain: Double = 0.1
+    ) {
+        self.warmth = warmth
+        self.softness = softness
+        self.saturation = saturation
+        self.grain = grain
+    }
+}
+
+public enum PixelSortDirection: String, Codable, Equatable, Sendable, CaseIterable {
+    case horizontal
+    case vertical
+}
+
+public struct PixelSortShaderParams: Codable, Equatable, Sendable {
+    public var threshold: Double
+    public var direction: PixelSortDirection
+    public var span: Int
+    public var amount: Double
+
+    public init(
+        threshold: Double = 0.65,
+        direction: PixelSortDirection = .horizontal,
+        span: Int = 24,
+        amount: Double = 1.0
+    ) {
+        self.threshold = threshold
+        self.direction = direction
+        self.span = span
+        self.amount = amount
+    }
+}
+
+public struct DistantPastShaderParams: Codable, Equatable, Sendable {
+    public var paletteDepth: Int
+    public var fade: Double
+    public var softness: Double
+    public var grain: Double
+
+    public init(
+        paletteDepth: Int = 6,
+        fade: Double = 0.3,
+        softness: Double = 0.2,
+        grain: Double = 0.15
+    ) {
+        self.paletteDepth = paletteDepth
+        self.fade = fade
+        self.softness = softness
+        self.grain = grain
+    }
+}
+
+public enum ShaderStyleParams: Codable, Equatable, Sendable {
+    case ascii(ASCIIShaderParams)
+    case crimewave(CrimewaveShaderParams)
+    case narc(NarcShaderParams)
+    case shiba(ShibaShaderParams)
+    case pixelSort(PixelSortShaderParams)
+    case distantPast(DistantPastShaderParams)
+
+    private enum CodingKeys: String, CodingKey {
+        case type, params
+    }
+
+    public var style: ShaderStyle {
+        switch self {
+        case .ascii: return .ascii
+        case .crimewave: return .crimewave
+        case .narc: return .narc
+        case .shiba: return .shiba
+        case .pixelSort: return .pixelSort
+        case .distantPast: return .distantPast
+        }
+    }
+
+    public static func `default`(for style: ShaderStyle) -> ShaderStyleParams {
+        switch style {
+        case .ascii: return .ascii(ASCIIShaderParams())
+        case .crimewave: return .crimewave(CrimewaveShaderParams())
+        case .narc: return .narc(NarcShaderParams())
+        case .shiba: return .shiba(ShibaShaderParams())
+        case .pixelSort: return .pixelSort(PixelSortShaderParams())
+        case .distantPast: return .distantPast(DistantPastShaderParams())
+        }
+    }
+
+    public init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        let type = try container.decode(String.self, forKey: .type)
+        switch type {
+        case "ascii":
+            self = .ascii(try container.decode(ASCIIShaderParams.self, forKey: .params))
+        case "crimewave":
+            self = .crimewave(try container.decode(CrimewaveShaderParams.self, forKey: .params))
+        case "narc":
+            self = .narc(try container.decode(NarcShaderParams.self, forKey: .params))
+        case "shiba":
+            self = .shiba(try container.decode(ShibaShaderParams.self, forKey: .params))
+        case "pixelSort":
+            self = .pixelSort(try container.decode(PixelSortShaderParams.self, forKey: .params))
+        case "distantPast":
+            self = .distantPast(try container.decode(DistantPastShaderParams.self, forKey: .params))
+        default:
+            throw DecodingError.dataCorruptedError(
+                forKey: .type, in: container,
+                debugDescription: "Unknown shader style: \(type)"
+            )
+        }
+    }
+
+    public func encode(to encoder: Encoder) throws {
+        var container = encoder.container(keyedBy: CodingKeys.self)
+        switch self {
+        case .ascii(let params):
+            try container.encode("ascii", forKey: .type)
+            try container.encode(params, forKey: .params)
+        case .crimewave(let params):
+            try container.encode("crimewave", forKey: .type)
+            try container.encode(params, forKey: .params)
+        case .narc(let params):
+            try container.encode("narc", forKey: .type)
+            try container.encode(params, forKey: .params)
+        case .shiba(let params):
+            try container.encode("shiba", forKey: .type)
+            try container.encode(params, forKey: .params)
+        case .pixelSort(let params):
+            try container.encode("pixelSort", forKey: .type)
+            try container.encode(params, forKey: .params)
+        case .distantPast(let params):
+            try container.encode("distantPast", forKey: .type)
+            try container.encode(params, forKey: .params)
+        }
+    }
+}
+
+public struct ShaderLayerParams: Identifiable, Codable, Equatable, Sendable {
+    public let id: UUID
+    public var enabled: Bool
+    public var style: ShaderStyle
+    public var intensity: Double
+    public var params: ShaderStyleParams
+
+    public init(
+        id: UUID = UUID(),
+        enabled: Bool = true,
+        style: ShaderStyle = .ascii,
+        intensity: Double = 1.0,
+        params: ShaderStyleParams? = nil
+    ) {
+        self.id = id
+        self.enabled = enabled
+        self.style = style
+        if let params, params.style == style {
+            self.params = params
+        } else {
+            assertionFailure("ShaderLayerParams params must match style")
+            self.params = ShaderStyleParams.default(for: style)
+        }
+        self.intensity = max(0, min(1, intensity))
+    }
+
+    private enum CodingKeys: String, CodingKey {
+        case id, enabled, style, intensity, params
+    }
+
+    public init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        let decodedStyle = try container.decode(ShaderStyle.self, forKey: .style)
+        let decodedParams = try container.decodeIfPresent(ShaderStyleParams.self, forKey: .params)
+            ?? ShaderStyleParams.default(for: decodedStyle)
+        self.init(
+            id: try container.decode(UUID.self, forKey: .id),
+            enabled: try container.decodeIfPresent(Bool.self, forKey: .enabled) ?? true,
+            style: decodedStyle,
+            intensity: try container.decodeIfPresent(Double.self, forKey: .intensity) ?? 1.0,
+            params: decodedParams
+        )
+    }
+}
+
 // MARK: - CompositionLayer
 
 public enum CompositionLayer: Identifiable, Codable, Equatable, Sendable {
@@ -786,6 +1058,7 @@ public enum CompositionLayer: Identifiable, Codable, Equatable, Sendable {
     case dither(DitherLayerParams)
     case aspectRatio(AspectRatioLayerParams)
     case lut(LUTLayerParams)
+    case shader(ShaderLayerParams)
 
     public var id: UUID {
         switch self {
@@ -799,6 +1072,7 @@ public enum CompositionLayer: Identifiable, Codable, Equatable, Sendable {
         case .dither(let p): return p.id
         case .aspectRatio(let p): return p.id
         case .lut(let p): return p.id
+        case .shader(let p): return p.id
         }
     }
 
@@ -814,6 +1088,7 @@ public enum CompositionLayer: Identifiable, Codable, Equatable, Sendable {
         case .dither: return "Dither"
         case .aspectRatio: return "Aspect Ratio"
         case .lut: return "LUT"
+        case .shader(let p): return p.style.label
         }
     }
 
@@ -830,6 +1105,7 @@ public enum CompositionLayer: Identifiable, Codable, Equatable, Sendable {
             case .dither(let p): return p.enabled
             case .aspectRatio(let p): return p.enabled
             case .lut(let p): return p.enabled
+            case .shader(let p): return p.enabled
             }
         }
         set {
@@ -864,6 +1140,9 @@ public enum CompositionLayer: Identifiable, Codable, Equatable, Sendable {
             case .lut(var p):
                 p.enabled = newValue
                 self = .lut(p)
+            case .shader(var p):
+                p.enabled = newValue
+                self = .shader(p)
             }
         }
     }
@@ -880,12 +1159,14 @@ public enum CompositionLayer: Identifiable, Codable, Equatable, Sendable {
         case .dither: return "circle.dotted"
         case .aspectRatio: return "crop"
         case .lut: return "photo.artframe"
+        case .shader: return "sparkles"
         }
     }
 
     public var layerSummary: String {
         switch self {
         case .lut(let p): return p.lutName.isEmpty ? "None" : p.lutName
+        case .shader(let p): return p.style.label
         default: return ""
         }
     }
@@ -920,6 +1201,8 @@ public enum CompositionLayer: Identifiable, Codable, Equatable, Sendable {
             self = .aspectRatio(try container.decode(AspectRatioLayerParams.self, forKey: .params))
         case "lut":
             self = .lut(try container.decode(LUTLayerParams.self, forKey: .params))
+        case "shader":
+            self = .shader(try container.decode(ShaderLayerParams.self, forKey: .params))
         default:
             throw DecodingError.dataCorruptedError(
                 forKey: .type, in: container,
@@ -960,6 +1243,9 @@ public enum CompositionLayer: Identifiable, Codable, Equatable, Sendable {
             try container.encode(p, forKey: .params)
         case .lut(let p):
             try container.encode("lut", forKey: .type)
+            try container.encode(p, forKey: .params)
+        case .shader(let p):
+            try container.encode("shader", forKey: .type)
             try container.encode(p, forKey: .params)
         }
     }
