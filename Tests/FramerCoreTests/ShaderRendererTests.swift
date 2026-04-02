@@ -515,6 +515,19 @@ final class ShaderRendererTests: XCTestCase {
         XCTAssertLessThan(averageNeighborDelta(in: output), averageNeighborDelta(in: image))
     }
 
+    func test_distantPastShader_intensityZeroMatchesOriginal() throws {
+        let image = makePortraitReferenceImage(width: 96, height: 128)
+        let params = ShaderLayerParams(
+            style: .distantPast,
+            intensity: 0.0,
+            params: .distantPast(DistantPastShaderParams())
+        )
+
+        let output = try ShaderRenderer.apply(to: image, params: params)
+
+        XCTAssertEqual(pixelData(for: output), pixelData(for: image))
+    }
+
     func test_pixelSortShader_reordersPixelsAboveThreshold() throws {
         let image = makeStripedGradientImage(width: 192, height: 96)
         let params = ShaderLayerParams(
@@ -566,6 +579,25 @@ final class ShaderRendererTests: XCTestCase {
             style: .pixelSort,
             intensity: 1.0,
             params: .pixelSort(PixelSortShaderParams(threshold: 0.1, direction: .horizontal, span: 24, amount: 1.0))
+        )
+
+        let output = try ShaderRenderer.apply(to: image, params: params)
+        let pixels = pixelData(for: output)
+
+        for idx in stride(from: 0, to: pixels.count, by: 4) {
+            let alpha = pixels[idx + 3]
+            XCTAssertLessThanOrEqual(pixels[idx], alpha)
+            XCTAssertLessThanOrEqual(pixels[idx + 1], alpha)
+            XCTAssertLessThanOrEqual(pixels[idx + 2], alpha)
+        }
+    }
+
+    func test_compositeShaderMaintainsPremultipliedAlpha() throws {
+        let image = makeTranslucentStripedGradientImage(width: 96, height: 96)
+        let params = ShaderLayerParams(
+            style: .crimewave,
+            intensity: 1.0,
+            params: .crimewave(CrimewaveShaderParams())
         )
 
         let output = try ShaderRenderer.apply(to: image, params: params)

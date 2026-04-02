@@ -58,6 +58,7 @@ public enum ShaderRenderer {
             mixAmount: params.softness * 0.65
         )
         ShaderPrimitives.addDeterministicGrain(pixels, width: image.width, height: image.height, amount: params.grain)
+        ShaderPrimitives.enforcePremultipliedAlpha(pixels, width: image.width, height: image.height)
         return try mixStylizedContext(ctx, with: image, intensity: intensity)
     }
 
@@ -82,6 +83,7 @@ public enum ShaderRenderer {
         ShaderPrimitives.adjustTemperature(pixels, width: image.width, height: image.height, amount: params.temperature)
         ShaderPrimitives.adjustSaturation(pixels, width: image.width, height: image.height, amount: 1.02)
         ShaderPrimitives.addDeterministicGrain(pixels, width: image.width, height: image.height, amount: params.grain * 1.1)
+        ShaderPrimitives.enforcePremultipliedAlpha(pixels, width: image.width, height: image.height)
         return try mixStylizedContext(ctx, with: image, intensity: intensity)
     }
 
@@ -106,6 +108,7 @@ public enum ShaderRenderer {
             mixAmount: params.softness * 0.55
         )
         ShaderPrimitives.addDeterministicGrain(pixels, width: image.width, height: image.height, amount: params.grain * 0.6)
+        ShaderPrimitives.enforcePremultipliedAlpha(pixels, width: image.width, height: image.height)
         return try mixStylizedContext(ctx, with: image, intensity: intensity)
     }
 
@@ -155,9 +158,9 @@ public enum ShaderRenderer {
                 let grainedG = UInt8(max(0, min(255, Int(softenedG) + grainOffset)))
                 let grainedB = UInt8(max(0, min(255, Int(softenedB) + grainOffset)))
 
-                pixels[idx] = ShaderPrimitives.mix(originalR, grainedR, intensity: intensity)
-                pixels[idx + 1] = ShaderPrimitives.mix(originalG, grainedG, intensity: intensity)
-                pixels[idx + 2] = ShaderPrimitives.mix(originalB, grainedB, intensity: intensity)
+                pixels[idx] = grainedR
+                pixels[idx + 1] = grainedG
+                pixels[idx + 2] = grainedB
                 pixels[idx + 3] = originalA
             }
         }
@@ -175,12 +178,9 @@ public enum ShaderRenderer {
             radius: 3,
             mixAmount: min(1.0, 0.5 + softness * 0.95 + fade * 0.4)
         )
+        ShaderPrimitives.enforcePremultipliedAlpha(pixels, width: width, height: height)
 
-        guard let result = ctx.makeImage() else {
-            throw FramerError.invalidImage(URL(fileURLWithPath: ""))
-        }
-
-        return result
+        return try mixStylizedContext(ctx, with: image, intensity: intensity)
     }
 
     private static func mixStylizedContext(
