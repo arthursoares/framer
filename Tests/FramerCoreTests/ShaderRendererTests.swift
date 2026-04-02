@@ -151,6 +151,20 @@ final class ShaderRendererTests: XCTestCase {
         XCTAssertNotEqual(pixelData(for: normal), pixelData(for: inverted))
     }
 
+    func test_asciiShader_previewDimensionScalesCellSize() throws {
+        let image = makeColorGridImage(width: 64, height: 64)
+        let params = ShaderLayerParams(
+            style: .ascii,
+            intensity: 1.0,
+            params: .ascii(ASCIIShaderParams(cellSize: 4, edgeBias: 0.0, foreground: .white, background: .black, invert: false))
+        )
+
+        let scaled = try ShaderRenderer.apply(to: image, params: params, previewBaseDimension: 32)
+
+        XCTAssertEqual(packedColorAt(scaled, x: 1, y: 1), packedColorAt(scaled, x: 6, y: 6))
+        XCTAssertEqual(packedColorAt(scaled, x: 9, y: 1), packedColorAt(scaled, x: 14, y: 6))
+    }
+
     func test_distantPastShader_reducesColorVariety() throws {
         let image = makeColorGridImage(width: 32, height: 32)
         let params = ShaderLayerParams(

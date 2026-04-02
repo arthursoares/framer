@@ -201,7 +201,11 @@ public enum BorderRenderer {
                 )
 
             case .shader(let params):
-                current = try ShaderRenderer.apply(to: current, params: params)
+                current = try ShaderRenderer.apply(
+                    to: current,
+                    params: params,
+                    previewBaseDimension: previewBaseDimension
+                )
             }
             i += 1
         }

@@ -4,7 +4,8 @@ import CoreGraphics
 enum ShaderASCIIRenderer {
     static func apply(
         to image: CGImage,
-        params: ShaderLayerParams
+        params: ShaderLayerParams,
+        previewBaseDimension: Int? = nil
     ) throws -> CGImage {
         guard case .ascii(let asciiParams) = params.params else {
             return image
@@ -52,7 +53,23 @@ enum ShaderASCIIRenderer {
         let sourcePixels = sourceData.bindMemory(to: UInt8.self, capacity: width * height * 4)
         let outputPixels = outputData.bindMemory(to: UInt8.self, capacity: width * height * 4)
 
-        let cellSize = max(1, asciiParams.cellSize)
+        let cellSize: Int
+        if asciiParams.cellSize > 1, let previewBase = previewBaseDimension {
+            let currentMax = max(width, height)
+            cellSize = max(
+                1,
+                min(
+                    64,
+                    Int(
+                        round(
+                            Double(currentMax) * Double(asciiParams.cellSize) / Double(previewBase)
+                        )
+                    )
+                )
+            )
+        } else {
+            cellSize = max(1, asciiParams.cellSize)
+        }
         let edgeBias = ShaderPrimitives.clamp01(asciiParams.edgeBias)
         let foreground = asciiParams.foreground
         let background = asciiParams.background
