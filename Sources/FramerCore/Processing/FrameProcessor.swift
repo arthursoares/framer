@@ -134,6 +134,9 @@ public actor FrameProcessor {
                     h = (h * scale).rounded(.down)
                 }
 
+            case .shader:
+                break
+
             default:
                 break
             }

@@ -113,6 +113,51 @@ final class PresetStoreTests: XCTestCase {
         XCTAssertEqual(lightnessShift, -8, accuracy: 0.0001)
     }
 
+    func test_yamlConfig_shaderLayer_roundtrips() throws {
+        var config = ProcessingConfig.default
+        config.layers = [
+            .shader(ShaderLayerParams(
+                style: .crimewave,
+                intensity: 0.8,
+                params: .crimewave(CrimewaveShaderParams(neon: 0.9, softness: 0.6, contrast: 1.2, grain: 0.3))
+            ))
+        ]
+
+        let yaml = try YAMLConfig.encode(config)
+        let decoded = try YAMLConfig.decode(yaml)
+
+        guard
+            let layer = decoded.layers?.first,
+            case .shader(let params) = layer
+        else {
+            return XCTFail("Expected decoded shader layer")
+        }
+
+        XCTAssertEqual(params.style, .crimewave)
+        XCTAssertEqual(params.intensity, 0.8)
+        XCTAssertEqual(
+            params.params,
+            .crimewave(CrimewaveShaderParams(neon: 0.9, softness: 0.6, contrast: 1.2, grain: 0.3))
+        )
+    }
+
+    func test_yamlConfig_preservesDisabledShaderLayer() throws {
+        var config = ProcessingConfig.default
+        config.layers = [
+            .shader(ShaderLayerParams(
+                enabled: false,
+                style: .ascii,
+                intensity: 1.0,
+                params: .ascii(ASCIIShaderParams())
+            ))
+        ]
+
+        let yaml = try YAMLConfig.encode(config)
+        let decoded = try YAMLConfig.decode(yaml)
+
+        XCTAssertEqual(decoded.layers?.first?.isEnabled, false)
+    }
+
     func test_yamlConfig_print10x15BackwardCompat() throws {
         let yaml = """
         border_style: print10x15

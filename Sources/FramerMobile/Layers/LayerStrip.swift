@@ -201,6 +201,7 @@ struct LayerRow: View {
         case .dither(let p): return p.algorithm.label
         case .aspectRatio(let p): return "\(p.ratioWidth):\(p.ratioHeight)"
         case .lut(let p): return p.lutName.isEmpty ? "None" : p.lutName
+        case .shader(let p): return p.style.label
         }
     }
 }
