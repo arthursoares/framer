@@ -211,4 +211,18 @@ enum ShaderPrimitives {
             pixels[idx + 2] = mix(b, lum, intensity: fade)
         }
     }
+
+    static func enforcePremultipliedAlpha(
+        _ pixels: UnsafeMutablePointer<UInt8>,
+        width: Int,
+        height: Int
+    ) {
+        for i in 0..<(width * height) {
+            let idx = i * 4
+            let alpha = pixels[idx + 3]
+            pixels[idx] = min(pixels[idx], alpha)
+            pixels[idx + 1] = min(pixels[idx + 1], alpha)
+            pixels[idx + 2] = min(pixels[idx + 2], alpha)
+        }
+    }
 }
