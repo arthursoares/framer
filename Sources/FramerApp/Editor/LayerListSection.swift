@@ -2534,7 +2534,12 @@ struct ShaderLayerControls: View {
 
     @ViewBuilder
     private func asciiControls(_ asciiParams: ASCIIShaderParams) -> some View {
-        sliderRow(title: "Cell Size", value: Double(asciiParams.cellSize), range: 4...24, step: 1) { value in
+        sliderRow(
+            title: "Cell Size",
+            value: Double(asciiParams.cellSize),
+            range: expandedRange(4...24, including: Double(asciiParams.cellSize)),
+            step: 1
+        ) { value in
             onChange(params.withParams(.ascii(ASCIIShaderParams(
                 cellSize: Int(value.rounded()),
                 edgeBias: asciiParams.edgeBias,
@@ -2544,7 +2549,12 @@ struct ShaderLayerControls: View {
             ))))
         }
 
-        sliderRow(title: "Edge Bias", value: asciiParams.edgeBias, range: 0...1, step: 0.05) { value in
+        sliderRow(
+            title: "Edge Bias",
+            value: asciiParams.edgeBias,
+            range: expandedRange(0...1, including: asciiParams.edgeBias),
+            step: 0.05
+        ) { value in
             onChange(params.withParams(.ascii(ASCIIShaderParams(
                 cellSize: asciiParams.cellSize,
                 edgeBias: value,
@@ -2668,17 +2678,32 @@ struct ShaderLayerControls: View {
             }
         }
 
-        sliderRow(title: "Threshold", value: pixelSortParams.threshold, range: 0...1, step: 0.05) { value in
+        sliderRow(
+            title: "Threshold",
+            value: pixelSortParams.threshold,
+            range: expandedRange(0...1, including: pixelSortParams.threshold),
+            step: 0.05
+        ) { value in
             var updated = pixelSortParams
             updated.threshold = value
             onChange(params.withParams(.pixelSort(updated)))
         }
-        sliderRow(title: "Span", value: Double(pixelSortParams.span), range: 4...64, step: 1) { value in
+        sliderRow(
+            title: "Span",
+            value: Double(pixelSortParams.span),
+            range: expandedRange(4...64, including: Double(pixelSortParams.span)),
+            step: 1
+        ) { value in
             var updated = pixelSortParams
             updated.span = Int(value.rounded())
             onChange(params.withParams(.pixelSort(updated)))
         }
-        sliderRow(title: "Amount", value: pixelSortParams.amount, range: 0...1, step: 0.05) { value in
+        sliderRow(
+            title: "Amount",
+            value: pixelSortParams.amount,
+            range: expandedRange(0...1, including: pixelSortParams.amount),
+            step: 0.05
+        ) { value in
             var updated = pixelSortParams
             updated.amount = value
             onChange(params.withParams(.pixelSort(updated)))
@@ -2710,8 +2735,17 @@ struct ShaderLayerControls: View {
         onSet: @escaping (String, Double) -> Void
     ) -> some View {
         ForEach(rows, id: \.0) { row in
-            sliderRow(title: row.0, value: row.1, range: row.2, step: row.3) { onSet(row.0, $0) }
+            sliderRow(
+                title: row.0,
+                value: row.1,
+                range: expandedRange(row.2, including: row.1),
+                step: row.3
+            ) { onSet(row.0, $0) }
         }
+    }
+
+    private func expandedRange(_ base: ClosedRange<Double>, including value: Double) -> ClosedRange<Double> {
+        min(base.lowerBound, value)...max(base.upperBound, value)
     }
 
     private func sliderRow(
