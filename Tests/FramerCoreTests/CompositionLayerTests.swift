@@ -262,6 +262,64 @@ final class CompositionLayerTests: XCTestCase {
         XCTAssertEqual(params.params, .ascii(ASCIIShaderParams()))
     }
 
+    func test_shaderLayer_withStyle_preservesIdentityAndResetsParams() {
+        let id = UUID()
+        let original = ShaderLayerParams(
+            id: id,
+            enabled: false,
+            style: .ascii,
+            intensity: 0.65,
+            params: .ascii(
+                ASCIIShaderParams(
+                    cellSize: 18,
+                    edgeBias: 0.3,
+                    foreground: .white,
+                    background: .black,
+                    invert: true
+                )
+            )
+        )
+
+        let updated = original.withStyle(.pixelSort)
+
+        XCTAssertEqual(updated.id, id)
+        XCTAssertEqual(updated.enabled, false)
+        XCTAssertEqual(updated.intensity, 0.65)
+        XCTAssertEqual(updated.style, .pixelSort)
+        XCTAssertEqual(updated.params, .pixelSort(PixelSortShaderParams()))
+    }
+
+    func test_shaderLayer_withParams_preservesIdentityAndIntensity() {
+        let id = UUID()
+        let original = ShaderLayerParams(
+            id: id,
+            enabled: false,
+            style: .ascii,
+            intensity: 0.4,
+            params: .ascii(ASCIIShaderParams())
+        )
+
+        let updated = original.withParams(
+            .distantPast(
+                DistantPastShaderParams(
+                    paletteDepth: 9,
+                    fade: 0.45,
+                    softness: 0.3,
+                    grain: 0.2
+                )
+            )
+        )
+
+        XCTAssertEqual(updated.id, id)
+        XCTAssertEqual(updated.enabled, false)
+        XCTAssertEqual(updated.intensity, 0.4)
+        XCTAssertEqual(updated.style, .distantPast)
+        XCTAssertEqual(
+            updated.params,
+            .distantPast(DistantPastShaderParams(paletteDepth: 9, fade: 0.45, softness: 0.3, grain: 0.2))
+        )
+    }
+
     // MARK: - applyLayers
 
     func test_applyLayers_borderOnly_correctDimensions() throws {
