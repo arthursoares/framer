@@ -65,6 +65,41 @@ final class ShaderRendererTests: XCTestCase {
         return ctx.makeImage()!
     }
 
+    func makeTranslucentStripedGradientImage(width: Int, height: Int) -> CGImage {
+        let colorSpace = CGColorSpaceCreateDeviceRGB()
+        let bitmapInfo = CGImageAlphaInfo.premultipliedLast.rawValue
+        let ctx = CGContext(
+            data: nil,
+            width: width,
+            height: height,
+            bitsPerComponent: 8,
+            bytesPerRow: width * 4,
+            space: colorSpace,
+            bitmapInfo: bitmapInfo
+        )!
+
+        let data = ctx.data!.bindMemory(to: UInt8.self, capacity: width * height * 4)
+        for y in 0..<height {
+            for x in 0..<width {
+                let idx = (y * width + x) * 4
+                let alpha = UInt8(max(48, min(255, (x * 255) / max(1, width - 1))))
+                let span = max(1, min(24, width))
+                let segment = x / span
+                let localX = x % span
+                let ramp = segment.isMultiple(of: 2) ? (span - 1 - localX) : localX
+                let intensity = Double(ramp) / Double(max(1, span - 1))
+                let red = UInt8((Double(alpha) * intensity).rounded())
+                let green = UInt8((Double(alpha) * (0.3 + intensity * 0.5)).rounded())
+                let blue = UInt8((Double(alpha) * (0.2 + intensity * 0.3)).rounded())
+                data[idx] = red
+                data[idx + 1] = green
+                data[idx + 2] = blue
+                data[idx + 3] = alpha
+            }
+        }
+        return ctx.makeImage()!
+    }
+
     func uniqueColorCount(in image: CGImage) -> Int {
         let width = image.width
         let height = image.height
@@ -129,6 +164,17 @@ final class ShaderRendererTests: XCTestCase {
     func luminanceValuesForRow(_ image: CGImage, y: Int, xRange: Range<Int>) -> [Double] {
         let pixels = pixelData(for: image)
         return xRange.map { x in
+            let idx = (y * image.width + x) * 4
+            let r = Double(pixels[idx])
+            let g = Double(pixels[idx + 1])
+            let b = Double(pixels[idx + 2])
+            return (0.299 * r) + (0.587 * g) + (0.114 * b)
+        }
+    }
+
+    func luminanceValuesForColumn(_ image: CGImage, x: Int, yRange: Range<Int>) -> [Double] {
+        let pixels = pixelData(for: image)
+        return yRange.map { y in
             let idx = (y * image.width + x) * 4
             let r = Double(pixels[idx])
             let g = Double(pixels[idx + 1])
@@ -284,5 +330,40 @@ final class ShaderRendererTests: XCTestCase {
         let output = try ShaderRenderer.apply(to: image, params: params)
 
         XCTAssertEqual(pixelData(for: output), pixelData(for: image))
+    }
+
+    func test_pixelSortVerticalDirectionReordersColumn() throws {
+        let image = makeStripedGradientImage(width: 96, height: 192)
+        let params = ShaderLayerParams(
+            style: .pixelSort,
+            intensity: 1.0,
+            params: .pixelSort(PixelSortShaderParams(threshold: 0.1, direction: .vertical, span: 24, amount: 1.0))
+        )
+
+        let output = try ShaderRenderer.apply(to: image, params: params)
+        let originalLuminance = luminanceValuesForColumn(image, x: 24, yRange: 0..<24)
+        let sortedLuminance = luminanceValuesForColumn(output, x: 24, yRange: 0..<24)
+
+        XCTAssertNotEqual(sortedLuminance, originalLuminance)
+        XCTAssertEqual(sortedLuminance, sortedLuminance.sorted())
+    }
+
+    func test_pixelSortMaintainsPremultipliedAlpha() throws {
+        let image = makeTranslucentStripedGradientImage(width: 96, height: 96)
+        let params = ShaderLayerParams(
+            style: .pixelSort,
+            intensity: 1.0,
+            params: .pixelSort(PixelSortShaderParams(threshold: 0.1, direction: .horizontal, span: 24, amount: 1.0))
+        )
+
+        let output = try ShaderRenderer.apply(to: image, params: params)
+        let pixels = pixelData(for: output)
+
+        for idx in stride(from: 0, to: pixels.count, by: 4) {
+            let alpha = pixels[idx + 3]
+            XCTAssertLessThanOrEqual(pixels[idx], alpha)
+            XCTAssertLessThanOrEqual(pixels[idx + 1], alpha)
+            XCTAssertLessThanOrEqual(pixels[idx + 2], alpha)
+        }
     }
 }

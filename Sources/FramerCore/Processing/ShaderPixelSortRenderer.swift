@@ -89,7 +89,7 @@ enum ShaderPixelSortRenderer {
                 outputPixels[idx] = ShaderPrimitives.mix(outputPixels[idx], sample.0, intensity: blendIntensity)
                 outputPixels[idx + 1] = ShaderPrimitives.mix(outputPixels[idx + 1], sample.1, intensity: blendIntensity)
                 outputPixels[idx + 2] = ShaderPrimitives.mix(outputPixels[idx + 2], sample.2, intensity: blendIntensity)
-                outputPixels[idx + 3] = sourcePixels[idx + 3]
+                outputPixels[idx + 3] = ShaderPrimitives.mix(outputPixels[idx + 3], sample.3, intensity: blendIntensity)
             }
         }
 
