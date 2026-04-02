@@ -33,6 +33,38 @@ final class ShaderRendererTests: XCTestCase {
         return ctx.makeImage()!
     }
 
+    func makeStripedGradientImage(width: Int, height: Int) -> CGImage {
+        let colorSpace = CGColorSpaceCreateDeviceRGB()
+        let bitmapInfo = CGImageAlphaInfo.premultipliedLast.rawValue
+        let ctx = CGContext(
+            data: nil,
+            width: width,
+            height: height,
+            bitsPerComponent: 8,
+            bytesPerRow: width * 4,
+            space: colorSpace,
+            bitmapInfo: bitmapInfo
+        )!
+
+        let data = ctx.data!.bindMemory(to: UInt8.self, capacity: width * height * 4)
+        for y in 0..<height {
+            for x in 0..<width {
+                let idx = (y * width + x) * 4
+                let span = max(1, min(24, width))
+                let segment = x / span
+                let localX = x % span
+                let ramp = segment.isMultiple(of: 2) ? (span - 1 - localX) : localX
+                let base = UInt8(max(0, min(255, Int((Double(ramp) / Double(max(1, span - 1))) * 255.0))))
+                let contrast = ((segment + y) % 2 == 0) ? 72 : 224
+                data[idx] = base
+                data[idx + 1] = UInt8((Int(base) + contrast) / 2)
+                data[idx + 2] = UInt8(max(0, min(255, contrast - Int(base) / 3)))
+                data[idx + 3] = 255
+            }
+        }
+        return ctx.makeImage()!
+    }
+
     func uniqueColorCount(in image: CGImage) -> Int {
         let width = image.width
         let height = image.height
@@ -92,6 +124,17 @@ final class ShaderRendererTests: XCTestCase {
             | (UInt32(pixels[idx + 1]) << 16)
             | (UInt32(pixels[idx + 2]) << 8)
             | UInt32(pixels[idx + 3])
+    }
+
+    func luminanceValuesForRow(_ image: CGImage, y: Int, xRange: Range<Int>) -> [Double] {
+        let pixels = pixelData(for: image)
+        return xRange.map { x in
+            let idx = (y * image.width + x) * 4
+            let r = Double(pixels[idx])
+            let g = Double(pixels[idx + 1])
+            let b = Double(pixels[idx + 2])
+            return (0.299 * r) + (0.587 * g) + (0.114 * b)
+        }
     }
 
     func test_asciiShader_preservesDimensions() throws {
@@ -212,5 +255,34 @@ final class ShaderRendererTests: XCTestCase {
         XCTAssertEqual(result.width, image.width)
         XCTAssertEqual(result.height, image.height)
         XCTAssertLessThan(uniqueColorCount(in: result), uniqueColorCount(in: image))
+    }
+
+    func test_pixelSortShader_reordersPixelsAboveThreshold() throws {
+        let image = makeStripedGradientImage(width: 192, height: 96)
+        let params = ShaderLayerParams(
+            style: .pixelSort,
+            intensity: 1.0,
+            params: .pixelSort(PixelSortShaderParams(threshold: 0.1, direction: .horizontal, span: 24, amount: 1.0))
+        )
+
+        let output = try ShaderRenderer.apply(to: image, params: params)
+        let originalLuminance = luminanceValuesForRow(image, y: 24, xRange: 0..<24)
+        let sortedLuminance = luminanceValuesForRow(output, y: 24, xRange: 0..<24)
+
+        XCTAssertNotEqual(sortedLuminance, originalLuminance)
+        XCTAssertEqual(sortedLuminance, sortedLuminance.sorted())
+    }
+
+    func test_pixelSortAmountZeroMatchesOriginal() throws {
+        let image = makeStripedGradientImage(width: 128, height: 128)
+        let params = ShaderLayerParams(
+            style: .pixelSort,
+            intensity: 1.0,
+            params: .pixelSort(PixelSortShaderParams(amount: 0.0))
+        )
+
+        let output = try ShaderRenderer.apply(to: image, params: params)
+
+        XCTAssertEqual(pixelData(for: output), pixelData(for: image))
     }
 }
