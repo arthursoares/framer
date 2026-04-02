@@ -99,6 +99,12 @@ final class FrameProcessorTests: XCTestCase {
         return total / Double(left.count)
     }
 
+    func pixelChecksum(_ image: CGImage) -> UInt64 {
+        pixelData(for: image).reduce(1469598103934665603) { partial, byte in
+            (partial ^ UInt64(byte)) &* 1099511628211
+        }
+    }
+
     func downscaleLikeFrameProcessor(_ image: CGImage, maxDimension: Int) -> CGImage {
         let width = image.width
         let height = image.height
@@ -157,5 +163,51 @@ final class FrameProcessorTests: XCTestCase {
         XCTAssertEqual(preview.width, exported.width)
         XCTAssertEqual(preview.height, exported.height)
         XCTAssertLessThan(imageDifference(preview, exported), 0.08)
+    }
+
+    func test_previewCGImage_builtinShaderPresets_renderAtCompactSize() async throws {
+        let presetDirectory = FileManager.default.temporaryDirectory
+            .appendingPathComponent("framer_shader_presets_\(UUID().uuidString)", isDirectory: true)
+        try FileManager.default.createDirectory(at: presetDirectory, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: presetDirectory) }
+
+        let store = PresetStore(directory: presetDirectory)
+        XCTAssertTrue(store.initializeDefaults())
+
+        let presets = try store.list().filter { $0.name.hasPrefix("Shader ") }
+        XCTAssertEqual(presets.count, 6)
+
+        let processor = FrameProcessor()
+        for preset in presets {
+            let preview = try await processor.previewCGImage(
+                for: sampleURL,
+                config: preset.config,
+                maxDimension: 320
+            )
+
+            XCTAssertGreaterThan(preview.width, 0, "Expected rendered width for \(preset.name)")
+            XCTAssertGreaterThan(preview.height, 0, "Expected rendered height for \(preset.name)")
+            XCTAssertLessThanOrEqual(max(preview.width, preview.height), 320, "Expected compact preview size for \(preset.name)")
+        }
+    }
+
+    func test_previewCGImage_shaderPreset_producesNonOriginalOutput() async throws {
+        let processor = FrameProcessor()
+        let config = ProcessingConfig(
+            layers: [
+                .shader(
+                    ShaderLayerParams(
+                        style: .ascii,
+                        intensity: 1.0,
+                        params: .ascii(ASCIIShaderParams())
+                    )
+                )
+            ]
+        )
+
+        let output = try await processor.previewCGImage(for: sampleURL, config: config, maxDimension: 320)
+        let baseline = try await processor.previewCGImage(for: sampleURL, config: .default, maxDimension: 320)
+
+        XCTAssertNotEqual(pixelChecksum(output), pixelChecksum(baseline))
     }
 }
