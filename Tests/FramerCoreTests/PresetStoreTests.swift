@@ -220,7 +220,7 @@ final class PresetStoreTests: XCTestCase {
         XCTAssertEqual(all.count, 12)
     }
 
-    func test_initializeDefaults_creates5Files() throws {
+    func test_initializeDefaults_creates11Files() throws {
         let store = PresetStore(directory: tempDir)
         store.initializeDefaults()
 
@@ -256,6 +256,95 @@ final class PresetStoreTests: XCTestCase {
         XCTAssertTrue(names.contains("Shader Shiba"))
         XCTAssertTrue(names.contains("Shader Pixel Sort"))
         XCTAssertTrue(names.contains("Shader Distant Past"))
+    }
+
+    func test_initializeDefaults_shaderPresetsHaveExpectedConfigs() throws {
+        let store = PresetStore(directory: tempDir)
+        store.initializeDefaults()
+
+        let presetsByName = Dictionary(uniqueKeysWithValues: try store.list().map { ($0.name, $0) })
+
+        for name in [
+            "Shader ASCII",
+            "Shader Crimewave",
+            "Shader Narc",
+            "Shader Shiba",
+            "Shader Pixel Sort",
+            "Shader Distant Past",
+        ] {
+            guard let preset = presetsByName[name] else {
+                return XCTFail("Missing preset \(name)")
+            }
+            XCTAssertEqual(preset.config.outputFormat, .png)
+            XCTAssertEqual(preset.config.layers?.count, 1)
+        }
+
+        if
+            let preset = presetsByName["Shader ASCII"],
+            let layer = preset.config.layers?.first,
+            case .shader(let params) = layer,
+            case .ascii(let asciiParams) = params.params
+        {
+            XCTAssertEqual(params.style, .ascii)
+            XCTAssertEqual(params.intensity, 1.0)
+            XCTAssertEqual(asciiParams.cellSize, 8)
+            XCTAssertEqual(asciiParams.edgeBias, 0.45, accuracy: 0.0001)
+        } else {
+            XCTFail("Shader ASCII preset did not decode to expected shader config")
+        }
+
+        if
+            let preset = presetsByName["Shader Crimewave"],
+            let layer = preset.config.layers?.first,
+            case .shader(let params) = layer
+        {
+            XCTAssertEqual(params.style, .crimewave)
+        } else {
+            XCTFail("Shader Crimewave preset did not decode to expected shader config")
+        }
+
+        if
+            let preset = presetsByName["Shader Narc"],
+            let layer = preset.config.layers?.first,
+            case .shader(let params) = layer
+        {
+            XCTAssertEqual(params.style, .narc)
+        } else {
+            XCTFail("Shader Narc preset did not decode to expected shader config")
+        }
+
+        if
+            let preset = presetsByName["Shader Shiba"],
+            let layer = preset.config.layers?.first,
+            case .shader(let params) = layer
+        {
+            XCTAssertEqual(params.style, .shiba)
+        } else {
+            XCTFail("Shader Shiba preset did not decode to expected shader config")
+        }
+
+        if
+            let preset = presetsByName["Shader Pixel Sort"],
+            let layer = preset.config.layers?.first,
+            case .shader(let params) = layer,
+            case .pixelSort(let pixelSortParams) = params.params
+        {
+            XCTAssertEqual(params.style, .pixelSort)
+            XCTAssertEqual(pixelSortParams.direction, .horizontal)
+            XCTAssertEqual(pixelSortParams.span, 24)
+        } else {
+            XCTFail("Shader Pixel Sort preset did not decode to expected shader config")
+        }
+
+        if
+            let preset = presetsByName["Shader Distant Past"],
+            let layer = preset.config.layers?.first,
+            case .shader(let params) = layer
+        {
+            XCTAssertEqual(params.style, .distantPast)
+        } else {
+            XCTFail("Shader Distant Past preset did not decode to expected shader config")
+        }
     }
 
     func test_initializeDefaults_createsShaderPresetFiles() throws {
