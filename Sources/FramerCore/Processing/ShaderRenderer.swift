@@ -2,12 +2,20 @@ import Foundation
 import CoreGraphics
 
 public enum ShaderRenderer {
-    public static func apply(to image: CGImage, params: ShaderLayerParams) throws -> CGImage {
+    public static func apply(
+        to image: CGImage,
+        params: ShaderLayerParams,
+        previewBaseDimension: Int? = nil
+    ) throws -> CGImage {
         try Task.checkCancellation()
 
         switch params.params {
         case .ascii:
-            return try ShaderASCIIRenderer.apply(to: image, params: params)
+            return try ShaderASCIIRenderer.apply(
+                to: image,
+                params: params,
+                previewBaseDimension: previewBaseDimension
+            )
         case .distantPast(let shaderParams):
             return try applyDistantPast(to: image, params: shaderParams, intensity: params.intensity)
         case .crimewave, .narc, .shiba, .pixelSort:
