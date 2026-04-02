@@ -9,11 +9,22 @@ public actor FrameProcessor {
 
     // MARK: - Preview (downscaled, no disk I/O)
 
-    public func previewCGImage(for url: URL, config: ProcessingConfig, rotation: Int = 0) throws -> sending CGImage {
+    public func previewCGImage(
+        for url: URL,
+        config: ProcessingConfig,
+        rotation: Int = 0,
+        maxDimension: Int? = nil
+    ) throws -> sending CGImage {
         let fullImage = try loadImage(from: url)
         let rotated = applyRotation(fullImage, degrees: rotation)
         try Task.checkCancellation()
-        let previewMax = previewMaxDimension(for: config, imageWidth: rotated.width, imageHeight: rotated.height)
+        let computedMax = previewMaxDimension(for: config, imageWidth: rotated.width, imageHeight: rotated.height)
+        let previewMax: Int
+        if let maxDimension {
+            previewMax = max(64, min(3000, maxDimension))
+        } else {
+            previewMax = computedMax
+        }
         let cgImage = downscale(rotated, maxDimension: previewMax)
         try Task.checkCancellation()
         let exif = (try? EXIFReader.read(from: url)) ?? ExifData()

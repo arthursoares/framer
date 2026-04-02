@@ -340,6 +340,9 @@
 				BuildIndependentTargetsInParallel = YES;
 				LastUpgradeCheck = 1600;
 				TargetAttributes = {
+					6B6245F15EBD4BFE5457220B = {
+						DevelopmentTeam = P7K6Z5BCV4;
+					};
 				};
 			};
 			buildConfigurationList = 574C6649FA5221AF13B369DF /* Build configuration list for PBXProject "Framer" */;
@@ -443,6 +446,7 @@
 				CODE_SIGN_ENTITLEMENTS = Framer.entitlements;
 				COMBINE_HIDPI_IMAGES = YES;
 				CURRENT_PROJECT_VERSION = 1;
+				DEVELOPMENT_TEAM = QLW5M4WG7H;
 				ENABLE_HARDENED_RUNTIME = YES;
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_KEY_CFBundleDisplayName = Framer;
@@ -589,6 +593,7 @@
 				CODE_SIGN_ENTITLEMENTS = Framer.entitlements;
 				COMBINE_HIDPI_IMAGES = YES;
 				CURRENT_PROJECT_VERSION = 1;
+				DEVELOPMENT_TEAM = QLW5M4WG7H;
 				ENABLE_HARDENED_RUNTIME = YES;
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_KEY_CFBundleDisplayName = Framer;
@@ -611,6 +616,7 @@
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				CODE_SIGN_IDENTITY = "iPhone Developer";
 				CURRENT_PROJECT_VERSION = 1;
+				DEVELOPMENT_TEAM = P7K6Z5BCV4;
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_KEY_CFBundleDisplayName = Framer;
 				INFOPLIST_KEY_NSPhotoLibraryUsageDescription = "Framer needs access to your photo library to select and process photos.";
@@ -637,6 +643,7 @@
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				CODE_SIGN_IDENTITY = "iPhone Developer";
 				CURRENT_PROJECT_VERSION = 1;
+				DEVELOPMENT_TEAM = P7K6Z5BCV4;
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_KEY_CFBundleDisplayName = Framer;
 				INFOPLIST_KEY_NSPhotoLibraryUsageDescription = "Framer needs access to your photo library to select and process photos.";

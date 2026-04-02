@@ -155,6 +155,7 @@ struct PresetPreviewGrid: View {
         let presets = appState.presets
         let url = photo.url
         let rotation = photo.rotation
+        let compactPreviewMaxDimension = 320
 
         // Single task that renders presets serially to avoid saturating CPU
         let task = Task {
@@ -167,7 +168,12 @@ struct PresetPreviewGrid: View {
                 let presetID = preset.id
                 do {
                     let cgImage = try await Task.detached {
-                        try await processor.previewCGImage(for: url, config: preset.config, rotation: rotation)
+                        try await processor.previewCGImage(
+                            for: url,
+                            config: preset.config,
+                            rotation: rotation,
+                            maxDimension: compactPreviewMaxDimension
+                        )
                     }.value
                     guard !Task.isCancelled else { return }
 
