@@ -5,15 +5,35 @@ import ImageIO
 /// Orchestrates the full image processing pipeline.
 /// Runs on a background actor to keep the main thread free.
 public actor FrameProcessor {
+    public static let presetThumbnailMaxDimension = 320
+
     public init() {}
 
     // MARK: - Preview (downscaled, no disk I/O)
 
     public func previewCGImage(for url: URL, config: ProcessingConfig, rotation: Int = 0) throws -> sending CGImage {
+        try renderCGImage(for: url, config: config, rotation: rotation, maxDimensionOverride: nil)
+    }
+
+    public func presetThumbnailCGImage(for url: URL, config: ProcessingConfig, rotation: Int = 0) throws -> sending CGImage {
+        try renderCGImage(
+            for: url,
+            config: config,
+            rotation: rotation,
+            maxDimensionOverride: Self.presetThumbnailMaxDimension
+        )
+    }
+
+    private func renderCGImage(
+        for url: URL,
+        config: ProcessingConfig,
+        rotation: Int,
+        maxDimensionOverride: Int?
+    ) throws -> sending CGImage {
         let fullImage = try loadImage(from: url)
         let rotated = applyRotation(fullImage, degrees: rotation)
         try Task.checkCancellation()
-        let previewMax = previewMaxDimension(for: config, imageWidth: rotated.width, imageHeight: rotated.height)
+        let previewMax = maxDimensionOverride ?? previewMaxDimension(for: config, imageWidth: rotated.width, imageHeight: rotated.height)
         let cgImage = downscale(rotated, maxDimension: previewMax)
         try Task.checkCancellation()
         let exif = (try? EXIFReader.read(from: url)) ?? ExifData()

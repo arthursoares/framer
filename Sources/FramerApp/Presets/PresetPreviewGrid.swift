@@ -13,6 +13,7 @@ struct PresetPreviewGrid: View {
         GridItem(.flexible(), spacing: 6),
         GridItem(.flexible(), spacing: 6),
     ]
+    private let maxConcurrentPresetRenders = 4
 
     var body: some View {
         LazyVGrid(columns: columns, spacing: 6) {
@@ -156,31 +157,51 @@ struct PresetPreviewGrid: View {
         let url = photo.url
         let rotation = photo.rotation
 
-        // Single task that renders presets serially to avoid saturating CPU
         let task = Task {
             try? await Task.sleep(for: .milliseconds(200))
             guard !Task.isCancelled else { return }
 
             let processor = FrameProcessor()
-            for preset in presets {
-                guard !Task.isCancelled else { return }
-                let presetID = preset.id
-                do {
-                    let cgImage = try await Task.detached {
-                        try await processor.previewCGImage(for: url, config: preset.config, rotation: rotation)
-                    }.value
-                    guard !Task.isCancelled else { return }
+            await withTaskGroup(of: Void.self) { group in
+                var nextIndex = 0
 
-                    let scale = NSScreen.main?.backingScaleFactor ?? 2.0
-                    let preview = NSImage(cgImage: cgImage, size: NSSize(
-                        width: CGFloat(cgImage.width) / scale,
-                        height: CGFloat(cgImage.height) / scale
-                    ))
-                    await MainActor.run {
-                        presetPreviews[presetID] = preview
+                func enqueueNext() {
+                    guard nextIndex < presets.count else { return }
+                    let preset = presets[nextIndex]
+                    nextIndex += 1
+
+                    group.addTask {
+                        guard !Task.isCancelled else { return }
+                        do {
+                            let cgImage = try await Task.detached {
+                                try await processor.presetThumbnailCGImage(for: url, config: preset.config, rotation: rotation)
+                            }.value
+                            guard !Task.isCancelled else { return }
+
+                            let scale = NSScreen.main?.backingScaleFactor ?? 2.0
+                            let preview = NSImage(cgImage: cgImage, size: NSSize(
+                                width: CGFloat(cgImage.width) / scale,
+                                height: CGFloat(cgImage.height) / scale
+                            ))
+                            await MainActor.run {
+                                presetPreviews[preset.id] = preview
+                            }
+                        } catch {
+                            // Silently fail — card shows placeholder
+                        }
                     }
-                } catch {
-                    // Silently fail — card shows placeholder
+                }
+
+                for _ in 0..<min(maxConcurrentPresetRenders, presets.count) {
+                    enqueueNext()
+                }
+
+                while await group.next() != nil {
+                    guard !Task.isCancelled else {
+                        group.cancelAll()
+                        return
+                    }
+                    enqueueNext()
                 }
             }
         }
