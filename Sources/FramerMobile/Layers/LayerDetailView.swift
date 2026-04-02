@@ -145,6 +145,18 @@ struct LayerDetailView: View {
             OverlayControls(params: params) { layer = .overlay($0) }
         case .lut(let params):
             LUTControls(params: params) { layer = .lut($0) }
+        case .shader(let params):
+            VStack(spacing: 8) {
+                ControlRow(label: "Shader") {
+                    Text(params.style.label)
+                        .font(AppFont.controlLabel)
+                        .foregroundStyle(Color.text1)
+                }
+                Text("Shader controls will be added in a later task.")
+                    .font(AppFont.body(12))
+                    .foregroundStyle(Color.text3)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+            }
         }
     }
 }

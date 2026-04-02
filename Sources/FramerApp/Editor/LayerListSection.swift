@@ -384,6 +384,16 @@ struct LayerRow: View {
             AspectRatioLayerControls(params: params) { layer = .aspectRatio($0) }
         case .lut(let params):
             LUTLayerControls(params: params) { layer = .lut($0) }
+        case .shader(let params):
+            VStack(alignment: .leading, spacing: 8) {
+                Text("Shader")
+                    .font(.headline)
+                Text("Style: \(params.style.label)")
+                    .foregroundStyle(.secondary)
+                Text("Controls will be added in a later task.")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+            }
         }
     }
 
@@ -420,6 +430,8 @@ struct LayerRow: View {
             return "\(p.ratioWidth):\(p.ratioHeight)"
         case .lut(let p):
             return p.lutName.isEmpty ? "None" : p.lutName
+        case .shader(let p):
+            return p.style.label
         }
     }
 }

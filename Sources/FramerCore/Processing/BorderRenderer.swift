@@ -199,6 +199,9 @@ public enum BorderRenderer {
                     intensity: params.intensity,
                     previewBaseDimension: previewBaseDimension
                 )
+
+            case .shader:
+                break
             }
             i += 1
         }
