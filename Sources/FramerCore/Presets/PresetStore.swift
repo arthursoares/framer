@@ -219,6 +219,66 @@ public final class PresetStore {
                     ))
                 ]
             )),
+            ("Shader ASCII", ProcessingConfig(
+                outputFormat: .png,
+                layers: [
+                    .shader(ShaderLayerParams(
+                        style: .ascii,
+                        intensity: 1.0,
+                        params: .ascii(ASCIIShaderParams(cellSize: 8, edgeBias: 0.45, foreground: .white, background: .black, invert: false))
+                    ))
+                ]
+            )),
+            ("Shader Crimewave", ProcessingConfig(
+                outputFormat: .png,
+                layers: [
+                    .shader(ShaderLayerParams(
+                        style: .crimewave,
+                        intensity: 1.0,
+                        params: .crimewave(CrimewaveShaderParams())
+                    ))
+                ]
+            )),
+            ("Shader Narc", ProcessingConfig(
+                outputFormat: .png,
+                layers: [
+                    .shader(ShaderLayerParams(
+                        style: .narc,
+                        intensity: 1.0,
+                        params: .narc(NarcShaderParams())
+                    ))
+                ]
+            )),
+            ("Shader Shiba", ProcessingConfig(
+                outputFormat: .png,
+                layers: [
+                    .shader(ShaderLayerParams(
+                        style: .shiba,
+                        intensity: 1.0,
+                        params: .shiba(ShibaShaderParams())
+                    ))
+                ]
+            )),
+            ("Shader Pixel Sort", ProcessingConfig(
+                outputFormat: .png,
+                layers: [
+                    .shader(ShaderLayerParams(
+                        style: .pixelSort,
+                        intensity: 1.0,
+                        params: .pixelSort(PixelSortShaderParams(threshold: 0.1, direction: .horizontal, span: 24, amount: 1.0))
+                    ))
+                ]
+            )),
+            ("Shader Distant Past", ProcessingConfig(
+                outputFormat: .png,
+                layers: [
+                    .shader(ShaderLayerParams(
+                        style: .distantPast,
+                        intensity: 1.0,
+                        params: .distantPast(DistantPastShaderParams())
+                    ))
+                ]
+            )),
         ]
 
         do {
