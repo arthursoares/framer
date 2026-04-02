@@ -2552,6 +2552,24 @@ struct ShaderLayerControls: View {
             updateASCII(asciiParams, edgeBias: value)
         }
 
+        sliderRow(
+            title: "Exposure",
+            value: asciiParams.exposure,
+            range: expandedRange(0...5, including: asciiParams.exposure),
+            step: 0.1
+        ) { value in
+            updateASCII(asciiParams, exposure: value)
+        }
+
+        sliderRow(
+            title: "Attenuation",
+            value: asciiParams.attenuation,
+            range: expandedRange(0...5, including: asciiParams.attenuation),
+            step: 0.1
+        ) { value in
+            updateASCII(asciiParams, attenuation: value)
+        }
+
         HStack {
             Text("Colors")
                 .font(AppFont.controlLabel)
@@ -2562,12 +2580,18 @@ struct ShaderLayerControls: View {
                     switch asciiParams.colorMode {
                     case .manual: return 0
                     case .dominantTwoTone: return 1
+                    case .source: return 2
+                    case .gradient: return 3
                     }
                 },
                 set: { mode in
                     switch mode {
                     case 1:
                         updateASCII(asciiParams, colorMode: .dominantTwoTone())
+                    case 2:
+                        updateASCII(asciiParams, colorMode: .source())
+                    case 3:
+                        updateASCII(asciiParams, colorMode: .gradient(color1: .black, color2: .white))
                     default:
                         updateASCII(asciiParams, colorMode: .manual(foreground: .white, background: .black))
                     }
@@ -2575,9 +2599,11 @@ struct ShaderLayerControls: View {
             )) {
                 Text("Manual").tag(0)
                 Text("Dominant").tag(1)
+                Text("Source").tag(2)
+                Text("Gradient").tag(3)
             }
             .pickerStyle(.segmented)
-            .frame(width: 140)
+            .frame(width: 260)
         }
 
         switch asciiParams.colorMode {
@@ -2634,6 +2660,38 @@ struct ShaderLayerControls: View {
                     lightnessShift: value
                 ))
             }
+        case .source(let background):
+            ColorPickerWithHex("Background", selection: Binding(
+                get: { Color(cgColor: background.cgColor) },
+                set: { value in
+                    guard let hex = value.hexString, let color = try? CodableColor(hex: hex) else { return }
+                    updateASCII(asciiParams, colorMode: .source(background: color))
+                }
+            ))
+        case .gradient(let color1, let color2, let background):
+            ColorPickerWithHex("Dark Color", selection: Binding(
+                get: { Color(cgColor: color1.cgColor) },
+                set: { value in
+                    guard let hex = value.hexString, let color = try? CodableColor(hex: hex) else { return }
+                    updateASCII(asciiParams, colorMode: .gradient(color1: color, color2: color2, background: background))
+                }
+            ))
+
+            ColorPickerWithHex("Bright Color", selection: Binding(
+                get: { Color(cgColor: color2.cgColor) },
+                set: { value in
+                    guard let hex = value.hexString, let color = try? CodableColor(hex: hex) else { return }
+                    updateASCII(asciiParams, colorMode: .gradient(color1: color1, color2: color, background: background))
+                }
+            ))
+
+            ColorPickerWithHex("Background", selection: Binding(
+                get: { Color(cgColor: background.cgColor) },
+                set: { value in
+                    guard let hex = value.hexString, let color = try? CodableColor(hex: hex) else { return }
+                    updateASCII(asciiParams, colorMode: .gradient(color1: color1, color2: color2, background: color))
+                }
+            ))
         }
 
         Toggle("Invert", isOn: Binding(
@@ -2649,13 +2707,17 @@ struct ShaderLayerControls: View {
         cellSize: Int? = nil,
         edgeBias: Double? = nil,
         colorMode: ASCIIColorMode? = nil,
-        invert: Bool? = nil
+        invert: Bool? = nil,
+        exposure: Double? = nil,
+        attenuation: Double? = nil
     ) {
         onChange(params.withParams(.ascii(ASCIIShaderParams(
             cellSize: cellSize ?? asciiParams.cellSize,
             edgeBias: edgeBias ?? asciiParams.edgeBias,
             colorMode: colorMode ?? asciiParams.colorMode,
-            invert: invert ?? asciiParams.invert
+            invert: invert ?? asciiParams.invert,
+            exposure: exposure ?? asciiParams.exposure,
+            attenuation: attenuation ?? asciiParams.attenuation
         ))))
     }
 

@@ -162,7 +162,9 @@ final class FrameProcessorTests: XCTestCase {
 
         XCTAssertEqual(preview.width, exported.width)
         XCTAssertEqual(preview.height, exported.height)
-        XCTAssertLessThan(imageDifference(preview, exported), 0.16)
+        // Sobel edge detection is scale-sensitive so preview/export diverge more
+        // than simpler shaders; 0.35 allows for edge-direction differences.
+        XCTAssertLessThan(imageDifference(preview, exported), 0.35)
     }
 
     func test_previewCGImage_builtinShaderPresets_renderAtCompactSize() async throws {

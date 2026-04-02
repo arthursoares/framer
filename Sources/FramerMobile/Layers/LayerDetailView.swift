@@ -994,18 +994,42 @@ private struct ShaderControls: View {
             updateASCII(asciiParams, edgeBias: value)
         }
 
+        sliderRow(
+            label: "Exposure",
+            value: asciiParams.exposure,
+            range: expandedRange(0...5, including: asciiParams.exposure),
+            step: 0.1
+        ) { value in
+            updateASCII(asciiParams, exposure: value)
+        }
+
+        sliderRow(
+            label: "Attenuation",
+            value: asciiParams.attenuation,
+            range: expandedRange(0...5, including: asciiParams.attenuation),
+            step: 0.1
+        ) { value in
+            updateASCII(asciiParams, attenuation: value)
+        }
+
         ControlRow(label: "Colors") {
             Picker("", selection: Binding(
                 get: {
                     switch asciiParams.colorMode {
                     case .manual: return 0
                     case .dominantTwoTone: return 1
+                    case .source: return 2
+                    case .gradient: return 3
                     }
                 },
                 set: { mode in
                     switch mode {
                     case 1:
                         updateASCII(asciiParams, colorMode: .dominantTwoTone())
+                    case 2:
+                        updateASCII(asciiParams, colorMode: .source())
+                    case 3:
+                        updateASCII(asciiParams, colorMode: .gradient(color1: .black, color2: .white))
                     default:
                         updateASCII(asciiParams, colorMode: .manual(foreground: .white, background: .black))
                     }
@@ -1013,6 +1037,8 @@ private struct ShaderControls: View {
             )) {
                 Text("Manual").tag(0)
                 Text("Dominant").tag(1)
+                Text("Source").tag(2)
+                Text("Gradient").tag(3)
             }
             .pickerStyle(.segmented)
         }
@@ -1083,6 +1109,54 @@ private struct ShaderControls: View {
                     lightnessShift: value
                 ))
             }
+        case .source(let background):
+            ControlRow(label: "Background") {
+                ColorPicker("", selection: Binding(
+                    get: { Color(cgColor: background.cgColor) },
+                    set: { value in
+                        guard let hex = value.hexString, let color = try? CodableColor(hex: hex) else { return }
+                        updateASCII(asciiParams, colorMode: .source(background: color))
+                    }
+                ))
+                .labelsHidden()
+                .accessibilityLabel("ASCII Source Background")
+            }
+        case .gradient(let color1, let color2, let background):
+            ControlRow(label: "Dark Color") {
+                ColorPicker("", selection: Binding(
+                    get: { Color(cgColor: color1.cgColor) },
+                    set: { value in
+                        guard let hex = value.hexString, let color = try? CodableColor(hex: hex) else { return }
+                        updateASCII(asciiParams, colorMode: .gradient(color1: color, color2: color2, background: background))
+                    }
+                ))
+                .labelsHidden()
+                .accessibilityLabel("ASCII Gradient Dark")
+            }
+
+            ControlRow(label: "Bright Color") {
+                ColorPicker("", selection: Binding(
+                    get: { Color(cgColor: color2.cgColor) },
+                    set: { value in
+                        guard let hex = value.hexString, let color = try? CodableColor(hex: hex) else { return }
+                        updateASCII(asciiParams, colorMode: .gradient(color1: color1, color2: color, background: background))
+                    }
+                ))
+                .labelsHidden()
+                .accessibilityLabel("ASCII Gradient Bright")
+            }
+
+            ControlRow(label: "Background") {
+                ColorPicker("", selection: Binding(
+                    get: { Color(cgColor: background.cgColor) },
+                    set: { value in
+                        guard let hex = value.hexString, let color = try? CodableColor(hex: hex) else { return }
+                        updateASCII(asciiParams, colorMode: .gradient(color1: color1, color2: color2, background: color))
+                    }
+                ))
+                .labelsHidden()
+                .accessibilityLabel("ASCII Gradient Background")
+            }
         }
 
         ControlRow(label: "Invert") {
@@ -1102,13 +1176,17 @@ private struct ShaderControls: View {
         cellSize: Int? = nil,
         edgeBias: Double? = nil,
         colorMode: ASCIIColorMode? = nil,
-        invert: Bool? = nil
+        invert: Bool? = nil,
+        exposure: Double? = nil,
+        attenuation: Double? = nil
     ) {
         onChange(params.withParams(.ascii(ASCIIShaderParams(
             cellSize: cellSize ?? asciiParams.cellSize,
             edgeBias: edgeBias ?? asciiParams.edgeBias,
             colorMode: colorMode ?? asciiParams.colorMode,
-            invert: invert ?? asciiParams.invert
+            invert: invert ?? asciiParams.invert,
+            exposure: exposure ?? asciiParams.exposure,
+            attenuation: attenuation ?? asciiParams.attenuation
         ))))
     }
 
