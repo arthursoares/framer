@@ -2570,34 +2570,40 @@ struct ShaderLayerControls: View {
             updateASCII(asciiParams, attenuation: value)
         }
 
-        Picker("Color Mode", selection: Binding(
-            get: {
-                switch asciiParams.colorMode {
-                case .manual: return 0
-                case .dominantTwoTone: return 1
-                case .source: return 2
-                case .gradient: return 3
+        VStack(alignment: .leading, spacing: 4) {
+            Text("Colors")
+                .font(AppFont.controlLabel)
+                .foregroundStyle(Color.text2)
+            Picker("", selection: Binding(
+                get: {
+                    switch asciiParams.colorMode {
+                    case .manual: return 0
+                    case .dominantTwoTone: return 1
+                    case .source: return 2
+                    case .gradient: return 3
+                    }
+                },
+                set: { mode in
+                    switch mode {
+                    case 1:
+                        updateASCII(asciiParams, colorMode: .dominantTwoTone())
+                    case 2:
+                        updateASCII(asciiParams, colorMode: .source())
+                    case 3:
+                        updateASCII(asciiParams, colorMode: .gradient(color1: .black, color2: .white))
+                    default:
+                        updateASCII(asciiParams, colorMode: .manual(foreground: .white, background: .black))
+                    }
                 }
-            },
-            set: { mode in
-                switch mode {
-                case 1:
-                    updateASCII(asciiParams, colorMode: .dominantTwoTone())
-                case 2:
-                    updateASCII(asciiParams, colorMode: .source())
-                case 3:
-                    updateASCII(asciiParams, colorMode: .gradient(color1: .black, color2: .white))
-                default:
-                    updateASCII(asciiParams, colorMode: .manual(foreground: .white, background: .black))
-                }
+            )) {
+                Text("Manual").tag(0)
+                Text("Dominant").tag(1)
+                Text("Source").tag(2)
+                Text("Gradient").tag(3)
             }
-        )) {
-            Text("Manual").tag(0)
-            Text("Dominant").tag(1)
-            Text("Source").tag(2)
-            Text("Gradient").tag(3)
+            .labelsHidden()
+            .pickerStyle(.segmented)
         }
-        .pickerStyle(.segmented)
 
         switch asciiParams.colorMode {
         case .manual(let foreground, let background):
