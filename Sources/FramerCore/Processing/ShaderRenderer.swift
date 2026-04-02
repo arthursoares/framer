@@ -5,7 +5,8 @@ public enum ShaderRenderer {
     public static func apply(
         to image: CGImage,
         params: ShaderLayerParams,
-        previewBaseDimension: Int? = nil
+        previewBaseDimension: Int? = nil,
+        sourceImage: CGImage? = nil
     ) throws -> CGImage {
         try Task.checkCancellation()
 
@@ -14,7 +15,8 @@ public enum ShaderRenderer {
             return try ShaderASCIIRenderer.apply(
                 to: image,
                 params: params,
-                previewBaseDimension: previewBaseDimension
+                previewBaseDimension: previewBaseDimension,
+                sourceImage: sourceImage
             )
         case .pixelSort:
             return try ShaderPixelSortRenderer.apply(to: image, params: params)

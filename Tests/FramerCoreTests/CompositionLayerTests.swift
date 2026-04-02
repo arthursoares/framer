@@ -102,7 +102,12 @@ final class CompositionLayerTests: XCTestCase {
             ShaderLayerParams(
                 style: .ascii,
                 intensity: 0.75,
-                params: .ascii(ASCIIShaderParams(cellSize: 12, edgeBias: 0.4, foreground: .white, background: .black, invert: false))
+                params: .ascii(ASCIIShaderParams(
+                    cellSize: 12,
+                    edgeBias: 0.4,
+                    colorMode: .dominantTwoTone(flipped: true, saturationShift: 15, lightnessShift: -10),
+                    invert: false
+                ))
             ),
             ShaderLayerParams(
                 enabled: false,
@@ -152,6 +157,30 @@ final class CompositionLayerTests: XCTestCase {
         XCTAssertEqual(decoded.style, .shiba)
         XCTAssertEqual(decoded.params, .shiba(ShibaShaderParams()))
         XCTAssertEqual(decoded.intensity, 0.6)
+    }
+
+    func test_asciiShaderParams_decodesLegacyForegroundBackground() throws {
+        let json = """
+        {
+          "cellSize": 9,
+          "edgeBias": 0.25,
+          "foreground": { "hex": "#FFFFFF" },
+          "background": { "hex": "#000000" },
+          "invert": true
+        }
+        """.data(using: .utf8)!
+
+        let decoded = try JSONDecoder().decode(ASCIIShaderParams.self, from: json)
+
+        XCTAssertEqual(
+            decoded,
+            ASCIIShaderParams(
+                cellSize: 9,
+                edgeBias: 0.25,
+                colorMode: .manual(foreground: .white, background: .black),
+                invert: true
+            )
+        )
     }
 
     func test_overlayBlendMode_defaultsPerKind() {

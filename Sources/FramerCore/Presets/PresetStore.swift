@@ -225,7 +225,12 @@ public final class PresetStore {
                     .shader(ShaderLayerParams(
                         style: .ascii,
                         intensity: 1.0,
-                        params: .ascii(ASCIIShaderParams(cellSize: 8, edgeBias: 0.45, foreground: .white, background: .black, invert: false))
+                        params: .ascii(ASCIIShaderParams(
+                            cellSize: 8,
+                            edgeBias: 0.45,
+                            colorMode: .dominantTwoTone(flipped: false, saturationShift: 8, lightnessShift: -6),
+                            invert: false
+                        ))
                     ))
                 ]
             )),

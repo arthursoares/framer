@@ -351,7 +351,7 @@ final class ShaderRendererTests: XCTestCase {
 
 
 
-    func test_asciiShader_quantizesIntoVisibleCells() throws {
+    func test_asciiShader_drawsGlyphStructureWithinCells() throws {
         let image = makeColorGridImage(width: 24, height: 24)
         let params = ShaderLayerParams(
             style: .ascii,
@@ -361,9 +361,6 @@ final class ShaderRendererTests: XCTestCase {
 
         let result = try ShaderRenderer.apply(to: image, params: params)
 
-        XCTAssertEqual(packedColorAt(result, x: 1, y: 1), packedColorAt(result, x: 4, y: 4))
-        XCTAssertEqual(packedColorAt(result, x: 7, y: 1), packedColorAt(result, x: 10, y: 4))
-
         var blockColors = Set<UInt32>()
         for y in stride(from: 1, to: result.height, by: 6) {
             for x in stride(from: 1, to: result.width, by: 6) {
@@ -371,6 +368,14 @@ final class ShaderRendererTests: XCTestCase {
             }
         }
         XCTAssertGreaterThan(blockColors.count, 1)
+
+        var firstCellColors = Set<UInt32>()
+        for y in 0..<6 {
+            for x in 0..<6 {
+                firstCellColors.insert(packedColorAt(result, x: x, y: y))
+            }
+        }
+        XCTAssertGreaterThan(firstCellColors.count, 1)
     }
 
     func test_asciiShader_invertChangesOutput() throws {
@@ -390,6 +395,35 @@ final class ShaderRendererTests: XCTestCase {
         let inverted = try ShaderRenderer.apply(to: image, params: invertedParams)
 
         XCTAssertNotEqual(pixelData(for: normal), pixelData(for: inverted))
+    }
+
+    func test_asciiShader_dominantTwoToneUsesExtractedPalette() throws {
+        let image = makePortraitReferenceImage(width: 32, height: 32)
+        let manualParams = ShaderLayerParams(
+            style: .ascii,
+            intensity: 1.0,
+            params: .ascii(ASCIIShaderParams(
+                cellSize: 6,
+                edgeBias: 0.3,
+                colorMode: .manual(foreground: .white, background: .black),
+                invert: false
+            ))
+        )
+        let dominantParams = ShaderLayerParams(
+            style: .ascii,
+            intensity: 1.0,
+            params: .ascii(ASCIIShaderParams(
+                cellSize: 6,
+                edgeBias: 0.3,
+                colorMode: .dominantTwoTone(flipped: false, saturationShift: 10, lightnessShift: -5),
+                invert: false
+            ))
+        )
+
+        let manual = try ShaderRenderer.apply(to: image, params: manualParams)
+        let dominant = try ShaderRenderer.apply(to: image, params: dominantParams, sourceImage: image)
+
+        XCTAssertNotEqual(pixelData(for: manual), pixelData(for: dominant))
     }
 
     func downscale(_ image: CGImage, maxDimension: Int) -> CGImage {

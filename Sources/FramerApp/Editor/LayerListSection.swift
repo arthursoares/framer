@@ -1286,7 +1286,7 @@ struct LayerFillPicker: View {
                 }
             }
             VStack(alignment: .leading, spacing: 4) {
-                Text("Lightness")
+                Text("Brightness")
                     .font(AppFont.controlLabel)
                     .foregroundStyle(Color.text2)
                 HStack {
@@ -1580,7 +1580,7 @@ struct CaptionLayerControls: View {
             }
         }
         VStack(alignment: .leading, spacing: 4) {
-            Text("Lightness")
+            Text("Brightness")
                 .font(AppFont.controlLabel)
                 .foregroundStyle(Color.text2)
             HStack {
@@ -1943,7 +1943,7 @@ struct DitherLayerControls: View {
                 ), in: -50...50)
             }
             VStack(alignment: .leading, spacing: 4) {
-                Text("Lightness")
+                Text("Brightness")
                     .font(AppFont.controlLabel)
                     .foregroundStyle(Color.text2)
                 Slider(value: Binding(
@@ -2540,13 +2540,7 @@ struct ShaderLayerControls: View {
             range: expandedRange(4...24, including: Double(asciiParams.cellSize)),
             step: 1
         ) { value in
-            onChange(params.withParams(.ascii(ASCIIShaderParams(
-                cellSize: Int(value.rounded()),
-                edgeBias: asciiParams.edgeBias,
-                foreground: asciiParams.foreground,
-                background: asciiParams.background,
-                invert: asciiParams.invert
-            ))))
+            updateASCII(asciiParams, cellSize: Int(value.rounded()))
         }
 
         sliderRow(
@@ -2555,55 +2549,114 @@ struct ShaderLayerControls: View {
             range: expandedRange(0...1, including: asciiParams.edgeBias),
             step: 0.05
         ) { value in
-            onChange(params.withParams(.ascii(ASCIIShaderParams(
-                cellSize: asciiParams.cellSize,
-                edgeBias: value,
-                foreground: asciiParams.foreground,
-                background: asciiParams.background,
-                invert: asciiParams.invert
-            ))))
+            updateASCII(asciiParams, edgeBias: value)
         }
 
-        ColorPickerWithHex("Foreground", selection: Binding(
-            get: { Color(cgColor: asciiParams.foreground.cgColor) },
-            set: { value in
-                guard let hex = value.hexString, let color = try? CodableColor(hex: hex) else { return }
-                onChange(params.withParams(.ascii(ASCIIShaderParams(
-                    cellSize: asciiParams.cellSize,
-                    edgeBias: asciiParams.edgeBias,
-                    foreground: color,
-                    background: asciiParams.background,
-                    invert: asciiParams.invert
-                ))))
+        HStack {
+            Text("Colors")
+                .font(AppFont.controlLabel)
+                .foregroundStyle(Color.text2)
+            Spacer()
+            Picker("", selection: Binding(
+                get: {
+                    switch asciiParams.colorMode {
+                    case .manual: return 0
+                    case .dominantTwoTone: return 1
+                    }
+                },
+                set: { mode in
+                    switch mode {
+                    case 1:
+                        updateASCII(asciiParams, colorMode: .dominantTwoTone())
+                    default:
+                        updateASCII(asciiParams, colorMode: .manual(foreground: .white, background: .black))
+                    }
+                }
+            )) {
+                Text("Manual").tag(0)
+                Text("Dominant").tag(1)
             }
-        ))
+            .pickerStyle(.segmented)
+            .frame(width: 140)
+        }
 
-        ColorPickerWithHex("Background", selection: Binding(
-            get: { Color(cgColor: asciiParams.background.cgColor) },
-            set: { value in
-                guard let hex = value.hexString, let color = try? CodableColor(hex: hex) else { return }
-                onChange(params.withParams(.ascii(ASCIIShaderParams(
-                    cellSize: asciiParams.cellSize,
-                    edgeBias: asciiParams.edgeBias,
-                    foreground: asciiParams.foreground,
-                    background: color,
-                    invert: asciiParams.invert
-                ))))
+        switch asciiParams.colorMode {
+        case .manual(let foreground, let background):
+            ColorPickerWithHex("Foreground", selection: Binding(
+                get: { Color(cgColor: foreground.cgColor) },
+                set: { value in
+                    guard let hex = value.hexString, let color = try? CodableColor(hex: hex) else { return }
+                    updateASCII(asciiParams, colorMode: .manual(foreground: color, background: background))
+                }
+            ))
+
+            ColorPickerWithHex("Background", selection: Binding(
+                get: { Color(cgColor: background.cgColor) },
+                set: { value in
+                    guard let hex = value.hexString, let color = try? CodableColor(hex: hex) else { return }
+                    updateASCII(asciiParams, colorMode: .manual(foreground: foreground, background: color))
+                }
+            ))
+        case .dominantTwoTone(let flipped, let saturationShift, let lightnessShift):
+            Toggle("Flip Palette", isOn: Binding(
+                get: { flipped },
+                set: { value in
+                    updateASCII(asciiParams, colorMode: .dominantTwoTone(
+                        flipped: value,
+                        saturationShift: saturationShift,
+                        lightnessShift: lightnessShift
+                    ))
+                }
+            ))
+
+            sliderRow(
+                title: "Saturation",
+                value: saturationShift,
+                range: expandedRange(-50...50, including: saturationShift),
+                step: 1
+            ) { value in
+                updateASCII(asciiParams, colorMode: .dominantTwoTone(
+                    flipped: flipped,
+                    saturationShift: value,
+                    lightnessShift: lightnessShift
+                ))
             }
-        ))
+
+            sliderRow(
+                title: "Brightness",
+                value: lightnessShift,
+                range: expandedRange(-50...50, including: lightnessShift),
+                step: 1
+            ) { value in
+                updateASCII(asciiParams, colorMode: .dominantTwoTone(
+                    flipped: flipped,
+                    saturationShift: saturationShift,
+                    lightnessShift: value
+                ))
+            }
+        }
 
         Toggle("Invert", isOn: Binding(
             get: { asciiParams.invert },
             set: { value in
-                onChange(params.withParams(.ascii(ASCIIShaderParams(
-                    cellSize: asciiParams.cellSize,
-                    edgeBias: asciiParams.edgeBias,
-                    foreground: asciiParams.foreground,
-                    background: asciiParams.background,
-                    invert: value
-                ))))
+                updateASCII(asciiParams, invert: value)
             }
         ))
+    }
+
+    private func updateASCII(
+        _ asciiParams: ASCIIShaderParams,
+        cellSize: Int? = nil,
+        edgeBias: Double? = nil,
+        colorMode: ASCIIColorMode? = nil,
+        invert: Bool? = nil
+    ) {
+        onChange(params.withParams(.ascii(ASCIIShaderParams(
+            cellSize: cellSize ?? asciiParams.cellSize,
+            edgeBias: edgeBias ?? asciiParams.edgeBias,
+            colorMode: colorMode ?? asciiParams.colorMode,
+            invert: invert ?? asciiParams.invert
+        ))))
     }
 
     @ViewBuilder
