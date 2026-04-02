@@ -1,0 +1,403 @@
+// Tests/FramerCoreTests/LUTRendererTests.swift
+import XCTest
+import CoreGraphics
+@testable import FramerCore
+
+final class LUTRendererTests: XCTestCase {
+
+    // MARK: - Test Helpers
+
+    func makeSolidImage(width: Int, height: Int, r: UInt8, g: UInt8, b: UInt8) -> CGImage {
+        let colorSpace = CGColorSpaceCreateDeviceRGB()
+        let bitmapInfo = CGImageAlphaInfo.premultipliedLast.rawValue
+        let ctx = CGContext(
+            data: nil, width: width, height: height,
+            bitsPerComponent: 8, bytesPerRow: width * 4,
+            space: colorSpace, bitmapInfo: bitmapInfo
+        )!
+        let data = ctx.data!.bindMemory(to: UInt8.self, capacity: width * height * 4)
+        for i in 0..<(width * height) {
+            let idx = i * 4
+            data[idx] = r
+            data[idx + 1] = g
+            data[idx + 2] = b
+            data[idx + 3] = 255
+        }
+        return ctx.makeImage()!
+    }
+
+    func makeGradientImage(width: Int, height: Int) -> CGImage {
+        let colorSpace = CGColorSpaceCreateDeviceRGB()
+        let bitmapInfo = CGImageAlphaInfo.premultipliedLast.rawValue
+        let ctx = CGContext(
+            data: nil, width: width, height: height,
+            bitsPerComponent: 8, bytesPerRow: width * 4,
+            space: colorSpace, bitmapInfo: bitmapInfo
+        )!
+        let data = ctx.data!.bindMemory(to: UInt8.self, capacity: width * height * 4)
+        for y in 0..<height {
+            for x in 0..<width {
+                let idx = (y * width + x) * 4
+                data[idx] = UInt8(Double(x) / Double(width - 1) * 255.0)
+                data[idx + 1] = UInt8(Double(y) / Double(height - 1) * 255.0)
+                data[idx + 2] = 128
+                data[idx + 3] = 255
+            }
+        }
+        return ctx.makeImage()!
+    }
+
+    func extractPixels(from image: CGImage) -> [(r: UInt8, g: UInt8, b: UInt8, a: UInt8)] {
+        let width = image.width
+        let height = image.height
+        let colorSpace = CGColorSpaceCreateDeviceRGB()
+        let bitmapInfo = CGImageAlphaInfo.premultipliedLast.rawValue
+        let ctx = CGContext(
+            data: nil, width: width, height: height,
+            bitsPerComponent: 8, bytesPerRow: width * 4,
+            space: colorSpace, bitmapInfo: bitmapInfo
+        )!
+        ctx.draw(image, in: CGRect(x: 0, y: 0, width: width, height: height))
+        let data = ctx.data!.bindMemory(to: UInt8.self, capacity: width * height * 4)
+        var result = [(r: UInt8, g: UInt8, b: UInt8, a: UInt8)]()
+        result.reserveCapacity(width * height)
+        for i in 0..<(width * height) {
+            let idx = i * 4
+            result.append((r: data[idx], g: data[idx + 1], b: data[idx + 2], a: data[idx + 3]))
+        }
+        return result
+    }
+
+    func makeIdentityLUT(size: Int) -> LUT3D {
+        var data = [Float]()
+        data.reserveCapacity(size * size * size * 3)
+        for b in 0..<size {
+            for g in 0..<size {
+                for r in 0..<size {
+                    data.append(Float(r) / Float(size - 1))
+                    data.append(Float(g) / Float(size - 1))
+                    data.append(Float(b) / Float(size - 1))
+                }
+            }
+        }
+        return LUT3D(size: size, data: data)
+    }
+
+    func makeRampLUT(
+        size: Int,
+        low: Float,
+        high: Float,
+        domainMin: SIMD3<Float>,
+        domainMax: SIMD3<Float>
+    ) -> LUT3D {
+        var data = [Float]()
+        data.reserveCapacity(size * size * size * 3)
+        for _ in 0..<size {
+            for _ in 0..<size {
+                for r in 0..<size {
+                    let value = r == 0 ? low : high
+                    data.append(value)
+                    data.append(value)
+                    data.append(value)
+                }
+            }
+        }
+        return LUT3D(size: size, data: data, domainMin: domainMin, domainMax: domainMax)
+    }
+
+    // MARK: - Identity LUT Tests
+
+    func test_lutRenderer_identity() throws {
+        let image = makeGradientImage(width: 32, height: 32)
+        let lut = makeIdentityLUT(size: 33)
+
+        let result = try LUTRenderer.apply(to: image, lut: lut, intensity: 1.0)
+        let originalPixels = extractPixels(from: image)
+        let resultPixels = extractPixels(from: result)
+
+        XCTAssertEqual(originalPixels.count, resultPixels.count)
+        for (orig, res) in zip(originalPixels, resultPixels) {
+            XCTAssertEqual(res.r, orig.r, accuracy: 1, "R channel should be preserved")
+            XCTAssertEqual(res.g, orig.g, accuracy: 1, "G channel should be preserved")
+            XCTAssertEqual(res.b, orig.b, accuracy: 1, "B channel should be preserved")
+        }
+    }
+
+    func test_lutRenderer_intensity0_returnsOriginal() throws {
+        let image = makeGradientImage(width: 32, height: 32)
+        let lut = makeIdentityLUT(size: 33)
+
+        let result = try LUTRenderer.apply(to: image, lut: lut, intensity: 0.0)
+        let originalPixels = extractPixels(from: image)
+        let resultPixels = extractPixels(from: result)
+
+        XCTAssertEqual(originalPixels.count, resultPixels.count)
+        for (orig, res) in zip(originalPixels, resultPixels) {
+            XCTAssertEqual(res.r, orig.r, accuracy: 1)
+            XCTAssertEqual(res.g, orig.g, accuracy: 1)
+            XCTAssertEqual(res.b, orig.b, accuracy: 1)
+        }
+    }
+
+    func test_lutRenderer_intensity1_fullApply() throws {
+        let image = makeSolidImage(width: 32, height: 32, r: 128, g: 64, b: 32)
+        let lut = makeIdentityLUT(size: 33)
+
+        let result = try LUTRenderer.apply(to: image, lut: lut, intensity: 1.0)
+        let resultPixels = extractPixels(from: result)
+
+        for pixel in resultPixels {
+            XCTAssertEqual(pixel.r, 128, accuracy: 1)
+            XCTAssertEqual(pixel.g, 64, accuracy: 1)
+            XCTAssertEqual(pixel.b, 32, accuracy: 1)
+        }
+    }
+
+    func test_lutRenderer_solidColorApply() throws {
+        let image = makeSolidImage(width: 32, height: 32, r: 200, g: 100, b: 50)
+        let lut = makeIdentityLUT(size: 33)
+
+        let result = try LUTRenderer.apply(to: image, lut: lut, intensity: 1.0)
+        let resultPixels = extractPixels(from: result)
+
+        for pixel in resultPixels {
+            XCTAssertEqual(pixel.r, 200, accuracy: 1)
+            XCTAssertEqual(pixel.g, 100, accuracy: 1)
+            XCTAssertEqual(pixel.b, 50, accuracy: 1)
+        }
+    }
+
+    // MARK: - Preview Dimension Tests
+
+    func test_lutRenderer_previewDimension_scalesDown() throws {
+        let image = makeGradientImage(width: 64, height: 64)
+        let lut = makeIdentityLUT(size: 33)
+
+        let resultFull = try LUTRenderer.apply(to: image, lut: lut, intensity: 1.0)
+        let resultPreview = try LUTRenderer.apply(to: image, lut: lut, intensity: 1.0, previewBaseDimension: 32)
+
+        XCTAssertEqual(resultFull.width, 64)
+        XCTAssertEqual(resultFull.height, 64)
+        XCTAssertEqual(resultPreview.width, 64)
+        XCTAssertEqual(resultPreview.height, 64)
+    }
+
+    // MARK: - Intensity Blend Tests
+
+    func test_lutRenderer_intensityHalf() throws {
+        let image = makeSolidImage(width: 8, height: 8, r: 128, g: 128, b: 128)
+        let lut = makeIdentityLUT(size: 33)
+
+        let result = try LUTRenderer.apply(to: image, lut: lut, intensity: 0.5)
+        let resultPixels = extractPixels(from: result)
+
+        for pixel in resultPixels {
+            XCTAssertEqual(pixel.r, 128, accuracy: 1)
+            XCTAssertEqual(pixel.g, 128, accuracy: 1)
+            XCTAssertEqual(pixel.b, 128, accuracy: 1)
+        }
+    }
+
+    // MARK: - Edge Cases
+
+    func test_lutRenderer_smallImage() throws {
+        let image = makeSolidImage(width: 1, height: 1, r: 100, g: 150, b: 200)
+        let lut = makeIdentityLUT(size: 2)
+
+        let result = try LUTRenderer.apply(to: image, lut: lut, intensity: 1.0)
+        let resultPixels = extractPixels(from: result)
+
+        XCTAssertEqual(resultPixels.count, 1)
+        XCTAssertEqual(resultPixels[0].r, 100, accuracy: 1)
+        XCTAssertEqual(resultPixels[0].g, 150, accuracy: 1)
+        XCTAssertEqual(resultPixels[0].b, 200, accuracy: 1)
+        XCTAssertEqual(resultPixels[0].a, 255)
+    }
+
+    func test_lutRenderer_clampsBelowDomainMin() throws {
+        let image = makeSolidImage(width: 1, height: 1, r: 0, g: 128, b: 128)
+        let lut = makeRampLUT(
+            size: 2,
+            low: 0.4,
+            high: 1.0,
+            domainMin: SIMD3<Float>(repeating: 0.5),
+            domainMax: SIMD3<Float>(repeating: 1.0)
+        )
+
+        let result = try LUTRenderer.apply(to: image, lut: lut, intensity: 1.0)
+        let pixel = try XCTUnwrap(extractPixels(from: result).first)
+
+        XCTAssertEqual(pixel.r, 102, accuracy: 1)
+        XCTAssertEqual(pixel.g, 102, accuracy: 1)
+        XCTAssertEqual(pixel.b, 102, accuracy: 1)
+    }
+
+    func test_lutRenderer_33sizeLUT() throws {
+        let image = makeGradientImage(width: 16, height: 16)
+        let lut = makeIdentityLUT(size: 33)
+
+        let result = try LUTRenderer.apply(to: image, lut: lut, intensity: 1.0)
+        let originalPixels = extractPixels(from: image)
+        let resultPixels = extractPixels(from: result)
+
+        XCTAssertEqual(originalPixels.count, resultPixels.count)
+        for (orig, res) in zip(originalPixels, resultPixels) {
+            XCTAssertEqual(res.r, orig.r, accuracy: 2)
+            XCTAssertEqual(res.g, orig.g, accuracy: 2)
+            XCTAssertEqual(res.b, orig.b, accuracy: 2)
+        }
+    }
+
+    func test_lutMetalRenderer_matchesCPU_identityLUT() throws {
+        guard LUTMetalRenderer.isAvailable else {
+            throw XCTSkip("Metal unavailable on this test host")
+        }
+
+        let image = makeGradientImage(width: 16, height: 16)
+        let lut = makeIdentityLUT(size: 33)
+
+        let cpu = try LUTRenderer.applyCPU(to: image, lut: lut, intensity: 1.0)
+        let gpu = try XCTUnwrap(LUTMetalRenderer.apply(to: image, lut: lut, intensity: 1.0))
+
+        let cpuPixels = extractPixels(from: cpu)
+        let gpuPixels = extractPixels(from: gpu)
+
+        XCTAssertEqual(cpuPixels.count, gpuPixels.count)
+        for (c, g) in zip(cpuPixels, gpuPixels) {
+            XCTAssertEqual(g.r, c.r)
+            XCTAssertEqual(g.g, c.g)
+            XCTAssertEqual(g.b, c.b)
+            XCTAssertEqual(g.a, c.a)
+        }
+    }
+
+    func test_lutMetalRenderer_matchesCPU_nonDefaultDomain() throws {
+        guard LUTMetalRenderer.isAvailable else {
+            throw XCTSkip("Metal unavailable on this test host")
+        }
+
+        let image = makeSolidImage(width: 8, height: 8, r: 0, g: 128, b: 255)
+        let lut = makeRampLUT(
+            size: 2,
+            low: 0.25,
+            high: 0.9,
+            domainMin: SIMD3<Float>(0.2, 0.3, 0.4),
+            domainMax: SIMD3<Float>(0.8, 0.9, 1.0)
+        )
+
+        let cpu = try LUTRenderer.applyCPU(to: image, lut: lut, intensity: 1.0)
+        let gpu = try XCTUnwrap(LUTMetalRenderer.apply(to: image, lut: lut, intensity: 1.0))
+
+        let cpuPixels = extractPixels(from: cpu)
+        let gpuPixels = extractPixels(from: gpu)
+
+        XCTAssertEqual(cpuPixels.count, gpuPixels.count)
+        for (c, g) in zip(cpuPixels, gpuPixels) {
+            XCTAssertEqual(g.r, c.r)
+            XCTAssertEqual(g.g, c.g)
+            XCTAssertEqual(g.b, c.b)
+            XCTAssertEqual(g.a, c.a)
+        }
+    }
+
+    func test_lutMetalRenderer_matchesCPU_partialIntensity() throws {
+        guard LUTMetalRenderer.isAvailable else {
+            throw XCTSkip("Metal unavailable on this test host")
+        }
+
+        let image = makeSolidImage(width: 8, height: 8, r: 64, g: 128, b: 192)
+        let lut = makeRampLUT(
+            size: 2,
+            low: 0.1,
+            high: 0.95,
+            domainMin: SIMD3<Float>(repeating: 0),
+            domainMax: SIMD3<Float>(repeating: 1)
+        )
+
+        let cpu = try LUTRenderer.applyCPU(to: image, lut: lut, intensity: 0.35)
+        let gpu = try XCTUnwrap(LUTMetalRenderer.apply(to: image, lut: lut, intensity: 0.35))
+
+        let cpuPixels = extractPixels(from: cpu)
+        let gpuPixels = extractPixels(from: gpu)
+
+        XCTAssertEqual(cpuPixels.count, gpuPixels.count)
+        for (c, g) in zip(cpuPixels, gpuPixels) {
+            XCTAssertEqual(g.r, c.r)
+            XCTAssertEqual(g.g, c.g)
+            XCTAssertEqual(g.b, c.b)
+            XCTAssertEqual(g.a, c.a)
+        }
+    }
+
+    func test_lutRenderer_publicApply_matchesCPU_withPreviewBaseDimension() throws {
+        guard LUTMetalRenderer.isAvailable else {
+            throw XCTSkip("Metal unavailable on this test host")
+        }
+
+        let image = makeGradientImage(width: 64, height: 64)
+        let lut = makeRampLUT(
+            size: 2,
+            low: 0.15,
+            high: 0.85,
+            domainMin: SIMD3<Float>(repeating: 0),
+            domainMax: SIMD3<Float>(repeating: 1)
+        )
+
+        let cpu = try LUTRenderer.applyCPU(to: image, lut: lut, intensity: 0.6, previewBaseDimension: 32)
+        let gpu = try LUTRenderer.apply(to: image, lut: lut, intensity: 0.6, previewBaseDimension: 32)
+
+        let cpuPixels = extractPixels(from: cpu)
+        let gpuPixels = extractPixels(from: gpu)
+
+        XCTAssertEqual(cpuPixels.count, gpuPixels.count)
+        for (c, g) in zip(cpuPixels, gpuPixels) {
+            XCTAssertEqual(g.r, c.r)
+            XCTAssertEqual(g.g, c.g)
+            XCTAssertEqual(g.b, c.b)
+            XCTAssertEqual(g.a, c.a)
+        }
+    }
+
+    func test_lutMetalRenderer_reusesPreviewInputTextureForRepeatedPreviewRenders() throws {
+        guard LUTMetalRenderer.isAvailable else {
+            throw XCTSkip("Metal unavailable on this test host")
+        }
+
+        let image = makeGradientImage(width: 16, height: 16)
+        let lut = makeIdentityLUT(size: 33)
+        let previewKey = LUTMetalRenderer.PreviewInputCacheKey(
+            sourceImageIdentity: UInt(bitPattern: Unmanaged.passUnretained(image).toOpaque()),
+            width: image.width,
+            height: image.height
+        )
+
+        let first = try XCTUnwrap(
+            LUTMetalRenderer.applyProfiled(
+                to: image,
+                lut: lut,
+                intensity: 1.0,
+                previewInputKey: previewKey
+            )
+        )
+        let second = try XCTUnwrap(
+            LUTMetalRenderer.applyProfiled(
+                to: image,
+                lut: lut,
+                intensity: 1.0,
+                previewInputKey: previewKey
+            )
+        )
+
+        XCTAssertFalse(first.timings.reusedInputTexture)
+        XCTAssertTrue(second.timings.reusedInputTexture)
+        let firstPixels = extractPixels(from: first.image)
+        let secondPixels = extractPixels(from: second.image)
+        XCTAssertEqual(firstPixels.count, secondPixels.count)
+        for (firstPixel, secondPixel) in zip(firstPixels, secondPixels) {
+            XCTAssertEqual(firstPixel.r, secondPixel.r)
+            XCTAssertEqual(firstPixel.g, secondPixel.g)
+            XCTAssertEqual(firstPixel.b, secondPixel.b)
+            XCTAssertEqual(firstPixel.a, secondPixel.a)
+        }
+    }
+}
