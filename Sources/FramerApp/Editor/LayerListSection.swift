@@ -2840,7 +2840,7 @@ struct ShaderLayerControls: View {
     @ViewBuilder
     private func styleSliderRows(
         _ rows: [(String, Double, ClosedRange<Double>, Double)],
-        onSet: @escaping (String, Double) -> Void
+        onSet: @escaping @MainActor @Sendable (String, Double) -> Void
     ) -> some View {
         ForEach(rows, id: \.0) { row in
             sliderRow(
@@ -2861,7 +2861,7 @@ struct ShaderLayerControls: View {
         value: Double,
         range: ClosedRange<Double>,
         step: Double,
-        onSet: @escaping @Sendable (Double) -> Void
+        onSet: @escaping @MainActor @Sendable (Double) -> Void
     ) -> some View {
         VStack(alignment: .leading, spacing: 4) {
             HStack {
