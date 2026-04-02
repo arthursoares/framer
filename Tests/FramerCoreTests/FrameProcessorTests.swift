@@ -134,9 +134,17 @@ final class FrameProcessorTests: XCTestCase {
         config.layers = [
             .shader(
                 ShaderLayerParams(
-                    style: .crimewave,
+                    style: .ascii,
                     intensity: 1.0,
-                    params: .crimewave(CrimewaveShaderParams())
+                    params: .ascii(
+                        ASCIIShaderParams(
+                            cellSize: 8,
+                            edgeBias: 0.45,
+                            foreground: .white,
+                            background: .black,
+                            invert: false
+                        )
+                    )
                 )
             )
         ]
