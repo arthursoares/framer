@@ -63,6 +63,37 @@ final class ShaderRendererTests: XCTestCase {
         return colors.count
     }
 
+
+    func pixelData(for image: CGImage) -> [UInt8] {
+        let width = image.width
+        let height = image.height
+        let colorSpace = CGColorSpaceCreateDeviceRGB()
+        let bitmapInfo = CGImageAlphaInfo.premultipliedLast.rawValue
+        let ctx = CGContext(
+            data: nil,
+            width: width,
+            height: height,
+            bitsPerComponent: 8,
+            bytesPerRow: width * 4,
+            space: colorSpace,
+            bitmapInfo: bitmapInfo
+        )!
+        ctx.draw(image, in: CGRect(x: 0, y: 0, width: width, height: height))
+
+        let count = width * height * 4
+        let data = ctx.data!.bindMemory(to: UInt8.self, capacity: count)
+        return Array(UnsafeBufferPointer(start: data, count: count))
+    }
+
+    func packedColorAt(_ image: CGImage, x: Int, y: Int) -> UInt32 {
+        let pixels = pixelData(for: image)
+        let idx = (y * image.width + x) * 4
+        return (UInt32(pixels[idx]) << 24)
+            | (UInt32(pixels[idx + 1]) << 16)
+            | (UInt32(pixels[idx + 2]) << 8)
+            | UInt32(pixels[idx + 3])
+    }
+
     func test_asciiShader_preservesDimensions() throws {
         let image = makeColorGridImage(width: 37, height: 23)
         let params = ShaderLayerParams(
@@ -75,6 +106,49 @@ final class ShaderRendererTests: XCTestCase {
 
         XCTAssertEqual(result.width, image.width)
         XCTAssertEqual(result.height, image.height)
+    }
+
+
+
+    func test_asciiShader_quantizesIntoVisibleCells() throws {
+        let image = makeColorGridImage(width: 24, height: 24)
+        let params = ShaderLayerParams(
+            style: .ascii,
+            intensity: 1.0,
+            params: .ascii(ASCIIShaderParams(cellSize: 6, edgeBias: 0.0, foreground: .white, background: .black, invert: false))
+        )
+
+        let result = try ShaderRenderer.apply(to: image, params: params)
+
+        XCTAssertEqual(packedColorAt(result, x: 1, y: 1), packedColorAt(result, x: 4, y: 4))
+        XCTAssertEqual(packedColorAt(result, x: 7, y: 1), packedColorAt(result, x: 10, y: 4))
+
+        var blockColors = Set<UInt32>()
+        for y in stride(from: 1, to: result.height, by: 6) {
+            for x in stride(from: 1, to: result.width, by: 6) {
+                blockColors.insert(packedColorAt(result, x: x, y: y))
+            }
+        }
+        XCTAssertGreaterThan(blockColors.count, 1)
+    }
+
+    func test_asciiShader_invertChangesOutput() throws {
+        let image = makeColorGridImage(width: 24, height: 24)
+        let normalParams = ShaderLayerParams(
+            style: .ascii,
+            intensity: 1.0,
+            params: .ascii(ASCIIShaderParams(cellSize: 6, edgeBias: 0.3, foreground: .white, background: .black, invert: false))
+        )
+        let invertedParams = ShaderLayerParams(
+            style: .ascii,
+            intensity: 1.0,
+            params: .ascii(ASCIIShaderParams(cellSize: 6, edgeBias: 0.3, foreground: .white, background: .black, invert: true))
+        )
+
+        let normal = try ShaderRenderer.apply(to: image, params: normalParams)
+        let inverted = try ShaderRenderer.apply(to: image, params: invertedParams)
+
+        XCTAssertNotEqual(pixelData(for: normal), pixelData(for: inverted))
     }
 
     func test_distantPastShader_reducesColorVariety() throws {

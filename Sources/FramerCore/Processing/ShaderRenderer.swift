@@ -7,7 +7,7 @@ public enum ShaderRenderer {
 
         switch params.params {
         case .ascii:
-            return image
+            return try ShaderASCIIRenderer.apply(to: image, params: params)
         case .distantPast(let shaderParams):
             return try applyDistantPast(to: image, params: shaderParams, intensity: params.intensity)
         case .crimewave, .narc, .shiba, .pixelSort:
