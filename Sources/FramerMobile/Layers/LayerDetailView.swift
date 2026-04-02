@@ -46,12 +46,27 @@ struct LayerDetailView: View {
                     Text(layer.label)
                         .font(AppFont.body(22, weight: .bold))
                         .foregroundStyle(Color.text0)
+
+                    Spacer()
+
+                    Button {
+                        layer.isEnabled.toggle()
+                    } label: {
+                        Image(systemName: layer.isEnabled ? "eye" : "eye.slash")
+                            .font(.system(size: 15, weight: .semibold))
+                            .foregroundStyle(layer.isEnabled ? Color.text1 : Color.text3)
+                            .frame(width: 36, height: 36)
+                            .background(Color.surface3, in: RoundedRectangle(cornerRadius: CornerRadius.md))
+                    }
+                    .buttonStyle(.plain)
                 }
                 .padding(.horizontal, 16)
 
                 // Layer-specific controls
                 layerControls
                     .padding(.horizontal, 16)
+                    .opacity(layer.isEnabled ? 1.0 : 0.55)
+                    .allowsHitTesting(layer.isEnabled)
 
                 Spacer(minLength: 20)
 
@@ -128,6 +143,8 @@ struct LayerDetailView: View {
             DitherControls(params: params) { layer = .dither($0) }
         case .overlay(let params):
             OverlayControls(params: params) { layer = .overlay($0) }
+        case .lut(let params):
+            LUTControls(params: params) { layer = .lut($0) }
         }
     }
 }
@@ -903,6 +920,151 @@ private struct FillPicker: View {
                         .frame(width: 40, alignment: .trailing)
                 }
             }
+        }
+    }
+}
+
+// MARK: - LUT Controls
+
+private struct LUTControls: View {
+    var params: LUTLayerParams
+    var onChange: (LUTLayerParams) -> Void
+
+    @State private var availableLUTs: [LUTInfo] = []
+    @State private var showingPicker = false
+    @State private var showingError = false
+    @State private var errorMessage = ""
+
+    var body: some View {
+        VStack(spacing: 8) {
+            if availableLUTs.isEmpty {
+                emptyState
+            } else {
+                ControlRow(label: "LUT") {
+                    Picker("", selection: Binding(
+                        get: { params.lutFileName },
+                        set: { newValue in
+                            var p = params
+                            p.lutFileName = newValue
+                            if let lut = availableLUTs.first(where: { $0.id == newValue }) {
+                                p.lutName = lut.displayName
+                            }
+                            onChange(p)
+                        }
+                    )) {
+                        Text("None").tag("")
+                        ForEach(availableLUTs, id: \.id) { lut in
+                            Text(lut.displayName).tag(lut.id)
+                        }
+                    }
+                    .pickerStyle(.menu)
+                }
+            }
+
+            ControlRow(label: "Intensity") {
+                HStack {
+                    Slider(value: Binding(
+                        get: { params.intensity },
+                        set: { var p = params; p.intensity = $0; onChange(p) }
+                    ), in: 0...1)
+                    Text("\(Int(params.intensity * 100))%")
+                        .font(AppFont.mono(12))
+                        .frame(width: 50, alignment: .trailing)
+                }
+            }
+
+            Button {
+                showingPicker = true
+            } label: {
+                HStack {
+                    Image(systemName: "square.and.arrow.down")
+                    Text("Import LUT")
+                }
+                .font(AppFont.controlLabel)
+                .foregroundStyle(Color.accent)
+            }
+            .sheet(isPresented: $showingPicker) {
+                DocumentPickerView { url in
+                    importLUT(from: url)
+                }
+            }
+        }
+        .onAppear {
+            loadLUTs()
+        }
+        .alert("Import Error", isPresented: $showingError) {
+            Button("OK", role: .cancel) {}
+        } message: {
+            Text(errorMessage)
+        }
+    }
+
+    private var emptyState: some View {
+        VStack(spacing: 8) {
+            Image(systemName: "photo.on.rectangle.angled")
+                .font(.system(size: 32))
+                .foregroundStyle(Color.text3)
+            Text("No LUTs available")
+                .font(AppFont.controlLabel)
+                .foregroundStyle(Color.text3)
+            Text("Import .cube files to get started")
+                .font(.caption)
+                .foregroundStyle(Color.text3)
+        }
+        .frame(maxWidth: .infinity)
+        .padding(.vertical, 16)
+    }
+
+    private func loadLUTs() {
+        availableLUTs = LUTProvider.availableLUTs()
+    }
+
+    private func importLUT(from url: URL) {
+        do {
+            let info = try LUTProvider.importLUT(from: url)
+            LUTProvider.invalidateCache()
+            loadLUTs()
+            var p = params
+            p.lutName = info.displayName
+            p.lutFileName = info.id
+            onChange(p)
+        } catch {
+            errorMessage = "Failed to import LUT: \(error.localizedDescription)"
+            showingError = true
+        }
+    }
+}
+
+// MARK: - Document Picker
+
+private struct DocumentPickerView: UIViewControllerRepresentable {
+    var onPick: (URL) -> Void
+
+    func makeUIViewController(context: Context) -> UIDocumentPickerViewController {
+        let picker = UIDocumentPickerViewController(forOpeningContentTypes: [.data])
+        picker.allowsMultipleSelection = false
+        picker.delegate = context.coordinator
+        return picker
+    }
+
+    func updateUIViewController(_ uiViewController: UIDocumentPickerViewController, context: Context) {}
+
+    fileprivate func makeCoordinator() -> Coordinator {
+        Coordinator(onPick: onPick)
+    }
+
+    fileprivate final class Coordinator: NSObject, UIDocumentPickerDelegate {
+        var onPick: (URL) -> Void
+
+        init(onPick: @escaping (URL) -> Void) {
+            self.onPick = onPick
+        }
+
+        func documentPicker(_ controller: UIDocumentPickerViewController, didPickDocumentsAt urls: [URL]) {
+            guard let url = urls.first else { return }
+            guard url.startAccessingSecurityScopedResource() else { return }
+            defer { url.stopAccessingSecurityScopedResource() }
+            onPick(url)
         }
     }
 }

@@ -61,6 +61,7 @@ public enum BorderRenderer {
 
         // Memoize dominant color: extract once if any layer needs it
         let needsDominant = layers.contains { layer in
+            guard layer.isEnabled else { return false }
             switch layer {
             case .padding(let p):
                 return p.fill.isDominant
@@ -78,6 +79,11 @@ public enum BorderRenderer {
         while i < layers.count {
             try Task.checkCancellation()
             let layer = layers[i]
+
+            guard layer.isEnabled else {
+                i += 1
+                continue
+            }
 
             // Phase 4A: coalesce consecutive border/padding layers into single context
             if case .border = layer, canCoalesce(layers, from: i) {
@@ -181,6 +187,18 @@ public enum BorderRenderer {
                     i += 1; continue
                 }
                 current = cropped
+
+            case .lut(let params):
+                guard !params.lutFileName.isEmpty,
+                      let lut = LUTProvider.loadLUT(named: params.lutFileName) else {
+                    i += 1; continue
+                }
+                current = try LUTRenderer.apply(
+                    to: current,
+                    lut: lut,
+                    intensity: params.intensity,
+                    previewBaseDimension: previewBaseDimension
+                )
             }
             i += 1
         }
@@ -247,6 +265,7 @@ public enum BorderRenderer {
         guard start + 1 < layers.count else { return false }
         var count = 0
         for j in start..<layers.count {
+            guard layers[j].isEnabled else { return count >= 2 }
             switch layers[j] {
             case .border:
                 count += 1
@@ -284,6 +303,7 @@ public enum BorderRenderer {
         var virtualW = image.width
         var virtualH = image.height
         while j < layers.count {
+            guard layers[j].isEnabled else { break }
             switch layers[j] {
             case .border(let p):
                 let t = p.thickness.resolved(relativeTo: min(virtualW, virtualH))
@@ -304,6 +324,7 @@ public enum BorderRenderer {
             }
             // Check if next layer continues the run
             if j + 1 < layers.count {
+                guard layers[j + 1].isEnabled else { break }
                 switch layers[j + 1] {
                 case .border, .padding: j += 1; continue
                 default: break

@@ -134,6 +134,37 @@ swift test
 xcodegen generate
 ```
 
+## LUT Benchmark
+
+The CLI includes a focused LUT benchmark command for comparing the CPU reference path against the real automatic render path used by the app and CLI.
+
+```bash
+swift run framer benchmark lut \
+  --input docs/sample.jpg \
+  --lut assets/luts/ANDP-KodakPortra800-32bit.CUBE \
+  --preview-base 1200 \
+  --iterations 10 \
+  --warmup 2
+```
+
+Measured on `2026-04-01` with `docs/sample.jpg` (`3000x1987`) and `assets/luts/ANDP-KodakPortra800-32bit.CUBE`:
+
+- Preview mode (`--preview-base 1200`)
+  - CPU: `233.04 ms`
+  - Auto(Metal): `32.44 ms`
+  - Speedup: `7.18x`
+- Full export mode (no `--preview-base`)
+  - CPU: `1964.00 ms`
+  - Auto(Metal): `78.16 ms`
+  - Speedup: `25.13x`
+
+The automatic path uses Metal when available and falls back to CPU otherwise.
+
+Next LUT performance step:
+- Preview still blocks on GPU readback and `CGImage` reconstruction after the Metal pass.
+- The next high-impact optimization is to present preview output closer to a Metal texture so the preview path no longer has to read pixels back to CPU on every LUT change.
+- That work is intentionally deferred because it touches preview/UI architecture, not just LUT internals.
+
 ## License
 
 This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.

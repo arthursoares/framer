@@ -5,6 +5,8 @@ import ImageIO
 /// Orchestrates the full image processing pipeline.
 /// Runs on a background actor to keep the main thread free.
 public actor FrameProcessor {
+    public static let presetThumbnailMaxDimension = 320
+
     public init() {}
 
     // MARK: - Preview (downscaled, no disk I/O)
@@ -37,6 +39,19 @@ public actor FrameProcessor {
         }
 
         return borderResult.image
+    }
+
+    public func presetThumbnailCGImage(
+        for url: URL,
+        config: ProcessingConfig,
+        rotation: Int = 0
+    ) throws -> sending CGImage {
+        try previewCGImage(
+            for: url,
+            config: config,
+            rotation: rotation,
+            maxDimension: Self.presetThumbnailMaxDimension
+        )
     }
 
     // MARK: - Full Export

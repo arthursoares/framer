@@ -26,6 +26,7 @@ public enum YAMLConfig {
 
     struct YAMLLayerSchema: Codable {
         var type: String
+        var enabled: Bool?
         var thickness: String?
         var color: String?
         var fill: String?
@@ -66,6 +67,9 @@ public enum YAMLConfig {
         var ratio: String?
         var offset_x: Double?
         var offset_y: Double?
+        var lut_name: String?
+        var lut_filename: String?
+        var intensity: Double?
     }
 
     public static func encode(_ config: ProcessingConfig) throws -> String {
@@ -184,6 +188,7 @@ public enum YAMLConfig {
         switch layer {
         case .border(let p):
             var schema = YAMLLayerSchema(type: "border")
+            if !p.enabled { schema.enabled = false }
             switch p.thickness {
             case .pixels(let px): schema.thickness = String(px)
             case .percent(let pct): schema.thickness = "\(pct)%"
@@ -193,12 +198,14 @@ public enum YAMLConfig {
 
         case .padding(let p):
             var schema = YAMLLayerSchema(type: "padding")
+            if !p.enabled { schema.enabled = false }
             schema.thickness = String(p.thickness)
             encodeFill(p.fill, into: &schema)
             return schema
 
         case .canvas(let p):
             var schema = YAMLLayerSchema(type: "canvas")
+            if !p.enabled { schema.enabled = false }
             schema.width = p.width
             schema.height = p.height
             encodeFill(p.fill, into: &schema)
@@ -206,12 +213,14 @@ public enum YAMLConfig {
 
         case .resize(let p):
             var schema = YAMLLayerSchema(type: "resize")
+            if !p.enabled { schema.enabled = false }
             schema.max_width = p.maxWidth
             schema.max_height = p.maxHeight
             return schema
 
         case .overlay(let p):
             var schema = YAMLLayerSchema(type: "overlay")
+            if !p.enabled { schema.enabled = false }
             schema.overlay_name = p.overlayName
             schema.overlay_kind = p.kind.rawValue
             schema.blend_mode = p.blendMode.rawValue
@@ -220,11 +229,13 @@ public enum YAMLConfig {
 
         case .orientation(let p):
             var schema = YAMLLayerSchema(type: "orientation")
+            if !p.enabled { schema.enabled = false }
             schema.orientation = p.target.rawValue
             return schema
 
         case .caption(let p):
             var schema = YAMLLayerSchema(type: "caption")
+            if !p.enabled { schema.enabled = false }
             switch p.mode {
             case .template(let t):
                 schema.caption_mode = "template"
@@ -257,6 +268,7 @@ public enum YAMLConfig {
 
         case .dither(let p):
             var schema = YAMLLayerSchema(type: "dither")
+            if !p.enabled { schema.enabled = false }
             schema.algorithm = p.algorithm.rawValue
             schema.bayer_level = p.bayerLevel
             schema.pixel_scale = p.pixelScale
@@ -283,9 +295,18 @@ public enum YAMLConfig {
 
         case .aspectRatio(let p):
             var schema = YAMLLayerSchema(type: "aspect_ratio")
+            if !p.enabled { schema.enabled = false }
             schema.ratio = "\(p.ratioWidth):\(p.ratioHeight)"
             if p.offsetX != 0 { schema.offset_x = p.offsetX }
             if p.offsetY != 0 { schema.offset_y = p.offsetY }
+            return schema
+
+        case .lut(let p):
+            var schema = YAMLLayerSchema(type: "lut")
+            if !p.enabled { schema.enabled = false }
+            schema.lut_name = p.lutName
+            schema.lut_filename = p.lutFileName
+            schema.intensity = p.intensity
             return schema
         }
     }
@@ -311,20 +332,22 @@ public enum YAMLConfig {
     }
 
     private static func decodeLayers(_ schema: YAMLLayerSchema) -> CompositionLayer? {
+        let enabled = schema.enabled ?? true
         switch schema.type {
         case "border":
             let thickness = schema.thickness.map { BorderSize(string: $0) } ?? .pixels(20)
             let color = schema.color.flatMap { try? CodableColor(hex: $0) } ?? .white
-            return .border(BorderLayerParams(thickness: thickness, color: color))
+            return .border(BorderLayerParams(enabled: enabled, thickness: thickness, color: color))
 
         case "padding":
             let thickness = schema.thickness.flatMap { Int($0) } ?? 150
             let fill = decodeFill(schema)
-            return .padding(PaddingLayerParams(thickness: thickness, fill: fill))
+            return .padding(PaddingLayerParams(enabled: enabled, thickness: thickness, fill: fill))
 
         case "canvas":
             let fill = decodeFill(schema)
             return .canvas(CanvasLayerParams(
+                enabled: enabled,
                 width: schema.width ?? 1080,
                 height: schema.height ?? 1350,
                 fill: fill
@@ -332,6 +355,7 @@ public enum YAMLConfig {
 
         case "resize":
             return .resize(ResizeLayerParams(
+                enabled: enabled,
                 maxWidth: schema.max_width ?? 1000,
                 maxHeight: schema.max_height ?? 1000
             ))
@@ -350,6 +374,7 @@ public enum YAMLConfig {
                 blendMode = nil
             }
             return .overlay(OverlayLayerParams(
+                enabled: enabled,
                 overlayName: schema.overlay_name ?? "",
                 kind: kind,
                 blendMode: blendMode,
@@ -363,7 +388,7 @@ public enum YAMLConfig {
             } else {
                 target = .landscape
             }
-            return .orientation(OrientationLayerParams(target: target))
+            return .orientation(OrientationLayerParams(enabled: enabled, target: target))
 
         case "caption":
             let mode: CaptionMode
@@ -382,6 +407,7 @@ public enum YAMLConfig {
                 fontSize = .auto
             }
             return .caption(CaptionLayerParams(
+                enabled: enabled,
                 mode: mode,
                 fontName: schema.font_name ?? "Courier New",
                 fontSize: fontSize,
@@ -419,6 +445,7 @@ public enum YAMLConfig {
                 colorMode = .bw
             }
             return .dither(DitherLayerParams(
+                enabled: enabled,
                 algorithm: algo,
                 colorMode: colorMode,
                 bayerLevel: schema.bayer_level ?? 2,
@@ -431,10 +458,19 @@ public enum YAMLConfig {
         case "aspect_ratio":
             let (rw, rh) = parseRatio(schema.ratio ?? "1:1")
             return .aspectRatio(AspectRatioLayerParams(
+                enabled: enabled,
                 ratioWidth: rw,
                 ratioHeight: rh,
                 offsetX: schema.offset_x ?? 0,
                 offsetY: schema.offset_y ?? 0
+            ))
+
+        case "lut":
+            return .lut(LUTLayerParams(
+                enabled: enabled,
+                lutName: schema.lut_name ?? "",
+                lutFileName: schema.lut_filename ?? "",
+                intensity: schema.intensity ?? 1.0
             ))
 
         default:
