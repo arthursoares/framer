@@ -98,6 +98,15 @@ public enum YAMLConfig {
         var shader_amount: Double?
         var shader_palette_depth: Int?
         var shader_fade: Double?
+        var shader_curvature: Double?
+        var shader_line_size: Int?
+        var shader_line_strength: Double?
+        var shader_brightness: Double?
+        var shader_vignette: Double?
+        var shader_dot_size: Double?
+        var shader_monochrome: Bool?
+        var shader_kernel_size: Int?
+        var shader_sharpness: Double?
     }
 
     public static func encode(_ config: ProcessingConfig) throws -> String {
@@ -577,6 +586,19 @@ public enum YAMLConfig {
             schema.shader_fade = p.fade
             schema.shader_softness = p.softness
             schema.shader_grain = p.grain
+        case .crt(let p):
+            schema.shader_curvature = p.curvature
+            schema.shader_line_size = p.lineSize
+            schema.shader_line_strength = p.lineStrength
+            schema.shader_brightness = p.brightness
+            schema.shader_vignette = p.vignette
+        case .halftone(let p):
+            schema.shader_dot_size = p.dotSize
+            schema.shader_contrast = p.contrast
+            if p.monochrome { schema.shader_monochrome = true }
+        case .kuwahara(let p):
+            schema.shader_kernel_size = p.kernelSize
+            schema.shader_sharpness = p.sharpness
         }
     }
 
@@ -649,6 +671,25 @@ public enum YAMLConfig {
                 fade: schema.shader_fade ?? 0.3,
                 softness: schema.shader_softness ?? 0.2,
                 grain: schema.shader_grain ?? 0.15
+            ))
+        case .crt:
+            return .crt(CRTShaderParams(
+                curvature: schema.shader_curvature ?? 6.0,
+                lineSize: schema.shader_line_size ?? 1,
+                lineStrength: schema.shader_line_strength ?? 1.0,
+                brightness: schema.shader_brightness ?? 0.0,
+                vignette: schema.shader_vignette ?? 30.0
+            ))
+        case .halftone:
+            return .halftone(HalftoneShaderParams(
+                dotSize: schema.shader_dot_size ?? 1.0,
+                contrast: schema.shader_contrast ?? 1.0,
+                monochrome: schema.shader_monochrome ?? false
+            ))
+        case .kuwahara:
+            return .kuwahara(KuwaharaShaderParams(
+                kernelSize: schema.shader_kernel_size ?? 4,
+                sharpness: schema.shader_sharpness ?? 8.0
             ))
         }
     }

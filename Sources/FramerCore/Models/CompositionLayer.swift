@@ -782,6 +782,9 @@ public enum ShaderStyle: String, Codable, CaseIterable, Sendable {
     case shiba
     case pixelSort
     case distantPast
+    case crt
+    case halftone
+    case kuwahara
 
     public var label: String {
         switch self {
@@ -791,6 +794,9 @@ public enum ShaderStyle: String, Codable, CaseIterable, Sendable {
         case .shiba: return "Shiba"
         case .pixelSort: return "Pixel Sort"
         case .distantPast: return "Distant Past"
+        case .crt: return "CRT"
+        case .halftone: return "Halftone"
+        case .kuwahara: return "Kuwahara"
         }
     }
 }
@@ -1024,6 +1030,57 @@ public struct DistantPastShaderParams: Codable, Equatable, Sendable {
     }
 }
 
+public struct CRTShaderParams: Codable, Equatable, Sendable {
+    public var curvature: Double
+    public var lineSize: Int
+    public var lineStrength: Double
+    public var brightness: Double
+    public var vignette: Double
+
+    public init(
+        curvature: Double = 6.0,
+        lineSize: Int = 1,
+        lineStrength: Double = 1.0,
+        brightness: Double = 0.0,
+        vignette: Double = 30.0
+    ) {
+        self.curvature = curvature
+        self.lineSize = lineSize
+        self.lineStrength = lineStrength
+        self.brightness = brightness
+        self.vignette = vignette
+    }
+}
+
+public struct HalftoneShaderParams: Codable, Equatable, Sendable {
+    public var dotSize: Double
+    public var contrast: Double
+    public var monochrome: Bool
+
+    public init(
+        dotSize: Double = 1.0,
+        contrast: Double = 1.0,
+        monochrome: Bool = false
+    ) {
+        self.dotSize = dotSize
+        self.contrast = contrast
+        self.monochrome = monochrome
+    }
+}
+
+public struct KuwaharaShaderParams: Codable, Equatable, Sendable {
+    public var kernelSize: Int
+    public var sharpness: Double
+
+    public init(
+        kernelSize: Int = 4,
+        sharpness: Double = 8.0
+    ) {
+        self.kernelSize = kernelSize
+        self.sharpness = sharpness
+    }
+}
+
 public enum ShaderStyleParams: Codable, Equatable, Sendable {
     case ascii(ASCIIShaderParams)
     case crimewave(CrimewaveShaderParams)
@@ -1031,6 +1088,9 @@ public enum ShaderStyleParams: Codable, Equatable, Sendable {
     case shiba(ShibaShaderParams)
     case pixelSort(PixelSortShaderParams)
     case distantPast(DistantPastShaderParams)
+    case crt(CRTShaderParams)
+    case halftone(HalftoneShaderParams)
+    case kuwahara(KuwaharaShaderParams)
 
     private enum CodingKeys: String, CodingKey {
         case type, params
@@ -1044,6 +1104,9 @@ public enum ShaderStyleParams: Codable, Equatable, Sendable {
         case .shiba: return .shiba
         case .pixelSort: return .pixelSort
         case .distantPast: return .distantPast
+        case .crt: return .crt
+        case .halftone: return .halftone
+        case .kuwahara: return .kuwahara
         }
     }
 
@@ -1055,6 +1118,9 @@ public enum ShaderStyleParams: Codable, Equatable, Sendable {
         case .shiba: return .shiba(ShibaShaderParams())
         case .pixelSort: return .pixelSort(PixelSortShaderParams())
         case .distantPast: return .distantPast(DistantPastShaderParams())
+        case .crt: return .crt(CRTShaderParams())
+        case .halftone: return .halftone(HalftoneShaderParams())
+        case .kuwahara: return .kuwahara(KuwaharaShaderParams())
         }
     }
 
@@ -1074,6 +1140,12 @@ public enum ShaderStyleParams: Codable, Equatable, Sendable {
             self = .pixelSort(try container.decode(PixelSortShaderParams.self, forKey: .params))
         case "distantPast":
             self = .distantPast(try container.decode(DistantPastShaderParams.self, forKey: .params))
+        case "crt":
+            self = .crt(try container.decode(CRTShaderParams.self, forKey: .params))
+        case "halftone":
+            self = .halftone(try container.decode(HalftoneShaderParams.self, forKey: .params))
+        case "kuwahara":
+            self = .kuwahara(try container.decode(KuwaharaShaderParams.self, forKey: .params))
         default:
             throw DecodingError.dataCorruptedError(
                 forKey: .type, in: container,
@@ -1102,6 +1174,15 @@ public enum ShaderStyleParams: Codable, Equatable, Sendable {
             try container.encode(params, forKey: .params)
         case .distantPast(let params):
             try container.encode("distantPast", forKey: .type)
+            try container.encode(params, forKey: .params)
+        case .crt(let params):
+            try container.encode("crt", forKey: .type)
+            try container.encode(params, forKey: .params)
+        case .halftone(let params):
+            try container.encode("halftone", forKey: .type)
+            try container.encode(params, forKey: .params)
+        case .kuwahara(let params):
+            try container.encode("kuwahara", forKey: .type)
             try container.encode(params, forKey: .params)
         }
     }

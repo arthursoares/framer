@@ -177,7 +177,7 @@ final class FrameProcessorTests: XCTestCase {
         XCTAssertTrue(store.initializeDefaults())
 
         let presets = try store.list().filter { $0.name.hasPrefix("Shader ") }
-        XCTAssertEqual(presets.count, 7)
+        XCTAssertEqual(presets.count, 10)
 
         let processor = FrameProcessor()
         for preset in presets {

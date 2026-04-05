@@ -970,6 +970,12 @@ private struct ShaderControls: View {
                 pixelSortControls(pixelSortParams)
             case .distantPast(let distantPastParams):
                 distantPastControls(distantPastParams)
+            case .crt(let crtParams):
+                crtControls(crtParams)
+            case .halftone(let halftoneParams):
+                halftoneControls(halftoneParams)
+            case .kuwahara(let kuwaharaParams):
+                kuwaharaControls(kuwaharaParams)
             }
         }
     }
@@ -1294,6 +1300,109 @@ private struct ShaderControls: View {
             var updated = pixelSortParams
             updated.amount = value
             onChange(params.withParams(.pixelSort(updated)))
+        }
+    }
+
+    @ViewBuilder
+    private func crtControls(_ crtParams: CRTShaderParams) -> some View {
+        sliderRow(
+            label: "Curvature",
+            value: crtParams.curvature,
+            range: expandedRange(1...10, including: crtParams.curvature),
+            step: 0.5
+        ) { value in
+            var updated = crtParams; updated.curvature = value
+            onChange(params.withParams(.crt(updated)))
+        }
+        sliderRow(
+            label: "Line Size",
+            value: Double(crtParams.lineSize),
+            range: 0...4,
+            step: 1
+        ) { value in
+            var updated = crtParams; updated.lineSize = Int(value.rounded())
+            onChange(params.withParams(.crt(updated)))
+        }
+        sliderRow(
+            label: "Line Strength",
+            value: crtParams.lineStrength,
+            range: expandedRange(0...5, including: crtParams.lineStrength),
+            step: 0.1
+        ) { value in
+            var updated = crtParams; updated.lineStrength = value
+            onChange(params.withParams(.crt(updated)))
+        }
+        sliderRow(
+            label: "Brightness",
+            value: crtParams.brightness,
+            range: expandedRange(-1...1, including: crtParams.brightness),
+            step: 0.05
+        ) { value in
+            var updated = crtParams; updated.brightness = value
+            onChange(params.withParams(.crt(updated)))
+        }
+        sliderRow(
+            label: "Vignette",
+            value: crtParams.vignette,
+            range: expandedRange(1...100, including: crtParams.vignette),
+            step: 1
+        ) { value in
+            var updated = crtParams; updated.vignette = value
+            onChange(params.withParams(.crt(updated)))
+        }
+    }
+
+    @ViewBuilder
+    private func halftoneControls(_ halftoneParams: HalftoneShaderParams) -> some View {
+        sliderRow(
+            label: "Dot Size",
+            value: halftoneParams.dotSize,
+            range: expandedRange(0.1...3, including: halftoneParams.dotSize),
+            step: 0.1
+        ) { value in
+            var updated = halftoneParams; updated.dotSize = value
+            onChange(params.withParams(.halftone(updated)))
+        }
+        sliderRow(
+            label: "Contrast",
+            value: halftoneParams.contrast,
+            range: expandedRange(0.1...3, including: halftoneParams.contrast),
+            step: 0.1
+        ) { value in
+            var updated = halftoneParams; updated.contrast = value
+            onChange(params.withParams(.halftone(updated)))
+        }
+        ControlRow(label: "Monochrome") {
+            Toggle("", isOn: Binding(
+                get: { halftoneParams.monochrome },
+                set: { value in
+                    var updated = halftoneParams; updated.monochrome = value
+                    onChange(params.withParams(.halftone(updated)))
+                }
+            ))
+            .labelsHidden()
+        }
+    }
+
+    @ViewBuilder
+    private func kuwaharaControls(_ kuwaharaParams: KuwaharaShaderParams) -> some View {
+        sliderRow(
+            label: "Kernel Size",
+            value: Double(kuwaharaParams.kernelSize),
+            range: expandedRange(1...15, including: Double(kuwaharaParams.kernelSize)),
+            step: 1
+        ) { value in
+            var updated = kuwaharaParams; updated.kernelSize = Int(value.rounded())
+            onChange(params.withParams(.kuwahara(updated)))
+        }
+        sliderRow(
+            label: "Sharpness",
+            value: kuwaharaParams.sharpness,
+            range: expandedRange(1...16, including: kuwaharaParams.sharpness),
+            step: 0.5
+        ) { value in
+            var updated = kuwaharaParams; updated.sharpness = value
+            onChange(params.withParams(.kuwahara(updated)))
         }
     }
 

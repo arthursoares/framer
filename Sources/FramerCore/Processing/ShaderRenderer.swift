@@ -28,6 +28,12 @@ public enum ShaderRenderer {
             return try applyShiba(to: image, params: shaderParams, intensity: params.intensity)
         case .distantPast(let shaderParams):
             return try applyDistantPast(to: image, params: shaderParams, intensity: params.intensity)
+        case .crt(let shaderParams):
+            return try applyCRT(to: image, params: shaderParams, intensity: params.intensity)
+        case .halftone(let shaderParams):
+            return try applyHalftone(to: image, params: shaderParams, intensity: params.intensity)
+        case .kuwahara(let shaderParams):
+            return try applyKuwahara(to: image, params: shaderParams, intensity: params.intensity)
         }
     }
 
@@ -276,6 +282,264 @@ public enum ShaderRenderer {
         ShaderPrimitives.enforcePremultipliedAlpha(pixels, width: width, height: height)
 
         return try mixStylizedContext(ctx, with: image, intensity: intensity)
+    }
+
+    // MARK: - CRT
+
+    private static func applyCRT(
+        to image: CGImage,
+        params: CRTShaderParams,
+        intensity: Double
+    ) throws -> CGImage {
+        let width = image.width
+        let height = image.height
+        let sourceCtx = try ShaderPrimitives.renderToRGBAContext(image)
+        let outputCtx = try ShaderPrimitives.makeRGBAContext(width: width, height: height)
+        guard let sourceData = sourceCtx.data, let outputData = outputCtx.data else {
+            throw FramerError.invalidImage(URL(fileURLWithPath: ""))
+        }
+        let src = sourceData.bindMemory(to: UInt8.self, capacity: width * height * 4)
+        let dst = outputData.bindMemory(to: UInt8.self, capacity: width * height * 4)
+
+        let curvature = max(1.0, params.curvature)
+        let lineScale = Double(height) / pow(2.0, Double(max(0, min(4, params.lineSize))))
+        let lineStr = max(0, params.lineStrength)
+        let brightnessAdj = params.brightness
+        let vignetteWidth = max(1.0, params.vignette)
+
+        func sampleSource(nx: Double, ny: Double) -> (Double, Double, Double) {
+            let sx = max(0, min(width - 1, Int((nx * Double(width)).rounded(.down))))
+            let sy = max(0, min(height - 1, Int((ny * Double(height)).rounded(.down))))
+            let idx = (sy * width + sx) * 4
+            return (Double(src[idx]) / 255.0, Double(src[idx + 1]) / 255.0, Double(src[idx + 2]) / 255.0)
+        }
+
+        for y in 0..<height {
+            try Task.checkCancellation()
+            let ny = Double(y) / Double(height)
+            for x in 0..<width {
+                let nx = Double(x) / Double(width)
+
+                // Barrel distortion
+                var crtX = nx * 2.0 - 1.0
+                var crtY = ny * 2.0 - 1.0
+                let offsetX = crtY / curvature
+                let offsetY = crtX / curvature
+                crtX += crtX * offsetX * offsetX
+                crtY += crtY * offsetY * offsetY
+                let sampleX = crtX * 0.5 + 0.5
+                let sampleY = crtY * 0.5 + 0.5
+
+                let idx = (y * width + x) * 4
+
+                // Out of bounds = black
+                guard sampleX > 0 && sampleX < 1 && sampleY > 0 && sampleY < 1 else {
+                    dst[idx] = 0; dst[idx + 1] = 0; dst[idx + 2] = 0; dst[idx + 3] = src[idx + 3]
+                    continue
+                }
+
+                var (r, g, b) = sampleSource(nx: sampleX, ny: sampleY)
+
+                // Scanlines — green channel uses sin, red/blue use cos (reference pattern)
+                let scanPhase = ny * lineScale * 2.0
+                g *= (sin(scanPhase) + 1.0) * 0.15 * lineStr + 1.0 + brightnessAdj
+                r *= (cos(scanPhase) + 1.0) * 0.135 * lineStr + 1.0 + brightnessAdj
+                b *= (cos(scanPhase) + 1.0) * 0.135 * lineStr + 1.0 + brightnessAdj
+
+                // Vignette
+                let vigX = vignetteWidth / Double(width)
+                let vigY = vignetteWidth / Double(height)
+                let vx = smoothstep(0, vigX, 1.0 - abs(crtX))
+                let vy = smoothstep(0, vigY, 1.0 - abs(crtY))
+
+                r = max(0, min(1, r)) * vx * vy
+                g = max(0, min(1, g)) * vx * vy
+                b = max(0, min(1, b)) * vx * vy
+
+                dst[idx] = ShaderPrimitives.clampByte(r * 255.0)
+                dst[idx + 1] = ShaderPrimitives.clampByte(g * 255.0)
+                dst[idx + 2] = ShaderPrimitives.clampByte(b * 255.0)
+                dst[idx + 3] = src[idx + 3]
+            }
+        }
+
+        return try mixStylizedContext(outputCtx, with: image, intensity: intensity)
+    }
+
+    @inline(__always)
+    private static func smoothstep(_ edge0: Double, _ edge1: Double, _ x: Double) -> Double {
+        let t = max(0, min(1, (x - edge0) / max(0.0001, edge1 - edge0)))
+        return t * t * (3.0 - 2.0 * t)
+    }
+
+    // MARK: - Halftone
+
+    private static func applyHalftone(
+        to image: CGImage,
+        params: HalftoneShaderParams,
+        intensity: Double
+    ) throws -> CGImage {
+        let width = image.width
+        let height = image.height
+        let ctx = try ShaderPrimitives.renderToRGBAContext(image)
+        let outputCtx = try ShaderPrimitives.makeRGBAContext(width: width, height: height)
+        guard let sourceData = ctx.data, let outputData = outputCtx.data else {
+            throw FramerError.invalidImage(URL(fileURLWithPath: ""))
+        }
+        let src = sourceData.bindMemory(to: UInt8.self, capacity: width * height * 4)
+        let dst = outputData.bindMemory(to: UInt8.self, capacity: width * height * 4)
+
+        let dotSize = max(0.1, params.dotSize)
+        let contrastExp = max(0.1, params.contrast)
+        let wf = Double(width)
+        let hf = Double(height)
+
+        // CMYK rotation angles (reference: cyan 15°, magenta 75°, yellow 0°, black 45°)
+        let cyanAngle = 0.261799
+        let magentaAngle = 1.309
+        let blackAngle = 0.785398
+
+        func halftonePattern(ux: Double, uy: Double, value: Double) -> Double {
+            let pattern = (sin(ux * wf * dotSize) + sin(uy * hf * dotSize)) / 2.0
+            return pattern < pow(max(0, min(1, value)), contrastExp) ? 1.0 : 0.0
+        }
+
+        func rotateUV(ux: Double, uy: Double, angle: Double) -> (Double, Double) {
+            let c = cos(angle), s = sin(angle)
+            return (ux * c - uy * s, ux * s + uy * c)
+        }
+
+        for y in 0..<height {
+            try Task.checkCancellation()
+            let uy = Double(y) / hf
+            for x in 0..<width {
+                let ux = Double(x) / wf
+                let idx = (y * width + x) * 4
+                let r = Double(src[idx]) / 255.0
+                let g = Double(src[idx + 1]) / 255.0
+                let b = Double(src[idx + 2]) / 255.0
+
+                if params.monochrome {
+                    // Simple B&W halftone based on luminance
+                    let lum = 0.299 * r + 0.587 * g + 0.114 * b
+                    let (rx, ry) = rotateUV(ux: ux, uy: uy, angle: blackAngle)
+                    let dot = halftonePattern(ux: rx, uy: ry, value: lum)
+                    let v = ShaderPrimitives.clampByte(dot * 255.0)
+                    dst[idx] = v; dst[idx + 1] = v; dst[idx + 2] = v
+                } else {
+                    // CMYK halftone (reference algorithm)
+                    let k = min(1.0 - r, min(1.0 - g, 1.0 - b))
+                    let invK = 1.0 - k
+                    var c_val = 0.0, m_val = 0.0, y_val = 0.0
+                    if invK > 0.001 {
+                        c_val = (1.0 - r - k) / invK
+                        m_val = (1.0 - g - k) / invK
+                        y_val = (1.0 - b - k) / invK
+                    }
+
+                    let (cux, cuy) = rotateUV(ux: ux, uy: uy, angle: cyanAngle)
+                    let cDot = halftonePattern(ux: cux, uy: cuy, value: c_val)
+
+                    let (mux, muy) = rotateUV(ux: ux, uy: uy, angle: magentaAngle)
+                    let mDot = halftonePattern(ux: mux, uy: muy, value: m_val)
+
+                    let yDot = halftonePattern(ux: ux, uy: uy, value: y_val)
+
+                    let (kux, kuy) = rotateUV(ux: ux, uy: uy, angle: blackAngle)
+                    let kDot = halftonePattern(ux: kux, uy: kuy, value: k)
+
+                    // CMY to RGB: subtract from white, then subtract K
+                    let outR = max(0, min(1, 1.0 - cDot - kDot))
+                    let outG = max(0, min(1, 1.0 - mDot - kDot))
+                    let outB = max(0, min(1, 1.0 - yDot - kDot))
+
+                    dst[idx] = ShaderPrimitives.clampByte(outR * 255.0)
+                    dst[idx + 1] = ShaderPrimitives.clampByte(outG * 255.0)
+                    dst[idx + 2] = ShaderPrimitives.clampByte(outB * 255.0)
+                }
+                dst[idx + 3] = src[idx + 3]
+            }
+        }
+
+        return try mixStylizedContext(outputCtx, with: image, intensity: intensity)
+    }
+
+    // MARK: - Kuwahara
+
+    private static func applyKuwahara(
+        to image: CGImage,
+        params: KuwaharaShaderParams,
+        intensity: Double
+    ) throws -> CGImage {
+        let width = image.width
+        let height = image.height
+        let ctx = try ShaderPrimitives.renderToRGBAContext(image)
+        let outputCtx = try ShaderPrimitives.makeRGBAContext(width: width, height: height)
+        guard let sourceData = ctx.data, let outputData = outputCtx.data else {
+            throw FramerError.invalidImage(URL(fileURLWithPath: ""))
+        }
+        let src = sourceData.bindMemory(to: UInt8.self, capacity: width * height * 4)
+        let dst = outputData.bindMemory(to: UInt8.self, capacity: width * height * 4)
+
+        let radius = max(1, min(15, params.kernelSize))
+
+        // Basic Kuwahara: split neighborhood into 4 quadrants,
+        // pick the quadrant with lowest variance, output its mean color.
+        for y in 0..<height {
+            try Task.checkCancellation()
+            for x in 0..<width {
+                var bestVariance = Double.greatestFiniteMagnitude
+                var bestR = 0.0, bestG = 0.0, bestB = 0.0
+
+                // Four quadrants: top-left, top-right, bottom-left, bottom-right
+                for qy in 0...1 {
+                    for qx in 0...1 {
+                        let startX = qx == 0 ? x - radius : x
+                        let endX = qx == 0 ? x : x + radius
+                        let startY = qy == 0 ? y - radius : y
+                        let endY = qy == 0 ? y : y + radius
+
+                        var sumR = 0.0, sumG = 0.0, sumB = 0.0
+                        var sumR2 = 0.0, sumG2 = 0.0, sumB2 = 0.0
+                        var count = 0.0
+
+                        for ky in startY...endY {
+                            let cy = max(0, min(height - 1, ky))
+                            for kx in startX...endX {
+                                let cx = max(0, min(width - 1, kx))
+                                let idx = (cy * width + cx) * 4
+                                let r = Double(src[idx])
+                                let g = Double(src[idx + 1])
+                                let b = Double(src[idx + 2])
+                                sumR += r; sumG += g; sumB += b
+                                sumR2 += r * r; sumG2 += g * g; sumB2 += b * b
+                                count += 1.0
+                            }
+                        }
+
+                        let meanR = sumR / count
+                        let meanG = sumG / count
+                        let meanB = sumB / count
+                        let variance = (sumR2 / count - meanR * meanR)
+                            + (sumG2 / count - meanG * meanG)
+                            + (sumB2 / count - meanB * meanB)
+
+                        if variance < bestVariance {
+                            bestVariance = variance
+                            bestR = meanR; bestG = meanG; bestB = meanB
+                        }
+                    }
+                }
+
+                let idx = (y * width + x) * 4
+                dst[idx] = ShaderPrimitives.clampByte(bestR)
+                dst[idx + 1] = ShaderPrimitives.clampByte(bestG)
+                dst[idx + 2] = ShaderPrimitives.clampByte(bestB)
+                dst[idx + 3] = src[idx + 3]
+            }
+        }
+
+        return try mixStylizedContext(outputCtx, with: image, intensity: intensity)
     }
 
     private static func mixStylizedContext(
