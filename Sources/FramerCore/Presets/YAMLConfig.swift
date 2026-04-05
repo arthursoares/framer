@@ -70,6 +70,43 @@ public enum YAMLConfig {
         var lut_name: String?
         var lut_filename: String?
         var intensity: Double?
+        var shader_style: String?
+        var shader_cell_size: Int?
+        var shader_edge_bias: Double?
+        var shader_color_mode: String?
+        var shader_foreground: String?
+        var shader_background: String?
+        var shader_flipped: Bool?
+        var shader_saturation_shift: Double?
+        var shader_lightness_shift: Double?
+        var shader_invert: Bool?
+        var shader_exposure: Double?
+        var shader_attenuation: Double?
+        var shader_color1: String?
+        var shader_color2: String?
+        var shader_neon: Double?
+        var shader_softness: Double?
+        var shader_contrast: Double?
+        var shader_grain: Double?
+        var shader_crush: Double?
+        var shader_temperature: Double?
+        var shader_warmth: Double?
+        var shader_saturation: Double?
+        var shader_threshold: Double?
+        var shader_direction: String?
+        var shader_span: Int?
+        var shader_amount: Double?
+        var shader_palette_depth: Int?
+        var shader_fade: Double?
+        var shader_curvature: Double?
+        var shader_line_size: Int?
+        var shader_line_strength: Double?
+        var shader_brightness: Double?
+        var shader_vignette: Double?
+        var shader_dot_size: Double?
+        var shader_monochrome: Bool?
+        var shader_kernel_size: Int?
+        var shader_sharpness: Double?
     }
 
     public static func encode(_ config: ProcessingConfig) throws -> String {
@@ -308,6 +345,14 @@ public enum YAMLConfig {
             schema.lut_filename = p.lutFileName
             schema.intensity = p.intensity
             return schema
+
+        case .shader(let p):
+            var schema = YAMLLayerSchema(type: "shader")
+            if !p.enabled { schema.enabled = false }
+            schema.intensity = p.intensity
+            schema.shader_style = p.style.rawValue
+            encodeShaderParams(p.params, into: &schema)
+            return schema
         }
     }
 
@@ -473,8 +518,179 @@ public enum YAMLConfig {
                 intensity: schema.intensity ?? 1.0
             ))
 
+        case "shader":
+            guard let styleRaw = schema.shader_style, let style = ShaderStyle(rawValue: styleRaw) else {
+                return nil
+            }
+            return .shader(ShaderLayerParams(
+                enabled: enabled,
+                style: style,
+                intensity: schema.intensity ?? 1.0,
+                params: decodeShaderParams(style: style, schema: schema)
+            ))
+
         default:
             return nil
+        }
+    }
+
+    private static func encodeShaderParams(_ params: ShaderStyleParams, into schema: inout YAMLLayerSchema) {
+        switch params {
+        case .ascii(let p):
+            schema.shader_cell_size = p.cellSize
+            schema.shader_edge_bias = p.edgeBias
+            switch p.colorMode {
+            case .manual(let foreground, let background):
+                schema.shader_color_mode = "manual"
+                schema.shader_foreground = foreground.hex
+                schema.shader_background = background.hex
+            case .dominantTwoTone(let flipped, let saturationShift, let lightnessShift):
+                schema.shader_color_mode = "dominantTwoTone"
+                if flipped { schema.shader_flipped = true }
+                if saturationShift != 0 { schema.shader_saturation_shift = saturationShift }
+                if lightnessShift != 0 { schema.shader_lightness_shift = lightnessShift }
+            case .source(let background):
+                schema.shader_color_mode = "source"
+                schema.shader_background = background.hex
+            case .gradient(let color1, let color2, let background):
+                schema.shader_color_mode = "gradient"
+                schema.shader_color1 = color1.hex
+                schema.shader_color2 = color2.hex
+                schema.shader_background = background.hex
+            }
+            schema.shader_invert = p.invert
+            if p.exposure != 1.0 { schema.shader_exposure = p.exposure }
+            if p.attenuation != 1.0 { schema.shader_attenuation = p.attenuation }
+        case .crimewave(let p):
+            schema.shader_neon = p.neon
+            schema.shader_softness = p.softness
+            schema.shader_contrast = p.contrast
+            schema.shader_grain = p.grain
+        case .narc(let p):
+            schema.shader_contrast = p.contrast
+            schema.shader_crush = p.crush
+            schema.shader_temperature = p.temperature
+            schema.shader_grain = p.grain
+        case .shiba(let p):
+            schema.shader_warmth = p.warmth
+            schema.shader_softness = p.softness
+            schema.shader_saturation = p.saturation
+            schema.shader_grain = p.grain
+        case .pixelSort(let p):
+            schema.shader_threshold = p.threshold
+            schema.shader_direction = p.direction.rawValue
+            schema.shader_span = p.span
+            schema.shader_amount = p.amount
+        case .distantPast(let p):
+            schema.shader_palette_depth = p.paletteDepth
+            schema.shader_fade = p.fade
+            schema.shader_softness = p.softness
+            schema.shader_grain = p.grain
+        case .crt(let p):
+            schema.shader_curvature = p.curvature
+            schema.shader_line_size = p.lineSize
+            schema.shader_line_strength = p.lineStrength
+            schema.shader_brightness = p.brightness
+            schema.shader_vignette = p.vignette
+        case .halftone(let p):
+            schema.shader_dot_size = p.dotSize
+            schema.shader_contrast = p.contrast
+            if p.monochrome { schema.shader_monochrome = true }
+        case .kuwahara(let p):
+            schema.shader_kernel_size = p.kernelSize
+            schema.shader_sharpness = p.sharpness
+        }
+    }
+
+    private static func decodeShaderParams(style: ShaderStyle, schema: YAMLLayerSchema) -> ShaderStyleParams {
+        switch style {
+        case .ascii:
+            let colorMode: ASCIIColorMode
+            switch schema.shader_color_mode ?? "manual" {
+            case "dominantTwoTone":
+                colorMode = .dominantTwoTone(
+                    flipped: schema.shader_flipped ?? false,
+                    saturationShift: schema.shader_saturation_shift ?? 0,
+                    lightnessShift: schema.shader_lightness_shift ?? 0
+                )
+            case "source":
+                colorMode = .source(
+                    background: (schema.shader_background.flatMap { try? CodableColor(hex: $0) }) ?? .black
+                )
+            case "gradient":
+                colorMode = .gradient(
+                    color1: (schema.shader_color1.flatMap { try? CodableColor(hex: $0) }) ?? .black,
+                    color2: (schema.shader_color2.flatMap { try? CodableColor(hex: $0) }) ?? .white,
+                    background: (schema.shader_background.flatMap { try? CodableColor(hex: $0) }) ?? .black
+                )
+            default:
+                colorMode = .manual(
+                    foreground: (schema.shader_foreground.flatMap { try? CodableColor(hex: $0) }) ?? .white,
+                    background: (schema.shader_background.flatMap { try? CodableColor(hex: $0) }) ?? .black
+                )
+            }
+            return .ascii(ASCIIShaderParams(
+                cellSize: schema.shader_cell_size ?? 10,
+                edgeBias: schema.shader_edge_bias ?? 0.5,
+                colorMode: colorMode,
+                invert: schema.shader_invert ?? false,
+                exposure: schema.shader_exposure ?? 1.0,
+                attenuation: schema.shader_attenuation ?? 1.0
+            ))
+        case .crimewave:
+            return .crimewave(CrimewaveShaderParams(
+                neon: schema.shader_neon ?? 0.7,
+                softness: schema.shader_softness ?? 0.4,
+                contrast: schema.shader_contrast ?? 1.15,
+                grain: schema.shader_grain ?? 0.2
+            ))
+        case .narc:
+            return .narc(NarcShaderParams(
+                contrast: schema.shader_contrast ?? 1.25,
+                crush: schema.shader_crush ?? 0.35,
+                temperature: schema.shader_temperature ?? -0.1,
+                grain: schema.shader_grain ?? 0.25
+            ))
+        case .shiba:
+            return .shiba(ShibaShaderParams(
+                warmth: schema.shader_warmth ?? 0.2,
+                softness: schema.shader_softness ?? 0.3,
+                saturation: schema.shader_saturation ?? 0.15,
+                grain: schema.shader_grain ?? 0.1
+            ))
+        case .pixelSort:
+            return .pixelSort(PixelSortShaderParams(
+                threshold: schema.shader_threshold ?? 0.65,
+                direction: schema.shader_direction.flatMap(PixelSortDirection.init(rawValue:)) ?? .horizontal,
+                span: schema.shader_span ?? 24,
+                amount: schema.shader_amount ?? 1.0
+            ))
+        case .distantPast:
+            return .distantPast(DistantPastShaderParams(
+                paletteDepth: schema.shader_palette_depth ?? 6,
+                fade: schema.shader_fade ?? 0.3,
+                softness: schema.shader_softness ?? 0.2,
+                grain: schema.shader_grain ?? 0.15
+            ))
+        case .crt:
+            return .crt(CRTShaderParams(
+                curvature: schema.shader_curvature ?? 6.0,
+                lineSize: schema.shader_line_size ?? 1,
+                lineStrength: schema.shader_line_strength ?? 1.0,
+                brightness: schema.shader_brightness ?? 0.0,
+                vignette: schema.shader_vignette ?? 30.0
+            ))
+        case .halftone:
+            return .halftone(HalftoneShaderParams(
+                dotSize: schema.shader_dot_size ?? 1.0,
+                contrast: schema.shader_contrast ?? 1.0,
+                monochrome: schema.shader_monochrome ?? false
+            ))
+        case .kuwahara:
+            return .kuwahara(KuwaharaShaderParams(
+                kernelSize: schema.shader_kernel_size ?? 4,
+                sharpness: schema.shader_sharpness ?? 8.0
+            ))
         }
     }
 

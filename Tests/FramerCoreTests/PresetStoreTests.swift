@@ -113,6 +113,83 @@ final class PresetStoreTests: XCTestCase {
         XCTAssertEqual(lightnessShift, -8, accuracy: 0.0001)
     }
 
+    func test_yamlConfig_shaderLayer_roundtrips() throws {
+        var config = ProcessingConfig.default
+        config.layers = [
+            .shader(ShaderLayerParams(
+                style: .crimewave,
+                intensity: 0.8,
+                params: .crimewave(CrimewaveShaderParams(neon: 0.9, softness: 0.6, contrast: 1.2, grain: 0.3))
+            ))
+        ]
+
+        let yaml = try YAMLConfig.encode(config)
+        let decoded = try YAMLConfig.decode(yaml)
+
+        guard
+            let layer = decoded.layers?.first,
+            case .shader(let params) = layer
+        else {
+            return XCTFail("Expected decoded shader layer")
+        }
+
+        XCTAssertEqual(params.style, .crimewave)
+        XCTAssertEqual(params.intensity, 0.8)
+        XCTAssertEqual(
+            params.params,
+            .crimewave(CrimewaveShaderParams(neon: 0.9, softness: 0.6, contrast: 1.2, grain: 0.3))
+        )
+    }
+
+    func test_yamlConfig_preservesDisabledShaderLayer() throws {
+        var config = ProcessingConfig.default
+        config.layers = [
+            .shader(ShaderLayerParams(
+                enabled: false,
+                style: .ascii,
+                intensity: 1.0,
+                params: .ascii(ASCIIShaderParams())
+            ))
+        ]
+
+        let yaml = try YAMLConfig.encode(config)
+        let decoded = try YAMLConfig.decode(yaml)
+
+        XCTAssertEqual(decoded.layers?.first?.isEnabled, false)
+    }
+
+    func test_yamlConfig_asciiShaderDominantTwoTonePreservesColorShifts() throws {
+        var config = ProcessingConfig.default
+        config.layers = [
+            .shader(ShaderLayerParams(
+                style: .ascii,
+                intensity: 0.9,
+                params: .ascii(ASCIIShaderParams(
+                    cellSize: 9,
+                    edgeBias: 0.35,
+                    colorMode: .dominantTwoTone(flipped: true, saturationShift: 18, lightnessShift: -12),
+                    invert: false
+                ))
+            ))
+        ]
+
+        let yaml = try YAMLConfig.encode(config)
+        let decoded = try YAMLConfig.decode(yaml)
+
+        guard
+            let layer = decoded.layers?.first,
+            case .shader(let params) = layer,
+            case .ascii(let asciiParams) = params.params,
+            case .dominantTwoTone(let flipped, let saturationShift, let lightnessShift) = asciiParams.colorMode
+        else {
+            return XCTFail("Expected ascii shader with dominant two-tone color mode")
+        }
+
+        XCTAssertTrue(flipped)
+        XCTAssertEqual(saturationShift, 18, accuracy: 0.0001)
+        XCTAssertEqual(lightnessShift, -12, accuracy: 0.0001)
+    }
+
     func test_yamlConfig_print10x15BackwardCompat() throws {
         let yaml = """
         border_style: print10x15
@@ -149,13 +226,19 @@ final class PresetStoreTests: XCTestCase {
         store.initializeDefaults()
 
         let all = try store.list()
-        XCTAssertEqual(all.count, 5)
+        XCTAssertEqual(all.count, 15)
         let names = Set(all.map(\.name))
         XCTAssertTrue(names.contains("film"))
         XCTAssertTrue(names.contains("instagram"))
         XCTAssertTrue(names.contains("minimal"))
         XCTAssertTrue(names.contains("print 10x15"))
         XCTAssertTrue(names.contains("dark gradient"))
+        XCTAssertTrue(names.contains("Shader ASCII"))
+        XCTAssertTrue(names.contains("Shader Crimewave"))
+        XCTAssertTrue(names.contains("Shader Narc"))
+        XCTAssertTrue(names.contains("Shader Shiba"))
+        XCTAssertTrue(names.contains("Shader Pixel Sort"))
+        XCTAssertTrue(names.contains("Shader Distant Past"))
     }
 
     func test_listPresets_mixedJSONAndYAML() throws {
@@ -166,17 +249,17 @@ final class PresetStoreTests: XCTestCase {
         try store.save(jsonPreset)
 
         let all = try store.list()
-        XCTAssertEqual(all.count, 6)
+        XCTAssertEqual(all.count, 16)
     }
 
-    func test_initializeDefaults_creates5Files() throws {
+    func test_initializeDefaults_creates11Files() throws {
         let store = PresetStore(directory: tempDir)
         store.initializeDefaults()
 
         let files = try FileManager.default.contentsOfDirectory(at: tempDir,
                                                                  includingPropertiesForKeys: nil)
         let yamlFiles = files.filter { $0.pathExtension == "yaml" }
-        XCTAssertEqual(yamlFiles.count, 5)
+        XCTAssertEqual(yamlFiles.count, 15)
 
         let names = Set(yamlFiles.map { $0.deletingPathExtension().lastPathComponent })
         XCTAssertTrue(names.contains("film"))
@@ -184,6 +267,134 @@ final class PresetStoreTests: XCTestCase {
         XCTAssertTrue(names.contains("minimal"))
         XCTAssertTrue(names.contains("print 10x15"))
         XCTAssertTrue(names.contains("dark gradient"))
+        XCTAssertTrue(names.contains("Shader ASCII"))
+        XCTAssertTrue(names.contains("Shader Crimewave"))
+        XCTAssertTrue(names.contains("Shader Narc"))
+        XCTAssertTrue(names.contains("Shader Shiba"))
+        XCTAssertTrue(names.contains("Shader Pixel Sort"))
+        XCTAssertTrue(names.contains("Shader Distant Past"))
+    }
+
+    func test_initializeDefaults_includesShaderPresets() throws {
+        let store = PresetStore(directory: tempDir)
+        store.initializeDefaults()
+
+        let all = try store.list()
+        let names = Set(all.map(\.name))
+
+        XCTAssertTrue(names.contains("Shader ASCII"))
+        XCTAssertTrue(names.contains("Shader Crimewave"))
+        XCTAssertTrue(names.contains("Shader Narc"))
+        XCTAssertTrue(names.contains("Shader Shiba"))
+        XCTAssertTrue(names.contains("Shader Pixel Sort"))
+        XCTAssertTrue(names.contains("Shader Distant Past"))
+    }
+
+    func test_initializeDefaults_shaderPresetsHaveExpectedConfigs() throws {
+        let store = PresetStore(directory: tempDir)
+        store.initializeDefaults()
+
+        let presetsByName = Dictionary(uniqueKeysWithValues: try store.list().map { ($0.name, $0) })
+
+        for name in [
+            "Shader ASCII",
+            "Shader Crimewave",
+            "Shader Narc",
+            "Shader Shiba",
+            "Shader Pixel Sort",
+            "Shader Ceiling",
+            "Shader Distant Past",
+        ] {
+            guard let preset = presetsByName[name] else {
+                return XCTFail("Missing preset \(name)")
+            }
+            XCTAssertEqual(preset.config.outputFormat, .png)
+            XCTAssertEqual(preset.config.layers?.count, 1)
+        }
+
+        if
+            let preset = presetsByName["Shader ASCII"],
+            let layer = preset.config.layers?.first,
+            case .shader(let params) = layer,
+            case .ascii(let asciiParams) = params.params
+        {
+            XCTAssertEqual(params.style, .ascii)
+            XCTAssertEqual(params.intensity, 1.0)
+            XCTAssertEqual(asciiParams.cellSize, 8)
+            XCTAssertEqual(asciiParams.edgeBias, 0.45, accuracy: 0.0001)
+            XCTAssertEqual(
+                asciiParams.colorMode,
+                .dominantTwoTone(flipped: false, saturationShift: 8, lightnessShift: -6)
+            )
+        } else {
+            XCTFail("Shader ASCII preset did not decode to expected shader config")
+        }
+
+        if
+            let preset = presetsByName["Shader Crimewave"],
+            let layer = preset.config.layers?.first,
+            case .shader(let params) = layer,
+            case .ascii(let asciiParams) = params.params
+        {
+            XCTAssertEqual(params.style, .ascii)
+            XCTAssertEqual(asciiParams.exposure, 1.78, accuracy: 0.001)
+            XCTAssertEqual(asciiParams.attenuation, 2.712, accuracy: 0.001)
+        } else {
+            XCTFail("Shader Crimewave preset did not decode to expected shader config")
+        }
+
+        if
+            let preset = presetsByName["Shader Narc"],
+            let layer = preset.config.layers?.first,
+            case .shader(let params) = layer
+        {
+            XCTAssertEqual(params.style, .narc)
+        } else {
+            XCTFail("Shader Narc preset did not decode to expected shader config")
+        }
+
+        if
+            let preset = presetsByName["Shader Shiba"],
+            let layer = preset.config.layers?.first,
+            case .shader(let params) = layer
+        {
+            XCTAssertEqual(params.style, .shiba)
+        } else {
+            XCTFail("Shader Shiba preset did not decode to expected shader config")
+        }
+
+        if
+            let preset = presetsByName["Shader Pixel Sort"],
+            let layer = preset.config.layers?.first,
+            case .shader(let params) = layer,
+            case .pixelSort(let pixelSortParams) = params.params
+        {
+            XCTAssertEqual(params.style, .pixelSort)
+            XCTAssertEqual(pixelSortParams.direction, .horizontal)
+            XCTAssertEqual(pixelSortParams.span, 24)
+        } else {
+            XCTFail("Shader Pixel Sort preset did not decode to expected shader config")
+        }
+
+        if
+            let preset = presetsByName["Shader Distant Past"],
+            let layer = preset.config.layers?.first,
+            case .shader(let params) = layer
+        {
+            XCTAssertEqual(params.style, .distantPast)
+        } else {
+            XCTFail("Shader Distant Past preset did not decode to expected shader config")
+        }
+    }
+
+    func test_initializeDefaults_createsShaderPresetFiles() throws {
+        let store = PresetStore(directory: tempDir)
+        store.initializeDefaults()
+
+        let files = try FileManager.default.contentsOfDirectory(at: tempDir, includingPropertiesForKeys: nil)
+        let yamlFiles = files.filter { $0.pathExtension == "yaml" }
+
+        XCTAssertEqual(yamlFiles.count, 15)
     }
 
     func test_initializeDefaults_doesNotOverwrite() throws {

@@ -97,6 +97,92 @@ final class CompositionLayerTests: XCTestCase {
         }
     }
 
+    func test_shaderLayer_roundtripsJSON() throws {
+        let layers: [ShaderLayerParams] = [
+            ShaderLayerParams(
+                style: .ascii,
+                intensity: 0.75,
+                params: .ascii(ASCIIShaderParams(
+                    cellSize: 12,
+                    edgeBias: 0.4,
+                    colorMode: .dominantTwoTone(flipped: true, saturationShift: 15, lightnessShift: -10),
+                    invert: false
+                ))
+            ),
+            ShaderLayerParams(
+                enabled: false,
+                style: .crimewave,
+                intensity: 0.5,
+                params: .crimewave(CrimewaveShaderParams(neon: 0.6, softness: 0.4, contrast: 1.1, grain: 0.2))
+            ),
+            ShaderLayerParams(
+                style: .narc,
+                intensity: 1.0,
+                params: .narc(NarcShaderParams(contrast: 1.3, crush: 0.45, temperature: -0.1, grain: 0.25))
+            ),
+            ShaderLayerParams(
+                style: .shiba,
+                intensity: 0.9,
+                params: .shiba(ShibaShaderParams(warmth: 0.2, softness: 0.35, saturation: 0.15, grain: 0.1))
+            ),
+            ShaderLayerParams(
+                style: .pixelSort,
+                intensity: 0.4,
+                params: .pixelSort(PixelSortShaderParams(threshold: 0.65, direction: .vertical, span: 32, amount: 0.7))
+            ),
+            ShaderLayerParams(
+                style: .distantPast,
+                intensity: 0.6,
+                params: .distantPast(DistantPastShaderParams(paletteDepth: 5, fade: 0.35, softness: 0.2, grain: 0.1))
+            )
+        ]
+
+        let data = try JSONEncoder().encode(layers)
+        let decoded = try JSONDecoder().decode([ShaderLayerParams].self, from: data)
+        XCTAssertEqual(layers, decoded)
+    }
+
+    func test_shaderLayer_decodingDefaultsParamsFromStyle() throws {
+        let json = """
+        {
+          "id": "B0F2A7CC-E93E-4D0A-B643-D15387D8CE95",
+          "enabled": true,
+          "style": "shiba",
+          "intensity": 0.6
+        }
+        """.data(using: .utf8)!
+
+        let decoded = try JSONDecoder().decode(ShaderLayerParams.self, from: json)
+
+        XCTAssertEqual(decoded.style, .shiba)
+        XCTAssertEqual(decoded.params, .shiba(ShibaShaderParams()))
+        XCTAssertEqual(decoded.intensity, 0.6)
+    }
+
+    func test_asciiShaderParams_decodesLegacyForegroundBackground() throws {
+        let json = """
+        {
+          "cellSize": 9,
+          "edgeBias": 0.25,
+          "foreground": { "hex": "#FFFFFF" },
+          "background": { "hex": "#000000" },
+          "invert": true
+        }
+        """.data(using: .utf8)!
+
+        let decoded = try JSONDecoder().decode(ASCIIShaderParams.self, from: json)
+
+        XCTAssertEqual(
+            decoded,
+            ASCIIShaderParams(
+                cellSize: 9,
+                edgeBias: 0.25,
+                colorMode: .manual(foreground: .white, background: .black),
+                invert: true
+            )
+        )
+    }
+
     func test_overlayBlendMode_defaultsPerKind() {
         XCTAssertEqual(OverlayBlendMode.defaultFor(.frame), .normal)
         XCTAssertEqual(OverlayBlendMode.defaultFor(.dust), .normal)
@@ -183,6 +269,84 @@ final class CompositionLayerTests: XCTestCase {
         let decoded = try JSONDecoder().decode(CompositionLayer.self, from: data)
         XCTAssertEqual(decoded.isEnabled, false)
         XCTAssertEqual(layer, decoded)
+    }
+
+    func test_disabledShaderLayer_roundtripsJSON() throws {
+        let layer = ShaderLayerParams(
+            enabled: false,
+            style: .ascii,
+            intensity: 0.25,
+            params: .ascii(ASCIIShaderParams(cellSize: 8, edgeBias: 0.5, foreground: .white, background: .black, invert: false))
+        )
+        let data = try JSONEncoder().encode(layer)
+        let decoded = try JSONDecoder().decode(ShaderLayerParams.self, from: data)
+        XCTAssertEqual(decoded.enabled, false)
+        XCTAssertEqual(layer, decoded)
+    }
+
+    func test_shaderLayer_defaults_to_ascii_style() {
+        let params = ShaderLayerParams()
+        XCTAssertEqual(params.style, .ascii)
+        XCTAssertEqual(params.intensity, 1.0)
+        XCTAssertEqual(params.params, .ascii(ASCIIShaderParams()))
+    }
+
+    func test_shaderLayer_withStyle_preservesIdentityAndResetsParams() {
+        let id = UUID()
+        let original = ShaderLayerParams(
+            id: id,
+            enabled: false,
+            style: .ascii,
+            intensity: 0.65,
+            params: .ascii(
+                ASCIIShaderParams(
+                    cellSize: 18,
+                    edgeBias: 0.3,
+                    foreground: .white,
+                    background: .black,
+                    invert: true
+                )
+            )
+        )
+
+        let updated = original.withStyle(.pixelSort)
+
+        XCTAssertEqual(updated.id, id)
+        XCTAssertEqual(updated.enabled, false)
+        XCTAssertEqual(updated.intensity, 0.65)
+        XCTAssertEqual(updated.style, .pixelSort)
+        XCTAssertEqual(updated.params, .pixelSort(PixelSortShaderParams()))
+    }
+
+    func test_shaderLayer_withParams_preservesIdentityAndIntensity() {
+        let id = UUID()
+        let original = ShaderLayerParams(
+            id: id,
+            enabled: false,
+            style: .ascii,
+            intensity: 0.4,
+            params: .ascii(ASCIIShaderParams())
+        )
+
+        let updated = original.withParams(
+            .distantPast(
+                DistantPastShaderParams(
+                    paletteDepth: 9,
+                    fade: 0.45,
+                    softness: 0.3,
+                    grain: 0.2
+                )
+            )
+        )
+
+        XCTAssertEqual(updated.id, id)
+        XCTAssertEqual(updated.enabled, false)
+        XCTAssertEqual(updated.intensity, 0.4)
+        XCTAssertEqual(updated.style, .distantPast)
+        XCTAssertEqual(
+            updated.params,
+            .distantPast(DistantPastShaderParams(paletteDepth: 9, fade: 0.45, softness: 0.3, grain: 0.2))
+        )
     }
 
     // MARK: - applyLayers

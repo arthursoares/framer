@@ -34,7 +34,8 @@ targets:
     settings:
       base:
         PRODUCT_BUNDLE_IDENTIFIER: com.arthursoares.Framer
-        DEVELOPMENT_TEAM: P7K6Z5BCV4
+        DEVELOPMENT_TEAM: QLW5M4WG7H
+        CODE_SIGN_STYLE: Automatic
         MARKETING_VERSION: "2.0.0"
         CURRENT_PROJECT_VERSION: "1"
         INFOPLIST_KEY_LSApplicationCategoryType: "public.app-category.photography"
@@ -67,7 +68,8 @@ targets:
     settings:
       base:
         PRODUCT_BUNDLE_IDENTIFIER: com.arthursoares.FramerMobile
-        DEVELOPMENT_TEAM: P7K6Z5BCV4
+        DEVELOPMENT_TEAM: QLW5M4WG7H
+        CODE_SIGN_STYLE: Automatic
         MARKETING_VERSION: "1.0.0"
         CURRENT_PROJECT_VERSION: "1"
         INFOPLIST_KEY_CFBundleDisplayName: "Framer"
