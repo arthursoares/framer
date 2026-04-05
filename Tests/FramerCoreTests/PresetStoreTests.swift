@@ -226,7 +226,7 @@ final class PresetStoreTests: XCTestCase {
         store.initializeDefaults()
 
         let all = try store.list()
-        XCTAssertEqual(all.count, 12)
+        XCTAssertEqual(all.count, 15)
         let names = Set(all.map(\.name))
         XCTAssertTrue(names.contains("film"))
         XCTAssertTrue(names.contains("instagram"))
@@ -249,7 +249,7 @@ final class PresetStoreTests: XCTestCase {
         try store.save(jsonPreset)
 
         let all = try store.list()
-        XCTAssertEqual(all.count, 13)
+        XCTAssertEqual(all.count, 16)
     }
 
     func test_initializeDefaults_creates11Files() throws {
@@ -259,7 +259,7 @@ final class PresetStoreTests: XCTestCase {
         let files = try FileManager.default.contentsOfDirectory(at: tempDir,
                                                                  includingPropertiesForKeys: nil)
         let yamlFiles = files.filter { $0.pathExtension == "yaml" }
-        XCTAssertEqual(yamlFiles.count, 12)
+        XCTAssertEqual(yamlFiles.count, 15)
 
         let names = Set(yamlFiles.map { $0.deletingPathExtension().lastPathComponent })
         XCTAssertTrue(names.contains("film"))
@@ -394,7 +394,7 @@ final class PresetStoreTests: XCTestCase {
         let files = try FileManager.default.contentsOfDirectory(at: tempDir, includingPropertiesForKeys: nil)
         let yamlFiles = files.filter { $0.pathExtension == "yaml" }
 
-        XCTAssertEqual(yamlFiles.count, 12)
+        XCTAssertEqual(yamlFiles.count, 15)
     }
 
     func test_initializeDefaults_doesNotOverwrite() throws {

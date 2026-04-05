@@ -309,6 +309,36 @@ public final class PresetStore {
                     ))
                 ]
             )),
+            ("Shader CRT", ProcessingConfig(
+                outputFormat: .png,
+                layers: [
+                    .shader(ShaderLayerParams(
+                        style: .crt,
+                        intensity: 1.0,
+                        params: .crt(CRTShaderParams())
+                    ))
+                ]
+            )),
+            ("Shader Halftone", ProcessingConfig(
+                outputFormat: .png,
+                layers: [
+                    .shader(ShaderLayerParams(
+                        style: .halftone,
+                        intensity: 1.0,
+                        params: .halftone(HalftoneShaderParams())
+                    ))
+                ]
+            )),
+            ("Shader Kuwahara", ProcessingConfig(
+                outputFormat: .png,
+                layers: [
+                    .shader(ShaderLayerParams(
+                        style: .kuwahara,
+                        intensity: 1.0,
+                        params: .kuwahara(KuwaharaShaderParams())
+                    ))
+                ]
+            )),
         ]
 
         do {

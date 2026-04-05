@@ -73,8 +73,8 @@
 		B1EC2164F8A3DF317311D2C8 /* textures */ = {isa = PBXFileReference; lastKnownFileType = folder; name = textures; path = assets/textures; sourceTree = SOURCE_ROOT; };
 		B2205885A0B72C7BB1800460 /* PreviewArea.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PreviewArea.swift; sourceTree = "<group>"; };
 		B7A795F9CA0BC01E3F2251A9 /* PreferencesView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PreferencesView.swift; sourceTree = "<group>"; };
+		C1057F8A867D8D5B86409FA9 /* framer-acerola-shader */ = {isa = PBXFileReference; lastKnownFileType = folder; name = "framer-acerola-shader"; path = .; sourceTree = SOURCE_ROOT; };
 		C20010735E58CE243ED6744A /* FramerCommands.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FramerCommands.swift; sourceTree = "<group>"; };
-		C69326A95C1DCC513D982A18 /* framer-lut-layer */ = {isa = PBXFileReference; lastKnownFileType = folder; name = "framer-lut-layer"; path = .; sourceTree = SOURCE_ROOT; };
 		CE5B96A143FA192F9CB0A8C1 /* LayerStrip.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LayerStrip.swift; sourceTree = "<group>"; };
 		D5BE1B7F799CD269EE2C1411 /* ImageThumbnailLoader.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ImageThumbnailLoader.swift; sourceTree = "<group>"; };
 		E4A8C555BBECD2011E74D76D /* FramerApp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FramerApp.swift; sourceTree = "<group>"; };
@@ -246,7 +246,7 @@
 		BF7EB4914AD9DF4212A2FFEA /* Packages */ = {
 			isa = PBXGroup;
 			children = (
-				C69326A95C1DCC513D982A18 /* framer-lut-layer */,
+				C1057F8A867D8D5B86409FA9 /* framer-acerola-shader */,
 			);
 			name = Packages;
 			sourceTree = "<group>";
@@ -344,7 +344,12 @@
 				LastUpgradeCheck = 1600;
 				TargetAttributes = {
 					6B6245F15EBD4BFE5457220B = {
-						DevelopmentTeam = P7K6Z5BCV4;
+						DevelopmentTeam = QLW5M4WG7H;
+						ProvisioningStyle = Automatic;
+					};
+					7B53F10D445F75CF087CE1C4 = {
+						DevelopmentTeam = QLW5M4WG7H;
+						ProvisioningStyle = Automatic;
 					};
 				};
 			};
@@ -448,6 +453,7 @@
 			buildSettings = {
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				CODE_SIGN_ENTITLEMENTS = Framer.entitlements;
+				CODE_SIGN_STYLE = Automatic;
 				COMBINE_HIDPI_IMAGES = YES;
 				CURRENT_PROJECT_VERSION = 1;
 				DEVELOPMENT_TEAM = QLW5M4WG7H;
@@ -595,6 +601,7 @@
 			buildSettings = {
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				CODE_SIGN_ENTITLEMENTS = Framer.entitlements;
+				CODE_SIGN_STYLE = Automatic;
 				COMBINE_HIDPI_IMAGES = YES;
 				CURRENT_PROJECT_VERSION = 1;
 				DEVELOPMENT_TEAM = QLW5M4WG7H;
@@ -619,8 +626,9 @@
 			buildSettings = {
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				CODE_SIGN_IDENTITY = "iPhone Developer";
+				CODE_SIGN_STYLE = Automatic;
 				CURRENT_PROJECT_VERSION = 1;
-				DEVELOPMENT_TEAM = P7K6Z5BCV4;
+				DEVELOPMENT_TEAM = QLW5M4WG7H;
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_KEY_CFBundleDisplayName = Framer;
 				INFOPLIST_KEY_NSPhotoLibraryUsageDescription = "Framer needs access to your photo library to select and process photos.";
@@ -646,8 +654,9 @@
 			buildSettings = {
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				CODE_SIGN_IDENTITY = "iPhone Developer";
+				CODE_SIGN_STYLE = Automatic;
 				CURRENT_PROJECT_VERSION = 1;
-				DEVELOPMENT_TEAM = P7K6Z5BCV4;
+				DEVELOPMENT_TEAM = QLW5M4WG7H;
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_KEY_CFBundleDisplayName = Framer;
 				INFOPLIST_KEY_NSPhotoLibraryUsageDescription = "Framer needs access to your photo library to select and process photos.";
