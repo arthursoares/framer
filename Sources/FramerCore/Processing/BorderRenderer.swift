@@ -199,6 +199,14 @@ public enum BorderRenderer {
                     intensity: params.intensity,
                     previewBaseDimension: previewBaseDimension
                 )
+
+            case .shader(let params):
+                current = try ShaderRenderer.apply(
+                    to: current,
+                    params: params,
+                    previewBaseDimension: previewBaseDimension,
+                    sourceImage: sourceImage
+                )
             }
             i += 1
         }

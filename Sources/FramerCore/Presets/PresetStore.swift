@@ -219,6 +219,126 @@ public final class PresetStore {
                     ))
                 ]
             )),
+            ("Shader ASCII", ProcessingConfig(
+                outputFormat: .png,
+                layers: [
+                    .shader(ShaderLayerParams(
+                        style: .ascii,
+                        intensity: 1.0,
+                        params: .ascii(ASCIIShaderParams(
+                            cellSize: 8,
+                            edgeBias: 0.45,
+                            colorMode: .dominantTwoTone(flipped: false, saturationShift: 8, lightnessShift: -6),
+                            invert: false
+                        ))
+                    ))
+                ]
+            )),
+            ("Shader Crimewave", ProcessingConfig(
+                outputFormat: .png,
+                layers: [
+                    .shader(ShaderLayerParams(
+                        style: .ascii,
+                        intensity: 1.0,
+                        params: .ascii(ASCIIShaderParams(
+                            cellSize: 8,
+                            edgeBias: 0.2,
+                            colorMode: .manual(
+                                foreground: (try? CodableColor(hex: "#FF9760")) ?? .white,
+                                background: (try? CodableColor(hex: "#110302")) ?? .black
+                            ),
+                            invert: false,
+                            exposure: 1.78,
+                            attenuation: 2.712
+                        ))
+                    ))
+                ]
+            )),
+            ("Shader Narc", ProcessingConfig(
+                outputFormat: .png,
+                layers: [
+                    .shader(ShaderLayerParams(
+                        style: .narc,
+                        intensity: 1.0,
+                        params: .narc(NarcShaderParams())
+                    ))
+                ]
+            )),
+            ("Shader Shiba", ProcessingConfig(
+                outputFormat: .png,
+                layers: [
+                    .shader(ShaderLayerParams(
+                        style: .shiba,
+                        intensity: 1.0,
+                        params: .shiba(ShibaShaderParams())
+                    ))
+                ]
+            )),
+            ("Shader Pixel Sort", ProcessingConfig(
+                outputFormat: .png,
+                layers: [
+                    .shader(ShaderLayerParams(
+                        style: .pixelSort,
+                        intensity: 1.0,
+                        params: .pixelSort(PixelSortShaderParams(threshold: 0.1, direction: .horizontal, span: 24, amount: 1.0))
+                    ))
+                ]
+            )),
+            ("Shader Ceiling", ProcessingConfig(
+                outputFormat: .png,
+                layers: [
+                    .shader(ShaderLayerParams(
+                        style: .pixelSort,
+                        intensity: 1.0,
+                        params: .pixelSort(PixelSortShaderParams(
+                            threshold: 0.19,
+                            direction: .horizontal,
+                            span: 256,
+                            amount: 1.0
+                        ))
+                    ))
+                ]
+            )),
+            ("Shader Distant Past", ProcessingConfig(
+                outputFormat: .png,
+                layers: [
+                    .shader(ShaderLayerParams(
+                        style: .distantPast,
+                        intensity: 1.0,
+                        params: .distantPast(DistantPastShaderParams())
+                    ))
+                ]
+            )),
+            ("Shader CRT", ProcessingConfig(
+                outputFormat: .png,
+                layers: [
+                    .shader(ShaderLayerParams(
+                        style: .crt,
+                        intensity: 1.0,
+                        params: .crt(CRTShaderParams())
+                    ))
+                ]
+            )),
+            ("Shader Halftone", ProcessingConfig(
+                outputFormat: .png,
+                layers: [
+                    .shader(ShaderLayerParams(
+                        style: .halftone,
+                        intensity: 1.0,
+                        params: .halftone(HalftoneShaderParams())
+                    ))
+                ]
+            )),
+            ("Shader Kuwahara", ProcessingConfig(
+                outputFormat: .png,
+                layers: [
+                    .shader(ShaderLayerParams(
+                        style: .kuwahara,
+                        intensity: 1.0,
+                        params: .kuwahara(KuwaharaShaderParams())
+                    ))
+                ]
+            )),
         ]
 
         do {
