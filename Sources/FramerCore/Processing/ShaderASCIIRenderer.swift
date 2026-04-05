@@ -19,8 +19,8 @@ enum ShaderASCIIRenderer {
     }
 
     private static let _lutLock = NSLock()
-    private static var _edgesLUT: LUT?
-    private static var _fillLUT: LUT?
+    nonisolated(unsafe) private static var _edgesLUT: LUT?
+    nonisolated(unsafe) private static var _fillLUT: LUT?
 
     private static func loadLUT(named name: String) -> LUT? {
         for searchPath in TextureFrameProvider.searchPaths {
@@ -45,7 +45,11 @@ enum ShaderASCIIRenderer {
             bitsPerComponent: 8, bytesPerRow: w * 4,
             space: colorSpace,
             bitmapInfo: CGImageAlphaInfo.premultipliedLast.rawValue
-        ), let data = (ctx.draw(image, in: CGRect(x: 0, y: 0, width: w, height: h)), ctx.data).1 else {
+        ) else {
+            return nil
+        }
+        ctx.draw(image, in: CGRect(x: 0, y: 0, width: w, height: h))
+        guard let data = ctx.data else {
             return nil
         }
         let ptr = data.bindMemory(to: UInt8.self, capacity: w * h * 4)
@@ -448,8 +452,7 @@ enum ShaderASCIIRenderer {
             return edges.sample(x: gx + offset, y: gy)
         } else {
             // Fill glyph: quantize luminance to 0-9, then offset into 80px wide LUT
-            let level = max(0, Int(floor(luminance * 10.0)) - 1)
-            let quantized = max(0, min(9, level))
+            let quantized = max(0, min(9, Int(floor(luminance * 9.999))))
             let offset = quantized * 8
             return fill.sample(x: gx + offset, y: gy)
         }

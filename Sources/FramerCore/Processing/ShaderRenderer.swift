@@ -482,6 +482,7 @@ public enum ShaderRenderer {
         let dst = outputData.bindMemory(to: UInt8.self, capacity: width * height * 4)
 
         let radius = max(1, min(15, params.kernelSize))
+        let sharpness = max(0, params.sharpness)
 
         // Basic Kuwahara: split neighborhood into 4 quadrants,
         // pick the quadrant with lowest variance, output its mean color.
@@ -532,6 +533,19 @@ public enum ShaderRenderer {
                 }
 
                 let idx = (y * width + x) * 4
+
+                // Unsharp mask: blend between Kuwahara (smooth) and sharpened
+                // sharpened = original + (original - smooth) * sharpness_factor
+                if sharpness > 0 {
+                    let factor = sharpness / 8.0
+                    let origR = Double(src[idx])
+                    let origG = Double(src[idx + 1])
+                    let origB = Double(src[idx + 2])
+                    bestR = bestR + (origR - bestR) * factor
+                    bestG = bestG + (origG - bestG) * factor
+                    bestB = bestB + (origB - bestB) * factor
+                }
+
                 dst[idx] = ShaderPrimitives.clampByte(bestR)
                 dst[idx + 1] = ShaderPrimitives.clampByte(bestG)
                 dst[idx + 2] = ShaderPrimitives.clampByte(bestB)

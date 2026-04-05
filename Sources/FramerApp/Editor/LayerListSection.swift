@@ -2811,7 +2811,7 @@ struct ShaderLayerControls: View {
         sliderRow(
             title: "Span",
             value: Double(pixelSortParams.span),
-            range: expandedRange(4...64, including: Double(pixelSortParams.span)),
+            range: expandedRange(4...256, including: Double(pixelSortParams.span)),
             step: 1
         ) { value in
             var updated = pixelSortParams
