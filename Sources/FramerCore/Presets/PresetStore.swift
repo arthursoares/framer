@@ -238,9 +238,19 @@ public final class PresetStore {
                 outputFormat: .png,
                 layers: [
                     .shader(ShaderLayerParams(
-                        style: .crimewave,
+                        style: .ascii,
                         intensity: 1.0,
-                        params: .crimewave(CrimewaveShaderParams())
+                        params: .ascii(ASCIIShaderParams(
+                            cellSize: 8,
+                            edgeBias: 0.2,
+                            colorMode: .manual(
+                                foreground: (try? CodableColor(hex: "#FF9760")) ?? .white,
+                                background: (try? CodableColor(hex: "#110302")) ?? .black
+                            ),
+                            invert: false,
+                            exposure: 1.78,
+                            attenuation: 2.712
+                        ))
                     ))
                 ]
             )),
@@ -271,6 +281,21 @@ public final class PresetStore {
                         style: .pixelSort,
                         intensity: 1.0,
                         params: .pixelSort(PixelSortShaderParams(threshold: 0.1, direction: .horizontal, span: 24, amount: 1.0))
+                    ))
+                ]
+            )),
+            ("Shader Ceiling", ProcessingConfig(
+                outputFormat: .png,
+                layers: [
+                    .shader(ShaderLayerParams(
+                        style: .pixelSort,
+                        intensity: 1.0,
+                        params: .pixelSort(PixelSortShaderParams(
+                            threshold: 0.19,
+                            direction: .horizontal,
+                            span: 256,
+                            amount: 1.0
+                        ))
                     ))
                 ]
             )),
