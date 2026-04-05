@@ -1193,9 +1193,9 @@ private struct ShaderControls: View {
     @ViewBuilder
     private func crimewaveControls(_ crimewaveParams: CrimewaveShaderParams) -> some View {
         styleSliderRows(
-            [("Neon", crimewaveParams.neon, 0...1, 0.05),
+            [("Neon", crimewaveParams.neon, 0...2, 0.05),
              ("Softness", crimewaveParams.softness, 0...1, 0.05),
-             ("Contrast", crimewaveParams.contrast, 0.8...1.8, 0.05),
+             ("Contrast", crimewaveParams.contrast, 0.5...3, 0.05),
              ("Grain", crimewaveParams.grain, 0...1, 0.05)]
         ) { label, value in
             var updated = crimewaveParams
@@ -1212,9 +1212,9 @@ private struct ShaderControls: View {
     @ViewBuilder
     private func narcControls(_ narcParams: NarcShaderParams) -> some View {
         styleSliderRows(
-            [("Contrast", narcParams.contrast, 0.8...1.8, 0.05),
+            [("Contrast", narcParams.contrast, 0.5...3, 0.05),
              ("Crush", narcParams.crush, 0...1, 0.05),
-             ("Temperature", narcParams.temperature, -0.5...0.5, 0.05),
+             ("Temperature", narcParams.temperature, -1...1, 0.05),
              ("Grain", narcParams.grain, 0...1, 0.05)]
         ) { label, value in
             var updated = narcParams
@@ -1231,9 +1231,9 @@ private struct ShaderControls: View {
     @ViewBuilder
     private func shibaControls(_ shibaParams: ShibaShaderParams) -> some View {
         styleSliderRows(
-            [("Warmth", shibaParams.warmth, -0.2...0.8, 0.05),
+            [("Warmth", shibaParams.warmth, -1...1, 0.05),
              ("Softness", shibaParams.softness, 0...1, 0.05),
-             ("Saturation", shibaParams.saturation, 0...1, 0.05),
+             ("Saturation", shibaParams.saturation, 0...2, 0.05),
              ("Grain", shibaParams.grain, 0...1, 0.05)]
         ) { label, value in
             var updated = shibaParams
@@ -1300,7 +1300,7 @@ private struct ShaderControls: View {
     @ViewBuilder
     private func distantPastControls(_ distantPastParams: DistantPastShaderParams) -> some View {
         styleSliderRows(
-            [("Palette Depth", Double(distantPastParams.paletteDepth), 2...12, 1),
+            [("Palette Depth", Double(distantPastParams.paletteDepth), 2...6, 1),
              ("Fade", distantPastParams.fade, 0...1, 0.05),
              ("Softness", distantPastParams.softness, 0...1, 0.05),
              ("Grain", distantPastParams.grain, 0...1, 0.05)]
