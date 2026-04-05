@@ -36,31 +36,37 @@ public enum ShaderRenderer {
         params: CrimewaveShaderParams,
         intensity: Double
     ) throws -> CGImage {
+        let width = image.width
+        let height = image.height
         let ctx = try ShaderPrimitives.renderToRGBAContext(image)
         guard let data = ctx.data else {
             throw FramerError.invalidImage(URL(fileURLWithPath: ""))
         }
-        let pixels = data.bindMemory(to: UInt8.self, capacity: image.width * image.height * 4)
+        let pixels = data.bindMemory(to: UInt8.self, capacity: width * height * 4)
 
-        ShaderPrimitives.adjustContrastAndCrush(pixels, width: image.width, height: image.height, contrast: params.contrast)
-        ShaderPrimitives.adjustSaturation(pixels, width: image.width, height: image.height, amount: 1.0 + params.neon * 0.8)
+        // Boost contrast strongly
+        ShaderPrimitives.adjustContrastAndCrush(pixels, width: width, height: height, contrast: params.contrast * 1.3)
+
+        // Push neon: saturate then heavy channel bias toward cyan/magenta
+        ShaderPrimitives.adjustSaturation(pixels, width: width, height: height, amount: 1.0 + params.neon * 1.6)
         ShaderPrimitives.applyChannelBias(
-            pixels,
-            width: image.width,
-            height: image.height,
-            red: params.neon * 10.0,
-            green: -params.neon * 8.0,
-            blue: params.neon * 22.0
+            pixels, width: width, height: height,
+            red: params.neon * 20.0,
+            green: -params.neon * 15.0,
+            blue: params.neon * 40.0
         )
-        ShaderPrimitives.applyBoxBlur(
-            pixels,
-            width: image.width,
-            height: image.height,
-            radius: 2,
-            mixAmount: params.softness * 0.65
-        )
-        ShaderPrimitives.addDeterministicGrain(pixels, width: image.width, height: image.height, amount: params.grain)
-        ShaderPrimitives.enforcePremultipliedAlpha(pixels, width: image.width, height: image.height)
+
+        // Softness
+        if params.softness > 0 {
+            ShaderPrimitives.applyBoxBlur(
+                pixels, width: width, height: height,
+                radius: max(1, Int((params.softness * 3).rounded())),
+                mixAmount: params.softness * 0.8
+            )
+        }
+
+        ShaderPrimitives.addDeterministicGrain(pixels, width: width, height: height, amount: params.grain)
+        ShaderPrimitives.enforcePremultipliedAlpha(pixels, width: width, height: height)
         return try mixStylizedContext(ctx, with: image, intensity: intensity)
     }
 
@@ -69,23 +75,29 @@ public enum ShaderRenderer {
         params: NarcShaderParams,
         intensity: Double
     ) throws -> CGImage {
+        let width = image.width
+        let height = image.height
         let ctx = try ShaderPrimitives.renderToRGBAContext(image)
         guard let data = ctx.data else {
             throw FramerError.invalidImage(URL(fileURLWithPath: ""))
         }
-        let pixels = data.bindMemory(to: UInt8.self, capacity: image.width * image.height * 4)
+        let pixels = data.bindMemory(to: UInt8.self, capacity: width * height * 4)
 
+        // Strong contrast and crush for gritty look
         ShaderPrimitives.adjustContrastAndCrush(
-            pixels,
-            width: image.width,
-            height: image.height,
-            contrast: params.contrast * 1.08,
-            crush: min(1.0, params.crush + 0.1)
+            pixels, width: width, height: height,
+            contrast: params.contrast * 1.4,
+            crush: min(1.0, params.crush * 1.5 + 0.15)
         )
-        ShaderPrimitives.adjustTemperature(pixels, width: image.width, height: image.height, amount: params.temperature)
-        ShaderPrimitives.adjustSaturation(pixels, width: image.width, height: image.height, amount: 1.02)
-        ShaderPrimitives.addDeterministicGrain(pixels, width: image.width, height: image.height, amount: params.grain * 1.1)
-        ShaderPrimitives.enforcePremultipliedAlpha(pixels, width: image.width, height: image.height)
+
+        // Temperature shift
+        ShaderPrimitives.adjustTemperature(pixels, width: width, height: height, amount: params.temperature * 1.5)
+
+        // Slight desaturation for washed-out look
+        ShaderPrimitives.adjustSaturation(pixels, width: width, height: height, amount: 0.85)
+
+        ShaderPrimitives.addDeterministicGrain(pixels, width: width, height: height, amount: params.grain * 1.5)
+        ShaderPrimitives.enforcePremultipliedAlpha(pixels, width: width, height: height)
         return try mixStylizedContext(ctx, with: image, intensity: intensity)
     }
 
@@ -94,23 +106,31 @@ public enum ShaderRenderer {
         params: ShibaShaderParams,
         intensity: Double
     ) throws -> CGImage {
+        let width = image.width
+        let height = image.height
         let ctx = try ShaderPrimitives.renderToRGBAContext(image)
         guard let data = ctx.data else {
             throw FramerError.invalidImage(URL(fileURLWithPath: ""))
         }
-        let pixels = data.bindMemory(to: UInt8.self, capacity: image.width * image.height * 4)
+        let pixels = data.bindMemory(to: UInt8.self, capacity: width * height * 4)
 
-        ShaderPrimitives.adjustTemperature(pixels, width: image.width, height: image.height, amount: params.warmth)
-        ShaderPrimitives.adjustSaturation(pixels, width: image.width, height: image.height, amount: 1.0 + params.saturation)
-        ShaderPrimitives.applyBoxBlur(
-            pixels,
-            width: image.width,
-            height: image.height,
-            radius: 1,
-            mixAmount: params.softness * 0.55
-        )
-        ShaderPrimitives.addDeterministicGrain(pixels, width: image.width, height: image.height, amount: params.grain * 0.6)
-        ShaderPrimitives.enforcePremultipliedAlpha(pixels, width: image.width, height: image.height)
+        // Warm temperature shift — more pronounced
+        ShaderPrimitives.adjustTemperature(pixels, width: width, height: height, amount: params.warmth * 1.8)
+
+        // Strong saturation boost
+        ShaderPrimitives.adjustSaturation(pixels, width: width, height: height, amount: 1.0 + params.saturation * 1.5)
+
+        // Softness
+        if params.softness > 0 {
+            ShaderPrimitives.applyBoxBlur(
+                pixels, width: width, height: height,
+                radius: max(1, Int((params.softness * 3).rounded())),
+                mixAmount: params.softness * 0.7
+            )
+        }
+
+        ShaderPrimitives.addDeterministicGrain(pixels, width: width, height: height, amount: params.grain)
+        ShaderPrimitives.enforcePremultipliedAlpha(pixels, width: width, height: height)
         return try mixStylizedContext(ctx, with: image, intensity: intensity)
     }
 
@@ -156,20 +176,10 @@ public enum ShaderRenderer {
             }
         }
 
-        // Pre-compute palette luminances for nearest-match
-        let paletteLum = palette.map { 0.299 * $0.r + 0.587 * $0.g + 0.114 * $0.b }
-
-        // Step 1: Color grading (approximates the 3 ColorCorrection passes + Blend)
-        // Reference CC1: exposure 4.0, contrast ~1.3, brightness ~+0.2, saturation ~0.85, temp -0.05
-        // Reference CC2: heavy desaturation (sat 0.498 red channel)
-        // Reference CC3: contrast ~1.17, exposure 1.156, temp +0.2
-        // Net effect: boosted exposure, warm tone, reduced saturation, higher contrast
-
-        // Exposure + contrast + brightness (controlled by fade)
-        let exposureMul = 1.0 + fade * 1.5       // 1.0 → 2.5 (reference net is ~4.6)
-        let contrastMul = 1.0 + fade * 0.35       // 1.0 → 1.35
-        let brightnessAdd = fade * 0.12            // warm brightness offset
-        let desatAmount = 1.0 - fade * 0.45        // 1.0 → 0.55
+        // Step 1: Gentle color grading — warm desaturation with slight exposure lift.
+        // Keep values moderate so the palette snap produces visible tonal separation.
+        let warmShift = fade * 0.04
+        let desatAmount = 1.0 - fade * 0.35
 
         for i in 0..<(width * height) {
             let idx = i * 4
@@ -177,65 +187,24 @@ public enum ShaderRenderer {
             var g = Double(pixels[idx + 1]) / 255.0
             var b = Double(pixels[idx + 2]) / 255.0
 
-            // Exposure
-            r *= exposureMul
-            g *= exposureMul
-            b *= exposureMul
+            // Warm shift
+            r += warmShift
+            b -= warmShift * 0.6
 
-            // Contrast around midpoint (reference uses 0.5 linear midpoint)
-            r = contrastMul * (r - 0.5) + 0.5 + brightnessAdd * 1.2
-            g = contrastMul * (g - 0.5) + 0.5 + brightnessAdd
-            b = contrastMul * (b - 0.5) + 0.5 + brightnessAdd * 0.85
-
-            // Warm temperature shift (reference: -0.05 then +0.2 net = +0.15)
-            let tempShift = fade * 0.06
-            r += tempShift
-            b -= tempShift * 0.7
-
-            // Desaturate (reference: selective, we approximate uniformly)
+            // Desaturate toward luminance
             let lum = 0.299 * r + 0.587 * g + 0.114 * b
             r = lum + (r - lum) * desatAmount
             g = lum + (g - lum) * desatAmount
             b = lum + (b - lum) * desatAmount
 
-            // Acerola Light self-blend approximation (mode 10, strength 0.2)
-            // AcerolaLight: luminance < 0.5 → 1 - (1-a)/(4*(a+0.001)) - 0.25
-            //               luminance >= 0.5 → a/(4*(1-(a-0.001))) + 0.25
-            // At 0.2 blend strength this gently lifts shadows and compresses highlights
-            let blendStr = fade * 0.2
-            func acerolaLight(_ a: Double) -> Double {
-                let s = max(0.001, min(0.999, a))
-                return s < 0.5
-                    ? max(0, 1.0 - (1.0 - s) / (4.0 * (s + 0.001)) - 0.25)
-                    : min(1, s / (4.0 * (1.0 - (s - 0.001))) + 0.25)
-            }
-            r = r + (acerolaLight(max(0, min(1, r))) - r) * blendStr
-            g = g + (acerolaLight(max(0, min(1, g))) - g) * blendStr
-            b = b + (acerolaLight(max(0, min(1, b))) - b) * blendStr
-
-            // Filmic tonemap approximation (Hable curve)
-            func hable(_ x: Double) -> Double {
-                let a = 0.1, b = 0.5, c = 0.075, d = 0.2, e = 0.014, f = 0.3
-                return ((x * (a * x + c * b) + d * e) / (x * (a * x + b) + d * f)) - e / f
-            }
-            let whiteScale = 1.0 / hable(8.0)
-            r = hable(max(0, r)) * whiteScale
-            g = hable(max(0, g)) * whiteScale
-            b = hable(max(0, b)) * whiteScale
-
-            // Gamma (reference: 1.201)
-            let gamma = 1.0 / (1.0 + fade * 0.2)
-            r = pow(max(0, min(1, r)), gamma)
-            g = pow(max(0, min(1, g)), gamma)
-            b = pow(max(0, min(1, b)), gamma)
-
-            pixels[idx] = ShaderPrimitives.clampByte(r * 255.0)
-            pixels[idx + 1] = ShaderPrimitives.clampByte(g * 255.0)
-            pixels[idx + 2] = ShaderPrimitives.clampByte(b * 255.0)
+            pixels[idx] = ShaderPrimitives.clampByte(max(0, min(1, r)) * 255.0)
+            pixels[idx + 1] = ShaderPrimitives.clampByte(max(0, min(1, g)) * 255.0)
+            pixels[idx + 2] = ShaderPrimitives.clampByte(max(0, min(1, b)) * 255.0)
         }
 
-        // Step 2: Palette snap — map each pixel to nearest palette color by luminance
-        // (Reference maps red channel to palette index; after grading, R ≈ luminance)
+        // Step 2: Palette snap — map each pixel to the nearest palette color
+        // using Euclidean distance in RGB (not just luminance). This preserves
+        // the hue variation between palette entries instead of collapsing to bands.
         for y in 0..<height {
             try Task.checkCancellation()
             for x in 0..<width {
@@ -243,13 +212,22 @@ public enum ShaderRenderer {
                 let r = Double(pixels[idx]) / 255.0
                 let g = Double(pixels[idx + 1]) / 255.0
                 let b = Double(pixels[idx + 2]) / 255.0
-                let pixelLum = 0.299 * r + 0.587 * g + 0.114 * b
 
-                // Find nearest palette entry by luminance distance
+                // Add dither noise before snapping to reduce banding
+                let noiseSeed = ((x &* 31) &+ (y &* 17) &+ ((x ^ y) &* 13)) & 255
+                let noise = (Double(noiseSeed) / 255.0 - 0.5) * 0.06
+                let nr = r + noise
+                let ng = g + noise
+                let nb = b + noise
+
                 var bestIdx = 0
-                var bestDist = abs(pixelLum - paletteLum[0])
-                for pi in 1..<palette.count {
-                    let dist = abs(pixelLum - paletteLum[pi])
+                var bestDist = Double.greatestFiniteMagnitude
+                for pi in 0..<palette.count {
+                    let pc = palette[pi]
+                    let dr = nr - pc.r
+                    let dg = ng - pc.g
+                    let db = nb - pc.b
+                    let dist = dr * dr + dg * dg + db * db
                     if dist < bestDist {
                         bestDist = dist
                         bestIdx = pi
@@ -257,32 +235,23 @@ public enum ShaderRenderer {
                 }
 
                 let pc = palette[bestIdx]
-
-                // Dither: add small noise before snapping to reduce banding
-                // (Reference uses blue noise at spread 0.062)
-                let noiseSeed = ((x &* 31) &+ (y &* 17) &+ ((x ^ y) &* 13)) & 255
-                let noise = (Double(noiseSeed) / 255.0 - 0.5) * grain * 0.15
-                let grainedR = ShaderPrimitives.clampByte((pc.r + noise) * 255.0)
-                let grainedG = ShaderPrimitives.clampByte((pc.g + noise) * 255.0)
-                let grainedB = ShaderPrimitives.clampByte((pc.b + noise) * 255.0)
-
-                pixels[idx] = grainedR
-                pixels[idx + 1] = grainedG
-                pixels[idx + 2] = grainedB
+                pixels[idx] = ShaderPrimitives.clampByte(pc.r * 255.0)
+                pixels[idx + 1] = ShaderPrimitives.clampByte(pc.g * 255.0)
+                pixels[idx + 2] = ShaderPrimitives.clampByte(pc.b * 255.0)
             }
         }
 
-        // Step 3: Vignette (reference: intensity 1.563, large roundness)
-        if fade > 0 {
+        // Step 3: Vignette
+        if fade > 0.05 {
             let cx = Double(width) / 2.0
             let cy = Double(height) / 2.0
-            let vignetteStrength = fade * 1.2
+            let vigStr = fade * 0.8
             for y in 0..<height {
                 for x in 0..<width {
                     let dx = (Double(x) - cx) / cx
                     let dy = (Double(y) - cy) / cy
-                    let dist = sqrt(dx * dx + dy * dy)
-                    let vignette = max(0, 1.0 - dist * dist * vignetteStrength * 0.5)
+                    let dist = dx * dx + dy * dy
+                    let vignette = max(0, 1.0 - dist * vigStr * 0.4)
                     let idx = (y * width + x) * 4
                     pixels[idx] = ShaderPrimitives.clampByte(Double(pixels[idx]) * vignette)
                     pixels[idx + 1] = ShaderPrimitives.clampByte(Double(pixels[idx + 1]) * vignette)
@@ -292,13 +261,15 @@ public enum ShaderRenderer {
         }
 
         // Step 4: Softness (blur)
-        ShaderPrimitives.applyBoxBlur(
-            pixels,
-            width: width,
-            height: height,
-            radius: max(1, Int((softness * 3).rounded())),
-            mixAmount: softness
-        )
+        if softness > 0 {
+            ShaderPrimitives.applyBoxBlur(
+                pixels,
+                width: width,
+                height: height,
+                radius: max(1, Int((softness * 3).rounded())),
+                mixAmount: softness * 0.7
+            )
+        }
 
         // Step 5: Film grain
         ShaderPrimitives.addDeterministicGrain(pixels, width: width, height: height, amount: grain)
