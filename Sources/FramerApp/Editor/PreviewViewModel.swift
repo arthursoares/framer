@@ -17,6 +17,7 @@ final class PreviewViewModel {
     private var originalLoadTask: Task<Void, Never>?
     private var originalImageURL: URL?
     private let processor = FrameProcessor()
+    private var renderGeneration: UInt64 = 0
 
     func updatePreview(for item: PhotoItem?, config: ProcessingConfig, includeOriginal: Bool = false) {
         renderTask?.cancel()
@@ -42,13 +43,13 @@ final class PreviewViewModel {
             originalImage = nil
         }
 
+        renderGeneration &+= 1
+        let generation = renderGeneration
+
         renderTask = Task {
             // Debounce: wait 150ms before rendering
             try? await Task.sleep(for: .milliseconds(150))
-            guard !Task.isCancelled else {
-                isLoading = false
-                return
-            }
+            guard generation == renderGeneration else { return }
 
             isLoading = true
             error = nil
@@ -59,22 +60,17 @@ final class PreviewViewModel {
                 let itemRotation = item.rotation
 
                 let exif = await processor.exifData(for: itemURL)
-                guard !Task.isCancelled else {
-                    return
-                }
+                guard generation == renderGeneration else { return }
                 exifData = exif
 
                 let cgPreview = try await processor.previewCGImage(for: itemURL, config: config, rotation: itemRotation)
+                guard generation == renderGeneration else { return }
                 let scale = NSScreen.main?.backingScaleFactor ?? 2.0
                 let preview = NSImage(cgImage: cgPreview, size: NSSize(
                     width: CGFloat(cgPreview.width) / scale,
                     height: CGFloat(cgPreview.height) / scale
                 ))
-                guard !Task.isCancelled else {
-                    return
-                }
                 previewImage = preview
-                // Output size in actual pixels (not points)
                 outputSize = CGSize(width: cgPreview.width, height: cgPreview.height)
                 if includeOriginal {
                     loadOriginalIfNeeded(for: item)

@@ -6,6 +6,11 @@ struct PreviewArea: View {
     @Binding var showingOriginal: Bool
 
     @State private var dragOffset: CGFloat = 0
+    @State private var zoomState = ZoomState()
+    @State private var magnifyBase: CGFloat = 1.0
+    @State private var panStart: CGSize = .zero
+    @State private var viewportSize: CGSize = .zero
+    @State private var isDragging = false
 
     var body: some View {
         ZStack {
@@ -23,12 +28,38 @@ struct PreviewArea: View {
                     .scaleEffect(1.5)
                     .tint(Color.text2)
             } else if let img = showingOriginal ? viewModel.originalImage : viewModel.previewImage {
-                Image(uiImage: img)
-                    .resizable()
-                    .aspectRatio(contentMode: .fit)
-                    .padding(.horizontal, 20)
-                    .shadow(color: .black.opacity(0.4), radius: 10, y: 4)
-                    .offset(x: dragOffset)
+                GeometryReader { geo in
+                    Image(uiImage: img)
+                        .resizable()
+                        .aspectRatio(contentMode: .fit)
+                        .padding(.horizontal, 20)
+                        .shadow(color: .black.opacity(0.4), radius: 10, y: 4)
+                        .scaleEffect(zoomState.scale)
+                        .offset(zoomState.isAtFit ? CGSize(width: dragOffset, height: 0) : zoomState.offset)
+                        .frame(width: geo.size.width, height: geo.size.height)
+                        .contentShape(Rectangle())
+                        .gesture(dragGesture(viewSize: geo.size))
+                        .simultaneousGesture(magnifyGesture(viewSize: geo.size))
+                        .onTapGesture(count: 2) {
+                            withAnimation(.easeInOut(duration: 0.25)) {
+                                zoomState.toggleFitActual()
+                                panStart = .zero
+                            }
+                        }
+                        .onAppear {
+                            updateFitScale(img: img, viewSize: geo.size)
+                        }
+                        .onChange(of: geo.size) { _, newSize in
+                            viewportSize = newSize
+                            updateFitScale(img: img, viewSize: newSize)
+                        }
+                        .onChange(of: img.size.width) { _, _ in
+                            updateFitScale(img: img, viewSize: geo.size)
+                        }
+                        .onChange(of: img.size.height) { _, _ in
+                            updateFitScale(img: img, viewSize: geo.size)
+                        }
+                }
             } else {
                 VStack(spacing: 12) {
                     Image(systemName: "photo.artframe")
@@ -62,38 +93,91 @@ struct PreviewArea: View {
                 }
             }
 
-            // Output size badge
-            if let size = viewModel.outputSize {
-                VStack {
+            // Zoom indicator (replaces output size badge when not at fit)
+            VStack {
+                Spacer()
+                HStack {
                     Spacer()
-                    HStack {
-                        Spacer()
+                    if !zoomState.isAtFit {
+                        ZoomIndicator(
+                            zoomState: zoomState,
+                            onFit: {
+                                withAnimation(.easeInOut(duration: 0.25)) {
+                                    zoomState.fitToWindow()
+                                }
+                            },
+                            onToggle: {
+                                withAnimation(.easeInOut(duration: 0.25)) {
+                                    zoomState.toggleFitActual()
+                                }
+                            }
+                        )
+                    } else if let size = viewModel.outputSize {
                         Text("\(Int(size.width))×\(Int(size.height))")
                             .font(AppFont.mono(10))
                             .foregroundStyle(Color.text3)
-                            .padding(.trailing, 16)
-                            .padding(.bottom, 8)
                     }
                 }
+                .padding(.trailing, 16)
+                .padding(.bottom, 8)
             }
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
         .contentShape(Rectangle())
-        // Swipe left/right to navigate photos
-        .gesture(
-            DragGesture(minimumDistance: 30)
-                .onChanged { value in
-                    dragOffset = value.translation.width * 0.4
+        // Long press to show original (only when not dragging)
+        .onLongPressGesture(minimumDuration: 0.3, pressing: { pressing in
+            if !isDragging { showingOriginal = pressing }
+        }, perform: {})
+        // Reset zoom on photo change
+        .onChange(of: appState.selectedIndex) { _, _ in
+            zoomState.fitToWindow()
+            dragOffset = 0
+        }
+    }
+
+    // MARK: - Gestures
+
+    private func magnifyGesture(viewSize: CGSize) -> some Gesture {
+        MagnifyGesture()
+            .onChanged { value in
+                let delta = value.magnification / magnifyBase
+                zoomState.applyMagnification(delta, anchor: CGPoint(x: viewSize.width / 2, y: viewSize.height / 2), viewSize: viewSize)
+                magnifyBase = value.magnification
+            }
+            .onEnded { _ in
+                magnifyBase = 1.0
+                if zoomState.isAtFit {
+                    withAnimation(.easeOut(duration: 0.15)) {
+                        zoomState.fitToWindow()
+                    }
+                } else {
+                    zoomState.clampOffset(imageSize: fittedImageSize(), viewSize: viewSize)
                 }
-                .onEnded { value in
+            }
+    }
+
+    private func dragGesture(viewSize: CGSize) -> some Gesture {
+        DragGesture(minimumDistance: zoomState.isAtFit ? 30 : 5)
+            .onChanged { value in
+                isDragging = true
+                if zoomState.isAtFit {
+                    dragOffset = value.translation.width * 0.4
+                } else {
+                    zoomState.offset = CGSize(
+                        width: panStart.width + value.translation.width,
+                        height: panStart.height + value.translation.height
+                    )
+                }
+            }
+            .onEnded { value in
+                isDragging = false
+                if zoomState.isAtFit {
                     let threshold: CGFloat = 60
                     if value.translation.width < -threshold {
-                        // Swipe left → next photo
                         if appState.selectedIndex < appState.library.count - 1 {
                             appState.selectedIndex += 1
                         }
                     } else if value.translation.width > threshold {
-                        // Swipe right → previous photo
                         if appState.selectedIndex > 0 {
                             appState.selectedIndex -= 1
                         }
@@ -101,11 +185,31 @@ struct PreviewArea: View {
                     withAnimation(.easeOut(duration: 0.15)) {
                         dragOffset = 0
                     }
+                } else {
+                    zoomState.clampOffset(imageSize: fittedImageSize(), viewSize: viewSize)
+                    panStart = zoomState.offset
                 }
-        )
-        // Long press to show original
-        .onLongPressGesture(minimumDuration: 0.3, pressing: { pressing in
-            showingOriginal = pressing
-        }, perform: {})
+            }
+    }
+
+    // MARK: - Helpers
+
+    private func updateFitScale(img: UIImage, viewSize: CGSize) {
+        let padded = CGSize(width: max(1, viewSize.width - 40), height: max(1, viewSize.height))
+        zoomState.updateFitScale(imageSize: img.size, viewSize: padded)
+        viewportSize = viewSize
+    }
+
+    private var displayedImage: UIImage? {
+        showingOriginal ? viewModel.originalImage : viewModel.previewImage
+    }
+
+    private func fittedImageSize() -> CGSize {
+        guard let img = displayedImage else { return .zero }
+        let padded = CGSize(width: max(1, viewportSize.width - 40), height: max(1, viewportSize.height))
+        let fitW = padded.width / img.size.width
+        let fitH = padded.height / img.size.height
+        let fit = min(fitW, fitH)
+        return CGSize(width: img.size.width * fit, height: img.size.height * fit)
     }
 }
