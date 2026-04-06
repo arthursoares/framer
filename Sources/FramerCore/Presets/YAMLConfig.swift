@@ -82,6 +82,7 @@ public enum YAMLConfig {
         var shader_invert: Bool?
         var shader_exposure: Double?
         var shader_attenuation: Double?
+        var shader_black_level: Double?
         var shader_color1: String?
         var shader_color2: String?
         var shader_neon: Double?
@@ -561,6 +562,7 @@ public enum YAMLConfig {
             schema.shader_invert = p.invert
             if p.exposure != 1.0 { schema.shader_exposure = p.exposure }
             if p.attenuation != 1.0 { schema.shader_attenuation = p.attenuation }
+            if p.blackLevel != 0.0 { schema.shader_black_level = p.blackLevel }
         case .crimewave(let p):
             schema.shader_neon = p.neon
             schema.shader_softness = p.softness
@@ -635,7 +637,8 @@ public enum YAMLConfig {
                 colorMode: colorMode,
                 invert: schema.shader_invert ?? false,
                 exposure: schema.shader_exposure ?? 1.0,
-                attenuation: schema.shader_attenuation ?? 1.0
+                attenuation: schema.shader_attenuation ?? 1.0,
+                blackLevel: schema.shader_black_level ?? 0.0
             ))
         case .crimewave:
             return .crimewave(CrimewaveShaderParams(

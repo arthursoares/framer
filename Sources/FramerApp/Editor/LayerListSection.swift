@@ -2576,6 +2576,15 @@ struct ShaderLayerControls: View {
             updateASCII(asciiParams, attenuation: value)
         }
 
+        sliderRow(
+            title: "Black Level",
+            value: asciiParams.blackLevel,
+            range: 0...1,
+            step: 0.05
+        ) { value in
+            updateASCII(asciiParams, blackLevel: value)
+        }
+
         VStack(alignment: .leading, spacing: 4) {
             Text("Colors")
                 .font(AppFont.controlLabel)
@@ -2619,7 +2628,9 @@ struct ShaderLayerControls: View {
                     guard let hex = value.hexString, let color = try? CodableColor(hex: hex) else { return }
                     updateASCII(asciiParams, colorMode: .manual(foreground: color, background: background))
                 }
-            ))
+            ), onHexCommit: { color in
+                updateASCII(asciiParams, colorMode: .manual(foreground: color, background: background))
+            })
 
             ColorPickerWithHex("Background", selection: Binding(
                 get: { Color(cgColor: background.cgColor) },
@@ -2627,7 +2638,9 @@ struct ShaderLayerControls: View {
                     guard let hex = value.hexString, let color = try? CodableColor(hex: hex) else { return }
                     updateASCII(asciiParams, colorMode: .manual(foreground: foreground, background: color))
                 }
-            ))
+            ), onHexCommit: { color in
+                updateASCII(asciiParams, colorMode: .manual(foreground: foreground, background: color))
+            })
         case .dominantTwoTone(let flipped, let saturationShift, let lightnessShift):
             Toggle("Flip Palette", isOn: Binding(
                 get: { flipped },
@@ -2672,7 +2685,9 @@ struct ShaderLayerControls: View {
                     guard let hex = value.hexString, let color = try? CodableColor(hex: hex) else { return }
                     updateASCII(asciiParams, colorMode: .source(background: color))
                 }
-            ))
+            ), onHexCommit: { color in
+                updateASCII(asciiParams, colorMode: .source(background: color))
+            })
         case .gradient(let color1, let color2, let background):
             ColorPickerWithHex("Dark Color", selection: Binding(
                 get: { Color(cgColor: color1.cgColor) },
@@ -2680,7 +2695,9 @@ struct ShaderLayerControls: View {
                     guard let hex = value.hexString, let color = try? CodableColor(hex: hex) else { return }
                     updateASCII(asciiParams, colorMode: .gradient(color1: color, color2: color2, background: background))
                 }
-            ))
+            ), onHexCommit: { color in
+                updateASCII(asciiParams, colorMode: .gradient(color1: color, color2: color2, background: background))
+            })
 
             ColorPickerWithHex("Bright Color", selection: Binding(
                 get: { Color(cgColor: color2.cgColor) },
@@ -2688,7 +2705,9 @@ struct ShaderLayerControls: View {
                     guard let hex = value.hexString, let color = try? CodableColor(hex: hex) else { return }
                     updateASCII(asciiParams, colorMode: .gradient(color1: color1, color2: color, background: background))
                 }
-            ))
+            ), onHexCommit: { color in
+                updateASCII(asciiParams, colorMode: .gradient(color1: color1, color2: color, background: background))
+            })
 
             ColorPickerWithHex("Background", selection: Binding(
                 get: { Color(cgColor: background.cgColor) },
@@ -2696,7 +2715,9 @@ struct ShaderLayerControls: View {
                     guard let hex = value.hexString, let color = try? CodableColor(hex: hex) else { return }
                     updateASCII(asciiParams, colorMode: .gradient(color1: color1, color2: color2, background: color))
                 }
-            ))
+            ), onHexCommit: { color in
+                updateASCII(asciiParams, colorMode: .gradient(color1: color1, color2: color2, background: color))
+            })
         }
 
         Toggle("Invert", isOn: Binding(
@@ -2714,7 +2735,8 @@ struct ShaderLayerControls: View {
         colorMode: ASCIIColorMode? = nil,
         invert: Bool? = nil,
         exposure: Double? = nil,
-        attenuation: Double? = nil
+        attenuation: Double? = nil,
+        blackLevel: Double? = nil
     ) {
         onChange(params.withParams(.ascii(ASCIIShaderParams(
             cellSize: cellSize ?? asciiParams.cellSize,
@@ -2722,7 +2744,8 @@ struct ShaderLayerControls: View {
             colorMode: colorMode ?? asciiParams.colorMode,
             invert: invert ?? asciiParams.invert,
             exposure: exposure ?? asciiParams.exposure,
-            attenuation: attenuation ?? asciiParams.attenuation
+            attenuation: attenuation ?? asciiParams.attenuation,
+            blackLevel: blackLevel ?? asciiParams.blackLevel
         ))))
     }
 
@@ -2994,14 +3017,21 @@ struct ShaderLayerControls: View {
 
 extension Color {
     var hexString: String? {
-        guard let cgColor = NSColor(self).cgColor.converted(
-            to: CGColorSpaceCreateDeviceRGB(), intent: .defaultIntent, options: nil),
-              let comps = cgColor.components, comps.count >= 3 else {
+        // Resolve to a concrete RGB NSColor — handles catalog, pattern, and named colors
+        let nsColor: NSColor
+        if let resolved = NSColor(self).usingColorSpace(.sRGB) {
+            nsColor = resolved
+        } else if let resolved = NSColor(self).usingColorSpace(.deviceRGB) {
+            nsColor = resolved
+        } else {
             return nil
         }
-        let r = Int(comps[0] * 255)
-        let g = Int(comps[1] * 255)
-        let b = Int(comps[2] * 255)
-        return String(format: "#%02X%02X%02X", r, g, b)
+        let r = Int(round(nsColor.redComponent * 255))
+        let g = Int(round(nsColor.greenComponent * 255))
+        let b = Int(round(nsColor.blueComponent * 255))
+        return String(format: "#%02X%02X%02X",
+                      max(0, min(255, r)),
+                      max(0, min(255, g)),
+                      max(0, min(255, b)))
     }
 }

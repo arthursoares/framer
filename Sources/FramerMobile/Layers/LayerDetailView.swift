@@ -579,8 +579,104 @@ private struct CaptionControls: View {
                         var p = params; p.fontColorMode = .dominantInverted(saturationShift: s, lightnessShift: l); onChange(p)
                     }
                 }
+
+                // Font
+                ControlRow(label: "Font") {
+                    Picker("", selection: Binding(
+                        get: { params.fontName },
+                        set: { var p = params; p.fontName = $0; onChange(p) }
+                    )) {
+                        ForEach(monospacedFontList, id: \.self) { name in
+                            Text(name).tag(name)
+                        }
+                    }
+                }
+
+                // Style
+                ControlRow(label: "Style") {
+                    HStack(spacing: 8) {
+                        Toggle(isOn: fontStyleBinding(.bold)) {
+                            Text("B").bold()
+                        }
+                        .toggleStyle(.button)
+
+                        Toggle(isOn: fontStyleBinding(.italic)) {
+                            Text("I").italic()
+                        }
+                        .toggleStyle(.button)
+                    }
+                }
+
+                // Font size
+                ControlRow(label: "Size") {
+                    Picker("", selection: Binding(
+                        get: {
+                            switch params.fontSize {
+                            case .auto: return 0
+                            case .fixed: return 1
+                            }
+                        },
+                        set: { idx in
+                            var p = params
+                            p.fontSize = idx == 0 ? .auto : .fixed(24)
+                            onChange(p)
+                        }
+                    )) {
+                        Text("Auto").tag(0)
+                        Text("Custom").tag(1)
+                    }
+                    .pickerStyle(.segmented)
+                }
+
+                if case .fixed(let pts) = params.fontSize {
+                    ControlRow(label: "Font Size") {
+                        HStack {
+                            Slider(value: Binding(
+                                get: { Double(pts) },
+                                set: { var p = params; p.fontSize = .fixed(Int($0)); onChange(p) }
+                            ), in: 6...120)
+                            Text("\(pts)pt")
+                                .font(AppFont.mono(12))
+                                .frame(width: 44, alignment: .trailing)
+                        }
+                    }
+                }
             }
         }
+    }
+
+    private var monospacedFontList: [String] {
+        let current = params.fontName
+        if Self.cachedMonospacedFonts.contains(current) {
+            return Self.cachedMonospacedFonts
+        }
+        return ([current] + Self.cachedMonospacedFonts).sorted()
+    }
+
+    private static let cachedMonospacedFonts: [String] = {
+        UIFont.familyNames
+            .filter { family in
+                guard let font = UIFont(name: family, size: 12) else {
+                    // Family name doesn't work as a font name — check first face
+                    let faces = UIFont.fontNames(forFamilyName: family)
+                    guard let first = faces.first,
+                          let f = UIFont(name: first, size: 12) else { return false }
+                    return f.fontDescriptor.symbolicTraits.contains(.traitMonoSpace)
+                }
+                return font.fontDescriptor.symbolicTraits.contains(.traitMonoSpace)
+            }
+            .sorted()
+    }()
+
+    private func fontStyleBinding(_ style: FontStyle) -> Binding<Bool> {
+        Binding(
+            get: { params.fontStyle.contains(style) },
+            set: { on in
+                var p = params
+                if on { p.fontStyle.insert(style) } else { p.fontStyle.remove(style) }
+                onChange(p)
+            }
+        )
     }
 
     @ViewBuilder
@@ -1018,6 +1114,15 @@ private struct ShaderControls: View {
             updateASCII(asciiParams, attenuation: value)
         }
 
+        sliderRow(
+            label: "Black Level",
+            value: asciiParams.blackLevel,
+            range: 0...1,
+            step: 0.05
+        ) { value in
+            updateASCII(asciiParams, blackLevel: value)
+        }
+
         ControlRow(label: "Colors") {
             Picker("", selection: Binding(
                 get: {
@@ -1184,7 +1289,8 @@ private struct ShaderControls: View {
         colorMode: ASCIIColorMode? = nil,
         invert: Bool? = nil,
         exposure: Double? = nil,
-        attenuation: Double? = nil
+        attenuation: Double? = nil,
+        blackLevel: Double? = nil
     ) {
         onChange(params.withParams(.ascii(ASCIIShaderParams(
             cellSize: cellSize ?? asciiParams.cellSize,
@@ -1192,7 +1298,8 @@ private struct ShaderControls: View {
             colorMode: colorMode ?? asciiParams.colorMode,
             invert: invert ?? asciiParams.invert,
             exposure: exposure ?? asciiParams.exposure,
-            attenuation: attenuation ?? asciiParams.attenuation
+            attenuation: attenuation ?? asciiParams.attenuation,
+            blackLevel: blackLevel ?? asciiParams.blackLevel
         ))))
     }
 

@@ -4,11 +4,14 @@ import FramerCore
 struct ColorPickerWithHex: View {
     let label: String
     @Binding var selection: Color
+    var onHexCommit: ((CodableColor) -> Void)?
     @State private var hexText: String = ""
+    @State private var suppressSync = false
 
-    init(_ label: String, selection: Binding<Color>) {
+    init(_ label: String, selection: Binding<Color>, onHexCommit: ((CodableColor) -> Void)? = nil) {
         self.label = label
         self._selection = selection
+        self.onHexCommit = onHexCommit
     }
 
     var body: some View {
@@ -29,7 +32,13 @@ struct ColorPickerWithHex: View {
                 .onSubmit { applyHex() }
         }
         .onAppear { syncHexFromColor() }
-        .onChange(of: selection) { _, _ in syncHexFromColor() }
+        .onChange(of: selection) { _, _ in
+            if suppressSync {
+                suppressSync = false
+            } else {
+                syncHexFromColor()
+            }
+        }
     }
 
     private func syncHexFromColor() {
@@ -41,8 +50,22 @@ struct ColorPickerWithHex: View {
     private func applyHex() {
         let cleaned = hexText.trimmingCharacters(in: .whitespaces)
         guard let codable = try? CodableColor(hex: cleaned) else { return }
-        if let nsColor = NSColor(cgColor: codable.cgColor) {
-            selection = Color(nsColor: nsColor)
+
+        // Direct hex callback bypasses Color round-trip entirely
+        if let onHexCommit {
+            onHexCommit(codable)
+            hexText = codable.hex
+            return
         }
+
+        // Update through the Color binding — suppress the sync so our hex isn't overwritten
+        suppressSync = true
+        let nsColor = NSColor(
+            colorSpace: .sRGB,
+            components: [CGFloat(codable.red), CGFloat(codable.green), CGFloat(codable.blue), 1.0],
+            count: 4
+        )
+        selection = Color(nsColor: nsColor)
+        hexText = codable.hex
     }
 }

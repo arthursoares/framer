@@ -873,6 +873,7 @@ public struct ASCIIShaderParams: Codable, Equatable, Sendable {
     public var invert: Bool
     public var exposure: Double
     public var attenuation: Double
+    public var blackLevel: Double
 
     public init(
         cellSize: Int = 10,
@@ -882,7 +883,8 @@ public struct ASCIIShaderParams: Codable, Equatable, Sendable {
         background: CodableColor = .black,
         invert: Bool = false,
         exposure: Double = 1.0,
-        attenuation: Double = 1.0
+        attenuation: Double = 1.0,
+        blackLevel: Double = 0.0
     ) {
         self.cellSize = cellSize
         self.edgeBias = edgeBias
@@ -890,11 +892,12 @@ public struct ASCIIShaderParams: Codable, Equatable, Sendable {
         self.invert = invert
         self.exposure = exposure
         self.attenuation = attenuation
+        self.blackLevel = blackLevel
     }
 
     private enum CodingKeys: String, CodingKey {
         case cellSize, edgeBias, colorMode, foreground, background, invert
-        case exposure, attenuation
+        case exposure, attenuation, blackLevel
     }
 
     public init(from decoder: Decoder) throws {
@@ -915,7 +918,8 @@ public struct ASCIIShaderParams: Codable, Equatable, Sendable {
             colorMode: decodedColorMode,
             invert: try container.decodeIfPresent(Bool.self, forKey: .invert) ?? false,
             exposure: try container.decodeIfPresent(Double.self, forKey: .exposure) ?? 1.0,
-            attenuation: try container.decodeIfPresent(Double.self, forKey: .attenuation) ?? 1.0
+            attenuation: try container.decodeIfPresent(Double.self, forKey: .attenuation) ?? 1.0,
+            blackLevel: try container.decodeIfPresent(Double.self, forKey: .blackLevel) ?? 0.0
         )
     }
 
@@ -927,6 +931,7 @@ public struct ASCIIShaderParams: Codable, Equatable, Sendable {
         try container.encode(invert, forKey: .invert)
         if exposure != 1.0 { try container.encode(exposure, forKey: .exposure) }
         if attenuation != 1.0 { try container.encode(attenuation, forKey: .attenuation) }
+        if blackLevel != 0.0 { try container.encode(blackLevel, forKey: .blackLevel) }
     }
 }
 
