@@ -5,6 +5,8 @@ struct PresetStrip: View {
     @Environment(AppState.self) var appState
     let cache: PresetPreviewCache
     @State private var showingImporter = false
+    @State private var renamingPreset: Preset?
+    @State private var renameText = ""
 
     var body: some View {
         ScrollView(.horizontal, showsIndicators: false) {
@@ -27,6 +29,12 @@ struct PresetStrip: View {
                             appState.appliedPresetConfig = preset.config
                         } label: {
                             Label("Apply", systemImage: "checkmark.circle")
+                        }
+                        Button {
+                            renameText = preset.name
+                            renamingPreset = preset
+                        } label: {
+                            Label("Rename", systemImage: "pencil")
                         }
                         Button {
                             exportPreset(preset)
@@ -115,6 +123,33 @@ struct PresetStrip: View {
                 }
                 appState.loadPresets()
             }
+        }
+        .alert("Rename Preset", isPresented: Binding(
+            get: { renamingPreset != nil },
+            set: { if !$0 { renamingPreset = nil } }
+        )) {
+            TextField("Preset name", text: $renameText)
+            Button("Cancel", role: .cancel) { renamingPreset = nil }
+            Button("Rename") {
+                if let preset = renamingPreset, !renameText.isEmpty {
+                    let otherNames = appState.presets
+                        .filter { $0.id != preset.id }
+                        .map(\.name)
+                    guard !otherNames.contains(renameText) else {
+                        renamingPreset = nil
+                        return
+                    }
+                    let updated = Preset(id: preset.id, name: renameText, config: preset.config)
+                    try? appState.presetStore.save(updated)
+                    if appState.activePresetName == preset.name {
+                        appState.activePresetName = renameText
+                    }
+                    appState.loadPresets()
+                }
+                renamingPreset = nil
+            }
+        } message: {
+            Text("Enter a new name for this preset.")
         }
     }
 

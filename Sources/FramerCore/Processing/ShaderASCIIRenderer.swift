@@ -217,10 +217,13 @@ enum ShaderASCIIRenderer {
                     edgeBias: edgeBias
                 )
 
-                // Apply exposure and attenuation to luminance for fill lookup
+                // Apply exposure, attenuation, and black level to luminance for fill lookup
                 var adjustedLum = ShaderPrimitives.clamp01(
                     pow(avgLum * exposure, attenuation)
                 )
+                // Lift blacks: remap [0,1] → [blackLevel,1]
+                let bl = asciiParams.blackLevel
+                if bl > 0 { adjustedLum = bl + adjustedLum * (1.0 - bl) }
                 if asciiParams.invert { adjustedLum = 1.0 - adjustedLum }
 
                 // Determine foreground color for this cell
