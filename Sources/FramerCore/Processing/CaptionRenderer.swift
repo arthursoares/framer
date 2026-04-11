@@ -26,10 +26,10 @@ public enum CaptionRenderer {
         guard let ctx = CGContext(data: nil,
                                   width: image.width,
                                   height: image.height,
-                                  bitsPerComponent: image.bitsPerComponent,
+                                  bitsPerComponent: 8,
                                   bytesPerRow: 0,
                                   space: image.colorSpace ?? CGColorSpaceCreateDeviceRGB(),
-                                  bitmapInfo: image.bitmapInfo.rawValue) else {
+                                  bitmapInfo: CGImageAlphaInfo.premultipliedLast.rawValue) else {
             throw FramerError.invalidImage(URL(fileURLWithPath: ""))
         }
 

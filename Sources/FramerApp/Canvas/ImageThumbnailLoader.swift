@@ -47,10 +47,10 @@ enum ImageThumbnailLoader {
             data: nil,
             width: newWidth,
             height: newHeight,
-            bitsPerComponent: image.bitsPerComponent,
+            bitsPerComponent: 8,
             bytesPerRow: 0,
             space: image.colorSpace ?? CGColorSpaceCreateDeviceRGB(),
-            bitmapInfo: image.bitmapInfo.rawValue
+            bitmapInfo: CGImageAlphaInfo.premultipliedLast.rawValue
         ) else {
             return image
         }

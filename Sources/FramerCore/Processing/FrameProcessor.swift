@@ -173,10 +173,10 @@ public actor FrameProcessor {
         let newW = swapDims ? image.height : image.width
         let newH = swapDims ? image.width : image.height
         guard let ctx = CGContext(data: nil, width: newW, height: newH,
-                                  bitsPerComponent: image.bitsPerComponent,
+                                  bitsPerComponent: 8,
                                   bytesPerRow: 0,
                                   space: image.colorSpace ?? CGColorSpaceCreateDeviceRGB(),
-                                  bitmapInfo: image.bitmapInfo.rawValue) else { return image }
+                                  bitmapInfo: CGImageAlphaInfo.premultipliedLast.rawValue) else { return image }
         ctx.translateBy(x: CGFloat(newW) / 2, y: CGFloat(newH) / 2)
         ctx.rotate(by: -radians)
         ctx.draw(image, in: CGRect(x: -CGFloat(image.width) / 2, y: -CGFloat(image.height) / 2,
@@ -191,10 +191,10 @@ public actor FrameProcessor {
         let newW = Int(Double(w) * scale)
         let newH = Int(Double(h) * scale)
         guard let ctx = CGContext(data: nil, width: newW, height: newH,
-                                  bitsPerComponent: image.bitsPerComponent,
+                                  bitsPerComponent: 8,
                                   bytesPerRow: 0,
                                   space: image.colorSpace ?? CGColorSpaceCreateDeviceRGB(),
-                                  bitmapInfo: image.bitmapInfo.rawValue) else { return image }
+                                  bitmapInfo: CGImageAlphaInfo.premultipliedLast.rawValue) else { return image }
         ctx.draw(image, in: CGRect(x: 0, y: 0, width: newW, height: newH))
         return ctx.makeImage() ?? image
     }
