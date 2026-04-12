@@ -231,5 +231,6 @@ struct PresetCard: View {
             .frame(width: 72)
         }
         .buttonStyle(.plain)
+        .accessibilityIdentifier("preset.card.\(preset.id.uuidString)")
     }
 }

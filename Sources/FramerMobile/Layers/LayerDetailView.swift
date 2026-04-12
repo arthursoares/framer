@@ -1613,6 +1613,7 @@ private struct LUTControls: View {
                         get: { params.intensity },
                         set: { var p = params; p.intensity = $0; onChange(p) }
                     ), in: 0...1)
+                    .accessibilityIdentifier("layer.detail.slider.intensity")
                     Text("\(Int(params.intensity * 100))%")
                         .font(AppFont.mono(12))
                         .frame(width: 50, alignment: .trailing)
