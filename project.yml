@@ -85,11 +85,38 @@ targets:
         Release:
           SWIFT_ACTIVE_COMPILATION_CONDITIONS: ""
 
+  FramerUITests:
+    type: bundle.ui-testing
+    platform: macOS
+    sources:
+      - path: Tests/FramerAppUITests
+    dependencies:
+      - target: Framer
+    settings:
+      base:
+        GENERATE_INFOPLIST_FILE: YES
+
+  FramerMobileUITests:
+    type: bundle.ui-testing
+    platform: iOS
+    deploymentTarget: "17.0"
+    sources:
+      - path: Tests/FramerMobileUITests
+    dependencies:
+      - target: FramerMobile
+    settings:
+      base:
+        GENERATE_INFOPLIST_FILE: YES
+
 schemes:
   Framer:
     build:
       targets:
         Framer: all
+    test:
+      config: Debug
+      targets:
+        - FramerUITests
     run:
       config: Debug
     archive:
@@ -99,6 +126,10 @@ schemes:
     build:
       targets:
         FramerMobile: all
+    test:
+      config: Debug
+      targets:
+        - FramerMobileUITests
     run:
       config: Debug
     archive:
