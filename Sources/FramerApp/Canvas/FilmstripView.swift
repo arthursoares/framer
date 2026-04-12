@@ -16,6 +16,7 @@ struct FilmstripView: View {
                                 isSelected: appState.selectedItems.contains(item.id)
                             )
                             .id(item.id)
+                            .accessibilityIdentifier("filmstrip.thumbnail.\(item.id.uuidString)")
                             .onTapGesture {
                                 if NSEvent.modifierFlags.contains(.command) {
                                     if appState.selectedItems.contains(item.id) {

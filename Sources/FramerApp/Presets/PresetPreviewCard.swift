@@ -52,5 +52,6 @@ struct PresetPreviewCard: View {
             }
         }
         .buttonStyle(.plain)
+        .accessibilityIdentifier("preset.card.\(preset.id.uuidString)")
     }
 }
