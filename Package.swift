@@ -35,5 +35,10 @@ let package = Package(
             name: "FramerCLITests",
             dependencies: ["FramerCLI", "FramerCore"]
         ),
+        .testTarget(
+            name: "FramerCLIE2ETests",
+            dependencies: ["FramerCore"],
+            resources: [.copy("../E2EFixtures")]
+        ),
     ]
 )
