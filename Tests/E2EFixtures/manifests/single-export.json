@@ -1,0 +1,7 @@
+{
+  "outputFilename": "sample-1_solid.jpg",
+  "expectedWidth": 3580,
+  "expectedHeight": 2567,
+  "format": "jpeg",
+  "preservesMetadata": true
+}
