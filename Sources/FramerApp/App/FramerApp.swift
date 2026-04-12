@@ -3,10 +3,15 @@ import FramerCore
 
 @main
 struct FramerApp: App {
-    @State private var appState = AppState()
+    @State private var appState: AppState
 
     init() {
-        registerBundledFonts()
+        Self.registerBundledFonts()
+        let state = AppState()
+        if let config = AppE2ETestConfiguration.load() {
+            state.applyE2ETestConfiguration(config)
+        }
+        _appState = State(initialValue: state)
     }
 
     var body: some Scene {
@@ -25,7 +30,7 @@ struct FramerApp: App {
     }
 
     /// Registers all .ttf and .otf fonts found in the app bundle's Resources.
-    private func registerBundledFonts() {
+    private static func registerBundledFonts() {
         let extensions = ["ttf", "otf"]
         for ext in extensions {
             guard let urls = Bundle.main.urls(forResourcesWithExtension: ext, subdirectory: nil) else { continue }
