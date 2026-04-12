@@ -35,6 +35,20 @@
                ReferencedContainer = "container:Framer.xcodeproj">
             </BuildableReference>
          </BuildActionEntry>
+         <BuildActionEntry
+            buildForTesting = "YES"
+            buildForRunning = "NO"
+            buildForProfiling = "NO"
+            buildForArchiving = "NO"
+            buildForAnalyzing = "NO">
+            <BuildableReference
+               BuildableIdentifier = "primary"
+               BlueprintIdentifier = "ABAB5EE806FCBDDBDD5B2B6E"
+               BuildableName = "FramerUITests.xctest"
+               BlueprintName = "FramerUITests"
+               ReferencedContainer = "container:Framer.xcodeproj">
+            </BuildableReference>
+         </BuildActionEntry>
       </BuildActionEntries>
    </BuildAction>
    <TestAction
@@ -61,6 +75,17 @@
                BlueprintIdentifier = "7F92C54B63835D9A7829BB9B"
                BuildableName = "FramerAppTests.xctest"
                BlueprintName = "FramerAppTests"
+               ReferencedContainer = "container:Framer.xcodeproj">
+            </BuildableReference>
+         </TestableReference>
+         <TestableReference
+            skipped = "NO"
+            parallelizable = "NO">
+            <BuildableReference
+               BuildableIdentifier = "primary"
+               BlueprintIdentifier = "ABAB5EE806FCBDDBDD5B2B6E"
+               BuildableName = "FramerUITests.xctest"
+               BlueprintName = "FramerUITests"
                ReferencedContainer = "container:Framer.xcodeproj">
             </BuildableReference>
          </TestableReference>
