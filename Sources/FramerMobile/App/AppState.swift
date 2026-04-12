@@ -16,6 +16,8 @@ final class AppState {
     var appliedPresetConfig: ProcessingConfig?
     var presets: [Preset] = []
     var presetStore = PresetStore()
+    var e2eExportDirectory: URL?
+    var isRunningE2ETests = false
 
     // UI state
     var activeTab: BottomTab = .presets
@@ -29,6 +31,31 @@ final class AppState {
 
     func loadPresets() {
         presets = (try? presetStore.list()) ?? []
+    }
+
+    func applyE2ETestConfiguration(_ config: AppE2ETestConfiguration) {
+        isRunningE2ETests = true
+        e2eExportDirectory = config.exportDirectory
+
+        let urls = (try? FileManager.default.contentsOfDirectory(
+            at: config.fixturesDirectory,
+            includingPropertiesForKeys: nil
+        )) ?? []
+        let imageURLs = urls
+            .filter { ["jpg", "jpeg", "png", "heic", "tif", "tiff"].contains($0.pathExtension.lowercased()) }
+            .sorted { $0.lastPathComponent < $1.lastPathComponent }
+
+        if !imageURLs.isEmpty {
+            library = imageURLs.map { PhotoItem(url: $0) }
+            selectedIndex = 0
+        }
+
+        if let presetName = config.presetName,
+           let preset = presets.first(where: { $0.name == presetName }) {
+            activePresetName = preset.name
+            currentConfig = preset.config
+            appliedPresetConfig = preset.config
+        }
     }
 
     var selectedPhoto: PhotoItem? {
