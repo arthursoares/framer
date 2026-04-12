@@ -80,6 +80,7 @@ struct EditorView: View {
                             .foregroundStyle(Color.accent)
                     }
                     .accessibilityLabel("Add Photos")
+                    .accessibilityIdentifier("toolbar.addPhotos")
                 }
                 ToolbarItem(placement: .topBarTrailing) {
                     if appState.selectedPhoto != nil {
@@ -112,6 +113,7 @@ struct EditorView: View {
                                 .foregroundStyle(Color.accent)
                         }
                         .accessibilityLabel("Share")
+                        .accessibilityIdentifier("toolbar.share")
                     }
                 }
             }
@@ -315,56 +317,31 @@ struct EditorView: View {
 
         Task {
             defer { isExporting = false }
-            var exportedFiles: [URL] = []
-            var failedCount = 0
-            var completedCount = 0
-            let maxConcurrency = Self.shareAllConcurrency(itemCount: items.count)
+            let exporter = ProcessedImageExporter()
+            let exportedFiles: [URL]
 
-            await withTaskGroup(of: URL?.self) { group in
-                var nextIndex = 0
-
-                func enqueue() {
-                    guard nextIndex < items.count else { return }
-                    let item = items[nextIndex]
-                    nextIndex += 1
-                    group.addTask {
-                        let processor = FrameProcessor()
-                        let tempURL = FileManager.default.temporaryDirectory
-                            .appendingPathComponent(UUID().uuidString)
-                            .appendingPathExtension(config.outputFormat == .png ? "png" : "jpg")
-                        do {
-                            try await processor.process(input: item.url, output: tempURL, config: config, rotation: item.rotation)
-                            return tempURL
-                        } catch {
-                            return nil
-                        }
-                    }
-                }
-
-                for _ in 0..<maxConcurrency {
-                    enqueue()
-                }
-
-                while let result = await group.next() {
-                    completedCount += 1
-                    exportProgress = Double(completedCount)
-                    if let url = result {
-                        exportedFiles.append(url)
-                    } else {
-                        failedCount += 1
-                    }
-                    enqueue()
-                }
+            do {
+                exportedFiles = try await exporter.exportAllProcessed(
+                    items: items,
+                    config: config,
+                    exportDirectory: appState.e2eExportDirectory
+                )
+                exportProgress = Double(exportedFiles.count)
+            } catch {
+                exportStatusMessage = "Could not process any photos for sharing."
+                return
             }
 
             guard !exportedFiles.isEmpty else {
                 exportStatusMessage = "Could not process any photos for sharing."
                 return
             }
-            if failedCount > 0 {
-                exportStatusMessage = "Processed \(exportedFiles.count) of \(items.count) photos. \(failedCount) failed."
+
+            if appState.isRunningE2ETests {
+                exportStatusMessage = "Exported \(exportedFiles.count) files"
+                return
             }
-            // Share all processed images
+
             let activityVC = UIActivityViewController(activityItems: exportedFiles, applicationActivities: nil)
             activityVC.completionWithItemsHandler = { _, _, _, _ in
                 for file in exportedFiles {
@@ -384,11 +361,6 @@ struct EditorView: View {
             activityVC.popoverPresentationController?.sourceView = presenter.view
             presenter.present(activityVC, animated: true)
         }
-    }
-
-    private nonisolated static func shareAllConcurrency(itemCount: Int) -> Int {
-        guard itemCount > 0 else { return 1 }
-        return min(2, itemCount)
     }
 
     private func shareImage() {
