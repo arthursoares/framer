@@ -33,6 +33,7 @@ struct ExportBar: View {
                     }
                 )
                 .disabled(appState.selectedItems.isEmpty)
+                .accessibilityIdentifier("export.selected")
 
                 Spacer()
 
@@ -67,6 +68,7 @@ struct ExportBar: View {
                     }
                 )
                 .disabled(appState.library.isEmpty)
+                .accessibilityIdentifier("export.all")
             }
             .padding(.horizontal, metrics.outerInset)
             .padding(.vertical, metrics.expandedBodyInset)
@@ -178,6 +180,10 @@ struct ExportBar: View {
 
     private func promptAndExport(_ items: [PhotoItem]) {
         guard !items.isEmpty else { return }
+        if appState.e2eExportDirectory != nil {
+            directExport(items)
+            return
+        }
         if appState.presets.isEmpty {
             directExport(items)
         } else {
@@ -187,6 +193,11 @@ struct ExportBar: View {
     }
 
     private func directExport(_ items: [PhotoItem]) {
+        if let exportDir = appState.e2eExportDirectory {
+            appState.exportItems(items, to: exportDir)
+            return
+        }
+
         let panel = NSOpenPanel()
         panel.canChooseFiles = false
         panel.canChooseDirectories = true
@@ -205,6 +216,23 @@ struct ExportBar: View {
         let items = pendingExportItems
         guard !items.isEmpty else { return }
         guard includeCurrentSettings || !selectedPresetIDs.isEmpty else { return }
+
+        if let exportDir = appState.e2eExportDirectory {
+            if includeCurrentSettings {
+                appState.exportItems(items, to: exportDir)
+            }
+
+            let presetConfigs = appState.presets
+                .filter { selectedPresetIDs.contains($0.id) }
+                .map { (name: $0.name, config: $0.config) }
+
+            if !presetConfigs.isEmpty {
+                appState.exportItems(items, to: exportDir, withPresets: presetConfigs)
+            }
+
+            selectedPresetIDs.removeAll()
+            return
+        }
 
         let panel = NSOpenPanel()
         panel.canChooseFiles = false

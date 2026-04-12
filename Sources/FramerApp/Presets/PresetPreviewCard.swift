@@ -62,5 +62,6 @@ struct PresetPreviewCard: View {
             .opacity(stateStyle.opacity)
         }
         .buttonStyle(.plain)
+        .accessibilityIdentifier("preset.card.\(preset.id.uuidString)")
     }
 }
