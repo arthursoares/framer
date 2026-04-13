@@ -138,7 +138,7 @@ public enum TextCellRenderer {
             paletteSource: sourceImage ?? image
         )
 
-        let uniformData = withUnsafeBytes(of: uniforms) { Data($0) }
+        let uniformData = uniformBytes(uniforms)
 
         let outputTexture = try MetalRenderPass.encode(
             pipeline: pipeline,

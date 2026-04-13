@@ -66,7 +66,7 @@ public enum PixelSortRenderer {
         let sampler = try library.nearestClamp()
         let sourceTexture = try MetalTextureSupport.makeTexture(from: image, device: library.device)
 
-        let bytes = withUnsafeBytes(of: uniforms) { Data($0) }
+        let bytes = uniformBytes(uniforms)
         let outputTexture = try MetalRenderPass.encode(
             pipeline: pipeline,
             source: sourceTexture,

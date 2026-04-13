@@ -231,7 +231,7 @@ public enum DitherGPURenderer {
         let sampler = try library.linearClamp()
         let sourceTexture = try MetalTextureSupport.makeTexture(from: workImage, device: library.device)
 
-        let bytes = withUnsafeBytes(of: uniforms) { Data($0) }
+        let bytes = uniformBytes(uniforms)
         let outputTexture = try MetalRenderPass.encode(
             pipeline: pipeline,
             source: sourceTexture,
