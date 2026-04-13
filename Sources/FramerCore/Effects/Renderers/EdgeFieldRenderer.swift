@@ -39,6 +39,22 @@ public enum EdgeFieldRenderer {
             } catch is MetalEffectError {
                 // fall through to CPU
             }
+        case .voronoi:
+            do {
+                return try EdgeFieldGPURenderer.renderVoronoi(
+                    input: input, common: common, geometry: geometry,
+                    color: color, params: payload, outputSize: outputSize)
+            } catch is MetalEffectError {
+                // fall through to CPU
+            }
+        case .noiseField:
+            do {
+                return try EdgeFieldGPURenderer.renderNoiseField(
+                    input: input, common: common, geometry: geometry,
+                    color: color, params: payload, outputSize: outputSize)
+            } catch is MetalEffectError {
+                // fall through to CPU
+            }
         default:
             break
         }

@@ -37,6 +37,11 @@ struct EdgeFieldUniforms {
     float frequency;           // waveLines spatial-phase multiplier
     float lineCount;           // reserved for waveLines density boost
     float spacing;             // pixel spacing for waveLines (pre-computed)
+    float cellSize;            // voronoi cell pitch (pixels)
+
+    float edgeWidth;           // voronoi edge ring width (0..1)
+    uint  randomize;           // voronoi per-row/col jitter (0 / 1)
+    float fieldWeight;         // voronoi "field" multiplier (== fieldIntensity)
     float _pad0;
 
     float4 edgeColor;          // colour for ink pixels (rgba, a unused)
@@ -196,6 +201,93 @@ static float4 waveLinesVariant(
 }
 
 // =============================================================================
+// VORONOI — grid-based cell approximation (not true Voronoi, matches the CPU
+// renderer's simplification). Each pixel snaps to its enclosing grid cell's
+// origin; distance from the pixel's offset within the cell determines the
+// output value: a thin ring-line at dist=0.5 from centre plus a radial
+// falloff modulated by `fieldIntensity`.
+// =============================================================================
+
+static float4 voronoiVariant(
+    VertexOut                    in,
+    texture2d<float>             source,
+    sampler                      texSampler,
+    constant EdgeFieldUniforms&  u
+) {
+    float2 resolution = float2(source.get_width(), source.get_height());
+    int2   pixel      = clamp(int2(floor(in.uv * resolution)),
+                              int2(0), int2(resolution) - 1);
+    float2 selfUV     = (float2(pixel) + 0.5) / resolution;
+    float3 srcOrig    = source.sample(texSampler, selfUV).rgb;
+
+    int   cellPitch = max(2, int(u.cellSize));
+    int   jitter    = 0;
+    if (u.randomize == 1u) {
+        jitter = int(round(sin(float((pixel.x + pixel.y) * 17)) * float(cellPitch) * 0.35));
+    }
+    int cellX = ((pixel.x + jitter) / cellPitch) * cellPitch;
+    int cellY = ((pixel.y - jitter) / cellPitch) * cellPitch;
+    float2 offset   = float2(float(pixel.x - cellX), float(pixel.y - cellY));
+    float  dist     = length(offset) / float(cellPitch);
+    float  edgeMask = max(0.0, 1.0 - fabs(dist - 0.5) / max(0.05, u.edgeWidth));
+    float  value    = saturate(edgeMask * u.lineStrength + (1.0 - dist) * u.fieldWeight * 0.6);
+    if (u.invert == 1u) { value = 1.0 - value; }
+
+    float bg = u.color.backgroundIntensity;
+    float3 ink = float3(max(bg, value));
+    if (u.edgeColor.r + u.edgeColor.g + u.edgeColor.b > 0.0) {
+        ink *= u.edgeColor.rgb;
+    }
+
+    float3 final = mix(srcOrig, saturate(ink), saturate(u.intensity));
+    return float4(final, 1.0);
+}
+
+// =============================================================================
+// NOISE FIELD — procedural IGN noise, optionally summed across octaves. Uses
+// ShaderCommon.h::ign as the base generator (cheap hash-based blue-noise
+// approximation). Matches CPU's 1D-axis projection + octave-scale summation.
+// =============================================================================
+
+static float4 noiseFieldVariant(
+    VertexOut                    in,
+    texture2d<float>             source,
+    sampler                      texSampler,
+    constant EdgeFieldUniforms&  u
+) {
+    float2 resolution = float2(source.get_width(), source.get_height());
+    int2   pixel      = clamp(int2(floor(in.uv * resolution)),
+                              int2(0), int2(resolution) - 1);
+    float2 selfUV     = (float2(pixel) + 0.5) / resolution;
+    float3 srcOrig    = source.sample(texSampler, selfUV).rgb;
+
+    float baseScale = max(1.0, u.amplitude * 120.0);
+    int   octaves   = 1;       // cheap cap — multi-octave could be added via a uniform
+    float accumulated = 0.0;
+    float weightSum   = 0.0;
+    float2 p = float2(pixel) / baseScale;
+    for (int o = 0; o < 4; o++) {
+        if (o >= octaves) { break; }
+        float oct    = exp2(float(o));
+        float weight = 1.0 / oct;
+        accumulated += ign(p * oct) * weight;
+        weightSum   += weight;
+    }
+    float noise = accumulated / max(weightSum, 0.0001);
+    float value = saturate(noise * u.lineStrength + u.fieldWeight * 0.3);
+    if (u.invert == 1u) { value = 1.0 - value; }
+
+    float bg = u.color.backgroundIntensity;
+    float3 ink = float3(max(bg, value));
+    if (u.edgeColor.r + u.edgeColor.g + u.edgeColor.b > 0.0) {
+        ink *= u.edgeColor.rgb;
+    }
+
+    float3 final = mix(srcOrig, saturate(ink), saturate(u.intensity));
+    return float4(final, 1.0);
+}
+
+// =============================================================================
 // Fragment entry — dispatch on variant.
 // =============================================================================
 
@@ -209,6 +301,8 @@ fragment float4 edgeFieldFragment(
         case 0:  return edgeDetectionVariant(in, source, texSampler, uniforms);
         case 1:  return contourVariant(in, source, texSampler, uniforms);
         case 2:  return waveLinesVariant(in, source, texSampler, uniforms);
+        case 3:  return voronoiVariant(in, source, texSampler, uniforms);
+        case 4:  return noiseFieldVariant(in, source, texSampler, uniforms);
         default: return source.sample(texSampler, in.uv);
     }
 }
