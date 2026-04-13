@@ -103,33 +103,10 @@ inline float3 cgGrain(float3 c, int2 px, float grainAmount) {
     return saturate(c + float3(delta));
 }
 
-// Small box blur, branchless on radius via a fixed max loop bound. radius is
-// clamped to 0..3 (matches ShaderPrimitives.applyBoxBlur's hard cap), so the
-// inner loop runs at most 7×7 = 49 samples — fine for fragment rate.
-inline float3 cgBoxBlur(texture2d<float> source,
-                        sampler          sampleState,
-                        float2           uv,
-                        float2           texelSize,
-                        int              radius,
-                        float            mixAmount,
-                        float3           original) {
-    if (radius <= 0 || mixAmount <= 0.0) { return original; }
-    int r = clamp(radius, 1, 3);
-
-    float3 sum = float3(0.0);
-    float  count = 0.0;
-    for (int dy = -3; dy <= 3; dy++) {
-        if (dy < -r || dy > r) { continue; }
-        for (int dx = -3; dx <= 3; dx++) {
-            if (dx < -r || dx > r) { continue; }
-            float2 sampleUV = uv + float2(float(dx), float(dy)) * texelSize;
-            sum += source.sample(sampleState, sampleUV).rgb;
-            count += 1.0;
-        }
-    }
-    float3 blurred = sum / max(count, 1.0);
-    return mix(original, blurred, saturate(mixAmount));
-}
+// Branchless per-variant style application. Wrapped as its own function so the
+// post-grade blur loop can re-apply the variant to each neighbour without
+// duplicating the switch.
+inline float3 applyVariantStyle(float3 c, constant ColorGradeUniforms& u);
 
 // =============================================================================
 // Per-variant pipelines
@@ -155,6 +132,14 @@ inline float3 shibaStyle(float3 c, constant ColorGradeUniforms& u) {
     return c;
 }
 
+inline float3 applyVariantStyle(float3 c, constant ColorGradeUniforms& u) {
+    switch (u.variant) {
+        case 1:  return narcStyle(c, u);
+        case 2:  return shibaStyle(c, u);
+        default: return crimewaveStyle(c, u);
+    }
+}
+
 // =============================================================================
 // Fragment entry — dispatch on variant
 // =============================================================================
@@ -168,18 +153,40 @@ fragment float4 colorGradeFragment(
     float2 resolution = float2(source.get_width(), source.get_height());
     float2 texel      = 1.0 / resolution;
 
-    // Optionally blur first so subsequent grading reads a softened sample.
-    // ShaderRenderer's CPU path applies blur AFTER the grading; doing it here
-    // pre-blurs but the visual difference is small and saves an extra pass.
     float3 src = source.sample(texSampler, in.uv).rgb;
-    float3 blurred = cgBoxBlur(source, texSampler, in.uv, texel,
-                               int(uniforms.blurRadius), uniforms.blurMixAmount, src);
 
-    float3 styled;
-    switch (uniforms.variant) {
-        case 1:  styled = narcStyle(blurred, uniforms); break;
-        case 2:  styled = shibaStyle(blurred, uniforms); break;
-        default: styled = crimewaveStyle(blurred, uniforms); break;
+    // Grade the center pixel FIRST. CPU's applyCrimewave/Narc/Shiba all apply
+    // contrast/saturation/temperature/channel-bias in-place on the pixel
+    // buffer BEFORE calling applyBoxBlur (ShaderRenderer.swift:102-120 for
+    // Crimewave; parallel structure for Narc and Shiba). The previous version
+    // blurred first and graded second — algebraically different whenever
+    // grading is non-linear (contrast, saturation, channel bias, temperature
+    // all are), which every variant uses. Parity tests hid the bug by pinning
+    // softness = 0 (EffectGPUParityTests.swift:156, :170, :181).
+    float3 styled = applyVariantStyle(src, uniforms);
+
+    // Blur AFTER grading. We can't sample a pre-graded texture (that would
+    // require a second pass), so re-apply the same variant style to each
+    // neighbour's raw source sample and average the styled results. That's
+    // algebraically equivalent to "grade the entire image, then box-blur"
+    // because a box blur is a spatial mean over the graded intermediate.
+    // radius is clamped 0..3 matching ShaderPrimitives.applyBoxBlur's cap.
+    int radius = clamp(int(uniforms.blurRadius), 0, 3);
+    if (radius > 0 && uniforms.blurMixAmount > 0.0) {
+        float3 sum = float3(0.0);
+        float  count = 0.0;
+        for (int dy = -3; dy <= 3; dy++) {
+            if (dy < -radius || dy > radius) { continue; }
+            for (int dx = -3; dx <= 3; dx++) {
+                if (dx < -radius || dx > radius) { continue; }
+                float2 nUV = in.uv + float2(float(dx), float(dy)) * texel;
+                float3 nSrc = source.sample(texSampler, nUV).rgb;
+                sum += applyVariantStyle(nSrc, uniforms);
+                count += 1.0;
+            }
+        }
+        float3 blurredStyled = sum / max(count, 1.0);
+        styled = mix(styled, blurredStyled, saturate(uniforms.blurMixAmount));
     }
 
     int2 px = int2(in.uv * resolution);

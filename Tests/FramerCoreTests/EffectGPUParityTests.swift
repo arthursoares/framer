@@ -147,6 +147,82 @@ final class EffectGPUParityTests: XCTestCase {
         XCTAssertLessThan(max,  255,   "ASCII max delta saturated (\(max))")
     }
 
+    // Per-direction parity guard for ASCII edge classification. Codex flagged
+    // during the ASCII fix review that `.diagonal1` vs `.diagonal2` could be
+    // swapped between CPU and GPU without the mean/max delta on the main
+    // gradient+checkerboard fixture catching it (a bucket swap picks a
+    // different edgesASCII row but similar magnitude). A single stripe in
+    // each of the four directions forces the classifier to commit to a
+    // direction; if GPU and CPU disagree, the wrong glyph row is sampled and
+    // the output diverges at the 8-wide glyph boundaries where one path
+    // writes foreground and the other writes background.
+    private enum ASCIIStripeDirection { case vertical, horizontal, diagonalRightDown, diagonalLeftDown }
+
+    private func makeStripeImage(width: Int = 64, height: Int = 64, direction: ASCIIStripeDirection) -> CGImage {
+        let colorSpace = CGColorSpaceCreateDeviceRGB()
+        let bitmapInfo = CGImageAlphaInfo.premultipliedLast.rawValue
+        let ctx = CGContext(
+            data: nil, width: width, height: height,
+            bitsPerComponent: 8, bytesPerRow: width * 4,
+            space: colorSpace, bitmapInfo: bitmapInfo
+        )!
+        let pixels = ctx.data!.bindMemory(to: UInt8.self, capacity: width * height * 4)
+        let halfThickness = 1
+        for y in 0..<height {
+            for x in 0..<width {
+                let onStripe: Bool
+                switch direction {
+                case .vertical:          onStripe = abs(x - width / 2) <= halfThickness
+                case .horizontal:        onStripe = abs(y - height / 2) <= halfThickness
+                case .diagonalRightDown: onStripe = abs(x - y) <= halfThickness
+                case .diagonalLeftDown:  onStripe = abs((width - 1 - x) - y) <= halfThickness
+                }
+                let value: UInt8 = onStripe ? 255 : 0
+                let idx = (y * width + x) * 4
+                pixels[idx] = value
+                pixels[idx + 1] = value
+                pixels[idx + 2] = value
+                pixels[idx + 3] = 255
+            }
+        }
+        return ctx.makeImage()!
+    }
+
+    func testASCIIEdgeDirectionParityAcrossStripes() throws {
+        try requireMetal()
+        guard let _ = try MetalTextureSupport.loadLUTTexture(
+            named: "edgesASCII.png",
+            device: MetalEffectLibrary.shared!.device
+        ) else {
+            throw XCTSkip("ASCII LUT atlases not present in TextureFrameProvider.searchPaths.")
+        }
+        let params = ShaderLayerParams(style: .ascii, intensity: 1.0,
+                                       params: .ascii(ASCIIShaderParams(cellSize: 8)))
+        for direction in [
+            ASCIIStripeDirection.vertical,
+            .horizontal,
+            .diagonalRightDown,
+            .diagonalLeftDown
+        ] {
+            let img = makeStripeImage(direction: direction)
+            let cpu = try ShaderASCIIRenderer.apply(to: img, params: params)
+            let gpu = try TextCellRenderer.renderASCII(to: img, params: params)
+            let (mean, _) = compare(cpu, gpu)
+            // mean is the meaningful signal here — a bucket-direction swap
+            // would flip the entire 8-pixel-wide glyph row in every affected
+            // cell, pushing mean well above any reasonable tolerance. A single-
+            // pixel float-vs-double precision tip at a Sobel-magnitude
+            // threshold boundary (which can happen on diagonal stripes where
+            // gradient strength sits exactly at the isEdge threshold) only
+            // moves the mean by ~4/255 even with max saturated to 255 on the
+            // one tipped pixel — observed: vertical/horizontal mean=0/max=0;
+            // diagonals mean≈4.1/max=255. We therefore intentionally do NOT
+            // assert on max here; the mean ceiling is the regression guard.
+            XCTAssertLessThan(mean, 30.0,
+                "\(direction) stripe ASCII mean delta too high (\(mean)) — likely an edge-direction bucket mismatch.")
+        }
+    }
+
     // MARK: - Color grade trio
 
     func testCrimewaveParity() throws {
@@ -185,6 +261,38 @@ final class EffectGPUParityTests: XCTestCase {
         let (mean, max) = compare(cpu, gpu)
         XCTAssertLessThan(mean, 6.0, "Shiba mean delta too high (\(mean))")
         XCTAssertLessThan(max,  40,  "Shiba max delta too high (\(max))")
+    }
+
+    // Guards against regression of the softness-ordering bug (CPU blurs AFTER
+    // grading; the GPU shader used to blur first). Covers the non-trivial
+    // contrast/saturation/channel-bias path that was hidden by softness=0 in
+    // the other tests. Larger tolerance than softness=0 because the GPU
+    // single-pass "grade-each-neighbour" approach and CPU's
+    // grade-then-box-blur diverge at tile edges by a few levels where the
+    // variant styles saturate clamps differently.
+    func testCrimewaveSoftnessParity() throws {
+        try requireMetal()
+        let img = makeTestImage()
+        let cp = CrimewaveShaderParams(softness: 0.6)
+        let params = ShaderLayerParams(style: .crimewave, intensity: 1.0,
+                                       params: .crimewave(cp))
+        let cpu = try ShaderRenderer.applyCrimewave(to: img, params: cp, intensity: 1.0)
+        let gpu = try ColorGradeRenderer.renderCrimewave(to: img, params: params)
+        let (mean, max) = compare(cpu, gpu)
+        XCTAssertLessThan(mean, 10.0, "Crimewave softness>0 mean delta too high (\(mean))")
+        XCTAssertLessThan(max,  80,   "Crimewave softness>0 max delta too high (\(max))")
+    }
+
+    func testShibaSoftnessParity() throws {
+        try requireMetal()
+        let img = makeTestImage()
+        let sp = ShibaShaderParams(softness: 0.6)
+        let params = ShaderLayerParams(style: .shiba, intensity: 1.0, params: .shiba(sp))
+        let cpu = try ShaderRenderer.applyShiba(to: img, params: sp, intensity: 1.0)
+        let gpu = try ColorGradeRenderer.renderShiba(to: img, params: params)
+        let (mean, max) = compare(cpu, gpu)
+        XCTAssertLessThan(mean, 10.0, "Shiba softness>0 mean delta too high (\(mean))")
+        XCTAssertLessThan(max,  80,   "Shiba softness>0 max delta too high (\(max))")
     }
 
     // MARK: - DistantPast
