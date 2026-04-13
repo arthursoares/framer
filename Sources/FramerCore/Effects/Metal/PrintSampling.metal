@@ -16,15 +16,20 @@ struct PrintSamplingUniforms {
     FramerGeometryUniforms geometry;
     FramerColorUniforms    color;
 
-    uint  variant;           // 0 = threshold (crosshatch / dithering added later)
+    uint  variant;           // 0 threshold, 1 crosshatch
     float intensity;         // 0..1, blend with original
     float threshold;         // 0..1, base threshold
     uint  invert;            // 0 / 1
 
     uint  thresholdLevels;   // 2..32
     uint  thresholdDither;   // 0 / 1 — 2×2 checkerboard phase on threshold
+    float hatchAngle;        // degrees (crosshatch)
+    float hatchDensity;      // >=0.1 (crosshatch)
+
+    float hatchLineWidth;    // 0..1 (crosshatch)
+    uint  hatchLayers;       // 1..3 (crosshatch)
+    float hatchRandomness;   // 0..1 (crosshatch)
     float _pad0;
-    float _pad1;
 
     float4 foregroundRGBA;   // ink colour
     float4 backgroundRGBA;   // paper colour
@@ -68,9 +73,56 @@ static float4 thresholdVariant(
 }
 
 // =============================================================================
-// Fragment entry — dispatch on variant. Future variants (crosshatch, dithering)
-// slot into additional cases here, each with a matching `static float4 *Variant`
-// helper above.
+// CROSSHATCH — pencil/etching line pattern at 1..3 configurable angles.
+// Mirrors CPU's cell-local formulation (PrintSamplingRenderer.swift:141-151):
+// rotate pixel coords by hatchAngle, test for line crossing at intervals of
+// `baseStep = max(resolution) / (hatchDensity * 10)`, add a second axis-
+// perpendicular layer, and a third diagonal layer when hatchLayers >= 3.
+// Inked only where the pixel is dark (luminance < threshold).
+// =============================================================================
+
+static float4 crosshatchVariant(
+    VertexOut                        in,
+    texture2d<float>                 source,
+    sampler                          texSampler,
+    constant PrintSamplingUniforms&  u
+) {
+    float2 resolution = float2(source.get_width(), source.get_height());
+    int2   pixel      = clamp(int2(floor(in.uv * resolution)),
+                              int2(0), int2(resolution) - 1);
+    float2 selfUV     = (float2(pixel) + 0.5) / resolution;
+    float3 src        = source.sample(texSampler, selfUV).rgb;
+
+    float lum  = luminance(src);
+    bool  dark = lum < u.threshold;
+
+    float angle   = u.hatchAngle * (M_PI_F / 180.0);
+    float density = max(1.0, u.hatchDensity * 10.0);
+    float baseStep = max(1.0, max(resolution.x, resolution.y) / density);
+    float lineWidth = max(0.03, u.hatchLineWidth * 0.5);
+
+    float cx = float(pixel.x);
+    float cy = float(pixel.y);
+    float rX = cx * cos(angle) - cy * sin(angle);
+    float rY = cx * sin(angle) + cy * cos(angle);
+
+    bool lineA = fabs(fract(rX / baseStep) - 0.5) < lineWidth;
+    bool lineB = u.hatchLayers >= 2u && fabs(fract(rY / baseStep) - 0.5) < lineWidth;
+    bool lineC = u.hatchLayers >= 3u && fabs(fract((rX + rY) / baseStep) - 0.5) < lineWidth;
+
+    bool noiseToggle = (u.hatchRandomness > 0.0)
+                    && sin(float((pixel.x + pixel.y) * 13)) > (1.0 - u.hatchRandomness);
+
+    bool inked = dark && (lineA || lineB || lineC || noiseToggle);
+    if (u.invert == 1u) { inked = !inked; }
+
+    float3 painted = inked ? u.foregroundRGBA.rgb : u.backgroundRGBA.rgb;
+    float3 final   = mix(src, painted, saturate(u.intensity));
+    return float4(final, 1.0);
+}
+
+// =============================================================================
+// Fragment entry — dispatch on variant.
 // =============================================================================
 
 fragment float4 printSamplingFragment(
@@ -81,6 +133,7 @@ fragment float4 printSamplingFragment(
 ) {
     switch (uniforms.variant) {
         case 0:  return thresholdVariant(in, source, texSampler, uniforms);
+        case 1:  return crosshatchVariant(in, source, texSampler, uniforms);
         default: return source.sample(texSampler, in.uv);
     }
 }

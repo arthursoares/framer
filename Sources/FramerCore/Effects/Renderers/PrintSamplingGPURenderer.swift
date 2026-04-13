@@ -26,8 +26,13 @@ public enum PrintSamplingGPURenderer {
 
         var thresholdLevels:  UInt32 = 4
         var thresholdDither:  UInt32 = 0
+        var hatchAngle:       Float  = 45
+        var hatchDensity:     Float  = 0.5
+
+        var hatchLineWidth:   Float  = 0.25
+        var hatchLayers:      UInt32 = 2
+        var hatchRandomness:  Float  = 0
         var _pad0: Float = 0
-        var _pad1: Float = 0
 
         var foregroundRGBA: SIMD4<Float> = SIMD4(0, 0, 0, 1)
         var backgroundRGBA: SIMD4<Float> = SIMD4(1, 1, 1, 1)
@@ -77,6 +82,51 @@ public enum PrintSamplingGPURenderer {
             auxTextures: [],
             sampler: sampler,
             uniformBytes: uniformData,
+            outputSize: (width, height),
+            library: library
+        )
+        return try MetalTextureSupport.makeCGImage(from: outputTexture)
+    }
+
+    // MARK: - Crosshatch
+
+    public static func renderCrosshatch(
+        input: CGImage,
+        common: GPUEffectCommonParameters,
+        geometry: GPUEffectGeometryParameters,
+        color: GPUEffectColorParameters,
+        params: PrintSamplingParameters,
+        outputSize: CGSize
+    ) throws -> CGImage {
+        guard let library = MetalEffectLibrary.shared else {
+            throw MetalEffectError.metalUnavailable
+        }
+        let width  = max(1, Int(outputSize.width.rounded()))
+        let height = max(1, Int(outputSize.height.rounded()))
+
+        var uniforms = Uniforms()
+        mapCommon(common, into: &uniforms.common)
+        mapGeometry(geometry, into: &uniforms.geometry)
+        mapColor(color, into: &uniforms.color)
+
+        uniforms.variant        = 1     // crosshatch
+        uniforms.intensity      = 1.0
+        uniforms.threshold      = Float(clamp01(params.threshold))
+        uniforms.invert         = params.invert ? 1 : 0
+        uniforms.hatchAngle     = Float(params.hatchAngle)
+        uniforms.hatchDensity   = Float(max(0.1, params.hatchDensity))
+        uniforms.hatchLineWidth = Float(clamp01(params.hatchLineWidth))
+        uniforms.hatchLayers    = UInt32(max(1, min(3, params.hatchLayers)))
+        uniforms.hatchRandomness = Float(clamp01(params.hatchRandomness))
+        uniforms.foregroundRGBA = params.foreground.map(simdColor) ?? SIMD4(0, 0, 0, 1)
+        uniforms.backgroundRGBA = params.background.map(simdColor) ?? SIMD4(1, 1, 1, 1)
+
+        let outputTexture = try MetalRenderPass.encode(
+            pipeline: try library.pipeline(for: "printSamplingFragment"),
+            source: try MetalTextureSupport.makeTexture(from: input, device: library.device),
+            auxTextures: [],
+            sampler: try library.linearClamp(),
+            uniformBytes: uniformBytes(uniforms),
             outputSize: (width, height),
             library: library
         )
