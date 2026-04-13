@@ -30,10 +30,14 @@ public enum ShaderRenderer {
                                     sourceImage: sourceImage)
                                 })
         case .pixelSort:
-            // PixelSort still runs on CPU — needs Grainrad's per-pixel
-            // fragment trick (notes/pixel-sort.md) to fit a serial span sort
-            // into a parallel kernel. Tracked separately in the migration plan.
-            return try ShaderPixelSortRenderer.apply(to: image, params: params)
+            // GPU path uses the per-fragment 24-sample approximation from
+            // grainrad/notes/pixel-sort.md. Matches CPU output for spans ≤ 24
+            // (Framer's default); longer deliberate streaks fall back to the
+            // CPU sort which preserves every pixel's exact rank — see
+            // docs/gpu-migration-plan.md.
+            return try gpuOrCPU(image: image,
+                                gpu: { try PixelSortRenderer.render(to: image, params: params) },
+                                cpu: { try ShaderPixelSortRenderer.apply(to: image, params: params) })
         case .crimewave(let shaderParams):
             return try gpuOrCPU(image: image,
                                 gpu: { try ColorGradeRenderer.renderCrimewave(to: image, params: params) },
