@@ -457,7 +457,7 @@ struct GPUEffectLayerControls: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 8) {
             Picker("Effect", selection: kindBinding) {
-                ForEach(GPUEffectKind.allCases, id: \.self) { kind in
+                ForEach(GPUEffectKind.userFacingCases, id: \.self) { kind in
                     Text(kind.label).tag(kind)
                 }
             }

@@ -161,7 +161,7 @@ private struct GPUEffectControls: View {
         VStack(spacing: 8) {
             ControlRow(label: "Effect") {
                 Picker("Effect", selection: kindBinding) {
-                    ForEach(GPUEffectKind.allCases, id: \.self) { kind in
+                    ForEach(GPUEffectKind.userFacingCases, id: \.self) { kind in
                         Text(kind.label).tag(kind)
                     }
                 }
