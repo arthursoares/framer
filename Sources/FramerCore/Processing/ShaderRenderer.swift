@@ -16,41 +16,72 @@ public enum ShaderRenderer {
             // docs/gpu-migration-plan.md). Falls back to the CPU renderer when
             // Metal is unavailable (no GPU device, missing LUT atlases, etc.)
             // so headless and pre-Metal hosts keep working.
-            do {
-                return try TextCellRenderer.renderASCII(
-                    to: image,
-                    params: params,
-                    previewBaseDimension: previewBaseDimension,
-                    sourceImage: sourceImage
-                )
-            } catch is MetalEffectError {
-                return try ShaderASCIIRenderer.apply(
-                    to: image,
-                    params: params,
-                    previewBaseDimension: previewBaseDimension,
-                    sourceImage: sourceImage
-                )
-            }
+            return try gpuOrCPU(image: image,
+                                gpu: { try TextCellRenderer.renderASCII(
+                                    to: image,
+                                    params: params,
+                                    previewBaseDimension: previewBaseDimension,
+                                    sourceImage: sourceImage)
+                                },
+                                cpu: { try ShaderASCIIRenderer.apply(
+                                    to: image,
+                                    params: params,
+                                    previewBaseDimension: previewBaseDimension,
+                                    sourceImage: sourceImage)
+                                })
         case .pixelSort:
+            // PixelSort still runs on CPU — needs Grainrad's per-pixel
+            // fragment trick (notes/pixel-sort.md) to fit a serial span sort
+            // into a parallel kernel. Tracked separately in the migration plan.
             return try ShaderPixelSortRenderer.apply(to: image, params: params)
         case .crimewave(let shaderParams):
-            return try applyCrimewave(to: image, params: shaderParams, intensity: params.intensity)
+            return try gpuOrCPU(image: image,
+                                gpu: { try ColorGradeRenderer.renderCrimewave(to: image, params: params) },
+                                cpu: { try applyCrimewave(to: image, params: shaderParams, intensity: params.intensity) })
         case .narc(let shaderParams):
-            return try applyNarc(to: image, params: shaderParams, intensity: params.intensity)
+            return try gpuOrCPU(image: image,
+                                gpu: { try ColorGradeRenderer.renderNarc(to: image, params: params) },
+                                cpu: { try applyNarc(to: image, params: shaderParams, intensity: params.intensity) })
         case .shiba(let shaderParams):
-            return try applyShiba(to: image, params: shaderParams, intensity: params.intensity)
+            return try gpuOrCPU(image: image,
+                                gpu: { try ColorGradeRenderer.renderShiba(to: image, params: params) },
+                                cpu: { try applyShiba(to: image, params: shaderParams, intensity: params.intensity) })
         case .distantPast(let shaderParams):
-            return try applyDistantPast(to: image, params: shaderParams, intensity: params.intensity)
+            return try gpuOrCPU(image: image,
+                                gpu: { try DistantPastRenderer.render(to: image, params: params) },
+                                cpu: { try applyDistantPast(to: image, params: shaderParams, intensity: params.intensity) })
         case .crt(let shaderParams):
-            return try applyCRT(to: image, params: shaderParams, intensity: params.intensity)
+            return try gpuOrCPU(image: image,
+                                gpu: { try CRTRenderer.render(to: image, params: params) },
+                                cpu: { try applyCRT(to: image, params: shaderParams, intensity: params.intensity) })
         case .halftone(let shaderParams):
-            return try applyHalftone(to: image, params: shaderParams, intensity: params.intensity)
+            return try gpuOrCPU(image: image,
+                                gpu: { try HalftoneRenderer.render(to: image, params: params) },
+                                cpu: { try applyHalftone(to: image, params: shaderParams, intensity: params.intensity) })
         case .kuwahara(let shaderParams):
-            return try applyKuwahara(to: image, params: shaderParams, intensity: params.intensity)
+            return try gpuOrCPU(image: image,
+                                gpu: { try KuwaharaRenderer.render(to: image, params: params) },
+                                cpu: { try applyKuwahara(to: image, params: shaderParams, intensity: params.intensity) })
         }
     }
 
-    private static func applyCrimewave(
+    /// Run the GPU path; on `MetalEffectError` (Metal unavailable, pipeline
+    /// build failure, missing atlas) fall back to the CPU implementation. Any
+    /// other error type bubbles up so genuine bugs aren't silently masked.
+    @inline(__always)
+    private static func gpuOrCPU(
+        image: CGImage,
+        gpu: () throws -> CGImage,
+        cpu: () throws -> CGImage
+    ) throws -> CGImage {
+        do {
+            return try gpu()
+        } catch is MetalEffectError {
+            return try cpu()
+        }
+    }
+
+    static func applyCrimewave(
         to image: CGImage,
         params: CrimewaveShaderParams,
         intensity: Double
@@ -89,7 +120,7 @@ public enum ShaderRenderer {
         return try mixStylizedContext(ctx, with: image, intensity: intensity)
     }
 
-    private static func applyNarc(
+    static func applyNarc(
         to image: CGImage,
         params: NarcShaderParams,
         intensity: Double
@@ -120,7 +151,7 @@ public enum ShaderRenderer {
         return try mixStylizedContext(ctx, with: image, intensity: intensity)
     }
 
-    private static func applyShiba(
+    static func applyShiba(
         to image: CGImage,
         params: ShibaShaderParams,
         intensity: Double
@@ -165,7 +196,7 @@ public enum ShaderRenderer {
         (0.921569, 0.912534, 0.912534),  // pearl white
     ]
 
-    private static func applyDistantPast(
+    static func applyDistantPast(
         to image: CGImage,
         params: DistantPastShaderParams,
         intensity: Double
@@ -299,7 +330,7 @@ public enum ShaderRenderer {
 
     // MARK: - CRT
 
-    private static func applyCRT(
+    static func applyCRT(
         to image: CGImage,
         params: CRTShaderParams,
         intensity: Double
@@ -387,7 +418,7 @@ public enum ShaderRenderer {
 
     // MARK: - Halftone
 
-    private static func applyHalftone(
+    static func applyHalftone(
         to image: CGImage,
         params: HalftoneShaderParams,
         intensity: Double
@@ -479,7 +510,7 @@ public enum ShaderRenderer {
 
     // MARK: - Kuwahara
 
-    private static func applyKuwahara(
+    static func applyKuwahara(
         to image: CGImage,
         params: KuwaharaShaderParams,
         intensity: Double
