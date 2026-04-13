@@ -260,25 +260,74 @@ static float4 asciiVariant(
     float2 cellCenterPx  = cellOriginPx + float2(cellSizeF * 0.5);
     float2 localPx       = pixel - cellOriginPx;       // 0 .. cellSize
 
-    // ---- Average luminance over the cell (4×4 stratified samples) -----------
-    const int N = 4;
-    float strideF = cellSizeF / float(N);
-    float lumSum  = 0.0;
-    float3 colorSum = float3(0.0);
-    for (int j = 0; j < N; j++) {
-        for (int i = 0; i < N; i++) {
-            float2 sampPx = cellOriginPx + (float2(float(i), float(j)) + 0.5) * strideF;
-            float3 c = source.sample(texSampler, sampPx * invRes).rgb;
-            lumSum += luminance(c);
+    // ---- Per-pixel cell statistics (faithful port of CPU algorithm) --------
+    // ShaderASCIIRenderer averages luminance + colour across EVERY pixel in
+    // the cell and runs Sobel at EVERY pixel in the cell, accumulating gxSum,
+    // gySum, and per-pixel gradient magnitude. A prior 4×4 stratified / cell-
+    // centre Sobel approximation diverged enough to flip edge/fill classifi-
+    // cation for marginal cells, producing 255-delta pixels in the parity
+    // test. Matching the CPU loop exactly costs ~cellSize²×9 samples per
+    // fragment (≤ ~36K for the clamped range 4..64) — easily absorbed on
+    // Apple Silicon given the full-resolution per-pixel parallelism.
+    //
+    // Edge cells: when image dimensions aren't divisible by cellSize, the
+    // last cell in a row/column is narrower/shorter. Clip the loop bounds
+    // to the actual cell extent (cellW, cellH) and divide by the clipped
+    // count — matches CPU's `xEnd - cellX` / `yEnd - cellY` reductions
+    // (ShaderASCIIRenderer.swift:186-189). Without this, edge cells would
+    // include phantom samples beyond the image edge (clamp-to-edge sampler
+    // returns the boundary pixel value, biasing the average).
+    int cellSizeI = int(cellSizeF);
+    int cellW     = min(cellSizeI, max(0, int(resolution.x) - int(cellOriginPx.x)));
+    int cellH     = min(cellSizeI, max(0, int(resolution.y) - int(cellOriginPx.y)));
+    if (cellW <= 0 || cellH <= 0) {
+        return float4(source.sample(texSampler, in.uv).rgb, 1.0);
+    }
+
+    float lumSum       = 0.0;
+    float3 colorSum    = float3(0.0);
+    float gxSum        = 0.0;
+    float gySum        = 0.0;
+    float edgeMagSum   = 0.0;
+
+    for (int j = 0; j < cellH; j++) {
+        for (int i = 0; i < cellW; i++) {
+            float2 samplePx = cellOriginPx + float2(float(i) + 0.5, float(j) + 0.5);
+            float3 c = source.sample(texSampler, samplePx * invRes).rgb;
+            float  l = luminance(c);
+            lumSum   += l;
             colorSum += c;
+
+            // Per-pixel Sobel. Use sampler-clamped reads for neighbours so
+            // cell-edge pixels don't wrap — matches CPU's clamping lum() helper.
+            float tl = luminance(source.sample(texSampler, (samplePx + float2(-1, -1)) * invRes).rgb);
+            float tc = luminance(source.sample(texSampler, (samplePx + float2( 0, -1)) * invRes).rgb);
+            float tr = luminance(source.sample(texSampler, (samplePx + float2( 1, -1)) * invRes).rgb);
+            float ml = luminance(source.sample(texSampler, (samplePx + float2(-1,  0)) * invRes).rgb);
+            float mr = luminance(source.sample(texSampler, (samplePx + float2( 1,  0)) * invRes).rgb);
+            float bl = luminance(source.sample(texSampler, (samplePx + float2(-1,  1)) * invRes).rgb);
+            float bc = luminance(source.sample(texSampler, (samplePx + float2( 0,  1)) * invRes).rgb);
+            float br = luminance(source.sample(texSampler, (samplePx + float2( 1,  1)) * invRes).rgb);
+
+            float gx = (-tl - 2.0 * ml - bl) + (tr + 2.0 * mr + br);
+            float gy = (-tl - 2.0 * tc - tr) + (bl + 2.0 * bc + br);
+
+            gxSum += gx;
+            gySum += gy;
+            edgeMagSum += sqrt(gx * gx + gy * gy);
         }
     }
-    float invSamples = 1.0 / float(N * N);
+    float invSamples = 1.0 / float(cellW * cellH);
     float  avgLum    = lumSum * invSamples;
     float3 avgColor  = colorSum * invSamples;
+    float  avgMag    = edgeMagSum * invSamples;
 
     // ---- Tone-map luminance for the LUT lookup -----------------------------
-    float adjustedLum = saturate(pow(max(avgLum * u.exposure, 0.0), max(u.attenuation, 0.0001)));
+    // Pass `attenuation` through unchanged — CPU allows 0 (which makes pow()
+    // collapse to 1.0 across the luminance range, useful for "max-brightness"
+    // overrides). The previous max(attenuation, 0.0001) clamp diverged from
+    // CPU at the exact value 0 (ShaderASCIIRenderer.swift:151,221).
+    float adjustedLum = saturate(pow(max(avgLum * u.exposure, 0.0), u.attenuation));
     if (u.blackLevel > 0.0) {
         adjustedLum = u.blackLevel + adjustedLum * (1.0 - u.blackLevel);
     }
@@ -286,28 +335,12 @@ static float4 asciiVariant(
         adjustedLum = 1.0 - adjustedLum;
     }
 
-    // ---- Sobel on cell-spaced neighbour averages ---------------------------
-    // 3×3 grid of cell-centre luminances. Cheaper than per-pixel Sobel inside
-    // the cell and matches the CPU's accumulated-gradient direction well
-    // enough for the four-bucket classification.
-    float lumGrid[9];
-    for (int j = -1; j <= 1; j++) {
-        for (int i = -1; i <= 1; i++) {
-            float2 nbCenter = cellCenterPx + float2(float(i), float(j)) * cellSizeF;
-            float3 c = source.sample(texSampler, nbCenter * invRes).rgb;
-            lumGrid[(j + 1) * 3 + (i + 1)] = luminance(c);
-        }
-    }
-
-    float gx = (-lumGrid[0] - 2.0 * lumGrid[3] - lumGrid[6])
-             + ( lumGrid[2] + 2.0 * lumGrid[5] + lumGrid[8]);
-    float gy = (-lumGrid[0] - 2.0 * lumGrid[1] - lumGrid[2])
-             + ( lumGrid[6] + 2.0 * lumGrid[7] + lumGrid[8]);
-    float magnitude = length(float2(gx, gy));
-
+    // ---- Edge classification (matches CPU threshold + direction bucketing) -
     // edgeBias 1.0 = very sensitive (low threshold), 0.0 = never edge.
     float threshold = 0.05 + (1.0 - u.edgeBias) * 0.35;
-    bool  isEdge    = magnitude > threshold;
+    bool  isEdge    = avgMag > threshold;
+    float gx = gxSum;
+    float gy = gySum;
 
     int direction = -1;        // -1 = no edge
     if (isEdge) {
@@ -329,8 +362,13 @@ static float4 asciiVariant(
     // nearest-clamp sampler instead of using `.read()`. UV is computed from
     // integer pixel coordinates plus a 0.5 centre offset, matching the
     // `sample(x:y:)` lookup the CPU LUT uses.
-    int gx8 = clamp(int(floor(localPx.x * 8.0 * invCell)), 0, 7);
-    int gy8 = clamp(int(floor(localPx.y * 8.0 * invCell)), 0, 7);
+    //
+    // Uses the clipped cellW/cellH (not cellSize) so the glyph is stretched
+    // across the actual cell extent on edge cells — matches CPU's
+    // `(localX * 8) / cellW` / `(localY * 8) / cellH` mapping
+    // (ShaderASCIIRenderer.swift:447-448).
+    int gx8 = clamp(int(floor(localPx.x * 8.0 / float(max(1, cellW)))), 0, 7);
+    int gy8 = clamp(int(floor(localPx.y * 8.0 / float(max(1, cellH)))), 0, 7);
 
     float glyphValue;
     if (direction >= 0) {
