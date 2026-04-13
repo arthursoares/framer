@@ -26,7 +26,12 @@ public enum EdgeFieldGPURenderer {
         var edgeThreshold: Float  = 0.5
         var edgeAlgorithm: UInt32 = 0
         var invert:        UInt32 = 0
+        var fieldIntensity: Float = 0.5
+
+        var contourLevels:   UInt32 = 8
+        var contourFillMode: UInt32 = 0       // 0 linesOnly, 1 filledBands
         var _pad0: Float = 0
+        var _pad1: Float = 0
 
         var edgeColor: SIMD4<Float> = SIMD4(0, 0, 0, 0)
     }
@@ -74,6 +79,54 @@ public enum EdgeFieldGPURenderer {
             auxTextures: [],
             sampler: sampler,
             uniformBytes: uniformData,
+            outputSize: (width, height),
+            library: library
+        )
+        return try MetalTextureSupport.makeCGImage(from: outputTexture)
+    }
+
+    // MARK: - Contour
+
+    public static func renderContour(
+        input: CGImage,
+        common: GPUEffectCommonParameters,
+        geometry: GPUEffectGeometryParameters,
+        color: GPUEffectColorParameters,
+        params: EdgeFieldParameters,
+        outputSize: CGSize
+    ) throws -> CGImage {
+        guard let library = MetalEffectLibrary.shared else {
+            throw MetalEffectError.metalUnavailable
+        }
+
+        let width  = max(1, Int(outputSize.width.rounded()))
+        let height = max(1, Int(outputSize.height.rounded()))
+
+        let pipeline = try library.pipeline(for: "edgeFieldFragment")
+        let sampler  = try library.linearClamp()
+        let sourceTexture = try MetalTextureSupport.makeTexture(from: input, device: library.device)
+
+        var uniforms = Uniforms()
+        mapCommon(common, into: &uniforms.common)
+        mapGeometry(geometry, into: &uniforms.geometry)
+        mapColor(color, into: &uniforms.color)
+
+        uniforms.variant         = 1        // contour
+        uniforms.intensity       = 1.0
+        uniforms.lineStrength    = Float(clamp01(params.lineStrength))
+        uniforms.thickness       = Float(clamp01(params.thickness))
+        uniforms.invert          = params.invert ? 1 : 0
+        uniforms.fieldIntensity  = Float(clamp01(params.fieldIntensity))
+        uniforms.contourLevels   = UInt32(max(2, min(32, params.contourLevels)))
+        uniforms.contourFillMode = (params.contourFillMode == .filledBands) ? 1 : 0
+        uniforms.edgeColor       = params.edgeColor.map { simdColor($0) } ?? SIMD4(0, 0, 0, 0)
+
+        let outputTexture = try MetalRenderPass.encode(
+            pipeline: pipeline,
+            source: sourceTexture,
+            auxTextures: [],
+            sampler: sampler,
+            uniformBytes: uniformBytes(uniforms),
             outputSize: (width, height),
             library: library
         )

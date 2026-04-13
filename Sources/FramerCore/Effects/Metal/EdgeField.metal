@@ -19,15 +19,20 @@ struct EdgeFieldUniforms {
     FramerGeometryUniforms geometry;
     FramerColorUniforms    color;
 
-    uint  variant;             // 0 edgeDetection, future: 1 contour, 2 waveLines, 3 voronoi, 4 noiseField
+    uint  variant;             // 0 edgeDetection, 1 contour, future: 2 waveLines, 3 voronoi, 4 noiseField
     float intensity;           // 0..1, blend with original
     float lineStrength;        // 0..1
     float thickness;           // 0..1
 
-    float edgeThreshold;       // 0..1, subtracts from edge before shaping
+    float edgeThreshold;       // 0..1, subtracts from edge before shaping (edgeDetection)
     uint  edgeAlgorithm;       // 0 sobel, 1 laplacian (edge multiplier differs)
     uint  invert;              // 0 / 1
+    float fieldIntensity;      // 0..1, contour-band modulation
+
+    uint  contourLevels;       // ≥ 2, number of contour bands
+    uint  contourFillMode;     // 0 linesOnly, 1 filledBands
     float _pad0;
+    float _pad1;
 
     float4 edgeColor;          // colour for ink pixels (rgba, a unused)
 };
@@ -92,6 +97,59 @@ static float4 edgeDetectionVariant(
 }
 
 // =============================================================================
+// CONTOUR — quantize source luminance into N bands, render band boundaries as
+// lines. Two modes: linesOnly renders lines at full brightness over a dim
+// background, filledBands renders each band at its quantized luminance with
+// brighter line strokes.
+// =============================================================================
+
+static float4 contourVariant(
+    VertexOut                    in,
+    texture2d<float>             source,
+    sampler                      texSampler,
+    constant EdgeFieldUniforms&  u
+) {
+    float2 resolution = float2(source.get_width(), source.get_height());
+    int2   pixel      = clamp(int2(floor(in.uv * resolution)),
+                              int2(0), int2(resolution) - 1);
+    float2 selfUV     = (float2(pixel) + 0.5) / resolution;
+    float3 srcOrig    = source.sample(texSampler, selfUV).rgb;
+
+    float lum       = saturate(luminance(srcOrig));
+    int   levels    = max(2, int(u.contourLevels));
+    float quantized = floor(lum * float(levels)) / float(levels);
+    float band      = fract(quantized * max(0.01, u.fieldIntensity) * float(levels));
+
+    float value;
+    if (u.contourFillMode == 1u) {
+        // filledBands
+        float lineWidth = max(0.04, u.lineStrength * u.thickness * 0.25);
+        bool  isLine    = band < lineWidth;
+        float bandValue = u.invert == 1u ? (1.0 - quantized) : quantized;
+        float lineValue = min(1.0, bandValue + u.lineStrength * 0.18);
+        value = isLine ? lineValue : bandValue;
+    } else {
+        // linesOnly
+        float lineWidth = max(0.04, u.lineStrength * u.thickness * 0.4);
+        bool  isLine    = band < lineWidth;
+        float dim       = (u.invert == 1u) ? (1.0 - lum) : lum * 0.15;
+        value = isLine ? 1.0 : dim;
+    }
+    value = saturate(value);
+
+    // Colour mapping: default is monochrome max(background, value); edgeColor
+    // tint multiplied in when set.
+    float bg = u.color.backgroundIntensity;
+    float3 ink = float3(max(bg, value));
+    if (u.edgeColor.r + u.edgeColor.g + u.edgeColor.b > 0.0) {
+        ink *= u.edgeColor.rgb;
+    }
+
+    float3 final = mix(srcOrig, saturate(ink), saturate(u.intensity));
+    return float4(final, 1.0);
+}
+
+// =============================================================================
 // Fragment entry — dispatch on variant.
 // =============================================================================
 
@@ -103,6 +161,7 @@ fragment float4 edgeFieldFragment(
 ) {
     switch (uniforms.variant) {
         case 0:  return edgeDetectionVariant(in, source, texSampler, uniforms);
+        case 1:  return contourVariant(in, source, texSampler, uniforms);
         default: return source.sample(texSampler, in.uv);
     }
 }
