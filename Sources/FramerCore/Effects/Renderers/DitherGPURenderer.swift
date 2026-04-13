@@ -30,24 +30,43 @@ public enum DitherGPURenderer {
         case halftone = 5
         case stucki = 6
         case whiteNoise = 7
-        // riemersma deliberately not represented — Swift forces CPU fallback
+        // 8 reserved for riemersma — deliberately not represented; Swift forces CPU fallback
+        case sierra = 9
+        case sierraTwoRow = 10
+        case sierraLite = 11
+        case jarvisJudiceNinke = 12
+        case burkes = 13
+        case interleavedGradientNoise = 14
+        case cmykHalftone = 15
 
         init?(_ algorithm: DitherAlgorithm) {
             switch algorithm {
-            case .bayer:           self = .bayer
-            case .floydSteinberg:  self = .floydSteinberg
-            case .atkinson:        self = .atkinson
-            case .blueNoise:       self = .blueNoise
-            case .artisticDrip:    self = .artisticDrip
-            case .halftone:        self = .halftone
-            case .stucki:          self = .stucki
-            case .whiteNoise:      self = .whiteNoise
-            case .riemersma:       return nil
+            case .bayer:                    self = .bayer
+            case .floydSteinberg:           self = .floydSteinberg
+            case .atkinson:                 self = .atkinson
+            case .blueNoise:                self = .blueNoise
+            case .artisticDrip:             self = .artisticDrip
+            case .halftone:                 self = .halftone
+            case .stucki:                   self = .stucki
+            case .whiteNoise:               self = .whiteNoise
+            case .riemersma:                return nil
+            case .sierra:                   self = .sierra
+            case .sierraTwoRow:             self = .sierraTwoRow
+            case .sierraLite:               self = .sierraLite
+            case .jarvisJudiceNinke:        self = .jarvisJudiceNinke
+            case .burkes:                   self = .burkes
+            case .interleavedGradientNoise: self = .interleavedGradientNoise
+            case .cmykHalftone:             self = .cmykHalftone
             }
         }
     }
 
     // MARK: - Uniform layout (mirrors DitherUniforms in Dither.metal)
+
+    /// Hard cap on uploaded palette colours. Mirrors `DITHER_MAX_PALETTE` in
+    /// Dither.metal and `DitherColorMode.MAX_PALETTE_COLORS` in the model.
+    /// All three constants must move together.
+    private static let MAX_PALETTE_COLORS = 16
 
     private struct Uniforms {
         var common = FramerCommonUniformsLayout()
@@ -56,7 +75,7 @@ public enum DitherGPURenderer {
 
         var algorithm: UInt32 = 0
         var bayerLevel: UInt32 = 2
-        var colorMode: UInt32 = 0           // 0 mono, 1 levels
+        var colorMode: UInt32 = 0           // 0 mono, 1 levels, 2 palette
         var colorLevels: UInt32 = 4
 
         var threshold: Float = 0.5
@@ -67,9 +86,50 @@ public enum DitherGPURenderer {
         var foregroundRGBA: SIMD4<Float> = SIMD4(1, 1, 1, 1)
         var backgroundRGBA: SIMD4<Float> = SIMD4(0, 0, 0, 1)
         var useTwoTone: UInt32 = 0
-        var _pad1: Float = 0
+        var paletteCount: UInt32 = 0
         var _pad2: Float = 0
         var _pad3: Float = 0
+
+        // 16 × float4 = 256 bytes. Slot order matches MSL palette[] indexing.
+        var palette: (
+            SIMD4<Float>, SIMD4<Float>, SIMD4<Float>, SIMD4<Float>,
+            SIMD4<Float>, SIMD4<Float>, SIMD4<Float>, SIMD4<Float>,
+            SIMD4<Float>, SIMD4<Float>, SIMD4<Float>, SIMD4<Float>,
+            SIMD4<Float>, SIMD4<Float>, SIMD4<Float>, SIMD4<Float>
+        ) = (
+            SIMD4(0,0,0,0), SIMD4(0,0,0,0), SIMD4(0,0,0,0), SIMD4(0,0,0,0),
+            SIMD4(0,0,0,0), SIMD4(0,0,0,0), SIMD4(0,0,0,0), SIMD4(0,0,0,0),
+            SIMD4(0,0,0,0), SIMD4(0,0,0,0), SIMD4(0,0,0,0), SIMD4(0,0,0,0),
+            SIMD4(0,0,0,0), SIMD4(0,0,0,0), SIMD4(0,0,0,0), SIMD4(0,0,0,0)
+        )
+
+        mutating func setPalette(_ colors: [SIMD4<Float>]) {
+            // Clamp to capacity. `DitherColorMode.palette` already truncates
+            // on decode so this is mostly defensive.
+            let n = min(colors.count, DitherGPURenderer.MAX_PALETTE_COLORS)
+            for i in 0..<n {
+                switch i {
+                case 0:  palette.0  = colors[i]
+                case 1:  palette.1  = colors[i]
+                case 2:  palette.2  = colors[i]
+                case 3:  palette.3  = colors[i]
+                case 4:  palette.4  = colors[i]
+                case 5:  palette.5  = colors[i]
+                case 6:  palette.6  = colors[i]
+                case 7:  palette.7  = colors[i]
+                case 8:  palette.8  = colors[i]
+                case 9:  palette.9  = colors[i]
+                case 10: palette.10 = colors[i]
+                case 11: palette.11 = colors[i]
+                case 12: palette.12 = colors[i]
+                case 13: palette.13 = colors[i]
+                case 14: palette.14 = colors[i]
+                case 15: palette.15 = colors[i]
+                default: break
+                }
+            }
+            paletteCount = UInt32(n)
+        }
     }
 
     // MARK: - Public entry
@@ -148,6 +208,19 @@ public enum DitherGPURenderer {
         case .levels(let n):
             uniforms.colorMode = 1
             uniforms.colorLevels = UInt32(max(2, min(8, n)))
+
+        case .palette(let colors):
+            // Empty palette → fall back to bw mode rather than uploading
+            // garbage. Should be impossible (decoder rejects empty palettes)
+            // but keeps the GPU defensive.
+            guard !colors.isEmpty else {
+                uniforms.colorMode = 0
+                uniforms.useTwoTone = 0
+                break
+            }
+            uniforms.colorMode = 2
+            let simdPalette = colors.prefix(Self.MAX_PALETTE_COLORS).map { simdColor($0) }
+            uniforms.setPalette(simdPalette)
         }
 
         // 4. Run the GPU pass at work resolution.
@@ -184,6 +257,7 @@ public enum DitherGPURenderer {
         case bw
         case twoTone(fg: CodableColor, bg: CodableColor)
         case levels(Int)
+        case palette([CodableColor])
     }
 
     private static func resolveColors(
@@ -210,6 +284,8 @@ public enum DitherGPURenderer {
             return .twoTone(fg: fg, bg: bg)
         case .color(let levels):
             return .levels(levels)
+        case .palette(let colors):
+            return .palette(colors)
         }
     }
 

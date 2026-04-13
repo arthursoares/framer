@@ -364,6 +364,83 @@ final class EffectGPUParityTests: XCTestCase {
                              "Riemersma fallback didn't actually dither (got \(binary) binary pixels)")
     }
 
+    func testDitherSierraOutputIsBinaryBW() throws {
+        try requireMetal()
+        let img = makeTestImage()
+        let params = DitherLayerParams(algorithm: .sierra, colorMode: .bw,
+                                       bayerLevel: 2, pixelScale: 1, threshold: 0.5)
+        let gpu = try DitherGPURenderer.apply(to: img, params: params)
+        XCTAssertEqual(gpu.width, img.width)
+        let bytes = drawToBytes(gpu)
+        var nonBinary = 0
+        for i in stride(from: 0, to: bytes.count, by: 4) {
+            if bytes[i] > 8 && bytes[i] < 247 { nonBinary += 1 }
+        }
+        XCTAssertLessThan(nonBinary, bytes.count / 4 / 100,
+                          "Sierra mono dither produced too many non-binary pixels (\(nonBinary))")
+    }
+
+    func testDitherIGNAlgorithmRouts() throws {
+        try requireMetal()
+        let img = makeTestImage()
+        // Just verify the new IGN algorithm doesn't crash and produces dithered
+        // output. Exact noise pattern depends on the IGN function — checking
+        // structural properties only.
+        let params = DitherLayerParams(algorithm: .interleavedGradientNoise,
+                                       colorMode: .bw, bayerLevel: 2,
+                                       pixelScale: 1, threshold: 0.5)
+        let gpu = try DitherGPURenderer.apply(to: img, params: params)
+        let bytes = drawToBytes(gpu)
+        var binary = 0
+        for i in stride(from: 0, to: bytes.count, by: 4) {
+            if bytes[i] < 8 || bytes[i] > 247 { binary += 1 }
+        }
+        XCTAssertGreaterThan(binary, bytes.count / 4 * 95 / 100,
+                             "IGN dither output should be near-binary (\(binary)/\(bytes.count / 4))")
+    }
+
+    func testDitherPaletteUsesOnlyPaletteColors() throws {
+        try requireMetal()
+        let img = makeTestImage()
+        let palette = VintagePalette.gameBoy
+        let params = DitherLayerParams(algorithm: .floydSteinberg,
+                                       colorMode: .palette(palette),
+                                       bayerLevel: 2, pixelScale: 1, threshold: 0.5)
+        let gpu = try DitherGPURenderer.apply(to: img, params: params)
+
+        // Every output pixel should be one of the 4 GameBoy greens (allowing
+        // ±2 byte sRGB-roundtrip slop per channel). Count palette hits.
+        let bytes = drawToBytes(gpu)
+        let paletteRGB: [(UInt8, UInt8, UInt8)] = palette.map {
+            (UInt8(round($0.red * 255)), UInt8(round($0.green * 255)), UInt8(round($0.blue * 255)))
+        }
+        var inPalette = 0
+        for i in stride(from: 0, to: bytes.count, by: 4) {
+            let r = bytes[i], g = bytes[i + 1], b = bytes[i + 2]
+            for (pr, pg, pb) in paletteRGB {
+                if abs(Int(r) - Int(pr)) <= 3 && abs(Int(g) - Int(pg)) <= 3 && abs(Int(b) - Int(pb)) <= 3 {
+                    inPalette += 1
+                    break
+                }
+            }
+        }
+        let pixelCount = bytes.count / 4
+        XCTAssertGreaterThan(inPalette, pixelCount * 95 / 100,
+                             "Palette dither emitted too many off-palette pixels (\(inPalette)/\(pixelCount))")
+    }
+
+    func testDitherCMYKHalftoneFallsBackOnEmptyMetal() throws {
+        // CMYK halftone runs on the GPU; CPU path degrades to monochrome
+        // halftone (documented in DitherRenderer.applyMonochromeDither). Just
+        // verify the algorithm option doesn't crash through either path.
+        let img = makeTestImage(width: 64, height: 64)
+        let params = DitherLayerParams(algorithm: .cmykHalftone, colorMode: .bw,
+                                       bayerLevel: 2, pixelScale: 1, threshold: 0.5)
+        let result = try DitherRenderer.apply(to: img, params: params)
+        XCTAssertEqual(result.width, img.width)
+        XCTAssertEqual(result.height, img.height)
+    }
+
     func testDitherColorLevelsQuantizesPerChannel() throws {
         try requireMetal()
         let img = makeTestImage()
