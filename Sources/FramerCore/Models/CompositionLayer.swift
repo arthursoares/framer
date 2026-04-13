@@ -1081,6 +1081,33 @@ public struct ShibaShaderParams: Codable, Equatable, Sendable {
 public enum PixelSortDirection: String, Codable, Equatable, Sendable, CaseIterable {
     case horizontal
     case vertical
+    /// Anti-diagonal sweep — `dir = normalize(1, 1)` along lines of constant
+    /// `floor(pixel.x - pixel.y)`. Lifted directly from Kim Asendorf's
+    /// original 2010 Processing sketch.
+    case diagonal
+}
+
+/// Span-detection criterion. Determines which pixels belong to a single
+/// sort-able run. The classic Framer behaviour is `.luminance`, retained as
+/// the default. The other four options are Kim Asendorf's original modes
+/// (Black / White / Bright / Dark) — see grainrad/notes/pixel-sort.md.
+public enum PixelSortSpanMode: String, Codable, Equatable, Sendable, CaseIterable {
+    /// Default Framer behaviour: span continues while `luminance >= threshold`.
+    /// Existing presets that don't carry a `spanMode` field decode to this
+    /// case so legacy behaviour is preserved.
+    case luminance
+    /// Kim Asendorf "Black": span starts when `luminance > threshold * 0.25`,
+    /// ends when it drops below — sorts emerge from shadow regions.
+    case kimBlack
+    /// Kim Asendorf "White": span starts when `luminance < 1 - threshold * 0.25`,
+    /// ends when it rises above — sorts emerge from highlights.
+    case kimWhite
+    /// Kim Asendorf "Bright": span uses `max(r,g,b) > threshold`. Stays in
+    /// well-lit, saturated regions.
+    case kimBright
+    /// Kim Asendorf "Dark": span uses `max(r,g,b) < threshold`. Stays in
+    /// shadow / desaturated regions.
+    case kimDark
 }
 
 public struct PixelSortShaderParams: Codable, Equatable, Sendable {
@@ -1088,17 +1115,64 @@ public struct PixelSortShaderParams: Codable, Equatable, Sendable {
     public var direction: PixelSortDirection
     public var span: Int
     public var amount: Double
+    /// Span detection criterion. Defaults to `.luminance` so existing presets
+    /// behave identically to before this knob existed.
+    public var spanMode: PixelSortSpanMode
+    /// Per-line threshold jitter (0 = uniform, 1 = ±25% per row/column/diagonal).
+    /// Each line gets a deterministic hash of its `lineCoord` modulating the
+    /// effective threshold — adjacent lines get different span lengths,
+    /// breaking up the mechanical look. Stable frame-to-frame for stills.
+    public var randomness: Double
+    /// Sort descending by luminance instead of ascending.
+    public var reverse: Bool
 
     public init(
         threshold: Double = 0.65,
         direction: PixelSortDirection = .horizontal,
         span: Int = 24,
-        amount: Double = 1.0
+        amount: Double = 1.0,
+        spanMode: PixelSortSpanMode = .luminance,
+        randomness: Double = 0.0,
+        reverse: Bool = false
     ) {
         self.threshold = threshold
         self.direction = direction
         self.span = span
         self.amount = amount
+        self.spanMode = spanMode
+        self.randomness = randomness
+        self.reverse = reverse
+    }
+
+    private enum CodingKeys: String, CodingKey {
+        case threshold, direction, span, amount, spanMode, randomness, reverse
+    }
+
+    public init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        // All new fields decode optionally with sensible defaults so old YAML
+        // and presets continue to load and behave identically.
+        self.init(
+            threshold: try container.decodeIfPresent(Double.self, forKey: .threshold) ?? 0.65,
+            direction: try container.decodeIfPresent(PixelSortDirection.self, forKey: .direction) ?? .horizontal,
+            span: try container.decodeIfPresent(Int.self, forKey: .span) ?? 24,
+            amount: try container.decodeIfPresent(Double.self, forKey: .amount) ?? 1.0,
+            spanMode: try container.decodeIfPresent(PixelSortSpanMode.self, forKey: .spanMode) ?? .luminance,
+            randomness: try container.decodeIfPresent(Double.self, forKey: .randomness) ?? 0.0,
+            reverse: try container.decodeIfPresent(Bool.self, forKey: .reverse) ?? false
+        )
+    }
+
+    public func encode(to encoder: Encoder) throws {
+        var container = encoder.container(keyedBy: CodingKeys.self)
+        try container.encode(threshold, forKey: .threshold)
+        try container.encode(direction, forKey: .direction)
+        try container.encode(span, forKey: .span)
+        try container.encode(amount, forKey: .amount)
+        // Skip emitting defaults so existing-style YAML stays clean.
+        if spanMode != .luminance { try container.encode(spanMode, forKey: .spanMode) }
+        if randomness != 0 { try container.encode(randomness, forKey: .randomness) }
+        if reverse { try container.encode(reverse, forKey: .reverse) }
     }
 }
 

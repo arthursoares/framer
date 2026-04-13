@@ -48,15 +48,27 @@ For deliberate long-streak settings (span 32+), the GPU output is visibly
 coarser; the CPU path remains the export-quality fallback (and the
 Metal-unavailable fallback) via `gpuOrCPU(...)` in ShaderRenderer.
 
-**Deferred to a follow-up**:
-  - Kim Asendorf's four span-detection modes (Black / White / Bright / Dark)
-  - Diagonal direction (`dir = normalize(1, 1)` along anti-diagonals)
-  - Per-line randomness (hash-based threshold jitter)
-  - Reverse sort (descending)
+### PixelSort extensions (landed in pixelsort-extensions pass)
 
-Adding any of those requires extending `PixelSortShaderParams` and the YAML
-config / preset format; out of scope for the GPU port pass to keep
-backwards-compatibility risk low.
+`PixelSortDirection` gains `.diagonal` (anti-diagonal sweep along
+`dir = (1, 1)`). `PixelSortShaderParams` gains:
+  - `spanMode: PixelSortSpanMode` — `.luminance` (Framer legacy default) plus
+    Kim Asendorf's four originals: `.kimBlack`, `.kimWhite`, `.kimBright`,
+    `.kimDark`. Bright/Dark use `max(r,g,b)` instead of luminance for span
+    detection — preserves saturated colours per Asendorf's original sketch.
+  - `randomness: Double` — per-line hash-based threshold jitter
+    (`sin(lineCoord * 0.173) * 43758.5453`, fract). Same recipe on CPU and
+    GPU so jitter patterns line up at matching line coordinates. Stable
+    frame-to-frame for stills.
+  - `reverse: Bool` — sort descending instead of ascending.
+
+YAML compat: every new field is optional in the `Codable` decoder with the
+old default value, and the encoder skips emitting defaults so existing
+presets round-trip identically. New presets can opt in field-by-field.
+
+Both CPU (`ShaderPixelSortRenderer.apply` rewritten) and GPU
+(`PixelSort.metal`) implement the full new surface; routing through
+`gpuOrCPU(...)` continues to work unchanged.
 
 ## Dither port notes
 

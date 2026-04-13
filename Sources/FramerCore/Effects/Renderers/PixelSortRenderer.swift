@@ -24,13 +24,18 @@ public enum PixelSortRenderer {
 
         var intensity: Float = 1
         var threshold: Float = 0
-        var direction: UInt32 = 0     // 0 horizontal, 1 vertical
+        var direction: UInt32 = 0     // 0 horizontal, 1 vertical, 2 diagonal
         var spanCap: Int32 = 24
 
         var widthPx: Float = 0
         var heightPx: Float = 0
+        var spanMode: UInt32 = 0      // 0 luminance, 1..4 Kim Asendorf
+        var reverse: UInt32 = 0       // 0/1
+
+        var randomness: Float = 0
         var _pad0: Float = 0
         var _pad1: Float = 0
+        var _pad2: Float = 0
     }
 
     public static func render(
@@ -47,10 +52,13 @@ public enum PixelSortRenderer {
         // so the GPU and CPU agree on the final blend factor.
         uniforms.intensity = Float(max(0.0, min(1.0, params.intensity * ps.amount)))
         uniforms.threshold = Float(max(0.0, min(1.0, ps.threshold)))
-        uniforms.direction = (ps.direction == .vertical) ? 1 : 0
+        uniforms.direction = directionID(ps.direction)
         uniforms.spanCap = Int32(max(1, min(256, ps.span)))
         uniforms.widthPx = Float(image.width)
         uniforms.heightPx = Float(image.height)
+        uniforms.spanMode = spanModeID(ps.spanMode)
+        uniforms.reverse = ps.reverse ? 1 : 0
+        uniforms.randomness = Float(max(0.0, min(1.0, ps.randomness)))
 
         let pipeline = try library.pipeline(for: "pixelSortFragment")
         // Nearest sampling — span detection compares per-pixel luminance and
@@ -69,5 +77,27 @@ public enum PixelSortRenderer {
             library: library
         )
         return try MetalTextureSupport.makeCGImage(from: outputTexture)
+    }
+
+    // MARK: - Enum mapping
+
+    @inline(__always)
+    private static func directionID(_ direction: PixelSortDirection) -> UInt32 {
+        switch direction {
+        case .horizontal: return 0
+        case .vertical:   return 1
+        case .diagonal:   return 2
+        }
+    }
+
+    @inline(__always)
+    private static func spanModeID(_ mode: PixelSortSpanMode) -> UInt32 {
+        switch mode {
+        case .luminance: return 0
+        case .kimBlack:  return 1
+        case .kimWhite:  return 2
+        case .kimBright: return 3
+        case .kimDark:   return 4
+        }
     }
 }
