@@ -276,6 +276,65 @@ final class EffectGPUParityTests: XCTestCase {
         XCTAssertLessThan(mean, 12.0, "PixelSort mean delta too high (\(mean))")
     }
 
+    func testPixelSortDiagonalDirectionDoesntCrash() throws {
+        try requireMetal()
+        let img = makeTestImage()
+        let ps = PixelSortShaderParams(direction: .diagonal)
+        let params = ShaderLayerParams(style: .pixelSort, intensity: 1.0,
+                                       params: .pixelSort(ps))
+        let gpu = try PixelSortRenderer.render(to: img, params: params)
+        XCTAssertEqual(gpu.width, img.width)
+        XCTAssertEqual(gpu.height, img.height)
+    }
+
+    func testPixelSortKimAsendorfModesProduceOutput() throws {
+        try requireMetal()
+        let img = makeTestImage()
+        let modes: [PixelSortSpanMode] = [.kimBlack, .kimWhite, .kimBright, .kimDark]
+        for mode in modes {
+            let ps = PixelSortShaderParams(threshold: 0.5, spanMode: mode)
+            let params = ShaderLayerParams(style: .pixelSort, intensity: 1.0,
+                                           params: .pixelSort(ps))
+            let gpu = try PixelSortRenderer.render(to: img, params: params)
+            XCTAssertEqual(gpu.width, img.width, "\(mode) wrong width")
+            XCTAssertEqual(gpu.height, img.height, "\(mode) wrong height")
+        }
+    }
+
+    func testPixelSortReverseFlipsSortOrder() throws {
+        try requireMetal()
+        let img = makeTestImage()
+        let normal = PixelSortShaderParams(threshold: 0.3)
+        let reversed = PixelSortShaderParams(threshold: 0.3, reverse: true)
+        let normalParams = ShaderLayerParams(style: .pixelSort, intensity: 1.0,
+                                              params: .pixelSort(normal))
+        let reversedParams = ShaderLayerParams(style: .pixelSort, intensity: 1.0,
+                                                params: .pixelSort(reversed))
+        let gpuNormal = try PixelSortRenderer.render(to: img, params: normalParams)
+        let gpuReversed = try PixelSortRenderer.render(to: img, params: reversedParams)
+        // Reverse must produce different output from normal — if it didn't,
+        // the reverse flag isn't reaching the shader.
+        let (mean, _) = compare(gpuNormal, gpuReversed)
+        XCTAssertGreaterThan(mean, 1.0,
+                             "Reverse sort should differ from ascending sort (mean delta \(mean))")
+    }
+
+    func testPixelSortRandomnessChangesOutput() throws {
+        try requireMetal()
+        let img = makeTestImage()
+        let plain = PixelSortShaderParams(threshold: 0.3, randomness: 0.0)
+        let jittered = PixelSortShaderParams(threshold: 0.3, randomness: 1.0)
+        let plainP = ShaderLayerParams(style: .pixelSort, intensity: 1.0,
+                                        params: .pixelSort(plain))
+        let jitterP = ShaderLayerParams(style: .pixelSort, intensity: 1.0,
+                                         params: .pixelSort(jittered))
+        let gpuPlain = try PixelSortRenderer.render(to: img, params: plainP)
+        let gpuJitter = try PixelSortRenderer.render(to: img, params: jitterP)
+        let (mean, _) = compare(gpuPlain, gpuJitter)
+        XCTAssertGreaterThan(mean, 0.5,
+                             "Randomness should perturb output (mean delta \(mean))")
+    }
+
     func testPixelSortRespectsThresholdSkip() throws {
         try requireMetal()
         // Threshold = 1.0 — no pixel exceeds it, every pixel returns source.

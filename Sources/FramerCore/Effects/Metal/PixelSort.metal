@@ -37,14 +37,29 @@ struct PixelSortUniforms {
 
     float intensity;        // pre-multiplied (params.intensity * amount)
     float threshold;        // 0..1
-    uint  direction;        // 0 horizontal, 1 vertical
+    uint  direction;        // 0 horizontal, 1 vertical, 2 diagonal
     int   spanCap;          // 1..PIXEL_SORT_MAX_WALK
 
     float widthPx;
     float heightPx;
+    uint  spanMode;         // 0 luminance, 1 kimBlack, 2 kimWhite, 3 kimBright, 4 kimDark
+    uint  reverse;          // 0/1 — descending sort when 1
+
+    float randomness;       // 0..1 — per-line threshold jitter
     float _pad0;
     float _pad1;
+    float _pad2;
 };
+
+constant uint PS_MODE_LUMINANCE = 0u;
+constant uint PS_MODE_KIM_BLACK = 1u;
+constant uint PS_MODE_KIM_WHITE = 2u;
+constant uint PS_MODE_KIM_BRIGHT = 3u;
+constant uint PS_MODE_KIM_DARK = 4u;
+
+constant uint PS_DIR_HORIZONTAL = 0u;
+constant uint PS_DIR_VERTICAL = 1u;
+constant uint PS_DIR_DIAGONAL = 2u;
 
 // Sample helpers — pixel-coordinate access through the bound sampler. The
 // sampler is clamp-to-edge so out-of-bounds reads silently fold to the border;
@@ -64,6 +79,57 @@ inline bool psInBounds(int2 px, int2 res) {
     return px.x >= 0 && px.y >= 0 && px.x < res.x && px.y < res.y;
 }
 
+// Span predicate. Mirrors the CPU isInSpan() exactly. `effective` is the
+// per-line jittered threshold (already adjusted for randomness).
+inline bool psInSpan(float3 c, float effective, uint mode) {
+    switch (mode) {
+        case PS_MODE_KIM_BLACK:
+            return luminance(c) > effective * 0.25;
+        case PS_MODE_KIM_WHITE:
+            return luminance(c) < (1.0 - effective * 0.25);
+        case PS_MODE_KIM_BRIGHT:
+            return maxRGB(c) > effective;
+        case PS_MODE_KIM_DARK:
+            return maxRGB(c) < effective;
+        default:
+            return luminance(c) >= effective;
+    }
+}
+
+// Sort criterion — luminance for now, regardless of span mode. Kim Asendorf's
+// original sketch uses brightness (= luminance) for sort even in the bright /
+// dark modes so the output sorts by perceived intensity. Matches CPU.
+inline float psSortValue(float3 c) {
+    return luminance(c);
+}
+
+// Per-line jitter: same recipe the CPU function uses
+// (sin(lineCoord * 0.173) * 43758.5453, fract). Stable line-coord →
+// stable threshold → no shimmer between renders.
+inline float psJitteredThreshold(float baseThreshold, int lineCoord, float randomness) {
+    if (randomness <= 0.0) { return baseThreshold; }
+    float raw = sin(float(lineCoord) * 0.173) * 43758.5453;
+    float frac = raw - floor(raw);
+    return saturate(baseThreshold * (1.0 + (frac - 0.5) * randomness * 0.5));
+}
+
+// Direction setup: returns the unit step (in integer pixels) and computes the
+// `lineCoord` that lines stay constant on. Diagonal uses the anti-diagonal
+// `dir = (1, 1)` and `lineCoord = floor(x - y)`.
+inline void psPickDirection(uint direction, int2 pixel,
+                            thread int2& dir, thread int& lineCoord) {
+    if (direction == PS_DIR_VERTICAL) {
+        dir = int2(0, 1);
+        lineCoord = pixel.x;
+    } else if (direction == PS_DIR_DIAGONAL) {
+        dir = int2(1, 1);
+        lineCoord = pixel.x - pixel.y;
+    } else {
+        dir = int2(1, 0);
+        lineCoord = pixel.y;
+    }
+}
+
 fragment float4 pixelSortFragment(
     VertexOut                  in           [[stage_in]],
     texture2d<float>           source       [[texture(0)]],
@@ -75,16 +141,20 @@ fragment float4 pixelSortFragment(
     int2 px = int2(in.uv * float2(res));
     px = clamp(px, int2(0), res - int2(1));
 
-    int2 dir = (uniforms.direction == 0u) ? int2(1, 0) : int2(0, 1);
+    int2 dir;
+    int  lineCoord;
+    psPickDirection(uniforms.direction, px, dir, lineCoord);
+
+    int   spanCap     = clamp(uniforms.spanCap, 1, PIXEL_SORT_MAX_WALK);
+    float effective   = psJitteredThreshold(saturate(uniforms.threshold),
+                                            lineCoord, saturate(uniforms.randomness));
 
     float3 currentColor = psSampleAt(source, texSampler, px, invRes);
-    float  currentLum   = psLuminance(currentColor);
-    float  threshold    = saturate(uniforms.threshold);
-    int    spanCap      = clamp(uniforms.spanCap, 1, PIXEL_SORT_MAX_WALK);
 
-    // If this pixel itself is below threshold, it can never be part of a
-    // sortable span (CPU walks past it without including it). Return source.
-    if (currentLum < threshold) {
+    // If this pixel itself doesn't satisfy the span predicate, it can't be
+    // part of a sort run. Return the source colour unchanged so the CPU's
+    // "walk past it" semantics are preserved.
+    if (!psInSpan(currentColor, effective, uniforms.spanMode)) {
         return float4(currentColor, 1.0);
     }
 
@@ -102,7 +172,7 @@ fragment float4 pixelSortFragment(
         int2 q = px - dir * i;
         if (!psInBounds(q, res)) { break; }
         float3 c = psSampleAt(source, texSampler, q, invRes);
-        if (psLuminance(c) < threshold) { break; }
+        if (!psInSpan(c, effective, uniforms.spanMode)) { break; }
         back = i;
     }
 
@@ -114,7 +184,7 @@ fragment float4 pixelSortFragment(
         int2 q = px + dir * i;
         if (!psInBounds(q, res)) { break; }
         float3 c = psSampleAt(source, texSampler, q, invRes);
-        if (psLuminance(c) < threshold) { break; }
+        if (!psInSpan(c, effective, uniforms.spanMode)) { break; }
         forward = i;
     }
 
@@ -145,17 +215,21 @@ fragment float4 pixelSortFragment(
         int2 q = spanStart + dir * offset;
         float3 c = psSampleAt(source, texSampler, q, invRes);
         colors[i] = c;
-        lums[i]   = psLuminance(c);
+        lums[i]   = psSortValue(c);
     }
 
-    // ---- Bubble sort (ascending by luminance) -------------------------------
+    // ---- Bubble sort (ascending or descending by luminance) ---------------
     // Bounded by SAMPLE_COUNT so the loop is fully unrollable. ~276 ops worst
     // case at SAMPLE_COUNT = 24 — fits in registers, no scratch memory.
+    bool descending = (uniforms.reverse == 1u);
     for (int i = 0; i < PIXEL_SORT_SAMPLE_COUNT - 1; i++) {
         if (i >= count - 1) { break; }
         for (int j = 0; j < PIXEL_SORT_SAMPLE_COUNT - 1; j++) {
             if (j >= count - 1 - i) { break; }
-            if (lums[j] > lums[j + 1]) {
+            bool needSwap = descending
+                ? (lums[j] < lums[j + 1])
+                : (lums[j] > lums[j + 1]);
+            if (needSwap) {
                 float3 tc = colors[j]; colors[j] = colors[j + 1]; colors[j + 1] = tc;
                 float  tl = lums[j];   lums[j]   = lums[j + 1];   lums[j + 1]   = tl;
             }
