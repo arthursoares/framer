@@ -17,20 +17,28 @@ public enum GPUEffectKind: String, Codable, Hashable, Sendable, CaseIterable {
     case voronoi
     case vhs
 
-    /// Variants shown in the layer-add picker. Excludes the three variants
-    /// that duplicate an existing `.shader` layer type with a different
-    /// (and better-tuned + GPU-accelerated) parameter surface:
-    ///   - `.ascii`     → already exposed as `.shader` ShaderStyle.ascii
-    ///   - `.halftone`  → already exposed as `.shader` ShaderStyle.halftone
-    ///   - `.pixelSort` → already exposed as `.shader` ShaderStyle.pixelSort
-    /// Without this filter the layer picker offered two different halftones,
-    /// two ASCIIs, and two pixel sorts with overlapping-but-different
-    /// parameter sets. The enum cases themselves are preserved (YAML
-    /// back-compat, preset roundtrip, Codable).
+    /// Variants shown in the layer-add picker. Filters out four variants:
+    ///
+    ///   - `.ascii`     → better-tuned + GPU-accelerated as `.shader` ASCII
+    ///   - `.halftone`  → better-tuned + GPU-accelerated as `.shader` Halftone
+    ///   - `.pixelSort` → better-tuned + GPU-accelerated as `.shader` PixelSort
+    ///   - `.dithering` → the `.dither` Layer type is the canonical dither
+    ///     path. It's GPU-accelerated, exposes all 17 dither algorithms
+    ///     (Bayer / Floyd-Steinberg / Atkinson / Sierra family / JJN /
+    ///     Burkes / IGN / Halftone / etc.) AND the four vintage palettes
+    ///     (Game Boy / NES / C64 / CGA). The bucket system's
+    ///     `.printSampling.dithering` variant only supports 3 algorithms
+    ///     and no palette picker, which users hit immediately (reported
+    ///     during the GPU migration session as "Dithering doesn't have
+    ///     the presets"). Hiding it from the picker avoids the half-shipped
+    ///     feature surface.
+    ///
+    /// The enum cases themselves are preserved (YAML back-compat, preset
+    /// roundtrip, Codable).
     public static var userFacingCases: [GPUEffectKind] {
         allCases.filter { kind in
             switch kind {
-            case .ascii, .halftone, .pixelSort: return false
+            case .ascii, .halftone, .pixelSort, .dithering: return false
             default: return true
             }
         }

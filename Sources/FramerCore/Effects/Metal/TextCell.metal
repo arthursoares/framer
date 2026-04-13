@@ -129,7 +129,12 @@ static float4 dotsVariant(
     float2 invRes      = 1.0 / resolution;
     float2 pixel       = in.uv * resolution;
 
-    float baseSpacing  = max(2.0, 8.0 * u.geometry.spacing);
+    // Cell size = base * geometry.spacing * geometry.scale. Both UI sliders
+    // contribute: spacing tunes the absolute cell pitch, scale acts as a
+    // coarse multiplier so moving the Scale slider actually affects output
+    // (previously only spacing was consumed — scale was silently orphaned).
+    float scaleMult    = max(0.1, u.geometry.scale);
+    float baseSpacing  = max(2.0, 8.0 * u.geometry.spacing * scaleMult);
     float invBaseSpace = 1.0 / baseSpacing;
     float dotBaseR     = baseSpacing * 0.4 * u.sizeMultiplier;
 
@@ -222,8 +227,9 @@ static float4 blockifyVariant(
     float2 invRes     = 1.0 / resolution;
     float2 pixel      = in.uv * resolution;
 
-    // Same cell size as dots — `spacing` drives the grid spacing.
-    float baseSpacing = max(2.0, 8.0 * u.geometry.spacing);
+    // Same cell size as dots — spacing + scale both contribute.
+    float scaleMult   = max(0.1, u.geometry.scale);
+    float baseSpacing = max(2.0, 8.0 * u.geometry.spacing * scaleMult);
 
     // Cell coordinates in pixel space.
     float2 cellIdx      = floor(pixel / baseSpacing);
