@@ -15,8 +15,15 @@ enum EffectBitmapSupport {
             bitmapInfo: CGImageAlphaInfo.premultipliedLast.rawValue
         ) else { return nil }
 
-        context.translateBy(x: 0, y: CGFloat(height))
-        context.scaleBy(x: 1, y: -1)
+        // No manual Y-flip. CGBitmapContext stores pixels top-down in memory
+        // (row 0 = top of image) regardless of draw-coordinate direction, and
+        // ctx.draw(image, rect) writes to that storage in the same convention.
+        // The previous `translateBy(y: height) + scaleBy(y: -1)` dance was a
+        // no-op for the MEMORY layout but an unnecessary source of confusion;
+        // worse, it diverged from the ShaderPrimitives.renderToRGBAContext
+        // pattern that the shader-style GPU renderers use, so bucket-system
+        // output appeared upside-down relative to every other layer's output
+        // when composited in the preview pipeline.
         context.draw(image, in: CGRect(x: 0, y: 0, width: width, height: height))
         return pixels
     }
