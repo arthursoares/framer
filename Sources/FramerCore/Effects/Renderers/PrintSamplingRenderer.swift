@@ -14,7 +14,8 @@ public enum PrintSamplingRenderer {
 
         // GPU fast path — see Effects/Metal/PrintSampling.metal. Falls back
         // to the CPU pixel loop below on any MetalEffectError.
-        if effect == .threshold {
+        switch effect {
+        case .threshold:
             do {
                 return try PrintSamplingGPURenderer.renderThreshold(
                     input: input, common: common, geometry: geometry,
@@ -22,6 +23,16 @@ public enum PrintSamplingRenderer {
             } catch is MetalEffectError {
                 // fall through to CPU
             }
+        case .crosshatch:
+            do {
+                return try PrintSamplingGPURenderer.renderCrosshatch(
+                    input: input, common: common, geometry: geometry,
+                    color: color, params: payload, outputSize: outputSize)
+            } catch is MetalEffectError {
+                // fall through to CPU
+            }
+        default:
+            break
         }
 
         let width = max(1, Int(outputSize.width.rounded()))
