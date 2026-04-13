@@ -10,6 +10,7 @@ public actor FrameProcessor {
     public init() {}
     private var exifCache: [URL: ExifData] = [:]
     private let maxExifCacheEntries = 256
+    private var gpuEffectsPlatform: GPUEffectsPlatform?
 
     // MARK: - Preview (downscaled, no disk I/O)
 
@@ -29,15 +30,29 @@ public actor FrameProcessor {
         } else {
             previewMax = computedMax
         }
-        let cgImage = downscale(rotated, maxDimension: previewMax)
+        let containsGPUEffect = config.layers?.contains { layer in
+            if case .gpuEffect = layer { return true }
+            return false
+        } ?? false
+        let cgImage = containsGPUEffect ? rotated : downscale(rotated, maxDimension: previewMax)
         try Task.checkCancellation()
         let exif = exifData(for: url)
 
         let borderResult: BorderResult
         if let layers = config.layers {
-            borderResult = try BorderRenderer.applyLayers(layers, to: cgImage, sourceImage: cgImage, exif: exif)
+            borderResult = try applyConfiguredLayers(
+                layers,
+                to: cgImage,
+                sourceImage: cgImage,
+                exif: exif,
+                previewBaseDimension: nil
+            )
         } else {
             borderResult = try BorderRenderer.applyBorder(to: cgImage, config: config, style: config.borderStyle)
+        }
+
+        if containsGPUEffect {
+            return downscale(borderResult.image, maxDimension: previewMax)
         }
 
         return borderResult.image
@@ -67,7 +82,13 @@ public actor FrameProcessor {
 
         let borderResult: BorderResult
         if let layers = config.layers {
-            borderResult = try BorderRenderer.applyLayers(layers, to: cgImage, sourceImage: cgImage, exif: exif, previewBaseDimension: previewBase)
+            borderResult = try applyConfiguredLayers(
+                layers,
+                to: cgImage,
+                sourceImage: cgImage,
+                exif: exif,
+                previewBaseDimension: previewBase
+            )
         } else {
             borderResult = try BorderRenderer.applyBorder(to: cgImage, config: config, style: config.borderStyle)
         }
@@ -105,6 +126,52 @@ public actor FrameProcessor {
             throw FramerError.invalidImage(url)
         }
         return image
+    }
+
+    private func platform() throws -> GPUEffectsPlatform {
+        if let gpuEffectsPlatform {
+            return gpuEffectsPlatform
+        }
+
+        let created = try GPUEffectsPlatform.makeForTests()
+        gpuEffectsPlatform = created
+        return created
+    }
+
+    private func applyConfiguredLayers(
+        _ layers: [CompositionLayer],
+        to image: CGImage,
+        sourceImage: CGImage,
+        exif: ExifData,
+        previewBaseDimension: Int?
+    ) throws -> BorderResult {
+        var result = BorderResult(image: image, imageOrigin: nil, imageSize: nil)
+
+        for layer in layers {
+            try Task.checkCancellation()
+
+            switch layer {
+            case .gpuEffect(let params):
+                let rendered = try platform().renderPreview(
+                    input: result.image,
+                    effect: params.kind,
+                    parameters: params.params,
+                    outputSize: CGSize(width: result.image.width, height: result.image.height)
+                )
+                result = BorderResult(image: rendered, imageOrigin: result.imageOrigin, imageSize: result.imageSize)
+
+            default:
+                result = try BorderRenderer.applyLayers(
+                    [layer],
+                    to: result.image,
+                    sourceImage: sourceImage,
+                    exif: exif,
+                    previewBaseDimension: previewBaseDimension
+                )
+            }
+        }
+
+        return result
     }
 
     /// Compute preview downscale target based on layer requirements.
@@ -152,6 +219,9 @@ public actor FrameProcessor {
                 }
 
             case .shader:
+                break
+
+            case .gpuEffect:
                 break
 
             default:

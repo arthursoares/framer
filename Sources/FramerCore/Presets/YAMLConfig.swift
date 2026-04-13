@@ -109,6 +109,93 @@ public enum YAMLConfig {
         var shader_monochrome: Bool?
         var shader_kernel_size: Int?
         var shader_sharpness: Double?
+        var gpu_effect_kind: String?
+        var gpu_common_brightness: Double?
+        var gpu_common_contrast: Double?
+        var gpu_common_saturation: Double?
+        var gpu_common_hue_rotation: Double?
+        var gpu_common_sharpness: Double?
+        var gpu_common_gamma: Double?
+        var gpu_scale: Double?
+        var gpu_spacing: Double?
+        var gpu_output_width: Int?
+        var gpu_color_mode: String?
+        var gpu_background_intensity: Double?
+        var gpu_character_set: String?
+        var gpu_text_variant: String?
+        var gpu_text_speed: Double?
+        var gpu_text_trail_length: Double?
+        var gpu_text_direction: String?
+        var gpu_text_glow: Double?
+        var gpu_text_background_opacity: Double?
+        var gpu_text_threshold: Double?
+        var gpu_text_rain_color: String?
+        var gpu_text_intensity: Double?
+        var gpu_text_foreground_color: String?
+        var gpu_text_background_color: String?
+        var gpu_dot_shape: String?
+        var gpu_dot_grid_type: String?
+        var gpu_text_invert: Bool?
+        var gpu_block_style: String?
+        var gpu_block_border_width: Double?
+        var gpu_block_border_color: String?
+        var gpu_sampling_variant: String?
+        var gpu_sample_density: Double?
+        var gpu_sampling_threshold: Double?
+        var gpu_dither_algorithm: String?
+        var gpu_modulation: Double?
+        var gpu_sharpen: Double?
+        var gpu_chromatic_enabled: Bool?
+        var gpu_chromatic_max_displace: Double?
+        var gpu_chromatic_red_shift: Double?
+        var gpu_chromatic_green_shift: Double?
+        var gpu_chromatic_blue_shift: Double?
+        var gpu_foreground_color: String?
+        var gpu_background_color: String?
+        var gpu_halftone_shape: String?
+        var gpu_halftone_angle: Double?
+        var gpu_invert: Bool?
+        var gpu_hatch_density: Double?
+        var gpu_hatch_layers: Int?
+        var gpu_hatch_angle: Double?
+        var gpu_hatch_line_width: Double?
+        var gpu_hatch_randomness: Double?
+        var gpu_threshold_levels: Int?
+        var gpu_threshold_dither: Bool?
+        var gpu_edge_variant: String?
+        var gpu_line_strength: Double?
+        var gpu_field_intensity: Double?
+        var gpu_edge_line_count: Double?
+        var gpu_edge_amplitude: Double?
+        var gpu_edge_frequency: Double?
+        var gpu_edge_thickness: Double?
+        var gpu_edge_direction: String?
+        var gpu_edge_animate: Bool?
+        var gpu_noise_type: String?
+        var gpu_noise_octaves: Int?
+        var gpu_noise_speed: Double?
+        var gpu_noise_distort_only: Bool?
+        var gpu_edge_algorithm: String?
+        var gpu_edge_threshold: Double?
+        var gpu_edge_invert: Bool?
+        var gpu_edge_color: String?
+        var gpu_contour_fill_mode: String?
+        var gpu_contour_levels: Int?
+        var gpu_voronoi_cell_size: Double?
+        var gpu_voronoi_edge_width: Double?
+        var gpu_voronoi_randomize: Bool?
+        var gpu_glitch_variant: String?
+        var gpu_glitch_amount: Double?
+        var gpu_glitch_threshold: Double?
+        var gpu_glitch_direction: String?
+        var gpu_glitch_sort_mode: String?
+        var gpu_glitch_streak_length: Double?
+        var gpu_glitch_randomness: Double?
+        var gpu_glitch_reverse: Bool?
+        var gpu_glitch_distortion: Double?
+        var gpu_glitch_color_bleed: Double?
+        var gpu_glitch_scanlines: Double?
+        var gpu_glitch_tracking_error: Double?
     }
 
     public static func encode(_ config: ProcessingConfig) throws -> String {
@@ -358,6 +445,13 @@ public enum YAMLConfig {
             schema.shader_style = p.style.rawValue
             encodeShaderParams(p.params, into: &schema)
             return schema
+
+        case .gpuEffect(let p):
+            var schema = YAMLLayerSchema(type: "gpu_effect")
+            if !p.enabled { schema.enabled = false }
+            schema.gpu_effect_kind = p.kind.rawValue
+            encodeGPUEffectParams(p.params, into: &schema)
+            return schema
         }
     }
 
@@ -537,8 +631,306 @@ public enum YAMLConfig {
                 params: decodeShaderParams(style: style, schema: schema)
             ))
 
+        case "gpu_effect":
+            guard let rawKind = schema.gpu_effect_kind, let kind = GPUEffectKind(rawValue: rawKind) else {
+                return nil
+            }
+            return .gpuEffect(GPUEffectLayerParams(
+                enabled: enabled,
+                kind: kind,
+                params: decodeGPUEffectParams(kind: kind, schema: schema)
+            ))
+
         default:
             return nil
+        }
+    }
+
+    private static func encodeGPUEffectParams(_ params: GPUEffectParameters, into schema: inout YAMLLayerSchema) {
+        func encodeCommon(_ common: GPUEffectCommonParameters) {
+            schema.gpu_common_brightness = common.brightness
+            schema.gpu_common_contrast = common.contrast
+            schema.gpu_common_saturation = common.saturation
+            schema.gpu_common_hue_rotation = common.hueRotation
+            schema.gpu_common_sharpness = common.sharpness
+            schema.gpu_common_gamma = common.gamma
+        }
+
+        func encodeGeometry(_ geometry: GPUEffectGeometryParameters) {
+            schema.gpu_scale = geometry.scale
+            schema.gpu_spacing = geometry.spacing
+            schema.gpu_output_width = geometry.outputWidth
+        }
+
+        func encodeColor(_ color: GPUEffectColorParameters) {
+            schema.gpu_color_mode = color.mode.rawValue
+            schema.gpu_background_intensity = color.backgroundIntensity
+        }
+
+        switch params {
+        case .textCell(let common, let geometry, let color, let payload):
+            encodeCommon(common)
+            encodeGeometry(geometry)
+            encodeColor(color)
+            schema.gpu_character_set = payload.characterSet.rawValue
+            schema.gpu_text_variant = payload.variant.rawValue
+            schema.gpu_text_speed = payload.speed
+            schema.gpu_text_trail_length = payload.trailLength
+            schema.gpu_text_direction = payload.direction.rawValue
+            schema.gpu_text_glow = payload.glow
+            schema.gpu_text_background_opacity = payload.backgroundOpacity
+            schema.gpu_text_threshold = payload.threshold
+            schema.gpu_text_rain_color = payload.rainColor?.hex
+            schema.gpu_text_intensity = payload.intensity
+            schema.gpu_text_foreground_color = payload.foreground?.hex
+            schema.gpu_text_background_color = payload.background?.hex
+            schema.gpu_dot_shape = payload.dotShape.rawValue
+            schema.gpu_dot_grid_type = payload.gridType.rawValue
+            schema.gpu_text_invert = payload.invert
+            schema.gpu_block_style = payload.blockStyle.rawValue
+            schema.gpu_block_border_width = payload.borderWidth
+            schema.gpu_block_border_color = payload.borderColor?.hex
+        case .printSampling(let common, let geometry, let color, let payload):
+            encodeCommon(common)
+            encodeGeometry(geometry)
+            encodeColor(color)
+            schema.gpu_sampling_variant = payload.variant.rawValue
+            schema.gpu_sample_density = payload.sampleDensity
+            schema.gpu_sampling_threshold = payload.threshold
+            schema.gpu_dither_algorithm = payload.algorithm.rawValue
+            schema.gpu_modulation = payload.modulation
+            schema.gpu_sharpen = payload.sharpen
+            schema.gpu_chromatic_enabled = payload.chromaticAberration.enabled
+            schema.gpu_chromatic_max_displace = payload.chromaticAberration.maxDisplace
+            schema.gpu_chromatic_red_shift = payload.chromaticAberration.redShift
+            schema.gpu_chromatic_green_shift = payload.chromaticAberration.greenShift
+            schema.gpu_chromatic_blue_shift = payload.chromaticAberration.blueShift
+            schema.gpu_foreground_color = payload.foreground?.hex
+            schema.gpu_background_color = payload.background?.hex
+            schema.gpu_halftone_shape = payload.halftoneShape.rawValue
+            schema.gpu_halftone_angle = payload.halftoneAngle
+            schema.gpu_invert = payload.invert
+            schema.gpu_hatch_density = payload.hatchDensity
+            schema.gpu_hatch_layers = payload.hatchLayers
+            schema.gpu_hatch_angle = payload.hatchAngle
+            schema.gpu_hatch_line_width = payload.hatchLineWidth
+            schema.gpu_hatch_randomness = payload.hatchRandomness
+            schema.gpu_threshold_levels = payload.thresholdLevels
+            schema.gpu_threshold_dither = payload.thresholdDither
+        case .edgeField(let common, let geometry, let color, let payload):
+            encodeCommon(common)
+            encodeGeometry(geometry)
+            encodeColor(color)
+            schema.gpu_edge_variant = payload.variant.rawValue
+            schema.gpu_line_strength = payload.lineStrength
+            schema.gpu_field_intensity = payload.fieldIntensity
+            schema.gpu_edge_line_count = payload.lineCount
+            schema.gpu_edge_amplitude = payload.amplitude
+            schema.gpu_edge_frequency = payload.frequency
+            schema.gpu_edge_thickness = payload.thickness
+            schema.gpu_edge_direction = payload.direction.rawValue
+            schema.gpu_edge_animate = payload.animate
+            schema.gpu_noise_type = payload.noiseType.rawValue
+            schema.gpu_noise_octaves = payload.octaves
+            schema.gpu_noise_speed = payload.speed
+            schema.gpu_noise_distort_only = payload.distortOnly
+            schema.gpu_edge_algorithm = payload.edgeAlgorithm.rawValue
+            schema.gpu_edge_threshold = payload.edgeThreshold
+            schema.gpu_edge_invert = payload.invert
+            schema.gpu_edge_color = payload.edgeColor?.hex
+            schema.gpu_contour_fill_mode = payload.contourFillMode.rawValue
+            schema.gpu_contour_levels = payload.contourLevels
+            schema.gpu_voronoi_cell_size = payload.cellSize
+            schema.gpu_voronoi_edge_width = payload.edgeWidth
+            schema.gpu_voronoi_randomize = payload.randomize
+        case .glitch(let common, let geometry, let color, let payload):
+            encodeCommon(common)
+            encodeGeometry(geometry)
+            encodeColor(color)
+            schema.gpu_glitch_variant = payload.variant.rawValue
+            schema.gpu_glitch_amount = payload.amount
+            schema.gpu_glitch_threshold = payload.threshold
+            schema.gpu_glitch_direction = payload.direction.rawValue
+            schema.gpu_glitch_sort_mode = payload.sortMode.rawValue
+            schema.gpu_glitch_streak_length = payload.streakLength
+            schema.gpu_glitch_randomness = payload.randomness
+            schema.gpu_glitch_reverse = payload.reverse
+            schema.gpu_glitch_distortion = payload.distortion
+            schema.gpu_glitch_color_bleed = payload.colorBleed
+            schema.gpu_glitch_scanlines = payload.scanlines
+            schema.gpu_glitch_tracking_error = payload.trackingError
+        }
+    }
+
+    private static func decodeGPUEffectParams(kind: GPUEffectKind, schema: YAMLLayerSchema) -> GPUEffectParameters {
+        let common = GPUEffectCommonParameters(
+            brightness: schema.gpu_common_brightness ?? 0,
+            contrast: schema.gpu_common_contrast ?? 1,
+            saturation: schema.gpu_common_saturation ?? 1,
+            hueRotation: schema.gpu_common_hue_rotation ?? 0,
+            sharpness: schema.gpu_common_sharpness ?? 0,
+            gamma: schema.gpu_common_gamma ?? 1
+        )
+        let geometry = GPUEffectGeometryParameters(
+            scale: schema.gpu_scale ?? 1,
+            spacing: schema.gpu_spacing ?? 1,
+            outputWidth: schema.gpu_output_width ?? 320
+        )
+        let color = GPUEffectColorParameters(
+            mode: schema.gpu_color_mode.flatMap(GPUEffectColorMode.init(rawValue:)) ?? .source,
+            backgroundIntensity: schema.gpu_background_intensity ?? 0
+        )
+
+        switch kind {
+        case .ascii, .matrixRain, .blockify, .dots:
+            let variant = schema.gpu_text_variant.flatMap(TextCellVariant.init(rawValue:)) ?? textCellVariant(for: kind)
+            let characterSet = schema.gpu_character_set.flatMap(GPUEffectCharacterSet.init(rawValue:)) ?? .classicASCII
+            return .textCell(
+                common: common,
+                geometry: geometry,
+                color: color,
+                textCell: TextCellParameters(
+                    characterSet: characterSet,
+                    variant: variant,
+                    speed: schema.gpu_text_speed ?? 0,
+                    trailLength: schema.gpu_text_trail_length ?? 0,
+                    direction: schema.gpu_text_direction.flatMap(TextCellFlowDirection.init(rawValue:)) ?? .down,
+                    glow: schema.gpu_text_glow ?? 0,
+                    backgroundOpacity: schema.gpu_text_background_opacity ?? 0,
+                    threshold: schema.gpu_text_threshold ?? 0.5,
+                    rainColor: schema.gpu_text_rain_color.flatMap { try? CodableColor(hex: $0) },
+                    intensity: schema.gpu_text_intensity ?? 1,
+                    foreground: schema.gpu_text_foreground_color.flatMap { try? CodableColor(hex: $0) },
+                    background: schema.gpu_text_background_color.flatMap { try? CodableColor(hex: $0) },
+                    dotShape: schema.gpu_dot_shape.flatMap(DotShape.init(rawValue:)) ?? .circle,
+                    gridType: schema.gpu_dot_grid_type.flatMap(DotGridType.init(rawValue:)) ?? .square,
+                    invert: schema.gpu_text_invert ?? false,
+                    blockStyle: schema.gpu_block_style.flatMap(BlockStyle.init(rawValue:)) ?? .solid,
+                    borderWidth: schema.gpu_block_border_width ?? 0,
+                    borderColor: schema.gpu_block_border_color.flatMap { try? CodableColor(hex: $0) }
+                )
+            )
+        case .dithering, .halftone, .threshold, .crosshatch:
+            let variant = schema.gpu_sampling_variant.flatMap(PrintSamplingVariant.init(rawValue:)) ?? printSamplingVariant(for: kind)
+            return .printSampling(
+                common: common,
+                geometry: geometry,
+                color: color,
+                printSampling: PrintSamplingParameters(
+                    variant: variant,
+                    sampleDensity: schema.gpu_sample_density ?? 0.5,
+                    threshold: schema.gpu_sampling_threshold ?? 0.5,
+                    algorithm: schema.gpu_dither_algorithm.flatMap(GPUDitherAlgorithm.init(rawValue:)) ?? .bayer8x8,
+                    modulation: schema.gpu_modulation ?? 0,
+                    sharpen: schema.gpu_sharpen ?? 0,
+                    chromaticAberration: .init(
+                        enabled: schema.gpu_chromatic_enabled ?? false,
+                        maxDisplace: schema.gpu_chromatic_max_displace ?? 0,
+                        redShift: schema.gpu_chromatic_red_shift ?? 0,
+                        greenShift: schema.gpu_chromatic_green_shift ?? 0,
+                        blueShift: schema.gpu_chromatic_blue_shift ?? 0
+                    ),
+                    foreground: schema.gpu_foreground_color.flatMap { try? CodableColor(hex: $0) },
+                    background: schema.gpu_background_color.flatMap { try? CodableColor(hex: $0) },
+                    halftoneShape: schema.gpu_halftone_shape.flatMap(HalftoneShape.init(rawValue:)) ?? .circle,
+                    halftoneAngle: schema.gpu_halftone_angle ?? 0,
+                    invert: schema.gpu_invert ?? false,
+                    hatchDensity: schema.gpu_hatch_density ?? 0.5,
+                    hatchLayers: schema.gpu_hatch_layers ?? 2,
+                    hatchAngle: schema.gpu_hatch_angle ?? 45,
+                    hatchLineWidth: schema.gpu_hatch_line_width ?? 0.25,
+                    hatchRandomness: schema.gpu_hatch_randomness ?? 0,
+                    thresholdLevels: schema.gpu_threshold_levels ?? 2,
+                    thresholdDither: schema.gpu_threshold_dither ?? false
+                )
+            )
+        case .contour, .edgeDetection, .waveLines, .noiseField, .voronoi:
+            let variant = schema.gpu_edge_variant.flatMap(EdgeFieldVariant.init(rawValue:)) ?? edgeFieldVariant(for: kind)
+            return .edgeField(
+                common: common,
+                geometry: geometry,
+                color: color,
+                edgeField: EdgeFieldParameters(
+                    variant: variant,
+                    lineStrength: schema.gpu_line_strength ?? 0.5,
+                    fieldIntensity: schema.gpu_field_intensity ?? 0.5,
+                    lineCount: schema.gpu_edge_line_count ?? 12,
+                    amplitude: schema.gpu_edge_amplitude ?? 0.5,
+                    frequency: schema.gpu_edge_frequency ?? 1.0,
+                    thickness: schema.gpu_edge_thickness ?? 0.3,
+                    direction: schema.gpu_edge_direction.flatMap(EdgeFieldDirection.init(rawValue:)) ?? .horizontal,
+                    animate: schema.gpu_edge_animate ?? false,
+                    noiseType: schema.gpu_noise_type.flatMap(NoiseFieldType.init(rawValue:)) ?? .value,
+                    octaves: schema.gpu_noise_octaves ?? 1,
+                    speed: schema.gpu_noise_speed ?? 0,
+                    distortOnly: schema.gpu_noise_distort_only ?? false,
+                    edgeAlgorithm: schema.gpu_edge_algorithm.flatMap(EdgeAlgorithm.init(rawValue:)) ?? .sobel,
+                    edgeThreshold: schema.gpu_edge_threshold ?? 0.5,
+                    invert: schema.gpu_edge_invert ?? false,
+                    edgeColor: schema.gpu_edge_color.flatMap { try? CodableColor(hex: $0) },
+                    contourFillMode: schema.gpu_contour_fill_mode.flatMap(ContourFillMode.init(rawValue:)) ?? .linesOnly,
+                    contourLevels: schema.gpu_contour_levels ?? 8,
+                    cellSize: schema.gpu_voronoi_cell_size ?? 16,
+                    edgeWidth: schema.gpu_voronoi_edge_width ?? 0.25,
+                    randomize: schema.gpu_voronoi_randomize ?? false
+                )
+            )
+        case .pixelSort, .vhs:
+            let variant = schema.gpu_glitch_variant.flatMap(GlitchVariant.init(rawValue:)) ?? glitchVariant(for: kind)
+            return .glitch(
+                common: common,
+                geometry: geometry,
+                color: color,
+                glitch: GlitchParameters(
+                    variant: variant,
+                    amount: schema.gpu_glitch_amount ?? 0.5,
+                    threshold: schema.gpu_glitch_threshold ?? 0.5,
+                    direction: schema.gpu_glitch_direction.flatMap(GlitchDirection.init(rawValue:)) ?? .horizontal,
+                    sortMode: schema.gpu_glitch_sort_mode.flatMap(PixelSortMode.init(rawValue:)) ?? .brightness,
+                    streakLength: schema.gpu_glitch_streak_length ?? 0.5,
+                    randomness: schema.gpu_glitch_randomness ?? 0,
+                    reverse: schema.gpu_glitch_reverse ?? false,
+                    distortion: schema.gpu_glitch_distortion ?? 0,
+                    colorBleed: schema.gpu_glitch_color_bleed ?? 0,
+                    scanlines: schema.gpu_glitch_scanlines ?? 0,
+                    trackingError: schema.gpu_glitch_tracking_error ?? 0
+                )
+            )
+        }
+    }
+
+    private static func textCellVariant(for kind: GPUEffectKind) -> TextCellVariant {
+        switch kind {
+        case .matrixRain: return .matrixRain
+        case .blockify: return .blockify
+        case .dots: return .dots
+        default: return .ascii
+        }
+    }
+
+    private static func printSamplingVariant(for kind: GPUEffectKind) -> PrintSamplingVariant {
+        switch kind {
+        case .halftone: return .halftone
+        case .threshold: return .threshold
+        case .crosshatch: return .crosshatch
+        default: return .dithering
+        }
+    }
+
+    private static func edgeFieldVariant(for kind: GPUEffectKind) -> EdgeFieldVariant {
+        switch kind {
+        case .edgeDetection: return .edgeDetection
+        case .waveLines: return .waveLines
+        case .voronoi: return .voronoi
+        case .noiseField: return .noiseField
+        default: return .contour
+        }
+    }
+
+    private static func glitchVariant(for kind: GPUEffectKind) -> GlitchVariant {
+        switch kind {
+        case .vhs: return .vhs
+        default: return .pixelSort
         }
     }
 
