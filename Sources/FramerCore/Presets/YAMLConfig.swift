@@ -64,6 +64,7 @@ public enum YAMLConfig {
         var dither_sharpen: Double?
         var dither_contrast: Double?
         var dither_flipped: Bool?
+        var dither_palette: [String]?
         var ratio: String?
         var offset_x: Double?
         var offset_y: Double?
@@ -328,6 +329,9 @@ public enum YAMLConfig {
             case .color(let levels):
                 schema.color_mode = "color"
                 schema.color_levels = levels
+            case .palette(let colors):
+                schema.color_mode = "palette"
+                schema.dither_palette = colors.map { $0.hex }
             }
             return schema
 
@@ -487,6 +491,9 @@ public enum YAMLConfig {
                 )
             case "color":
                 colorMode = .color(levels: schema.color_levels ?? 4)
+            case "palette":
+                let colors = (schema.dither_palette ?? []).compactMap { try? CodableColor(hex: $0) }
+                colorMode = colors.isEmpty ? .bw : .palette(colors)
             default:
                 colorMode = .bw
             }
