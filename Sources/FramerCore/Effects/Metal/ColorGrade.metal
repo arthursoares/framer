@@ -151,35 +151,49 @@ fragment float4 colorGradeFragment(
     constant ColorGradeUniforms& uniforms     [[buffer(0)]]
 ) {
     float2 resolution = float2(source.get_width(), source.get_height());
-    float2 texel      = 1.0 / resolution;
 
-    float3 src = source.sample(texSampler, in.uv).rgb;
+    // Pin to the integer pixel grid. Needed for the box-blur kernel-clipping
+    // logic below to count "real" neighbours only.
+    int2   pixel    = clamp(int2(floor(in.uv * resolution)), int2(0), int2(resolution) - 1);
+    float2 selfUV   = (float2(pixel) + 0.5) / resolution;
+    float3 src      = source.sample(texSampler, selfUV).rgb;
 
-    // Grade the center pixel FIRST. CPU's applyCrimewave/Narc/Shiba all apply
+    // Grade the centre pixel FIRST. CPU's applyCrimewave/Narc/Shiba all apply
     // contrast/saturation/temperature/channel-bias in-place on the pixel
     // buffer BEFORE calling applyBoxBlur (ShaderRenderer.swift:102-120 for
     // Crimewave; parallel structure for Narc and Shiba). The previous version
     // blurred first and graded second — algebraically different whenever
     // grading is non-linear (contrast, saturation, channel bias, temperature
-    // all are), which every variant uses. Parity tests hid the bug by pinning
-    // softness = 0 (EffectGPUParityTests.swift:156, :170, :181).
+    // all are). Parity tests hid the bug by pinning softness = 0.
     float3 styled = applyVariantStyle(src, uniforms);
 
-    // Blur AFTER grading. We can't sample a pre-graded texture (that would
-    // require a second pass), so re-apply the same variant style to each
-    // neighbour's raw source sample and average the styled results. That's
-    // algebraically equivalent to "grade the entire image, then box-blur"
-    // because a box blur is a spatial mean over the graded intermediate.
-    // radius is clamped 0..3 matching ShaderPrimitives.applyBoxBlur's cap.
+    // Blur AFTER grading. Re-apply the same variant style to each neighbour's
+    // raw source value, average the styled neighbours, mix with centre
+    // styled. Equivalent to "grade the entire image, then box-blur" because
+    // a box blur is a spatial mean over the styled intermediate.
+    //
+    // Border handling matches CPU's ShaderPrimitives.applyBoxBlur exactly:
+    // when the kernel hits the image edge, CPU clips its inner loop bounds
+    // to in-bounds pixels and divides by the actual sample count, NOT by
+    // the full kernel area (Sources/FramerCore/Processing/ShaderPrimitives
+    // .swift:79-87). Earlier this shader trusted clamp-to-edge sampling
+    // which repeated the border texel — codex review caught this as a
+    // remaining systematic delta along the outer `radius`-pixel band.
     int radius = clamp(int(uniforms.blurRadius), 0, 3);
     if (radius > 0 && uniforms.blurMixAmount > 0.0) {
         float3 sum = float3(0.0);
         float  count = 0.0;
+        int    maxX = int(resolution.x) - 1;
+        int    maxY = int(resolution.y) - 1;
         for (int dy = -3; dy <= 3; dy++) {
             if (dy < -radius || dy > radius) { continue; }
+            int ny = pixel.y + dy;
+            if (ny < 0 || ny > maxY) { continue; }
             for (int dx = -3; dx <= 3; dx++) {
                 if (dx < -radius || dx > radius) { continue; }
-                float2 nUV = in.uv + float2(float(dx), float(dy)) * texel;
+                int nx = pixel.x + dx;
+                if (nx < 0 || nx > maxX) { continue; }
+                float2 nUV = (float2(float(nx), float(ny)) + 0.5) / resolution;
                 float3 nSrc = source.sample(texSampler, nUV).rgb;
                 sum += applyVariantStyle(nSrc, uniforms);
                 count += 1.0;
@@ -189,8 +203,7 @@ fragment float4 colorGradeFragment(
         styled = mix(styled, blurredStyled, saturate(uniforms.blurMixAmount));
     }
 
-    int2 px = int2(in.uv * resolution);
-    styled  = cgGrain(styled, px, uniforms.grain);
+    styled = cgGrain(styled, pixel, uniforms.grain);
 
     // Final blend with the original source by intensity (matches
     // ShaderRenderer.mixStylizedContext).
