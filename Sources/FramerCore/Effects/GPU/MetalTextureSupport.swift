@@ -76,14 +76,15 @@ public enum MetalTextureSupport {
         named name: String,
         device: MTLDevice
     ) throws -> MTLTexture? {
+        // LUT loads are O(once per atlas name) across the app lifetime, so
+        // holding the lock through the filesystem read + GPU upload is cheaper
+        // than a release/reacquire dance — and it eliminates the check-then-act
+        // race where two concurrent first-time callers would each upload.
         lutLock.lock()
-        if let cached = lutCache[name] {
-            lutLock.unlock()
-            return cached
-        }
-        lutLock.unlock()
+        defer { lutLock.unlock() }
 
-        // Locate the PNG via the same search paths the CPU loader uses.
+        if let cached = lutCache[name] { return cached }
+
         var foundURL: URL?
         for searchPath in TextureFrameProvider.searchPaths {
             let url = searchPath.appendingPathComponent(name)
@@ -100,10 +101,7 @@ public enum MetalTextureSupport {
         }
 
         let texture = try makeTexture(from: cgImage, device: device)
-
-        lutLock.lock()
         lutCache[name] = texture
-        lutLock.unlock()
         return texture
     }
 
