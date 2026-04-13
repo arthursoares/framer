@@ -1235,11 +1235,17 @@ public struct HalftoneShaderParams: Codable, Equatable, Sendable {
 
 public struct KuwaharaShaderParams: Codable, Equatable, Sendable {
     public var kernelSize: Int
+    /// Unsharp-mask blend factor toward the original sample. The CPU + GPU
+    /// implementations both compute `bestColor + (srcOrig - bestColor) *
+    /// (sharpness / 8.0)`, so `sharpness = 8.0` collapses the entire effect
+    /// back to the input image (factor = 1.0 → full override with srcOrig).
+    /// Default is 0.0 so the user sees the full edge-preserving smoothing
+    /// out of the box; the slider can pull toward the original as needed.
     public var sharpness: Double
 
     public init(
         kernelSize: Int = 4,
-        sharpness: Double = 8.0
+        sharpness: Double = 0.0
     ) {
         self.kernelSize = kernelSize
         self.sharpness = sharpness
