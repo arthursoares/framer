@@ -167,13 +167,18 @@ struct LayerListSection: View {
                 Label("Shader", systemImage: "sparkles.rectangle.stack")
             }
             Button {
+                // Default to `.dots` — the overlap-filter on the bucket picker
+                // removes .ascii / .halftone / .pixelSort from userFacingCases
+                // (they duplicate .shader layer styles), so using .ascii here
+                // produces a "selection has no associated tag" SwiftUI warning.
+                // .dots is both user-facing and GPU-accelerated.
                 addLayer(.gpuEffect(GPUEffectLayerParams(
-                    kind: .ascii,
+                    kind: .dots,
                     params: .textCell(
                         common: .init(),
                         geometry: .init(scale: 1.0, spacing: 2.0, outputWidth: 240),
                         color: .init(mode: .foregroundBackground, backgroundIntensity: 0.2),
-                        textCell: .init(characterSet: .classicASCII, variant: .ascii)
+                        textCell: .init(characterSet: .classicASCII, variant: .dots)
                     )
                 )))
             } label: {
