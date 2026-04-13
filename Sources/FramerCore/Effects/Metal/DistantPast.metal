@@ -64,64 +64,53 @@ inline float3 dpGrain(float3 c, int2 px, float grainAmount) {
     return saturate(c + float3(delta));
 }
 
-// Same constraints as ColorGrade.cgBoxBlur.
-inline float3 dpBoxBlur(texture2d<float> source,
-                        sampler          sampleState,
-                        float2           uv,
-                        float2           texelSize,
-                        int              radius,
-                        float            mixAmount,
-                        float3           original) {
-    if (radius <= 0 || mixAmount <= 0.0) { return original; }
-    int r = clamp(radius, 1, 3);
-
-    float3 sum = float3(0.0);
-    float  count = 0.0;
-    for (int dy = -3; dy <= 3; dy++) {
-        if (dy < -r || dy > r) { continue; }
-        for (int dx = -3; dx <= 3; dx++) {
-            if (dx < -r || dx > r) { continue; }
-            float2 sampleUV = uv + float2(float(dx), float(dy)) * texelSize;
-            sum += source.sample(sampleState, sampleUV).rgb;
-            count += 1.0;
-        }
-    }
-    return mix(original, sum / max(count, 1.0), saturate(mixAmount));
+// Per-pixel DistantPast pipeline: steps 1 (warm shift + desat), 2 (dithered
+// palette snap), 3 (vignette). Re-runnable on any (raw source, integer pixel)
+// pair so the post-grade box blur can sample neighbours and apply the same
+// pipeline before averaging — algebraically equivalent to "process whole
+// image then box-blur," which is what CPU does
+// (ShaderRenderer.swift:233-326).
+// CPU's per-stage byte quantization is reproduced here so that the palette
+// snap in step 2 sees the same input domain CPU sees. ShaderPrimitives
+// .clampByte rounds to nearest integer in 0..255 and writes back as UInt8;
+// the next stage then re-reads via Double(pixels[i]) / 255.0. Net effect:
+// each intermediate gets snapped to a 1/255 grid. For ColorGrade's
+// continuous transforms this adds ~0.5/255 fp noise that compounds little;
+// for DistantPast the palette-snap stage is sensitive to ≤1/255 input
+// changes near a palette boundary and a missing quantization can flip the
+// chosen colour, producing 255 max delta vs CPU. Codex flagged.
+inline float3 dpQuantizeToByte(float3 c) {
+    return floor(saturate(c) * 255.0 + 0.5) / 255.0;
 }
 
-fragment float4 distantPastFragment(
-    VertexOut                    in           [[stage_in]],
-    texture2d<float>             source       [[texture(0)]],
-    sampler                      texSampler   [[sampler(0)]],
-    constant DistantPastUniforms& uniforms    [[buffer(0)]]
-) {
-    float fade = saturate(uniforms.fade);
-    float softness = saturate(uniforms.softness);
-    float grain = saturate(uniforms.grain);
+inline float3 dpProcessPixel(float3 src, int2 px, constant DistantPastUniforms& u) {
+    float fade = saturate(u.fade);
 
-    float3 srcOriginal = source.sample(texSampler, in.uv).rgb;
-    float3 c = srcOriginal;
-
-    // ---- Step 1: warm shift + desaturate -----------------------------------
+    // Step 1: warm shift + desaturate. Then byte-quantize to mirror CPU's
+    // pixels[idx] = clampByte(...) write at ShaderRenderer.swift:254-256.
     float warmShift = fade * 0.04;
     float desatAmount = 1.0 - fade * 0.35;
-
+    float3 c = src;
     c.r += warmShift;
     c.b -= warmShift * 0.6;
     float lum = luminance(c);
     c = float3(lum) + (c - float3(lum)) * desatAmount;
+    c = dpQuantizeToByte(c);
 
-    // ---- Step 2: dithered palette snap -------------------------------------
-    int2 px = int2(in.uv * float2(uniforms.widthPx, uniforms.heightPx));
+    // Step 2: dithered palette snap. Palette colours are already in 0..1 from
+    // the uniform, so the snap result is exact. CPU writes the snapped colour
+    // back as bytes (clampByte(pc.r * 255)) — equivalent to dpQuantizeToByte
+    // on the palette entry, which is a no-op since palette colours are
+    // already on the 1/255 grid by construction. Skip the extra quantize
+    // here for clarity.
     float noise = dpDitherSeed(px);
     float3 dithered = c + float3(noise);
-
-    int paletteCount = clamp(int(uniforms.paletteCount), 2, MAX_PALETTE_COLORS);
-    float bestDist = 1.0e9;
-    float3 bestColor = uniforms.palette[0].rgb;
+    int paletteCount = clamp(int(u.paletteCount), 2, MAX_PALETTE_COLORS);
+    float bestDist  = 1.0e9;
+    float3 bestColor = u.palette[0].rgb;
     for (int i = 0; i < MAX_PALETTE_COLORS; i++) {
         if (i >= paletteCount) { break; }
-        float3 pc = uniforms.palette[i].rgb;
+        float3 pc = u.palette[i].rgb;
         float3 d  = dithered - pc;
         float dist = dot(d, d);
         if (dist < bestDist) {
@@ -131,25 +120,75 @@ fragment float4 distantPastFragment(
     }
     c = bestColor;
 
-    // ---- Step 3: vignette --------------------------------------------------
+    // Step 3: vignette. Then byte-quantize to mirror CPU's clampByte writes
+    // at ShaderRenderer.swift:310-312.
     if (fade > 0.05) {
-        float2 cxy = float2(uniforms.widthPx, uniforms.heightPx) * 0.5;
+        float2 cxy = float2(u.widthPx, u.heightPx) * 0.5;
         float2 dn  = (float2(px) - cxy) / cxy;
         float distSq = dot(dn, dn);
         float vigStr = fade * 0.8;
         float vignette = max(0.0, 1.0 - distSq * vigStr * 0.4);
         c *= vignette;
+        c = dpQuantizeToByte(c);
     }
 
-    // ---- Step 4: softness blur (applied after palette to soften banding) ---
-    float2 texel = 1.0 / float2(source.get_width(), source.get_height());
-    c = dpBoxBlur(source, texSampler, in.uv, texel,
-                  int(uniforms.blurRadius), uniforms.blurMixAmount, c);
+    return c;
+}
 
-    // ---- Step 5: grain -----------------------------------------------------
-    c = dpGrain(c, px, grain);
+fragment float4 distantPastFragment(
+    VertexOut                    in           [[stage_in]],
+    texture2d<float>             source       [[texture(0)]],
+    sampler                      texSampler   [[sampler(0)]],
+    constant DistantPastUniforms& uniforms    [[buffer(0)]]
+) {
+    float grain = saturate(uniforms.grain);
 
-    // ---- Step 6: blend with original by intensity --------------------------
+    float2 resolution = float2(uniforms.widthPx, uniforms.heightPx);
+    int2   pixel      = clamp(int2(floor(in.uv * resolution)), int2(0), int2(resolution) - 1);
+    float2 selfUV     = (float2(pixel) + 0.5) / resolution;
+
+    float3 srcOriginal = source.sample(texSampler, selfUV).rgb;
+
+    // Steps 1-3 on the centre pixel.
+    float3 c = dpProcessPixel(srcOriginal, pixel, uniforms);
+
+    // Step 4: softness blur — applied to the PROCESSED intermediate, not the
+    // raw source. Previous version sampled `source` inside the blur loop,
+    // which dragged the unprocessed image back into the result whenever
+    // softness > 0 (codex flagged: DistantPast.metal:144-147 in pre-fix).
+    // Match CPU's grade-then-box-blur order by re-running the per-pixel
+    // pipeline on each in-bounds neighbour, averaging, then mixing with the
+    // centre processed value. Border policy: clip kernel to in-bounds pixels
+    // and divide by actual sample count (matches ShaderPrimitives
+    // .applyBoxBlur:79-87).
+    int radius = clamp(int(uniforms.blurRadius), 0, 3);
+    if (radius > 0 && uniforms.blurMixAmount > 0.0) {
+        float3 sum   = float3(0.0);
+        float  count = 0.0;
+        int    maxX  = int(resolution.x) - 1;
+        int    maxY  = int(resolution.y) - 1;
+        for (int dy = -3; dy <= 3; dy++) {
+            if (dy < -radius || dy > radius) { continue; }
+            int ny = pixel.y + dy;
+            if (ny < 0 || ny > maxY) { continue; }
+            for (int dx = -3; dx <= 3; dx++) {
+                if (dx < -radius || dx > radius) { continue; }
+                int nx = pixel.x + dx;
+                if (nx < 0 || nx > maxX) { continue; }
+                float2 nUV = (float2(float(nx), float(ny)) + 0.5) / resolution;
+                float3 nSrc = source.sample(texSampler, nUV).rgb;
+                sum += dpProcessPixel(nSrc, int2(nx, ny), uniforms);
+                count += 1.0;
+            }
+        }
+        float3 blurredProcessed = sum / max(count, 1.0);
+        c = mix(c, blurredProcessed, saturate(uniforms.blurMixAmount));
+    }
+
+    // Step 5: grain
+    c = dpGrain(c, pixel, grain);
+
+    // Step 6: blend with original by intensity
     float3 final = mix(srcOriginal, c, saturate(uniforms.intensity));
     return float4(final, 1.0);
 }

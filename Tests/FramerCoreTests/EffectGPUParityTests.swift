@@ -315,6 +315,25 @@ final class EffectGPUParityTests: XCTestCase {
         XCTAssertLessThan(mean, 12.0, "DistantPast mean delta too high (\(mean))")
     }
 
+    // Guards against regression of the softness-ordering bug for DistantPast
+    // (CPU blurs AFTER palette-snap + vignette; the GPU shader used to blur
+    // the raw source instead of the processed intermediate, dragging the
+    // pre-snap colours back into the result whenever softness > 0). Codex
+    // flagged this in the initial cloud-branch review (DistantPast.metal:144
+    // pre-fix). With softness = 0.6 and kernel-clipping border handling, the
+    // test should hit roughly the same delta envelope as softness=0.
+    func testDistantPastSoftnessParity() throws {
+        try requireMetal()
+        let img = makeTestImage()
+        let dp = DistantPastShaderParams(softness: 0.6)
+        let params = ShaderLayerParams(style: .distantPast, intensity: 1.0,
+                                       params: .distantPast(dp))
+        let cpu = try ShaderRenderer.applyDistantPast(to: img, params: dp, intensity: 1.0)
+        let gpu = try DistantPastRenderer.render(to: img, params: params)
+        let (mean, _) = compare(cpu, gpu)
+        XCTAssertLessThan(mean, 12.0, "DistantPast softness>0 mean delta too high (\(mean))")
+    }
+
     // MARK: - CRT
 
     func testCRTParity() throws {
