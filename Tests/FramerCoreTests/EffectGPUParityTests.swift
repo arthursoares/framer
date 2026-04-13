@@ -291,6 +291,108 @@ final class EffectGPUParityTests: XCTestCase {
         XCTAssertLessThan(max, 8, "PixelSort threshold-skip max delta too high (\(max))")
     }
 
+    // MARK: - Dither
+    //
+    // Dither parity is structurally loose: GPU uses blue-noise threshold
+    // approximation while CPU uses real error diffusion (Floyd-Steinberg etc).
+    // The two are *visually* similar on natural images but per-pixel deltas
+    // are large. These tests assert structure: output dimensions, output range
+    // (binary for bw mode), Riemersma forced-fallback path, etc.
+
+    func testDitherBayerOutputIsBinaryBW() throws {
+        try requireMetal()
+        let img = makeTestImage()
+        let params = DitherLayerParams(algorithm: .bayer, colorMode: .bw,
+                                       bayerLevel: 2, pixelScale: 1,
+                                       threshold: 0.5)
+        let gpu = try DitherGPURenderer.apply(to: img, params: params)
+        XCTAssertEqual(gpu.width, img.width)
+        XCTAssertEqual(gpu.height, img.height)
+
+        // BW output: every pixel's RGB should be either ~0 or ~255 (allowing
+        // sRGB-roundtrip slop of a few bytes).
+        let bytes = drawToBytes(gpu)
+        var binaryViolations = 0
+        for i in stride(from: 0, to: bytes.count, by: 4) {
+            let r = bytes[i]
+            if r > 8 && r < 247 { binaryViolations += 1 }
+        }
+        // Allow ≤ 1% non-binary pixels (sub-pixel sampling at edges).
+        let pixelCount = bytes.count / 4
+        XCTAssertLessThan(binaryViolations, pixelCount / 100,
+                          "Bayer mono dither produced too many non-binary pixels (\(binaryViolations)/\(pixelCount))")
+    }
+
+    func testDitherTwoToneMapsToColors() throws {
+        try requireMetal()
+        let img = makeTestImage()
+        let fg = try CodableColor(hex: "#FF0000")  // pure red
+        let bg = try CodableColor(hex: "#0000FF")  // pure blue
+        let params = DitherLayerParams(algorithm: .floydSteinberg,
+                                       colorMode: .twoTone(foreground: fg, background: bg),
+                                       bayerLevel: 2, pixelScale: 1, threshold: 0.5)
+        let gpu = try DitherGPURenderer.apply(to: img, params: params)
+        let bytes = drawToBytes(gpu)
+        var redCount = 0, blueCount = 0
+        for i in stride(from: 0, to: bytes.count, by: 4) {
+            let r = bytes[i], g = bytes[i + 1], b = bytes[i + 2]
+            if r > 200 && g < 50 && b < 50 { redCount += 1 }
+            else if r < 50 && g < 50 && b > 200 { blueCount += 1 }
+        }
+        let pixelCount = bytes.count / 4
+        XCTAssertGreaterThan(redCount + blueCount, pixelCount * 95 / 100,
+                             "TwoTone output should be predominantly fg/bg (got red=\(redCount) blue=\(blueCount) of \(pixelCount))")
+    }
+
+    func testDitherRiemersmaRoutesToCPU() throws {
+        // Riemersma has no GPU implementation; the public `apply` should silently
+        // fall back to CPU. This test runs even without Metal because the GPU
+        // call would throw and the fallback would handle it.
+        let img = makeTestImage(width: 64, height: 64)
+        let params = DitherLayerParams(algorithm: .riemersma, colorMode: .bw,
+                                       bayerLevel: 2, pixelScale: 1, threshold: 0.5)
+        let result = try DitherRenderer.apply(to: img, params: params)
+        XCTAssertEqual(result.width, img.width)
+        XCTAssertEqual(result.height, img.height)
+        // Make sure it actually ran (not pass-through): bw output must be binary.
+        let bytes = drawToBytes(result)
+        var binary = 0
+        for i in stride(from: 0, to: bytes.count, by: 4) {
+            if bytes[i] < 8 || bytes[i] > 247 { binary += 1 }
+        }
+        XCTAssertGreaterThan(binary, bytes.count / 4 * 90 / 100,
+                             "Riemersma fallback didn't actually dither (got \(binary) binary pixels)")
+    }
+
+    func testDitherColorLevelsQuantizesPerChannel() throws {
+        try requireMetal()
+        let img = makeTestImage()
+        let levels = 4
+        let params = DitherLayerParams(algorithm: .bayer, colorMode: .color(levels: levels),
+                                       bayerLevel: 2, pixelScale: 1, threshold: 0.5)
+        let gpu = try DitherGPURenderer.apply(to: img, params: params)
+        let bytes = drawToBytes(gpu)
+
+        // With `levels` per channel, each channel byte should snap to one of
+        // `levels` evenly-spaced values: round(i * 255 / (levels - 1)).
+        let allowedValues = (0..<levels).map { UInt8(round(Double($0) * 255.0 / Double(levels - 1))) }
+        let allowedSet = Set(allowedValues)
+        var offGrid = 0
+        for i in stride(from: 0, to: bytes.count, by: 4) {
+            for ch in 0..<3 {
+                if !allowedSet.contains(bytes[i + ch]) {
+                    // Allow ±1 byte tolerance for sRGB roundtrip slop.
+                    let v = Int(bytes[i + ch])
+                    let near = allowedValues.contains { abs(Int($0) - v) <= 1 }
+                    if !near { offGrid += 1 }
+                }
+            }
+        }
+        let totalChannels = (bytes.count / 4) * 3
+        XCTAssertLessThan(offGrid, totalChannels / 100,
+                          "Color-levels output had too many off-grid values (\(offGrid)/\(totalChannels))")
+    }
+
     // MARK: - Smoke: all GPU paths return same-sized output
 
     func testGPUOutputDimensionsMatchInput() throws {

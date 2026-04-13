@@ -15,6 +15,7 @@ Status as of 2026-04-13. Session handoff document for resuming on Claude Cloud.
 | Halftone     | `ShaderRenderer.applyHalftone`        | `HalftoneRenderer.render`                       | ✅ + fallback |
 | Kuwahara     | `ShaderRenderer.applyKuwahara`        | `KuwaharaRenderer.render`                       | ✅ + fallback |
 | PixelSort    | `ShaderPixelSortRenderer.apply`       | `PixelSortRenderer.render`                      | ✅ + fallback (CPU stays as export-quality path) |
+| Dither       | `DitherRenderer.applyCPU` (renamed)   | `DitherGPURenderer.apply`                       | ✅ + fallback (GPU uses blue-noise approximation; Riemersma is CPU-only) |
 
 `ShaderRenderer.gpuOrCPU(image:gpu:cpu:)` runs each GPU path with a CPU
 fallback; only `MetalEffectError` triggers fallback so genuine bugs surface.
@@ -56,6 +57,68 @@ Metal-unavailable fallback) via `gpuOrCPU(...)` in ShaderRenderer.
 Adding any of those requires extending `PixelSortShaderParams` and the YAML
 config / preset format; out of scope for the GPU port pass to keep
 backwards-compatibility risk low.
+
+## Dither port notes
+
+Implemented as `Dither.metal::ditherFragment` + `DitherGPURenderer`. Routes
+through the renamed `DitherRenderer.apply` (was the CPU implementation, now
+GPU-first with CPU fallback). The legacy CPU body lives at
+`DitherRenderer.applyCPU` — same signature, called by tests directly and by
+the GPU-fallback path.
+
+GPU implementation strategy follows Grainrad's design from
+`grainrad/notes/dithering.md`: error-diffusion algorithms (Floyd-Steinberg,
+Atkinson, Stucki, Artistic Drip) are *approximated* by an Interleaved
+Gradient Noise threshold with per-algorithm scaling coefficient. True
+serial error diffusion can't run as a single fragment pass because each
+pixel's quantization error feeds forward into neighbours. Blue-noise
+threshold approximation produces visually similar output on natural images
+without the serial bottleneck.
+
+Algorithm coverage:
+
+| Algorithm        | GPU strategy                                      |
+|------------------|---------------------------------------------------|
+| bayer            | procedural bit-interleave Bayer (level 1..4 → 4..32) |
+| floydSteinberg   | IGN approximation, coefficient 0.85               |
+| atkinson         | IGN approximation, coefficient 0.75               |
+| blueNoise        | IGN unmodulated                                   |
+| artisticDrip     | IGN approximation, coefficient 0.65               |
+| halftone         | hard-coded 6×6 clustered-dot matrix               |
+| stucki           | IGN approximation, coefficient 0.80               |
+| whiteNoise       | hash-based per-pixel white noise                  |
+| **riemersma**    | **CPU only** — Hilbert curve traversal is serial  |
+
+Colour modes:
+- `.bw` → mono dither, output 0/1 → mapped to black/white
+- `.twoTone(fg, bg)` → mono dither → mapped to fg/bg colours
+- `.dominantTwoTone(...)` → CPU resolves dominant colours via
+  `ColorExtractor.extractTwoDominantColors`, then mono dither maps to them
+- `.color(levels: N)` → per-channel quantization with per-channel decorrelated
+  IGN offset (channels read different positions in the noise field so they
+  don't snap together)
+
+Pixel-scale handling matches CPU exactly: downscale source to work resolution
+with bilinear, run dither pass, upscale back to original with nearest-neighbour
+for chunky pixels.
+
+Sharpen and contrast pre-processing are inline in the shader (unsharp mask
+via 3×3 box blur + S-curve contrast) so they don't require a separate pass.
+
+Parity test strategy (`testDitherBayerOutputIsBinaryBW`,
+`testDitherTwoToneMapsToColors`, `testDitherRiemersmaRoutesToCPU`,
+`testDitherColorLevelsQuantizesPerChannel`) checks structural properties
+rather than per-pixel deltas — the blue-noise approximation guarantees
+visual similarity, not bit-for-bit equivalence with serial error diffusion.
+
+Algorithms NOT yet ported from `grainrad/notes/dithering.md`'s extended
+palette (would require model + YAML changes):
+- Sierra family (3-row, 2-row, lite)
+- Jarvis-Judice-Ninke
+- Burkes
+- IGN as a first-class algorithm distinct from blueNoise
+- CMYK-angle clustered dot
+- Palette-quantize against an arbitrary uniform-uploaded palette
 
 ## Original plan continues below.
 
