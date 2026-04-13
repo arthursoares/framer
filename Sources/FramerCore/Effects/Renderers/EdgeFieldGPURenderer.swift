@@ -30,8 +30,13 @@ public enum EdgeFieldGPURenderer {
 
         var contourLevels:   UInt32 = 8
         var contourFillMode: UInt32 = 0       // 0 linesOnly, 1 filledBands
+        var direction:       UInt32 = 0       // 0 horizontal, 1 vertical
+        var amplitude:       Float  = 0.5
+
+        var frequency: Float = 1.0
+        var lineCount: Float = 12
+        var spacing:   Float = 8.0
         var _pad0: Float = 0
-        var _pad1: Float = 0
 
         var edgeColor: SIMD4<Float> = SIMD4(0, 0, 0, 0)
     }
@@ -120,6 +125,56 @@ public enum EdgeFieldGPURenderer {
         uniforms.contourLevels   = UInt32(max(2, min(32, params.contourLevels)))
         uniforms.contourFillMode = (params.contourFillMode == .filledBands) ? 1 : 0
         uniforms.edgeColor       = params.edgeColor.map { simdColor($0) } ?? SIMD4(0, 0, 0, 0)
+
+        let outputTexture = try MetalRenderPass.encode(
+            pipeline: pipeline,
+            source: sourceTexture,
+            auxTextures: [],
+            sampler: sampler,
+            uniformBytes: uniformBytes(uniforms),
+            outputSize: (width, height),
+            library: library
+        )
+        return try MetalTextureSupport.makeCGImage(from: outputTexture)
+    }
+
+    // MARK: - Wave Lines
+
+    public static func renderWaveLines(
+        input: CGImage,
+        common: GPUEffectCommonParameters,
+        geometry: GPUEffectGeometryParameters,
+        color: GPUEffectColorParameters,
+        params: EdgeFieldParameters,
+        outputSize: CGSize
+    ) throws -> CGImage {
+        guard let library = MetalEffectLibrary.shared else {
+            throw MetalEffectError.metalUnavailable
+        }
+
+        let width  = max(1, Int(outputSize.width.rounded()))
+        let height = max(1, Int(outputSize.height.rounded()))
+
+        let pipeline = try library.pipeline(for: "edgeFieldFragment")
+        let sampler  = try library.linearClamp()
+        let sourceTexture = try MetalTextureSupport.makeTexture(from: input, device: library.device)
+
+        var uniforms = Uniforms()
+        mapCommon(common, into: &uniforms.common)
+        mapGeometry(geometry, into: &uniforms.geometry)
+        mapColor(color, into: &uniforms.color)
+
+        uniforms.variant      = 2            // waveLines
+        uniforms.intensity    = 1.0
+        uniforms.lineStrength = Float(clamp01(params.lineStrength))
+        uniforms.thickness    = Float(clamp01(params.thickness))
+        uniforms.invert       = params.invert ? 1 : 0
+        uniforms.direction    = (params.direction == .vertical) ? 1 : 0
+        uniforms.amplitude    = Float(clamp01(params.amplitude))
+        uniforms.frequency    = Float(max(0.1, params.frequency))
+        uniforms.lineCount    = Float(params.lineCount)
+        uniforms.spacing      = Float(max(1.0, geometry.spacing + geometry.scale * 2.0))
+        uniforms.edgeColor    = params.edgeColor.map { simdColor($0) } ?? SIMD4(0, 0, 0, 0)
 
         let outputTexture = try MetalRenderPass.encode(
             pipeline: pipeline,

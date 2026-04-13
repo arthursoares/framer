@@ -76,11 +76,15 @@ public enum ShaderRenderer {
     private static func gpuOrCPU(
         image: CGImage,
         gpu: () throws -> CGImage,
-        cpu: () throws -> CGImage
+        cpu: () throws -> CGImage,
+        label: String = #function
     ) throws -> CGImage {
         do {
-            return try gpu()
-        } catch is MetalEffectError {
+            let result = try gpu()
+            print("[ShaderRenderer] GPU path ✓  \(label)")
+            return result
+        } catch let error as MetalEffectError {
+            print("[ShaderRenderer] CPU fallback (Metal error: \(error)) — \(label)")
             return try cpu()
         }
     }

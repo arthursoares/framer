@@ -31,8 +31,13 @@ struct EdgeFieldUniforms {
 
     uint  contourLevels;       // ≥ 2, number of contour bands
     uint  contourFillMode;     // 0 linesOnly, 1 filledBands
+    uint  direction;           // 0 horizontal, 1 vertical (waveLines)
+    float amplitude;           // 0..1, waveLines source phase contribution
+
+    float frequency;           // waveLines spatial-phase multiplier
+    float lineCount;           // reserved for waveLines density boost
+    float spacing;             // pixel spacing for waveLines (pre-computed)
     float _pad0;
-    float _pad1;
 
     float4 edgeColor;          // colour for ink pixels (rgba, a unused)
 };
@@ -150,6 +155,47 @@ static float4 contourVariant(
 }
 
 // =============================================================================
+// WAVE LINES — source-modulated sinusoidal line bands along one axis. Phase
+// = axis / spacing * frequency + sourceLum * π * amplitude. Lines render where
+// |sin(phase)| < threshold, determined by thickness * lineStrength.
+// =============================================================================
+
+static float4 waveLinesVariant(
+    VertexOut                    in,
+    texture2d<float>             source,
+    sampler                      texSampler,
+    constant EdgeFieldUniforms&  u
+) {
+    float2 resolution = float2(source.get_width(), source.get_height());
+    int2   pixel      = clamp(int2(floor(in.uv * resolution)),
+                              int2(0), int2(resolution) - 1);
+    float2 selfUV     = (float2(pixel) + 0.5) / resolution;
+    float3 srcOrig    = source.sample(texSampler, selfUV).rgb;
+
+    float lum     = saturate(luminance(srcOrig));
+    float axis    = (u.direction == 1u) ? float(pixel.x) : float(pixel.y);
+    float spacing = max(1.0, u.spacing);
+    float freq    = max(0.1, u.frequency);
+    float amp     = max(0.1, u.amplitude);
+
+    float phase     = (axis / spacing) * freq;
+    float wave      = sin(phase + lum * M_PI_F * amp);
+    float threshold = max(0.03, u.thickness * max(0.1, u.lineStrength));
+    float value     = (fabs(wave) < threshold) ? 1.0 : (lum * 0.15);
+    if (u.invert == 1u) { value = 1.0 - value; }
+    value = saturate(value);
+
+    float bg = u.color.backgroundIntensity;
+    float3 ink = float3(max(bg, value));
+    if (u.edgeColor.r + u.edgeColor.g + u.edgeColor.b > 0.0) {
+        ink *= u.edgeColor.rgb;
+    }
+
+    float3 final = mix(srcOrig, saturate(ink), saturate(u.intensity));
+    return float4(final, 1.0);
+}
+
+// =============================================================================
 // Fragment entry — dispatch on variant.
 // =============================================================================
 
@@ -162,6 +208,7 @@ fragment float4 edgeFieldFragment(
     switch (uniforms.variant) {
         case 0:  return edgeDetectionVariant(in, source, texSampler, uniforms);
         case 1:  return contourVariant(in, source, texSampler, uniforms);
+        case 2:  return waveLinesVariant(in, source, texSampler, uniforms);
         default: return source.sample(texSampler, in.uv);
     }
 }
