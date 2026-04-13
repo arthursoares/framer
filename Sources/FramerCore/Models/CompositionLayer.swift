@@ -520,6 +520,16 @@ public enum DitherAlgorithm: String, Codable, Sendable, CaseIterable {
     case stucki
     case whiteNoise
     case riemersma
+    // Added in the dither-extensions pass — see grainrad/notes/dithering.md.
+    // All Codable raw values match the `case` name so old YAML keeps loading
+    // and new YAML can opt in without a migration.
+    case sierra
+    case sierraTwoRow
+    case sierraLite
+    case jarvisJudiceNinke
+    case burkes
+    case interleavedGradientNoise
+    case cmykHalftone
 
     public var label: String {
         switch self {
@@ -532,14 +542,24 @@ public enum DitherAlgorithm: String, Codable, Sendable, CaseIterable {
         case .stucki: return "Stucki"
         case .whiteNoise: return "White Noise"
         case .riemersma: return "Riemersma"
+        case .sierra: return "Sierra"
+        case .sierraTwoRow: return "Sierra Two-Row"
+        case .sierraLite: return "Sierra Lite"
+        case .jarvisJudiceNinke: return "Jarvis-Judice-Ninke"
+        case .burkes: return "Burkes"
+        case .interleavedGradientNoise: return "Interleaved Gradient Noise"
+        case .cmykHalftone: return "CMYK Halftone"
         }
     }
 
     /// Whether this algorithm uses error diffusion (benefits from serpentine scanning).
     public var isErrorDiffusion: Bool {
         switch self {
-        case .floydSteinberg, .atkinson, .artisticDrip, .stucki, .riemersma: return true
-        default: return false
+        case .floydSteinberg, .atkinson, .artisticDrip, .stucki, .riemersma,
+             .sierra, .sierraTwoRow, .sierraLite, .jarvisJudiceNinke, .burkes:
+            return true
+        default:
+            return false
         }
     }
 }
@@ -550,9 +570,15 @@ public enum DitherColorMode: Codable, Equatable, Sendable {
     /// Two-tone using the two most dominant high-contrast colors from the image.
     case dominantTwoTone(flipped: Bool, saturationShift: Double = 0, lightnessShift: Double = 0)
     case color(levels: Int)
+    /// Quantize against an arbitrary palette (e.g. GameBoy / NES / C64 looks).
+    /// Capped at MAX_PALETTE_COLORS to fit in a single uniform upload.
+    case palette([CodableColor])
+
+    public static let MAX_PALETTE_COLORS = 16
 
     private enum CodingKeys: String, CodingKey {
         case type, foreground, background, levels, flipped, saturationShift, lightnessShift
+        case palette
     }
 
     public init(from decoder: Decoder) throws {
@@ -572,6 +598,17 @@ public enum DitherColorMode: Codable, Equatable, Sendable {
         case "color":
             let levels = try container.decode(Int.self, forKey: .levels)
             self = .color(levels: levels)
+        case "palette":
+            let raw = try container.decodeIfPresent([CodableColor].self, forKey: .palette) ?? []
+            // Drop empty palettes silently (back to bw) so a malformed YAML
+            // doesn't bring down the renderer; truncate too-long palettes to
+            // the uniform's hard cap.
+            if raw.isEmpty {
+                self = .bw
+            } else {
+                let capped = raw.prefix(DitherColorMode.MAX_PALETTE_COLORS).map { $0 }
+                self = .palette(capped)
+            }
         default: self = .bw
         }
     }
@@ -592,8 +629,57 @@ public enum DitherColorMode: Codable, Equatable, Sendable {
         case .color(let levels):
             try container.encode("color", forKey: .type)
             try container.encode(levels, forKey: .levels)
+        case .palette(let colors):
+            try container.encode("palette", forKey: .type)
+            try container.encode(colors, forKey: .palette)
         }
     }
+}
+
+/// Canonical retro / vintage palettes for `DitherColorMode.palette`. UI can
+/// surface these as named presets so users don't have to enter colours by hand.
+/// Sources cited inline.
+public enum VintagePalette {
+    /// Original Game Boy DMG-01 LCD greens, as documented in the Pan Docs.
+    /// Source: <https://gbdev.io/pandocs/Color.html>.
+    public static let gameBoy: [CodableColor] = [
+        CodableColor(unchecked: "#0F380F"),
+        CodableColor(unchecked: "#306230"),
+        CodableColor(unchecked: "#8BAC0F"),
+        CodableColor(unchecked: "#9BBC0F"),
+    ]
+
+    /// NES system palette — the 4 most-used colours from the standard NTSC
+    /// palette. Source: <https://www.nesdev.org/wiki/PPU_palettes>.
+    public static let nes: [CodableColor] = [
+        CodableColor(unchecked: "#000000"),
+        CodableColor(unchecked: "#7C7C7C"),
+        CodableColor(unchecked: "#FCFCFC"),
+        CodableColor(unchecked: "#A4E4FC"),
+    ]
+
+    /// Commodore 64 16-colour palette (Pepto's calibration).
+    /// Source: <https://www.pepto.de/projects/colorvic/>.
+    public static let c64: [CodableColor] = [
+        CodableColor(unchecked: "#000000"), CodableColor(unchecked: "#FFFFFF"),
+        CodableColor(unchecked: "#883932"), CodableColor(unchecked: "#67B6BD"),
+        CodableColor(unchecked: "#8B3F96"), CodableColor(unchecked: "#55A049"),
+        CodableColor(unchecked: "#40318D"), CodableColor(unchecked: "#BFCE72"),
+        CodableColor(unchecked: "#8B5429"), CodableColor(unchecked: "#574200"),
+        CodableColor(unchecked: "#B86962"), CodableColor(unchecked: "#505050"),
+        CodableColor(unchecked: "#787878"), CodableColor(unchecked: "#94E089"),
+        CodableColor(unchecked: "#7869C4"), CodableColor(unchecked: "#9F9F9F"),
+    ]
+
+    /// IBM CGA palette 1 high-intensity (the cyan/magenta/white colour set
+    /// every 1980s game seemed to use). Source: IBM 6322508 Color Graphics
+    /// Adapter manual.
+    public static let cga: [CodableColor] = [
+        CodableColor(unchecked: "#000000"),
+        CodableColor(unchecked: "#55FFFF"),
+        CodableColor(unchecked: "#FF55FF"),
+        CodableColor(unchecked: "#FFFFFF"),
+    ]
 }
 
 public struct DitherLayerParams: Identifiable, Codable, Equatable, Sendable {

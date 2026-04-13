@@ -111,14 +111,54 @@ Parity test strategy (`testDitherBayerOutputIsBinaryBW`,
 rather than per-pixel deltas — the blue-noise approximation guarantees
 visual similarity, not bit-for-bit equivalence with serial error diffusion.
 
-Algorithms NOT yet ported from `grainrad/notes/dithering.md`'s extended
-palette (would require model + YAML changes):
-- Sierra family (3-row, 2-row, lite)
-- Jarvis-Judice-Ninke
-- Burkes
-- IGN as a first-class algorithm distinct from blueNoise
-- CMYK-angle clustered dot
-- Palette-quantize against an arbitrary uniform-uploaded palette
+### Extended algorithms (landed in dither-extensions pass)
+
+`DitherAlgorithm` now covers Sierra (3-row), Sierra Two-Row, Sierra Lite,
+Jarvis-Judice-Ninke, Burkes, Interleaved Gradient Noise, and CMYK Halftone.
+All have full CPU implementations (kernel-table form for the error-diffusion
+family, procedural for IGN). GPU implementations use the same blue-noise
+approximation strategy with per-algorithm coefficients tuned by visual
+character on natural photos.
+
+Coefficient table (`thresholdForAlgorithm` in `Dither.metal`):
+
+| Algorithm           | Coefficient | Notes |
+|---------------------|-------------|-------|
+| floydSteinberg      | 0.85        | original tuning |
+| sierra              | 0.85        | similar spread to Floyd-Steinberg |
+| burkes              | 0.85        | larger 5×2 kernel, similar character |
+| stucki              | 0.80        | wider 5×3 kernel |
+| atkinson            | 0.75        | partial diffusion (6/8) |
+| sierraTwoRow        | 0.75        | tighter Sierra variant |
+| artisticDrip        | 0.65        | heavy downward bias in CPU kernel |
+| sierraLite          | 0.65        | smallest Sierra variant |
+| jarvisJudiceNinke   | 0.90        | largest 5×3 kernel — broadest spread |
+| interleavedGradientNoise | 1.0    | unmodulated IGN |
+
+`DitherColorMode` gains `.palette([CodableColor])` (capped at 16 colours).
+The model file ships canonical vintage palettes via `VintagePalette`:
+GameBoy DMG-01, NES (subset), Commodore 64 (full 16), and IBM CGA palette 1.
+Palette-mode dithering uses per-channel decorrelated IGN jitter to nudge
+pixels across palette boundaries — the trick that makes vintage palette
+output painterly instead of posterised.
+
+`.cmykHalftone` is GPU-first with a documented degradation: CPU fallback
+uses monochrome 6×6 clustered dot (no per-channel rotation). True CMYK
+rotated screens only run on the GPU path.
+
+### Algorithms still NOT ported
+
+The remaining items from `grainrad/notes/dithering.md` would change the
+parameter surface significantly:
+
+- Modulation overlays (wave / grid / radial / horizontal / rgbSplit on top of
+  the threshold)
+- Epsilon glow post-pass
+- JPEG-glitch effects (block-shift, channel-swap, scanline-offset)
+- Chromatic aberration as part of the dither pass
+
+Most of these probably belong as separate effect layers rather than dither
+sub-modes.
 
 ## Original plan continues below.
 

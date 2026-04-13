@@ -40,33 +40,56 @@
 // =============================================================================
 // Algorithm IDs — keep in lockstep with DitherAlgorithm in Swift / CPU enum.
 // =============================================================================
-//   0 bayer
-//   1 floydSteinberg
-//   2 atkinson
-//   3 blueNoise
-//   4 artisticDrip
-//   5 halftone
-//   6 stucki
-//   7 whiteNoise
-//   8 riemersma  ← unsupported on GPU, Swift forces CPU path
+//   0 bayer                       — ordered, procedural matrix
+//   1 floydSteinberg              — IGN approximation, coef 0.85
+//   2 atkinson                    — IGN approximation, coef 0.75
+//   3 blueNoise                   — IGN unmodulated
+//   4 artisticDrip                — IGN approximation, coef 0.65
+//   5 halftone                    — clustered-dot 6×6 monochrome
+//   6 stucki                      — IGN approximation, coef 0.80
+//   7 whiteNoise                  — uncorrelated hash noise
+//   8 riemersma                   — UNSUPPORTED (Swift forces CPU fallback)
+//   9 sierra                      — IGN approximation, coef 0.85
+//  10 sierraTwoRow                — IGN approximation, coef 0.75
+//  11 sierraLite                  — IGN approximation, coef 0.65
+//  12 jarvisJudiceNinke           — IGN approximation, coef 0.90 (largest kernel)
+//  13 burkes                      — IGN approximation, coef 0.85
+//  14 interleavedGradientNoise    — IGN, identical to blueNoise here but
+//                                   exposed as a distinct algorithm so the UI
+//                                   can label it correctly
+//  15 cmykHalftone                — clustered-dot screens rotated per channel
+//                                   (15° / 75° / 0° / 45°)
 
-constant uint DITHER_BAYER          = 0u;
-constant uint DITHER_FLOYD          = 1u;
-constant uint DITHER_ATKINSON       = 2u;
-constant uint DITHER_BLUE_NOISE     = 3u;
-constant uint DITHER_ARTISTIC_DRIP  = 4u;
-constant uint DITHER_HALFTONE       = 5u;
-constant uint DITHER_STUCKI         = 6u;
-constant uint DITHER_WHITE_NOISE    = 7u;
+constant uint DITHER_BAYER             = 0u;
+constant uint DITHER_FLOYD             = 1u;
+constant uint DITHER_ATKINSON          = 2u;
+constant uint DITHER_BLUE_NOISE        = 3u;
+constant uint DITHER_ARTISTIC_DRIP     = 4u;
+constant uint DITHER_HALFTONE          = 5u;
+constant uint DITHER_STUCKI            = 6u;
+constant uint DITHER_WHITE_NOISE       = 7u;
+constant uint DITHER_SIERRA            = 9u;
+constant uint DITHER_SIERRA_TWO_ROW    = 10u;
+constant uint DITHER_SIERRA_LITE       = 11u;
+constant uint DITHER_JJN               = 12u;
+constant uint DITHER_BURKES            = 13u;
+constant uint DITHER_IGN               = 14u;
+constant uint DITHER_CMYK_HALFTONE     = 15u;
 
 // =============================================================================
 // Color mode IDs
 // =============================================================================
 //   0 bw / twoTone / dominantTwoTone (monochrome dither, optional 2-colour map)
 //   1 color (per-channel quantization with dithered offset)
+//   2 palette (nearest-colour match against an arbitrary palette)
 
-constant uint DITHER_COLOR_MONO   = 0u;
-constant uint DITHER_COLOR_LEVELS = 1u;
+constant uint DITHER_COLOR_MONO    = 0u;
+constant uint DITHER_COLOR_LEVELS  = 1u;
+constant uint DITHER_COLOR_PALETTE = 2u;
+
+// Hard cap on palette-mode colour count. Mirrors DitherColorMode.MAX_PALETTE_COLORS
+// in Swift; bumping this requires bumping the Swift constant too and re-binding.
+constant int DITHER_MAX_PALETTE = 16;
 
 struct DitherUniforms {
     FramerCommonUniforms common;        // unused
@@ -89,9 +112,13 @@ struct DitherUniforms {
     float4 foregroundRGBA;
     float4 backgroundRGBA;
     uint   useTwoTone;      // 0 = bw, 1 = use foreground/background mapping
-    float  _pad1;
+    uint   paletteCount;    // 1..DITHER_MAX_PALETTE — only read when colorMode == 2
     float  _pad2;
     float  _pad3;
+
+    // Arbitrary palette upload for `colorMode == DITHER_COLOR_PALETTE`. Unused
+    // slots are zero. Each colour is .rgb in 0..1; .a is unused.
+    float4 palette[DITHER_MAX_PALETTE];
 };
 
 // =============================================================================
@@ -141,6 +168,20 @@ constant float halftone6x6[36] = {
 
 inline float halftoneThreshold(uint2 pos) {
     return halftone6x6[(pos.y % 6u) * 6u + (pos.x % 6u)];
+}
+
+// CMYK halftone: rotate the UV per channel and sample the same 6×6 clustered
+// dot. Standard newspaper angles: cyan 15°, magenta 75°, yellow 0°, black 45°.
+// `channel` is 0..3 (C, M, Y, K).
+inline float cmykHalftoneThreshold(float2 pixel, uint channel) {
+    constexpr float ANGLES[4] = { 0.261799, 1.309, 0.0, 0.785398 };
+    float angle = ANGLES[channel];
+    float c = cos(angle);
+    float s = sin(angle);
+    float2 rot = float2(pixel.x * c - pixel.y * s,
+                        pixel.x * s + pixel.y * c);
+    uint2 cell = uint2(uint(floor(rot.x)) % 6u, uint(floor(rot.y)) % 6u);
+    return halftone6x6[cell.y * 6u + cell.x];
 }
 
 // =============================================================================
@@ -201,9 +242,63 @@ inline float thresholdForAlgorithm(uint algorithm, uint2 pos, uint bayerLevel,
             float n = ign(float2(pos));
             return clamp(baseThreshold + (n - 0.5) * 0.65, 0.0, 1.0);
         }
+        case DITHER_SIERRA: {
+            float n = ign(float2(pos));
+            return clamp(baseThreshold + (n - 0.5) * 0.85, 0.0, 1.0);
+        }
+        case DITHER_SIERRA_TWO_ROW: {
+            float n = ign(float2(pos));
+            return clamp(baseThreshold + (n - 0.5) * 0.75, 0.0, 1.0);
+        }
+        case DITHER_SIERRA_LITE: {
+            float n = ign(float2(pos));
+            return clamp(baseThreshold + (n - 0.5) * 0.65, 0.0, 1.0);
+        }
+        case DITHER_JJN: {
+            float n = ign(float2(pos));
+            return clamp(baseThreshold + (n - 0.5) * 0.90, 0.0, 1.0);
+        }
+        case DITHER_BURKES: {
+            float n = ign(float2(pos));
+            return clamp(baseThreshold + (n - 0.5) * 0.85, 0.0, 1.0);
+        }
+        case DITHER_IGN: {
+            // Same shape as DITHER_BLUE_NOISE for now — distinct ID so the UI
+            // can label it correctly. If we add a different blue-noise mask
+            // (void-and-cluster etc.), DITHER_BLUE_NOISE diverges from this.
+            return clamp(ign(float2(pos)) + (baseThreshold - 0.5), 0.0, 1.0);
+        }
+        case DITHER_CMYK_HALFTONE: {
+            // For mono mode this falls back to the standard halftone matrix.
+            // CMYK rotation only kicks in inside the palette / colour paths.
+            float m = halftoneThreshold(pos);
+            return clamp(m + (baseThreshold - 0.5), 0.0, 1.0);
+        }
         default:
             return baseThreshold;
     }
+}
+
+// =============================================================================
+// Palette nearest-match (Euclidean distance in linear-ish 0..1 RGB).
+// =============================================================================
+
+inline float3 palettePick(float3 c,
+                          constant DitherUniforms& u) {
+    int n = clamp(int(u.paletteCount), 1, DITHER_MAX_PALETTE);
+    float bestDist = 1e9;
+    float3 bestColor = u.palette[0].rgb;
+    for (int i = 0; i < DITHER_MAX_PALETTE; i++) {
+        if (i >= n) { break; }
+        float3 p = u.palette[i].rgb;
+        float3 d = c - p;
+        float dist = dot(d, d);
+        if (dist < bestDist) {
+            bestDist = dist;
+            bestColor = p;
+        }
+    }
+    return bestColor;
 }
 
 // =============================================================================
@@ -289,6 +384,47 @@ fragment float4 ditherFragment(
     src = ditherContrast(src, uniforms.contrastAmount);
 
     uint2 pixel = uint2(in.uv * resolution);
+
+    if (uniforms.colorMode == DITHER_COLOR_PALETTE) {
+        // Palette mode: jitter source slightly with the per-algorithm noise
+        // so neighbouring pixels can pick adjacent palette entries (this is
+        // what gives GameBoy / NES looks their painterly feel instead of flat
+        // posterisation). Per-channel decorrelated offsets prevent the three
+        // channels from snapping to the same direction.
+        float jitterStrength = 0.10;
+        float thrR = thresholdForAlgorithm(uniforms.algorithm, pixel,
+                                            uniforms.bayerLevel,
+                                            uniforms.threshold) - 0.5;
+        float thrG = thresholdForAlgorithm(uniforms.algorithm,
+                                            pixel + uint2(13u, 7u),
+                                            uniforms.bayerLevel,
+                                            uniforms.threshold) - 0.5;
+        float thrB = thresholdForAlgorithm(uniforms.algorithm,
+                                            pixel + uint2(31u, 19u),
+                                            uniforms.bayerLevel,
+                                            uniforms.threshold) - 0.5;
+        float3 jittered = saturate(src + float3(thrR, thrG, thrB) * jitterStrength);
+        // CMYK halftone mode adds an additional per-channel halftone screen
+        // before the palette pick, mimicking print-style halftoned output
+        // even when targeting an arbitrary palette.
+        if (uniforms.algorithm == DITHER_CMYK_HALFTONE) {
+            float2 pxF = float2(pixel);
+            float k  = min(1.0 - jittered.r, min(1.0 - jittered.g, 1.0 - jittered.b));
+            float invK = max(1.0 - k, 0.001);
+            float c_v = (1.0 - jittered.r - k) / invK;
+            float m_v = (1.0 - jittered.g - k) / invK;
+            float y_v = (1.0 - jittered.b - k) / invK;
+            float cDot = step(cmykHalftoneThreshold(pxF, 0u), c_v);
+            float mDot = step(cmykHalftoneThreshold(pxF, 1u), m_v);
+            float yDot = step(cmykHalftoneThreshold(pxF, 2u), y_v);
+            float kDot = step(cmykHalftoneThreshold(pxF, 3u), k);
+            float3 cmyk = saturate(float3(1.0 - cDot - kDot,
+                                          1.0 - mDot - kDot,
+                                          1.0 - yDot - kDot));
+            jittered = mix(jittered, cmyk, 0.5);
+        }
+        return float4(palettePick(jittered, uniforms), 1.0);
+    }
 
     if (uniforms.colorMode == DITHER_COLOR_LEVELS) {
         // Per-channel dither: each channel gets its own threshold via the
