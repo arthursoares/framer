@@ -57,10 +57,19 @@ fragment float4 halftoneFragment(
     float dotSize = max(uniforms.dotSize, 0.1);
     float contrastExp = max(uniforms.halftoneContrast, 0.1);
 
-    float ux = in.uv.x;
-    float uy = in.uv.y;
+    // Pin to the integer pixel grid so the halftone phase math matches CPU's
+    // `ux = x / width`, `uy = y / height` exactly. Without this, `in.uv` at
+    // fragment centers introduces a half-texel phase shift, and the halftone
+    // dot pattern (a sin() of `ux * wf * dotSize`) drifts ~half a dot relative
+    // to CPU. Mean delta on the parity test was 32/255 before this fix.
+    float2 resolution = float2(wf, hf);
+    int2   pixel      = int2(floor(in.uv * resolution));
+    pixel = clamp(pixel, int2(0), int2(resolution) - 1);
+    float ux = float(pixel.x) / wf;
+    float uy = float(pixel.y) / hf;
+    float2 selfUV = (float2(pixel) + 0.5) / resolution;
 
-    float3 src = source.sample(texSampler, in.uv).rgb;
+    float3 src = source.sample(texSampler, selfUV).rgb;
 
     float3 outRGB;
     if (uniforms.monochrome == 1u) {
