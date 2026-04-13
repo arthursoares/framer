@@ -17,6 +17,15 @@ let package = Package(
             name: "FramerCore",
             dependencies: [
                 .product(name: "Yams", package: "Yams"),
+            ],
+            // Effects/Metal contains the .metal shader sources + the shared
+            // ShaderCommon.h header. Declaring them as processed resources
+            // makes SwiftPM (and the Xcode toolchain it shells out to) compile
+            // the .metal files into `default.metallib` inside Bundle.module
+            // and copy the header alongside for include resolution. Required
+            // for `MetalEffectLibrary.makeDefaultLibrary(bundle: .module)`.
+            resources: [
+                .process("Effects/Metal"),
             ]
         ),
         .executableTarget(

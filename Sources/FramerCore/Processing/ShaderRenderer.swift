@@ -12,12 +12,25 @@ public enum ShaderRenderer {
 
         switch params.params {
         case .ascii:
-            return try ShaderASCIIRenderer.apply(
-                to: image,
-                params: params,
-                previewBaseDimension: previewBaseDimension,
-                sourceImage: sourceImage
-            )
+            // GPU path (Phase 1 of the Effects bucket migration — see
+            // docs/gpu-migration-plan.md). Falls back to the CPU renderer when
+            // Metal is unavailable (no GPU device, missing LUT atlases, etc.)
+            // so headless and pre-Metal hosts keep working.
+            do {
+                return try TextCellRenderer.renderASCII(
+                    to: image,
+                    params: params,
+                    previewBaseDimension: previewBaseDimension,
+                    sourceImage: sourceImage
+                )
+            } catch is MetalEffectError {
+                return try ShaderASCIIRenderer.apply(
+                    to: image,
+                    params: params,
+                    previewBaseDimension: previewBaseDimension,
+                    sourceImage: sourceImage
+                )
+            }
         case .pixelSort:
             return try ShaderPixelSortRenderer.apply(to: image, params: params)
         case .crimewave(let shaderParams):
