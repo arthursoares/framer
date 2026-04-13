@@ -98,9 +98,9 @@ static float4 edgeDetectionVariant(
 
     // Optional per-variant colour tint from TextCellParameters-style edgeColor.
     // If provided as non-default, multiply into the ink contribution.
-    if (u.edgeColor.r + u.edgeColor.g + u.edgeColor.b > 0.0) {
-        ink *= u.edgeColor.rgb;
-    }
+    // edgeColor defaults to (1,1,1,1) identity on the Swift side, so
+    // multiplying unconditionally tints only when the user picked a colour.
+    ink *= u.edgeColor.rgb;
 
     float3 final = mix(srcOrig, saturate(ink), saturate(u.intensity));
     return float4(final, 1.0);
@@ -151,9 +151,9 @@ static float4 contourVariant(
     // tint multiplied in when set.
     float bg = u.color.backgroundIntensity;
     float3 ink = float3(max(bg, value));
-    if (u.edgeColor.r + u.edgeColor.g + u.edgeColor.b > 0.0) {
-        ink *= u.edgeColor.rgb;
-    }
+    // edgeColor defaults to (1,1,1,1) identity on the Swift side, so
+    // multiplying unconditionally tints only when the user picked a colour.
+    ink *= u.edgeColor.rgb;
 
     float3 final = mix(srcOrig, saturate(ink), saturate(u.intensity));
     return float4(final, 1.0);
@@ -192,9 +192,9 @@ static float4 waveLinesVariant(
 
     float bg = u.color.backgroundIntensity;
     float3 ink = float3(max(bg, value));
-    if (u.edgeColor.r + u.edgeColor.g + u.edgeColor.b > 0.0) {
-        ink *= u.edgeColor.rgb;
-    }
+    // edgeColor defaults to (1,1,1,1) identity on the Swift side, so
+    // multiplying unconditionally tints only when the user picked a colour.
+    ink *= u.edgeColor.rgb;
 
     float3 final = mix(srcOrig, saturate(ink), saturate(u.intensity));
     return float4(final, 1.0);
@@ -267,9 +267,9 @@ static float4 voronoiVariant(
 
     float bg = u.color.backgroundIntensity;
     float3 ink = float3(max(bg, value));
-    if (u.edgeColor.r + u.edgeColor.g + u.edgeColor.b > 0.0) {
-        ink *= u.edgeColor.rgb;
-    }
+    // edgeColor defaults to (1,1,1,1) identity on the Swift side, so
+    // multiplying unconditionally tints only when the user picked a colour.
+    ink *= u.edgeColor.rgb;
 
     float3 final = mix(srcOrig, saturate(ink), saturate(u.intensity));
     return float4(final, 1.0);
@@ -316,9 +316,9 @@ static float4 noiseFieldVariant(
 
     float bg = u.color.backgroundIntensity;
     float3 ink = float3(max(bg, value));
-    if (u.edgeColor.r + u.edgeColor.g + u.edgeColor.b > 0.0) {
-        ink *= u.edgeColor.rgb;
-    }
+    // edgeColor defaults to (1,1,1,1) identity on the Swift side, so
+    // multiplying unconditionally tints only when the user picked a colour.
+    ink *= u.edgeColor.rgb;
 
     float3 final = mix(srcOrig, saturate(ink), saturate(u.intensity));
     return float4(final, 1.0);
