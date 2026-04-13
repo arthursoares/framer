@@ -31,6 +31,14 @@ public enum EdgeFieldRenderer {
             } catch is MetalEffectError {
                 // fall through to CPU
             }
+        case .waveLines:
+            do {
+                return try EdgeFieldGPURenderer.renderWaveLines(
+                    input: input, common: common, geometry: geometry,
+                    color: color, params: payload, outputSize: outputSize)
+            } catch is MetalEffectError {
+                // fall through to CPU
+            }
         default:
             break
         }
