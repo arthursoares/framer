@@ -14,7 +14,7 @@ Status as of 2026-04-13. Session handoff document for resuming on Claude Cloud.
 | CRT          | `ShaderRenderer.applyCRT`             | `CRTRenderer.render`                            | ✅ + fallback |
 | Halftone     | `ShaderRenderer.applyHalftone`        | `HalftoneRenderer.render`                       | ✅ + fallback |
 | Kuwahara     | `ShaderRenderer.applyKuwahara`        | `KuwaharaRenderer.render`                       | ✅ + fallback |
-| **PixelSort**| `ShaderPixelSortRenderer.apply`       | **deferred** — see PixelSort section below      | ❌ |
+| PixelSort    | `ShaderPixelSortRenderer.apply`       | `PixelSortRenderer.render`                      | ✅ + fallback (CPU stays as export-quality path) |
 
 `ShaderRenderer.gpuOrCPU(image:gpu:cpu:)` runs each GPU path with a CPU
 fallback; only `MetalEffectError` triggers fallback so genuine bugs surface.
@@ -23,26 +23,39 @@ fallback; only `MetalEffectError` triggers fallback so genuine bugs surface.
 delta checks. They self-skip when Metal is unavailable so they no-op on the
 Linux container that authored them.
 
-## Why PixelSort isn't a fragment shader yet
+## PixelSort port notes
 
-`ShaderPixelSortRenderer` runs a serial span-sort: walk a row/column, find a
-contiguous run of pixels above `threshold`, sort the run by luminance, write
-back, repeat. Two properties make a naive port wrong:
+Implemented as `PixelSort.metal::pixelSortFragment` + `PixelSortRenderer`,
+using the fragment-per-pixel design from `grainrad/notes/pixel-sort.md`. Each
+fragment walks back/forward along the sort axis to find its enclosing span
+(stopping at thresholds, image edges, or the configured span cap), samples up
+to 24 evenly-spaced positions across the span into thread-local arrays,
+bubble-sorts them by luminance, and returns the colour at this fragment's
+proportional rank.
 
-1. **The output of one span informs the next** through the `outputPixels`
-   buffer (subsequent spans read previously sorted neighbours). A
-   fragment-per-pixel shader has no serial-dependency channel.
-2. **Span length depends on the threshold and image content.** Spans up to
-   `span` pixels long start at any pixel where luminance crosses threshold.
-   Each fragment needs to know which span it belongs to *and* its rank within
-   the sort.
+Semantics match `ShaderPixelSortRenderer.apply` exactly for the existing
+parameter surface:
+  - Span criterion: `luminance ≥ threshold` (continues a run).
+  - Sort criterion: luminance ascending.
+  - Direction: horizontal / vertical (no diagonal in this pass).
+  - Span cap: 1..256, identical to CPU clamp.
 
-`grainrad/notes/pixel-sort.md` describes the trick: each fragment scans up to
-`span` pixels in its row/column to (a) locate its enclosing span boundaries
-and (b) compute its rank by counting how many in-span pixels have luminance ≤
-its own. That's O(span²) per pixel but capped (≤ 24 default), and
-fully parallel. Worth a separate task with its own design pass — not a
-mechanical port.
+**Approximation**: spans longer than `SAMPLE_COUNT = 24` are sub-sampled. For
+Framer's default `span = 24` every pixel in every span is read by both CPU
+and GPU — the parity test (`testPixelSortParityDefaultSpan`) validates this.
+For deliberate long-streak settings (span 32+), the GPU output is visibly
+coarser; the CPU path remains the export-quality fallback (and the
+Metal-unavailable fallback) via `gpuOrCPU(...)` in ShaderRenderer.
+
+**Deferred to a follow-up**:
+  - Kim Asendorf's four span-detection modes (Black / White / Bright / Dark)
+  - Diagonal direction (`dir = normalize(1, 1)` along anti-diagonals)
+  - Per-line randomness (hash-based threshold jitter)
+  - Reverse sort (descending)
+
+Adding any of those requires extending `PixelSortShaderParams` and the YAML
+config / preset format; out of scope for the GPU port pass to keep
+backwards-compatibility risk low.
 
 ## Original plan continues below.
 

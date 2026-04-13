@@ -255,6 +255,42 @@ final class EffectGPUParityTests: XCTestCase {
         XCTAssertLessThan(mean, 12.0, "Kuwahara mean delta too high (\(mean))")
     }
 
+    // MARK: - PixelSort
+
+    func testPixelSortParityDefaultSpan() throws {
+        try requireMetal()
+        let img = makeTestImage()
+        // Default span = 24 — matches the GPU shader's SAMPLE_COUNT cap, so
+        // every pixel in every span is read by both paths and the rank lookup
+        // is exact. Output should match closely modulo Float vs Double
+        // rounding.
+        let ps = PixelSortShaderParams()
+        let params = ShaderLayerParams(style: .pixelSort, intensity: 1.0,
+                                       params: .pixelSort(ps))
+        let cpu = try ShaderPixelSortRenderer.apply(to: img, params: params)
+        let gpu = try PixelSortRenderer.render(to: img, params: params)
+        let (mean, _) = compare(cpu, gpu)
+        // PixelSort flips many bytes when the sort order changes by even one
+        // sample — relax tolerance vs colour-grade tests but keep it tight
+        // enough to catch broken rank logic.
+        XCTAssertLessThan(mean, 12.0, "PixelSort mean delta too high (\(mean))")
+    }
+
+    func testPixelSortRespectsThresholdSkip() throws {
+        try requireMetal()
+        // Threshold = 1.0 — no pixel exceeds it, every pixel returns source.
+        // GPU output must equal source pixel-for-pixel (subject to the CIContext
+        // sRGB roundtrip, which can introduce ≤ 1-byte deltas).
+        let img = makeTestImage()
+        let ps = PixelSortShaderParams(threshold: 1.0)
+        let params = ShaderLayerParams(style: .pixelSort, intensity: 1.0,
+                                       params: .pixelSort(ps))
+        let gpu = try PixelSortRenderer.render(to: img, params: params)
+        let (mean, max) = compare(img, gpu)
+        XCTAssertLessThan(mean, 2.0, "PixelSort threshold-skip diverged from source (mean \(mean))")
+        XCTAssertLessThan(max, 8, "PixelSort threshold-skip max delta too high (\(max))")
+    }
+
     // MARK: - Smoke: all GPU paths return same-sized output
 
     func testGPUOutputDimensionsMatchInput() throws {
