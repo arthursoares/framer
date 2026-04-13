@@ -2013,6 +2013,7 @@ private struct DitherControls: View {
                         case .twoTone: return 1
                         case .color: return 2
                         case .dominantTwoTone: return 3
+                        case .palette: return 4
                         }
                     },
                     set: { tag in
@@ -2022,6 +2023,7 @@ private struct DitherControls: View {
                         case 1: p.colorMode = .twoTone(foreground: (try? CodableColor(hex: "#0251FF")) ?? .black, background: .black)
                         case 2: p.colorMode = .color(levels: 4)
                         case 3: p.colorMode = .dominantTwoTone(flipped: false, saturationShift: 0, lightnessShift: 0)
+                        case 4: p.colorMode = .palette(VintagePalette.gameBoy)
                         default: break
                         }
                         onChange(p)
