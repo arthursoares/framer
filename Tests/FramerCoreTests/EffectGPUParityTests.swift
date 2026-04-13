@@ -266,10 +266,10 @@ final class EffectGPUParityTests: XCTestCase {
     // Guards against regression of the softness-ordering bug (CPU blurs AFTER
     // grading; the GPU shader used to blur first). Covers the non-trivial
     // contrast/saturation/channel-bias path that was hidden by softness=0 in
-    // the other tests. Larger tolerance than softness=0 because the GPU
-    // single-pass "grade-each-neighbour" approach and CPU's
-    // grade-then-box-blur diverge at tile edges by a few levels where the
-    // variant styles saturate clamps differently.
+    // the other tests. With the kernel-clipping fix matching CPU's box-blur
+    // border policy, tolerances are the same as the softness=0 tests —
+    // remaining drift is float-vs-double precision in saturate clamps after
+    // each style stage, not a structural divergence.
     func testCrimewaveSoftnessParity() throws {
         try requireMetal()
         let img = makeTestImage()
@@ -279,8 +279,8 @@ final class EffectGPUParityTests: XCTestCase {
         let cpu = try ShaderRenderer.applyCrimewave(to: img, params: cp, intensity: 1.0)
         let gpu = try ColorGradeRenderer.renderCrimewave(to: img, params: params)
         let (mean, max) = compare(cpu, gpu)
-        XCTAssertLessThan(mean, 10.0, "Crimewave softness>0 mean delta too high (\(mean))")
-        XCTAssertLessThan(max,  80,   "Crimewave softness>0 max delta too high (\(max))")
+        XCTAssertLessThan(mean, 6.0, "Crimewave softness>0 mean delta too high (\(mean))")
+        XCTAssertLessThan(max,  40,  "Crimewave softness>0 max delta too high (\(max))")
     }
 
     func testShibaSoftnessParity() throws {
@@ -291,8 +291,8 @@ final class EffectGPUParityTests: XCTestCase {
         let cpu = try ShaderRenderer.applyShiba(to: img, params: sp, intensity: 1.0)
         let gpu = try ColorGradeRenderer.renderShiba(to: img, params: params)
         let (mean, max) = compare(cpu, gpu)
-        XCTAssertLessThan(mean, 10.0, "Shiba softness>0 mean delta too high (\(mean))")
-        XCTAssertLessThan(max,  80,   "Shiba softness>0 max delta too high (\(max))")
+        XCTAssertLessThan(mean, 6.0, "Shiba softness>0 mean delta too high (\(mean))")
+        XCTAssertLessThan(max,  40,  "Shiba softness>0 max delta too high (\(max))")
     }
 
     // MARK: - DistantPast
