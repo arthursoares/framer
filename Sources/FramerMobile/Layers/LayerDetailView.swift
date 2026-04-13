@@ -159,13 +159,11 @@ private struct GPUEffectControls: View {
 
     var body: some View {
         VStack(spacing: 8) {
+            // Kind is fixed at layer creation (each variant is its own
+            // layer-add menu entry). Show read-only for orientation; don't
+            // offer a Picker to switch variants mid-flight.
             ControlRow(label: "Effect") {
-                Picker("Effect", selection: kindBinding) {
-                    ForEach(GPUEffectKind.userFacingCases, id: \.self) { kind in
-                        Text(kind.label).tag(kind)
-                    }
-                }
-                .pickerStyle(.menu)
+                Label(params.kind.label, systemImage: params.kind.menuIcon)
             }
 
             ControlRow(label: "Scale") {

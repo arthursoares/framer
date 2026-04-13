@@ -63,4 +63,132 @@ public enum GPUEffectKind: String, Codable, Hashable, Sendable, CaseIterable {
         case .vhs: return "VHS"
         }
     }
+
+    /// SF Symbol name for the layer-add menu entry.
+    public var menuIcon: String {
+        switch self {
+        case .ascii:         return "textformat"
+        case .dithering:     return "square.grid.4x3.fill"
+        case .halftone:      return "circle.dotted"
+        case .matrixRain:    return "cloud.rain"
+        case .dots:          return "circle.grid.3x3.fill"
+        case .contour:       return "map"
+        case .pixelSort:     return "rectangle.split.3x1"
+        case .blockify:      return "square.grid.3x3.fill"
+        case .threshold:     return "circle.lefthalf.filled"
+        case .edgeDetection: return "scope"
+        case .crosshatch:    return "line.diagonal"
+        case .waveLines:     return "waveform"
+        case .noiseField:    return "sparkle"
+        case .voronoi:       return "hexagon"
+        case .vhs:           return "tv"
+        }
+    }
+
+    /// Build a fresh `.gpuEffect` layer pre-scoped to this kind with sensible
+    /// default parameters. Used by the per-variant add-layer menu entries so
+    /// each effect is a first-class layer type in the UI while sharing the
+    /// same underlying data model.
+    public func makeDefaultLayer() -> CompositionLayer {
+        let common   = GPUEffectCommonParameters()
+        let geometry = GPUEffectGeometryParameters(scale: 1.0, spacing: 2.0, outputWidth: 240)
+        let color    = GPUEffectColorParameters(mode: .foregroundBackground, backgroundIntensity: 0.2)
+
+        let params: GPUEffectParameters
+        switch self {
+        // TextCell bucket
+        case .ascii:
+            var p = TextCellParameters(); p.variant = .ascii
+            params = .textCell(common: common, geometry: geometry, color: color, textCell: p)
+        case .dots:
+            var p = TextCellParameters(); p.variant = .dots
+            params = .textCell(common: common, geometry: geometry, color: color, textCell: p)
+        case .blockify:
+            var p = TextCellParameters(); p.variant = .blockify
+            params = .textCell(common: common, geometry: geometry, color: color, textCell: p)
+        case .matrixRain:
+            var p = TextCellParameters()
+            p.variant = .matrixRain
+            p.direction = .down
+            p.trailLength = 0.5
+            p.glow = 0.5
+            params = .textCell(common: common, geometry: geometry, color: color, textCell: p)
+
+        // PrintSampling bucket
+        case .threshold:
+            var p = PrintSamplingParameters()
+            p.variant = .threshold
+            p.threshold = 0.5
+            p.thresholdLevels = 2
+            params = .printSampling(common: common, geometry: geometry, color: color, printSampling: p)
+        case .crosshatch:
+            var p = PrintSamplingParameters()
+            p.variant = .crosshatch
+            p.threshold = 0.5
+            p.hatchDensity = 0.5
+            p.hatchLayers = 2
+            params = .printSampling(common: common, geometry: geometry, color: color, printSampling: p)
+        case .halftone:
+            var p = PrintSamplingParameters(); p.variant = .halftone
+            params = .printSampling(common: common, geometry: geometry, color: color, printSampling: p)
+        case .dithering:
+            var p = PrintSamplingParameters(); p.variant = .dithering
+            params = .printSampling(common: common, geometry: geometry, color: color, printSampling: p)
+
+        // EdgeField bucket
+        case .edgeDetection:
+            var p = EdgeFieldParameters()
+            p.variant = .edgeDetection
+            p.lineStrength = 0.7
+            p.thickness = 0.3
+            p.edgeAlgorithm = .sobel
+            p.edgeThreshold = 0.2
+            params = .edgeField(common: common, geometry: geometry, color: color, edgeField: p)
+        case .contour:
+            var p = EdgeFieldParameters()
+            p.variant = .contour
+            p.lineStrength = 0.5
+            p.thickness = 0.3
+            p.contourLevels = 8
+            p.contourFillMode = .linesOnly
+            params = .edgeField(common: common, geometry: geometry, color: color, edgeField: p)
+        case .waveLines:
+            var p = EdgeFieldParameters()
+            p.variant = .waveLines
+            p.lineStrength = 0.5
+            p.thickness = 0.3
+            p.amplitude = 0.5
+            p.frequency = 1.0
+            p.direction = .horizontal
+            params = .edgeField(common: common, geometry: geometry, color: color, edgeField: p)
+        case .voronoi:
+            var p = EdgeFieldParameters()
+            p.variant = .voronoi
+            p.cellSize = 16.0
+            p.edgeWidth = 0.25
+            p.lineStrength = 0.5
+            params = .edgeField(common: common, geometry: geometry, color: color, edgeField: p)
+        case .noiseField:
+            var p = EdgeFieldParameters()
+            p.variant = .noiseField
+            p.amplitude = 0.5
+            p.fieldIntensity = 0.5
+            params = .edgeField(common: common, geometry: geometry, color: color, edgeField: p)
+
+        // Glitch bucket
+        case .pixelSort:
+            var p = GlitchParameters(); p.variant = .pixelSort
+            params = .glitch(common: common, geometry: geometry, color: color, glitch: p)
+        case .vhs:
+            var p = GlitchParameters()
+            p.variant = .vhs
+            p.amount = 0.5
+            p.scanlines = 0.5
+            p.colorBleed = 0.5
+            p.trackingError = 0.3
+            params = .glitch(common: common, geometry: geometry, color: color, glitch: p)
+        }
+
+        return .gpuEffect(GPUEffectLayerParams(kind: self, params: params))
+    }
 }

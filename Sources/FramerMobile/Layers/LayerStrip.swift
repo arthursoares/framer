@@ -127,6 +127,15 @@ struct LayerStrip: View {
             Button { addLayer(.shader(ShaderLayerParams())) } label: {
                 Label("Shader", systemImage: "sparkles.rectangle.stack")
             }
+            Divider()
+            // Per-variant GPU-effect entries. Each is a first-class layer
+            // type in the picker (Option B of the bucket-UI refactor); under
+            // the hood all map to `.gpuEffect` with pre-scoped defaults.
+            ForEach(GPUEffectKind.userFacingCases, id: \.self) { kind in
+                Button { addLayer(kind.makeDefaultLayer()) } label: {
+                    Label(kind.label, systemImage: kind.menuIcon)
+                }
+            }
         } label: {
             HStack {
                 Image(systemName: "plus.circle")
