@@ -702,7 +702,9 @@ struct GPUEffectLayerControls: View {
 
             if case .edgeField(let common, let geometry, let color, let payload) = params.params,
                params.kind == .waveLines {
-                adjustmentSlider(label: "Line Count", binding: edgeFieldBinding(\.lineCount), range: 1...64)
+                // Line Strength drives the shader's threshold shaping — primary
+                // brightness knob, was missing from UI before.
+                adjustmentSlider(label: "Line Strength", binding: edgeFieldBinding(\.lineStrength), range: 0...1)
                 adjustmentSlider(label: "Amplitude", binding: edgeFieldBinding(\.amplitude), range: 0...1)
                 adjustmentSlider(label: "Frequency", binding: edgeFieldBinding(\.frequency), range: 0.1...4)
                 adjustmentSlider(label: "Thickness", binding: edgeFieldBinding(\.thickness), range: 0.05...1)
@@ -712,25 +714,25 @@ struct GPUEffectLayerControls: View {
                     Text("Vertical").tag(EdgeFieldDirection.vertical)
                 }
                 .pickerStyle(.menu)
-
-                Toggle("Animate", isOn: edgeAnimateBinding)
+                // Line Count + Animate were orphaned — shader doesn't read
+                // `lineCount` in the phase math, and there's no time uniform
+                // so Animate had no effect. Wire them or hide. Hidden for now.
             }
 
             if case .edgeField(let common, let geometry, let color, let payload) = params.params,
                params.kind == .noiseField {
-                Picker("Noise Type", selection: noiseTypeBinding) {
-                    Text("Value").tag(NoiseFieldType.value)
-                    Text("Simplex").tag(NoiseFieldType.simplex)
-                    Text("Cellular").tag(NoiseFieldType.cellular)
-                }
-                .pickerStyle(.menu)
-
-                adjustmentSlider(label: "Octaves", binding: noiseOctavesBinding, range: 1...8)
+                // Line Strength gates the noise contribution (shader:
+                // `noise * u.lineStrength + fieldWeight * 0.3`). Field Intensity
+                // biases the baseline level. Both were missing from UI.
+                adjustmentSlider(label: "Line Strength", binding: edgeFieldBinding(\.lineStrength), range: 0...1)
+                adjustmentSlider(label: "Field Intensity", binding: edgeFieldBinding(\.fieldIntensity), range: 0...1)
+                adjustmentSlider(label: "Octaves", binding: noiseOctavesBinding, range: 1...6)
                 adjustmentSlider(label: "Scale", binding: edgeFieldBinding(\.amplitude), range: 0.1...1)
-                adjustmentSlider(label: "Speed", binding: noiseSpeedBinding, range: 0...1)
-
-                Toggle("Animate", isOn: edgeAnimateBinding)
-                Toggle("Distort Only", isOn: noiseDistortOnlyBinding)
+                Toggle("Invert", isOn: edgeInvertBinding)
+                // Removed: Noise Type picker (shader hardcodes IGN — simplex/
+                // cellular not implemented), Speed + Animate (no time uniform),
+                // Distort Only (shader generates standalone, doesn't distort
+                // source UVs). Re-enable when those paths are implemented.
             }
 
             if case .edgeField(let common, let geometry, let color, let payload) = params.params,
@@ -741,6 +743,7 @@ struct GPUEffectLayerControls: View {
                 }
                 .pickerStyle(.menu)
 
+                adjustmentSlider(label: "Line Strength", binding: edgeFieldBinding(\.lineStrength), range: 0...1)
                 adjustmentSlider(label: "Threshold", binding: edgeThresholdBinding, range: 0...1)
                 adjustmentSlider(label: "Line Width", binding: edgeFieldBinding(\.thickness), range: 0.05...1)
                 Toggle("Invert", isOn: edgeInvertBinding)
@@ -764,6 +767,8 @@ struct GPUEffectLayerControls: View {
                 }
                 .pickerStyle(.menu)
 
+                adjustmentSlider(label: "Line Strength", binding: edgeFieldBinding(\.lineStrength), range: 0...1)
+                adjustmentSlider(label: "Field Intensity", binding: edgeFieldBinding(\.fieldIntensity), range: 0.01...1)
                 adjustmentSlider(label: "Levels", binding: contourLevelsBinding, range: 2...24)
                 adjustmentSlider(label: "Line Width", binding: edgeFieldBinding(\.thickness), range: 0.05...1)
                 Toggle("Invert", isOn: edgeInvertBinding)
@@ -782,6 +787,8 @@ struct GPUEffectLayerControls: View {
             if case .edgeField(let common, let geometry, let color, let payload) = params.params,
                params.kind == .voronoi {
                 adjustmentSlider(label: "Cell Size", binding: voronoiCellSizeBinding, range: 2...64)
+                adjustmentSlider(label: "Wall Strength", binding: edgeFieldBinding(\.lineStrength), range: 0...1)
+                adjustmentSlider(label: "Cell Fill", binding: edgeFieldBinding(\.fieldIntensity), range: 0...1)
                 adjustmentSlider(label: "Edge Width", binding: voronoiEdgeWidthBinding, range: 0.05...1)
                 Toggle("Randomize", isOn: voronoiRandomizeBinding)
 
@@ -811,6 +818,10 @@ struct GPUEffectLayerControls: View {
                 }
 
                 if params.kind == .crosshatch {
+                    // Threshold is the luminance cutoff that decides which pixels
+                    // get inked (shader: `bool dark = lum < u.threshold`). Users
+                    // previously couldn't tune this — default was the only value.
+                    adjustmentSlider(label: "Threshold", binding: printSamplingBinding(\.threshold), range: 0...1)
                     adjustmentSlider(label: "Density", binding: hatchDensityBinding, range: 0...1)
                     adjustmentSlider(label: "Layers", binding: hatchLayersBinding, range: 1...4)
                     adjustmentSlider(label: "Angle", binding: hatchAngleBinding, range: 0...90)
@@ -820,6 +831,9 @@ struct GPUEffectLayerControls: View {
                 }
 
                 if params.kind == .threshold {
+                    // Core cutoff — shader decides ink vs paper by `quantized < u.threshold`.
+                    // Not exposed before so users were stuck at the default.
+                    adjustmentSlider(label: "Threshold", binding: printSamplingBinding(\.threshold), range: 0...1)
                     adjustmentSlider(label: "Levels", binding: thresholdLevelsBinding, range: 2...8)
                     Toggle("Dither", isOn: thresholdDitherBinding)
                     Toggle("Invert", isOn: invertBinding)
@@ -1342,6 +1356,22 @@ struct GPUEffectLayerControls: View {
                 guard case .edgeField(let common, let geometry, let color, var payload) = params.params else { return }
                 payload[keyPath: keyPath] = newValue
                 onChange(updated(layer: params, params: .edgeField(common: common, geometry: geometry, color: color, edgeField: payload)))
+            }
+        )
+    }
+
+    private func printSamplingBinding(_ keyPath: WritableKeyPath<PrintSamplingParameters, Double>) -> Binding<Double> {
+        Binding(
+            get: {
+                if case .printSampling(_, _, _, let payload) = params.params {
+                    return payload[keyPath: keyPath]
+                }
+                return 0
+            },
+            set: { newValue in
+                guard case .printSampling(let common, let geometry, let color, var payload) = params.params else { return }
+                payload[keyPath: keyPath] = newValue
+                onChange(updated(layer: params, params: .printSampling(common: common, geometry: geometry, color: color, printSampling: payload)))
             }
         )
     }

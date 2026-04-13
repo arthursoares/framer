@@ -79,7 +79,7 @@ public enum EdgeFieldGPURenderer {
         uniforms.edgeThreshold = Float(clamp01(params.edgeThreshold))
         uniforms.edgeAlgorithm = (params.edgeAlgorithm == .laplacian) ? 1 : 0
         uniforms.invert        = params.invert ? 1 : 0
-        uniforms.edgeColor     = params.edgeColor.map { simdColor($0) } ?? SIMD4(0, 0, 0, 0)
+        uniforms.edgeColor     = params.edgeColor.map { simdColor($0) } ?? SIMD4(1, 1, 1, 1)
 
         let uniformData = uniformBytes(uniforms)
 
@@ -129,7 +129,7 @@ public enum EdgeFieldGPURenderer {
         uniforms.fieldIntensity  = Float(clamp01(params.fieldIntensity))
         uniforms.contourLevels   = UInt32(max(2, min(32, params.contourLevels)))
         uniforms.contourFillMode = (params.contourFillMode == .filledBands) ? 1 : 0
-        uniforms.edgeColor       = params.edgeColor.map { simdColor($0) } ?? SIMD4(0, 0, 0, 0)
+        uniforms.edgeColor       = params.edgeColor.map { simdColor($0) } ?? SIMD4(1, 1, 1, 1)
 
         let outputTexture = try MetalRenderPass.encode(
             pipeline: pipeline,
@@ -179,7 +179,7 @@ public enum EdgeFieldGPURenderer {
         uniforms.frequency    = Float(max(0.1, params.frequency))
         uniforms.lineCount    = Float(params.lineCount)
         uniforms.spacing      = Float(max(1.0, geometry.spacing + geometry.scale * 2.0))
-        uniforms.edgeColor    = params.edgeColor.map { simdColor($0) } ?? SIMD4(0, 0, 0, 0)
+        uniforms.edgeColor    = params.edgeColor.map { simdColor($0) } ?? SIMD4(1, 1, 1, 1)
 
         let outputTexture = try MetalRenderPass.encode(
             pipeline: pipeline,
@@ -219,7 +219,7 @@ public enum EdgeFieldGPURenderer {
         uniforms.edgeWidth    = Float(clamp01(params.edgeWidth))
         uniforms.randomize    = params.randomize ? 1 : 0
         uniforms.fieldWeight  = Float(clamp01(params.fieldIntensity))
-        uniforms.edgeColor    = params.edgeColor.map { simdColor($0) } ?? SIMD4(0, 0, 0, 0)
+        uniforms.edgeColor    = params.edgeColor.map { simdColor($0) } ?? SIMD4(1, 1, 1, 1)
 
         let outputTexture = try MetalRenderPass.encode(
             pipeline: try library.pipeline(for: "edgeFieldFragment"),
@@ -258,7 +258,7 @@ public enum EdgeFieldGPURenderer {
         uniforms.amplitude    = Float(clamp01(params.amplitude))
         uniforms.fieldWeight  = Float(clamp01(params.fieldIntensity))
         uniforms.octaves      = UInt32(max(1, min(6, params.octaves)))
-        uniforms.edgeColor    = params.edgeColor.map { simdColor($0) } ?? SIMD4(0, 0, 0, 0)
+        uniforms.edgeColor    = params.edgeColor.map { simdColor($0) } ?? SIMD4(1, 1, 1, 1)
 
         let outputTexture = try MetalRenderPass.encode(
             pipeline: try library.pipeline(for: "edgeFieldFragment"),
