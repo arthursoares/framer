@@ -44,12 +44,20 @@ public enum TextureFrameProvider {
     public static var searchPaths: [URL] {
         var paths: [URL] = []
 
-        // 1. Bundled textures in app resources
+        // 1. Bundled textures in the macOS / iOS app resources (project.yml
+        //    folder reference). Available when running as Framer.app.
         if let bundledDir = Bundle.main.resourceURL?.appendingPathComponent("textures") {
             paths.append(bundledDir)
         }
 
-        // 2. User overlays
+        // 2. Bundled textures in FramerCore's SPM resource bundle. Available
+        //    when running via swift run / swift test / FramerCLI — contexts
+        //    where Bundle.main is the test runner or CLI binary, not the app.
+        if let coreDir = Bundle.module.resourceURL?.appendingPathComponent("textures") {
+            paths.append(coreDir)
+        }
+
+        // 3. User overlays
         if let appSupport = FileManager.default.urls(
             for: .applicationSupportDirectory, in: .userDomainMask
         ).first {
