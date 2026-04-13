@@ -1,0 +1,121 @@
+// EdgeFieldGPURenderer.swift
+// GPU path for the EdgeField bucket (`.gpuEffect.edgeField.*`). Called by
+// EdgeFieldRenderer.renderPreview for variants whose fragment shader is
+// implemented in Effects/Metal/EdgeField.metal. Throws MetalEffectError on
+// Metal failure so the caller can fall back to the existing CPU path.
+
+import Foundation
+import CoreGraphics
+import Metal
+import simd
+
+public enum EdgeFieldGPURenderer {
+
+    // Mirrors EdgeFieldUniforms in EdgeField.metal — field order, types, and
+    // padding must match exactly.
+    private struct Uniforms {
+        var common   = FramerCommonUniformsLayout()
+        var geometry = FramerGeometryUniformsLayout()
+        var color    = FramerColorUniformsLayout()
+
+        var variant:       UInt32 = 0
+        var intensity:     Float  = 1
+        var lineStrength:  Float  = 0.5
+        var thickness:     Float  = 0.3
+
+        var edgeThreshold: Float  = 0.5
+        var edgeAlgorithm: UInt32 = 0
+        var invert:        UInt32 = 0
+        var _pad0: Float = 0
+
+        var edgeColor: SIMD4<Float> = SIMD4(0, 0, 0, 0)
+    }
+
+    // MARK: - Edge Detection
+
+    public static func renderEdgeDetection(
+        input: CGImage,
+        common: GPUEffectCommonParameters,
+        geometry: GPUEffectGeometryParameters,
+        color: GPUEffectColorParameters,
+        params: EdgeFieldParameters,
+        outputSize: CGSize
+    ) throws -> CGImage {
+        guard let library = MetalEffectLibrary.shared else {
+            throw MetalEffectError.metalUnavailable
+        }
+
+        let width  = max(1, Int(outputSize.width.rounded()))
+        let height = max(1, Int(outputSize.height.rounded()))
+
+        let pipeline = try library.pipeline(for: "edgeFieldFragment")
+        let sampler  = try library.linearClamp()
+        let sourceTexture = try MetalTextureSupport.makeTexture(from: input, device: library.device)
+
+        var uniforms = Uniforms()
+        mapCommon(common, into: &uniforms.common)
+        mapGeometry(geometry, into: &uniforms.geometry)
+        mapColor(color, into: &uniforms.color)
+
+        uniforms.variant       = 0        // edgeDetection
+        uniforms.intensity     = 1.0
+        uniforms.lineStrength  = Float(clamp01(params.lineStrength))
+        uniforms.thickness     = Float(clamp01(params.thickness))
+        uniforms.edgeThreshold = Float(clamp01(params.edgeThreshold))
+        uniforms.edgeAlgorithm = (params.edgeAlgorithm == .laplacian) ? 1 : 0
+        uniforms.invert        = params.invert ? 1 : 0
+        uniforms.edgeColor     = params.edgeColor.map { simdColor($0) } ?? SIMD4(0, 0, 0, 0)
+
+        let uniformData = uniformBytes(uniforms)
+
+        let outputTexture = try MetalRenderPass.encode(
+            pipeline: pipeline,
+            source: sourceTexture,
+            auxTextures: [],
+            sampler: sampler,
+            uniformBytes: uniformData,
+            outputSize: (width, height),
+            library: library
+        )
+        return try MetalTextureSupport.makeCGImage(from: outputTexture)
+    }
+
+    // MARK: - Helpers
+
+    private static func mapCommon(_ p: GPUEffectCommonParameters, into u: inout FramerCommonUniformsLayout) {
+        u.brightness  = Float(p.brightness)
+        u.contrast    = Float(p.contrast)
+        u.saturation  = Float(p.saturation)
+        u.hueRotation = Float(p.hueRotation)
+        u.sharpness   = Float(p.sharpness)
+        u.gamma       = Float(p.gamma)
+    }
+
+    private static func mapGeometry(_ p: GPUEffectGeometryParameters, into u: inout FramerGeometryUniformsLayout) {
+        u.scale       = Float(p.scale)
+        u.spacing     = Float(p.spacing)
+        u.outputWidth = Float(p.outputWidth)
+    }
+
+    private static func mapColor(_ p: GPUEffectColorParameters, into u: inout FramerColorUniformsLayout) {
+        u.mode = {
+            switch p.mode {
+            case .source:               return 0
+            case .foregroundBackground: return 1
+            case .monochrome:           return 2
+            case .palette:              return 3
+            }
+        }()
+        u.backgroundIntensity = Float(p.backgroundIntensity)
+    }
+
+    @inline(__always)
+    private static func simdColor(_ color: CodableColor) -> SIMD4<Float> {
+        SIMD4(Float(color.red), Float(color.green), Float(color.blue), 1)
+    }
+
+    @inline(__always)
+    private static func clamp01(_ value: Double) -> Double {
+        max(0, min(1, value))
+    }
+}
