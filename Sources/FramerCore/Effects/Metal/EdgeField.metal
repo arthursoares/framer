@@ -40,9 +40,9 @@ struct EdgeFieldUniforms {
     float cellSize;            // voronoi cell pitch (pixels)
 
     float edgeWidth;           // voronoi edge ring width (0..1)
-    uint  randomize;           // voronoi per-row/col jitter (0 / 1)
-    float fieldWeight;         // voronoi "field" multiplier (== fieldIntensity)
-    float _pad0;
+    uint  randomize;           // voronoi per-cell seed jitter (0 / 1)
+    float fieldWeight;         // voronoi/noiseField "field" multiplier (== fieldIntensity)
+    uint  octaves;             // noiseField octaves (1..6)
 
     float4 edgeColor;          // colour for ink pixels (rgba, a unused)
 };
@@ -201,11 +201,12 @@ static float4 waveLinesVariant(
 }
 
 // =============================================================================
-// VORONOI — grid-based cell approximation (not true Voronoi, matches the CPU
-// renderer's simplification). Each pixel snaps to its enclosing grid cell's
-// origin; distance from the pixel's offset within the cell determines the
-// output value: a thin ring-line at dist=0.5 from centre plus a radial
-// falloff modulated by `fieldIntensity`.
+// VORONOI — 9-neighbourhood cellular pattern. For each fragment, searches the
+// 3x3 grid of candidate cell-centre "seeds" (optionally jittered per-cell)
+// and tracks the nearest and second-nearest seed distances. Edges where the
+// two are close (cell boundaries) render bright; interiors render darker
+// with a radial falloff from the nearest seed. Produces the classic Voronoi
+// mosaic look — distinct polygonal cells with visible walls.
 // =============================================================================
 
 static float4 voronoiVariant(
@@ -220,17 +221,48 @@ static float4 voronoiVariant(
     float2 selfUV     = (float2(pixel) + 0.5) / resolution;
     float3 srcOrig    = source.sample(texSampler, selfUV).rgb;
 
-    int   cellPitch = max(2, int(u.cellSize));
-    int   jitter    = 0;
-    if (u.randomize == 1u) {
-        jitter = int(round(sin(float((pixel.x + pixel.y) * 17)) * float(cellPitch) * 0.35));
+    float cellPitch = max(2.0, u.cellSize);
+    float2 p       = float2(pixel);
+    float2 cellId  = floor(p / cellPitch);
+
+    // Search the 3x3 neighbourhood of candidate seeds. Each cell's seed is at
+    // (cellId + 0.5 + jitter) * cellPitch. When `randomize` is on we add
+    // deterministic per-cell offsets to break the grid-aligned look.
+    float nearest       = 1.0e10;
+    float secondNearest = 1.0e10;
+    for (int j = -1; j <= 1; j++) {
+        for (int i = -1; i <= 1; i++) {
+            float2 neighborId = cellId + float2(float(i), float(j));
+            float2 seedOffset = float2(0.5);
+            if (u.randomize == 1u) {
+                // Deterministic-per-cell jitter within 0..1 so seeds stay inside
+                // their own cell (avoids holes when a seed escapes outside).
+                float hx = fract(sin(dot(neighborId, float2(127.1, 311.7))) * 43758.5453);
+                float hy = fract(sin(dot(neighborId, float2(269.5,  183.3))) * 43758.5453);
+                seedOffset = float2(0.1 + hx * 0.8, 0.1 + hy * 0.8);
+            }
+            float2 seedPos = (neighborId + seedOffset) * cellPitch;
+            float  d       = length(p - seedPos);
+            if (d < nearest) {
+                secondNearest = nearest;
+                nearest       = d;
+            } else if (d < secondNearest) {
+                secondNearest = d;
+            }
+        }
     }
-    int cellX = ((pixel.x + jitter) / cellPitch) * cellPitch;
-    int cellY = ((pixel.y - jitter) / cellPitch) * cellPitch;
-    float2 offset   = float2(float(pixel.x - cellX), float(pixel.y - cellY));
-    float  dist     = length(offset) / float(cellPitch);
-    float  edgeMask = max(0.0, 1.0 - fabs(dist - 0.5) / max(0.05, u.edgeWidth));
-    float  value    = saturate(edgeMask * u.lineStrength + (1.0 - dist) * u.fieldWeight * 0.6);
+
+    // Cell-edge detection: where nearest and second-nearest are close, we're
+    // on a boundary between two cells. `edgeWidth` tunes the wall thickness
+    // relative to cell pitch.
+    float edgeGap   = (secondNearest - nearest) / cellPitch;
+    float edgeWidth = max(0.01, u.edgeWidth);
+    float wall      = 1.0 - smoothstep(0.0, edgeWidth, edgeGap);
+
+    // Interior falloff: bright at the seed, fading to the wall.
+    float interior = 1.0 - saturate(nearest / (cellPitch * 0.6));
+
+    float value = saturate(wall * u.lineStrength + interior * u.fieldWeight * 0.6);
     if (u.invert == 1u) { value = 1.0 - value; }
 
     float bg = u.color.backgroundIntensity;
@@ -244,9 +276,10 @@ static float4 voronoiVariant(
 }
 
 // =============================================================================
-// NOISE FIELD — procedural IGN noise, optionally summed across octaves. Uses
-// ShaderCommon.h::ign as the base generator (cheap hash-based blue-noise
-// approximation). Matches CPU's 1D-axis projection + octave-scale summation.
+// NOISE FIELD — multi-octave procedural noise. Sum N octaves of IGN (see
+// ShaderCommon.h) at doubling frequencies with halving weights to produce
+// FBM-style output. `octaves` (1..6) drives the detail depth; `amplitude`
+// tunes the base spatial frequency; `fieldWeight` biases the output level.
 // =============================================================================
 
 static float4 noiseFieldVariant(
@@ -261,12 +294,16 @@ static float4 noiseFieldVariant(
     float2 selfUV     = (float2(pixel) + 0.5) / resolution;
     float3 srcOrig    = source.sample(texSampler, selfUV).rgb;
 
+    // `amplitude` (0..1 from the UI) → base spatial period in pixels. Smaller
+    // amplitude = tighter noise grain. `120.0` keeps the default (amp=0.5) at
+    // a ~60-pixel base period, which reads as recognisable "big splotches"
+    // at common preview sizes.
     float baseScale = max(1.0, u.amplitude * 120.0);
-    int   octaves   = 1;       // cheap cap — multi-octave could be added via a uniform
+    int   octaves   = clamp(int(u.octaves), 1, 6);
     float accumulated = 0.0;
     float weightSum   = 0.0;
     float2 p = float2(pixel) / baseScale;
-    for (int o = 0; o < 4; o++) {
+    for (int o = 0; o < 6; o++) {
         if (o >= octaves) { break; }
         float oct    = exp2(float(o));
         float weight = 1.0 / oct;

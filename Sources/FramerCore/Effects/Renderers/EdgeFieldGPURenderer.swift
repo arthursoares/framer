@@ -41,7 +41,7 @@ public enum EdgeFieldGPURenderer {
         var edgeWidth:   Float  = 0.25
         var randomize:   UInt32 = 0
         var fieldWeight: Float  = 0.5
-        var _pad0: Float = 0
+        var octaves:     UInt32 = 1
 
         var edgeColor: SIMD4<Float> = SIMD4(0, 0, 0, 0)
     }
@@ -257,6 +257,7 @@ public enum EdgeFieldGPURenderer {
         uniforms.invert       = params.invert ? 1 : 0
         uniforms.amplitude    = Float(clamp01(params.amplitude))
         uniforms.fieldWeight  = Float(clamp01(params.fieldIntensity))
+        uniforms.octaves      = UInt32(max(1, min(6, params.octaves)))
         uniforms.edgeColor    = params.edgeColor.map { simdColor($0) } ?? SIMD4(0, 0, 0, 0)
 
         let outputTexture = try MetalRenderPass.encode(
