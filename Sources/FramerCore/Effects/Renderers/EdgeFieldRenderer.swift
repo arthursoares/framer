@@ -12,6 +12,18 @@ public enum EdgeFieldRenderer {
             return input
         }
 
+        // GPU fast path — see Effects/Metal/EdgeField.metal. Falls back to
+        // the CPU pixel loop below on any MetalEffectError.
+        if effect == .edgeDetection {
+            do {
+                return try EdgeFieldGPURenderer.renderEdgeDetection(
+                    input: input, common: common, geometry: geometry,
+                    color: color, params: payload, outputSize: outputSize)
+            } catch is MetalEffectError {
+                // fall through to CPU
+            }
+        }
+
         let width = max(1, Int(outputSize.width.rounded()))
         let height = max(1, Int(outputSize.height.rounded()))
         let bytesPerRow = width * 4
