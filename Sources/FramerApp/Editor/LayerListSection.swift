@@ -166,23 +166,17 @@ struct LayerListSection: View {
             } label: {
                 Label("Shader", systemImage: "sparkles.rectangle.stack")
             }
-            Button {
-                // Default to `.dots` — the overlap-filter on the bucket picker
-                // removes .ascii / .halftone / .pixelSort from userFacingCases
-                // (they duplicate .shader layer styles), so using .ascii here
-                // produces a "selection has no associated tag" SwiftUI warning.
-                // .dots is both user-facing and GPU-accelerated.
-                addLayer(.gpuEffect(GPUEffectLayerParams(
-                    kind: .dots,
-                    params: .textCell(
-                        common: .init(),
-                        geometry: .init(scale: 1.0, spacing: 2.0, outputWidth: 240),
-                        color: .init(mode: .foregroundBackground, backgroundIntensity: 0.2),
-                        textCell: .init(characterSet: .classicASCII, variant: .dots)
-                    )
-                )))
-            } label: {
-                Label("GPU Effect", systemImage: "sparkles.rectangle.stack.fill")
+            Divider()
+            // One menu entry per user-facing GPU-effect variant. Each
+            // constructs a .gpuEffect layer pre-scoped to that specific kind
+            // with sensible default parameters — so "+ Dots" feels like its
+            // own layer type even though the underlying data model is still
+            // the shared .gpuEffect case. Avoids the confusion of a single
+            // "+ GPU Effect" umbrella that then asks users to pick a variant.
+            ForEach(GPUEffectKind.userFacingCases, id: \.self) { kind in
+                Button { addLayer(kind.makeDefaultLayer()) } label: {
+                    Label(kind.label, systemImage: kind.menuIcon)
+                }
             }
         } label: {
             Label("Add Layer", systemImage: "plus.circle")
@@ -461,12 +455,18 @@ struct GPUEffectLayerControls: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 8) {
-            Picker("Effect", selection: kindBinding) {
-                ForEach(GPUEffectKind.userFacingCases, id: \.self) { kind in
-                    Text(kind.label).tag(kind)
-                }
+            // Per-variant layers (Option B of the bucket-UI refactor): each
+            // GPU-effect variant is a first-class entry in the layer-add
+            // menu, so the kind is fixed at creation. Show it here as a
+            // read-only label so users know which layer they're editing
+            // without offering mid-flight variant switching (which would
+            // require re-picking every parameter for the new kind).
+            HStack {
+                Label(params.kind.label, systemImage: params.kind.menuIcon)
+                    .font(AppFont.controlLabel)
+                    .foregroundStyle(Color.text1)
+                Spacer()
             }
-            .pickerStyle(.menu)
 
             HStack {
                 Text("Scale")
