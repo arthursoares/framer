@@ -160,6 +160,128 @@ public enum TextCellRenderer {
         return try resize(workImage, to: image.width, height: image.height)
     }
 
+    // MARK: - Dots entry point (.gpuEffect.textCell bucket)
+
+    /// Render the Dots variant on the GPU via the bucket-system parameter
+    /// surface. Shares the same `textCellFragment` pipeline as ASCII; the
+    /// variant=0 branch in TextCell.metal::dotsVariant handles the geometry.
+    /// Throws `MetalEffectError` on Metal failure so the caller's
+    /// `gpuOrCPU` helper can fall back to the CPU paintEllipse / paintRect /
+    /// paintDiamond path.
+    public static func renderDotsFromBucket(
+        input: CGImage,
+        common: GPUEffectCommonParameters,
+        geometry: GPUEffectGeometryParameters,
+        color: GPUEffectColorParameters,
+        params: TextCellParameters,
+        outputSize: CGSize
+    ) throws -> CGImage {
+        guard let library = MetalEffectLibrary.shared else {
+            throw MetalEffectError.metalUnavailable
+        }
+
+        let width  = max(1, Int(outputSize.width.rounded()))
+        let height = max(1, Int(outputSize.height.rounded()))
+
+        let pipeline = try library.pipeline(for: "textCellFragment")
+        let sampler  = try library.linearClamp()
+        let sourceTexture = try MetalTextureSupport.makeTexture(from: input, device: library.device)
+
+        let uniforms = makeDotsUniforms(
+            common: common,
+            geometry: geometry,
+            color: color,
+            params: params
+        )
+        let uniformData = uniformBytes(uniforms)
+
+        // The ASCII atlases are bound at texture slots 1 and 2 for variant=2;
+        // for variant=0 (dots) the shader ignores them but the bindings must
+        // still be valid textures. Reuse the source texture as placeholders.
+        let outputTexture = try MetalRenderPass.encode(
+            pipeline: pipeline,
+            source: sourceTexture,
+            auxTextures: [sourceTexture, sourceTexture],
+            sampler: sampler,
+            uniformBytes: uniformData,
+            outputSize: (width, height),
+            library: library
+        )
+        return try MetalTextureSupport.makeCGImage(from: outputTexture)
+    }
+
+    private static func makeDotsUniforms(
+        common: GPUEffectCommonParameters,
+        geometry: GPUEffectGeometryParameters,
+        color: GPUEffectColorParameters,
+        params: TextCellParameters
+    ) -> TextCellUniforms {
+        var u = TextCellUniforms()
+
+        // Common / geometry / color blocks — map bucket params into the
+        // shared uniform layouts MSL's TextCellUniforms embeds.
+        u.common.brightness  = Float(common.brightness)
+        u.common.contrast    = Float(common.contrast)
+        u.common.saturation  = Float(common.saturation)
+        u.common.hueRotation = Float(common.hueRotation)
+        u.common.sharpness   = Float(common.sharpness)
+        u.common.gamma       = Float(common.gamma)
+
+        u.geometry.scale       = Float(geometry.scale)
+        u.geometry.spacing     = Float(max(0.5, geometry.spacing))
+        u.geometry.outputWidth = Float(geometry.outputWidth)
+
+        u.color.mode = {
+            switch color.mode {
+            case .source:               return 0
+            case .foregroundBackground: return 1
+            case .monochrome:           return 2
+            case .palette:              return 3
+            }
+        }()
+        u.color.backgroundIntensity = Float(color.backgroundIntensity)
+
+        // TextCellParameters carries its own fg/bg overrides which take
+        // precedence over the shared color block when present. This matches
+        // the convention used elsewhere in the bucket renderers.
+        if let fg = params.foreground {
+            u.color.foregroundRGBA = simdColor(fg)
+        }
+        if let bg = params.background {
+            u.color.backgroundRGBA = simdColor(bg)
+        }
+
+        // Variant-specific.
+        u.variant = 0                                              // 0 = dots
+        u.dotShape = UInt32(dotShapeRawValue(params.dotShape))
+        u.gridType = UInt32(gridTypeRawValue(params.gridType))
+        u.blockStyle = 0                                            // unused for dots
+
+        u.sizeMultiplier     = 1.0                                 // baseline; the shader multiplies by 0.4
+        u.intensity          = Float(clamp01(params.intensity))
+        u.invert             = params.invert ? 1 : 0
+        u.borderWidth        = Float(params.borderWidth)
+        u.threshold          = Float(clamp01(params.threshold))
+        u.glow               = Float(clamp01(params.glow))
+        u.backgroundOpacity  = Float(clamp01(params.backgroundOpacity))
+        return u
+    }
+
+    private static func dotShapeRawValue(_ shape: DotShape) -> Int {
+        switch shape {
+        case .circle:  return 0
+        case .square:  return 1
+        case .diamond: return 2
+        }
+    }
+
+    private static func gridTypeRawValue(_ grid: DotGridType) -> Int {
+        switch grid {
+        case .square: return 0
+        case .hex:    return 1
+        }
+    }
+
     // MARK: - Uniform packing
 
     private static func makeUniforms(
