@@ -104,8 +104,19 @@ final class GPUEffectBucketDispatchTests: XCTestCase {
             return .glitch(common: common, geometry: geometry, color: color,
                            glitch: GlitchParameters(variant: .pixelSort))
         case .vhs:
-            return .glitch(common: common, geometry: geometry, color: color,
-                           glitch: GlitchParameters(variant: .vhs))
+            // Defaults for every sub-factor (distortion/colorBleed/scanlines/
+            // trackingError) are 0 on GlitchParameters, so `variant: .vhs`
+            // alone produces a pass-through — `amount` is a multiplier on
+            // each factor. Seed non-zero values so the shader actually
+            // applies visible modulation (matches what makeDefaultLayer()
+            // ships for user-facing layer creation).
+            var p = GlitchParameters(variant: .vhs)
+            p.amount = 0.5
+            p.distortion = 0.3
+            p.colorBleed = 0.5
+            p.scanlines = 0.5
+            p.trackingError = 0.3
+            return .glitch(common: common, geometry: geometry, color: color, glitch: p)
         }
     }
 

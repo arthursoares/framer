@@ -12,6 +12,21 @@ public enum GlitchRenderer {
             return input
         }
 
+        // GPU fast path for VHS — see Effects/Metal/Glitch.metal::vhsVariant.
+        // Falls back to the CPU pixel loop below on MetalEffectError. PixelSort
+        // isn't dispatched here: it routes through `.shader` layer type via
+        // ShaderStyle.pixelSort + ShaderRenderer.apply, which already has a
+        // GPU path (PixelSortRenderer + PixelSort.metal).
+        if effect == .vhs {
+            do {
+                return try GlitchGPURenderer.renderVHS(
+                    input: input, common: common, geometry: geometry,
+                    color: color, params: payload, outputSize: outputSize)
+            } catch is MetalEffectError {
+                // fall through to CPU
+            }
+        }
+
         let width = max(1, Int(outputSize.width.rounded()))
         let height = max(1, Int(outputSize.height.rounded()))
         let bytesPerRow = width * 4
