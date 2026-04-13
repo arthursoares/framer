@@ -124,7 +124,40 @@ public enum DitherRenderer {
     ///   - previewBaseDimension: When set (export path), the max dimension that the preview
     ///     downscaled to. The effective pixel scale is adjusted so the dither cell count
     ///     matches what the preview produced, ensuring consistent visual output.
-    public static func apply(to image: CGImage, params: DitherLayerParams, previewBaseDimension: Int? = nil, sourceImage: CGImage? = nil) throws -> CGImage {
+    /// Public entry point. Tries the GPU path first
+    /// (`DitherGPURenderer.apply`); falls back to `applyCPU` on
+    /// `MetalEffectError` (Metal unavailable, Riemersma which has no GPU
+    /// implementation, or pipeline build failure).
+    ///
+    /// Same signature as the legacy CPU entry — callers (BorderRenderer,
+    /// tests) need no changes.
+    public static func apply(
+        to image: CGImage,
+        params: DitherLayerParams,
+        previewBaseDimension: Int? = nil,
+        sourceImage: CGImage? = nil
+    ) throws -> CGImage {
+        do {
+            return try DitherGPURenderer.apply(
+                to: image,
+                params: params,
+                previewBaseDimension: previewBaseDimension,
+                sourceImage: sourceImage
+            )
+        } catch is MetalEffectError {
+            return try applyCPU(
+                to: image,
+                params: params,
+                previewBaseDimension: previewBaseDimension,
+                sourceImage: sourceImage
+            )
+        }
+    }
+
+    /// CPU implementation. Reachable from tests and from the GPU fallback in
+    /// `apply(...)`. The body is unchanged from the original CPU dither
+    /// renderer; only the entry-point name changed.
+    public static func applyCPU(to image: CGImage, params: DitherLayerParams, previewBaseDimension: Int? = nil, sourceImage: CGImage? = nil) throws -> CGImage {
         let width = image.width
         let height = image.height
         guard width > 0, height > 0 else {
