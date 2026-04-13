@@ -203,16 +203,72 @@ static float4 dotsVariant(
 //   - outlined: fill cell with border color, inset by borderWidth*cellSize, fill with sampled
 // =============================================================================
 
+// =============================================================================
+// BLOCKIFY — tile the image with solid or outlined rectangles, one per cell.
+// Mirrors TextCellBucketRenderer's CPU fallback:
+//   - solid:    fill cell with cell-average colour
+//   - outlined: fill cell with border colour, inset rectangle with cell colour
+//     (inset proportional to borderWidth; clamped to min 1 px)
+// blockStyle: 0 = solid, 1 = outlined.
+// =============================================================================
+
 static float4 blockifyVariant(
     VertexOut                   in,
     texture2d<float>            source,
     sampler                     texSampler,
     constant TextCellUniforms&  u
 ) {
-    // TODO: implement after Dots is validated. The bucket structure already works —
-    // this is purely shape-drawing code. Reuse cellCenter math from dotsVariant.
-    (void)in; (void)source; (void)texSampler; (void)u;
-    return float4(0, 0, 0, 1);
+    float2 resolution = float2(source.get_width(), source.get_height());
+    float2 invRes     = 1.0 / resolution;
+    float2 pixel      = in.uv * resolution;
+
+    // Same cell size as dots — `spacing` drives the grid spacing.
+    float baseSpacing = max(2.0, 8.0 * u.geometry.spacing);
+
+    // Cell coordinates in pixel space.
+    float2 cellIdx      = floor(pixel / baseSpacing);
+    float2 cellOriginPx = cellIdx * baseSpacing;
+    float2 localPx      = pixel - cellOriginPx;
+    float2 cellCenterPx = cellOriginPx + float2(baseSpacing * 0.5);
+
+    // Average the cell's source colour by sampling at the centre with the
+    // bilinear sampler — for a cell of ~8 px this blurs the cell contents
+    // close to their true mean without the cost of an exhaustive loop.
+    float3 cellColor = source.sample(texSampler, cellCenterPx * invRes).rgb;
+
+    // Foreground / background colour selection mirrors the ASCII variant's
+    // mode handling for consistency across the bucket: 0 = flat fg/bg from
+    // uniforms, 1 = use per-cell sampled colour, 2 = gradient by luminance.
+    // TextCellParameters.foreground/background already resolved into
+    // u.color.foregroundRGBA / backgroundRGBA Swift-side.
+    float3 fgColor;
+    if (u.color.mode == 1u) {
+        fgColor = cellColor;
+    } else {
+        fgColor = u.color.foregroundRGBA.rgb;
+    }
+    float3 bgColor = u.color.backgroundRGBA.rgb;
+
+    // Solid: cell filled with fg. Outlined: border rim in bg, inset rect in fg.
+    float3 drawn;
+    if (u.blockStyle == 1u) {
+        // Inset proportional to borderWidth. `borderWidth` is 0..1-ish, scales
+        // similarly to the CPU path (`rect.width * borderWidth * 0.4`), with a
+        // 1-pixel floor so hairline borders always render visibly.
+        float inset = max(1.0, baseSpacing * u.borderWidth * 0.4);
+        bool  inInset = localPx.x >= inset
+                     && localPx.x <= (baseSpacing - inset)
+                     && localPx.y >= inset
+                     && localPx.y <= (baseSpacing - inset);
+        drawn = inInset ? fgColor : bgColor;
+    } else {
+        drawn = fgColor;
+    }
+
+    // Final mix with original by intensity — matches dots and ascii.
+    float3 srcOrig = source.sample(texSampler, in.uv).rgb;
+    float3 final   = mix(srcOrig, drawn, saturate(u.intensity));
+    return float4(final, 1.0);
 }
 
 // =============================================================================

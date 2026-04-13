@@ -210,6 +210,60 @@ public enum TextCellRenderer {
         return try MetalTextureSupport.makeCGImage(from: outputTexture)
     }
 
+    // MARK: - Blockify entry point (.gpuEffect.textCell bucket)
+
+    /// Render the Blockify variant on the GPU via the bucket-system parameter
+    /// surface. Shares the `textCellFragment` pipeline with dots + ASCII; the
+    /// variant=1 branch in TextCell.metal::blockifyVariant handles the
+    /// rectangle drawing. Throws MetalEffectError on Metal failure.
+    public static func renderBlockifyFromBucket(
+        input: CGImage,
+        common: GPUEffectCommonParameters,
+        geometry: GPUEffectGeometryParameters,
+        color: GPUEffectColorParameters,
+        params: TextCellParameters,
+        outputSize: CGSize
+    ) throws -> CGImage {
+        guard let library = MetalEffectLibrary.shared else {
+            throw MetalEffectError.metalUnavailable
+        }
+
+        let width  = max(1, Int(outputSize.width.rounded()))
+        let height = max(1, Int(outputSize.height.rounded()))
+
+        let pipeline = try library.pipeline(for: "textCellFragment")
+        let sampler  = try library.linearClamp()
+        let sourceTexture = try MetalTextureSupport.makeTexture(from: input, device: library.device)
+
+        var uniforms = makeDotsUniforms(
+            common: common,
+            geometry: geometry,
+            color: color,
+            params: params
+        )
+        uniforms.variant = 1                                        // 1 = blockify
+        uniforms.blockStyle = UInt32(blockStyleRawValue(params.blockStyle))
+        let uniformData = uniformBytes(uniforms)
+
+        let outputTexture = try MetalRenderPass.encode(
+            pipeline: pipeline,
+            source: sourceTexture,
+            auxTextures: [sourceTexture, sourceTexture],           // dummy atlas binds
+            sampler: sampler,
+            uniformBytes: uniformData,
+            outputSize: (width, height),
+            library: library
+        )
+        return try MetalTextureSupport.makeCGImage(from: outputTexture)
+    }
+
+    private static func blockStyleRawValue(_ style: BlockStyle) -> Int {
+        switch style {
+        case .solid:    return 0
+        case .outlined: return 1
+        }
+    }
+
     private static func makeDotsUniforms(
         common: GPUEffectCommonParameters,
         geometry: GPUEffectGeometryParameters,
