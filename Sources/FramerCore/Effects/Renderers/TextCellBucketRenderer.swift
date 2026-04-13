@@ -18,6 +18,24 @@ public enum TextCellBucketRenderer {
             return input
         }
 
+        // GPU fast path for variants whose Metal shader is fully implemented
+        // in TextCell.metal. Falls back to the CPU pixel loop below if Metal
+        // is unavailable (CI, no default device) or the pipeline fails.
+        if effect == .dots {
+            do {
+                return try TextCellRenderer.renderDotsFromBucket(
+                    input: input,
+                    common: common,
+                    geometry: geometry,
+                    color: color,
+                    params: textCell,
+                    outputSize: outputSize
+                )
+            } catch is MetalEffectError {
+                // fall through to CPU
+            }
+        }
+
         let width = max(1, Int(outputSize.width.rounded()))
         let height = max(1, Int(outputSize.height.rounded()))
         guard let sourcePixels = EffectBitmapSupport.rasterize(input, width: width, height: height) else {
