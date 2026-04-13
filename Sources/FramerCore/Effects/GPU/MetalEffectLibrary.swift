@@ -55,27 +55,43 @@ public final class MetalEffectLibrary: @unchecked Sendable {
         guard let dev = MTLCreateSystemDefaultDevice() else { return nil }
         guard let queue = dev.makeCommandQueue() else { return nil }
 
-        // SwiftPM 5.10's `.process(...)` rule for .metal files does NOT compile
-        // them into a metallib — it just copies them into Bundle.module as
-        // opaque text resources. (Despite Apple's docs implying otherwise on
-        // some toolchain combos, on the Swift 6.3 toolchain we observe loose
-        // .metal files in the bundle and no default.metallib generated.)
+        // SPM + .metal compilation diverges across build contexts:
         //
-        // Workaround: read each .metal file as text at startup, inline the
-        // shared header, concatenate, and compile via makeLibrary(source:).
-        // Single library shared across all effect pipelines.
+        //   - Under Xcode (Framer.app build): SwiftPM's `.process(...)` rule
+        //     for .metal files DOES invoke the Metal compiler toolchain via
+        //     Xcode's build system, producing a `default.metallib` inside
+        //     Bundle.module. The raw .metal source files are NOT copied.
+        //
+        //   - Under `swift build` / `swift test` / FramerCLI (no Xcode
+        //     toolchain driver): SwiftPM 5.10 treats the .metal files as
+        //     opaque resources and just copies them verbatim. No metallib
+        //     gets generated.
+        //
+        // So we try the precompiled library first; if it's missing, fall
+        // back to reading the .metal text resources and compiling at runtime.
         let bundle = Bundle.module
+
+        if let lib = try? dev.makeDefaultLibrary(bundle: bundle) {
+            self.device = dev
+            self.commandQueue = queue
+            self.library = lib
+            return
+        }
 
         guard
             let headerURL = bundle.url(forResource: "ShaderCommon", withExtension: "h"),
             let headerSource = try? String(contentsOf: headerURL, encoding: .utf8)
         else {
+            print("MetalEffectLibrary: no default.metallib and no source fallback available in Bundle.module")
             return nil
         }
 
         let metalURLs = (bundle.urls(forResourcesWithExtension: "metal", subdirectory: nil) ?? [])
             .sorted { $0.lastPathComponent < $1.lastPathComponent }
-        guard !metalURLs.isEmpty else { return nil }
+        guard !metalURLs.isEmpty else {
+            print("MetalEffectLibrary: ShaderCommon.h found but no .metal text resources in Bundle.module")
+            return nil
+        }
 
         var combined = headerSource + "\n"
         for url in metalURLs {
