@@ -43,7 +43,11 @@ public enum HalftoneRenderer {
         uniforms.heightPx = Float(image.height)
 
         let pipeline = try library.pipeline(for: "halftoneFragment")
-        let sampler = try library.linearClamp()
+        // Nearest sampler — CPU does exact integer-pixel byte reads
+        // (Sources/FramerCore/Processing/ShaderRenderer.swift:466-468). Bilinear
+        // would smear the source channels into adjacent pixels and shift the
+        // halftone phase by half a texel, producing a systematic delta.
+        let sampler = try library.nearestClamp()
         let sourceTexture = try MetalTextureSupport.makeTexture(from: image, device: library.device)
 
         let bytes = withUnsafeBytes(of: uniforms) { Data($0) }

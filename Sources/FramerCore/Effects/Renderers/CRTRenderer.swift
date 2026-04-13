@@ -47,7 +47,10 @@ public enum CRTRenderer {
         uniforms.heightPx = Float(image.height)
 
         let pipeline = try library.pipeline(for: "crtFragment")
-        let sampler = try library.linearClamp()
+        // Nearest sampler — CPU does exact integer-pixel byte reads. Bilinear
+        // filtering would blur the source by ~half a texel and bias every
+        // sample toward neighbour pixels, producing a systematic delta vs CPU.
+        let sampler = try library.nearestClamp()
         let sourceTexture = try MetalTextureSupport.makeTexture(from: image, device: library.device)
 
         let bytes = withUnsafeBytes(of: uniforms) { Data($0) }

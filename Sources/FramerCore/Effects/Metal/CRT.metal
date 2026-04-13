@@ -48,8 +48,17 @@ fragment float4 crtFragment(
     constant CRTUniforms&      uniforms     [[buffer(0)]]
 ) {
     float curvature = max(1.0, uniforms.curvature);
-    float ny = in.uv.y;
-    float nx = in.uv.x;
+
+    // Pin the math to the integer pixel grid so it matches CPU's
+    // `nx = x / width`, `ny = y / height` exactly. Without this, fragment
+    // centers (uv at (x+0.5)/width) introduce a half-texel phase shift that
+    // accumulates through the barrel distortion + scanline phase + vignette
+    // fractions and diverges from CPU output by ~12-20/255 mean delta.
+    float2 resolution = float2(max(uniforms.widthPx, 1.0), max(uniforms.heightPx, 1.0));
+    int2   pixel      = int2(floor(in.uv * resolution));
+    pixel = clamp(pixel, int2(0), int2(resolution) - 1);
+    float ny = float(pixel.y) / resolution.y;
+    float nx = float(pixel.x) / resolution.x;
 
     // ---- Step 1: barrel distortion -----------------------------------------
     float crtX = nx * 2.0 - 1.0;
@@ -61,17 +70,27 @@ fragment float4 crtFragment(
     float sampleX = crtX * 0.5 + 0.5;
     float sampleY = crtY * 0.5 + 0.5;
 
+    // The fragment's own pixel — used for srcOrig and as the integer-aligned
+    // sampling anchor when the distorted sample lands inside [0,1]².
+    float2 selfUV = (float2(pixel) + 0.5) / resolution;
+    float3 srcOrig = source.sample(texSampler, selfUV).rgb;
+
     // Out of bounds → black. The CPU keeps the original alpha; we emit 1.0 to
     // stay consistent with every other GPU effect's opaque output (matters
     // because the GPU output is later composited via CIContext readback).
-    float3 srcOrig = source.sample(texSampler, in.uv).rgb;
     if (sampleX <= 0.0 || sampleX >= 1.0 || sampleY <= 0.0 || sampleY >= 1.0) {
         float3 black = float3(0.0);
         float3 finalBlack = mix(srcOrig, black, saturate(uniforms.intensity));
         return float4(finalBlack, 1.0);
     }
 
-    float3 c = source.sample(texSampler, float2(sampleX, sampleY)).rgb;
+    // Distorted source sample: snap to integer pixel grid (matches CPU's
+    // `Int(nx * width).rounded(.down)` index computation) and sample at the
+    // pixel centre.
+    int2  distortedPx = int2(floor(float2(sampleX, sampleY) * resolution));
+    distortedPx = clamp(distortedPx, int2(0), int2(resolution) - 1);
+    float2 distortedUV = (float2(distortedPx) + 0.5) / resolution;
+    float3 c = source.sample(texSampler, distortedUV).rgb;
 
     // ---- Step 2: per-channel scanlines -------------------------------------
     float scanPhase = ny * uniforms.lineScale * 2.0;
