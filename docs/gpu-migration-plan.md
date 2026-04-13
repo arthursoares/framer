@@ -2,6 +2,50 @@
 
 Status as of 2026-04-13. Session handoff document for resuming on Claude Cloud.
 
+## Status snapshot (post Phase 1 + Phase 2 land)
+
+| Effect       | CPU path                              | GPU renderer                                    | Wired |
+|--------------|---------------------------------------|-------------------------------------------------|-------|
+| ASCII        | `ShaderASCIIRenderer.apply`           | `TextCellRenderer.renderASCII`                  | ✅ + fallback |
+| Crimewave    | `ShaderRenderer.applyCrimewave`       | `ColorGradeRenderer.renderCrimewave` (variant 0)| ✅ + fallback |
+| Narc         | `ShaderRenderer.applyNarc`            | `ColorGradeRenderer.renderNarc` (variant 1)     | ✅ + fallback |
+| Shiba        | `ShaderRenderer.applyShiba`           | `ColorGradeRenderer.renderShiba` (variant 2)    | ✅ + fallback |
+| DistantPast  | `ShaderRenderer.applyDistantPast`     | `DistantPastRenderer.render`                    | ✅ + fallback |
+| CRT          | `ShaderRenderer.applyCRT`             | `CRTRenderer.render`                            | ✅ + fallback |
+| Halftone     | `ShaderRenderer.applyHalftone`        | `HalftoneRenderer.render`                       | ✅ + fallback |
+| Kuwahara     | `ShaderRenderer.applyKuwahara`        | `KuwaharaRenderer.render`                       | ✅ + fallback |
+| **PixelSort**| `ShaderPixelSortRenderer.apply`       | **deferred** — see PixelSort section below      | ❌ |
+
+`ShaderRenderer.gpuOrCPU(image:gpu:cpu:)` runs each GPU path with a CPU
+fallback; only `MetalEffectError` triggers fallback so genuine bugs surface.
+
+`Tests/FramerCoreTests/EffectGPUParityTests.swift` ships per-effect CPU vs GPU
+delta checks. They self-skip when Metal is unavailable so they no-op on the
+Linux container that authored them.
+
+## Why PixelSort isn't a fragment shader yet
+
+`ShaderPixelSortRenderer` runs a serial span-sort: walk a row/column, find a
+contiguous run of pixels above `threshold`, sort the run by luminance, write
+back, repeat. Two properties make a naive port wrong:
+
+1. **The output of one span informs the next** through the `outputPixels`
+   buffer (subsequent spans read previously sorted neighbours). A
+   fragment-per-pixel shader has no serial-dependency channel.
+2. **Span length depends on the threshold and image content.** Spans up to
+   `span` pixels long start at any pixel where luminance crosses threshold.
+   Each fragment needs to know which span it belongs to *and* its rank within
+   the sort.
+
+`grainrad/notes/pixel-sort.md` describes the trick: each fragment scans up to
+`span` pixels in its row/column to (a) locate its enclosing span boundaries
+and (b) compute its rank by counting how many in-span pixels have luminance ≤
+its own. That's O(span²) per pixel but capped (≤ 24 default), and
+fully parallel. Worth a separate task with its own design pass — not a
+mechanical port.
+
+## Original plan continues below.
+
 ## Target
 
 Replace all four Effects-bucket renderers in Framer with Metal fragment shaders. GPU-only — CPU renderers deleted as each bucket lands. Framer is macOS-only, so `MTLCreateSystemDefaultDevice()` is always available, including in `FramerCLI`.
