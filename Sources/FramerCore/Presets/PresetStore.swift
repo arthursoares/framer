@@ -339,6 +339,62 @@ public final class PresetStore {
                     ))
                 ]
             )),
+            ("GPU ASCII Matrix", ProcessingConfig(
+                outputFormat: .png,
+                layers: [
+                    .gpuEffect(GPUEffectLayerParams(
+                        kind: .matrixRain,
+                        params: .textCell(
+                            common: .init(brightness: 0.02, contrast: 1.1, saturation: 0.9, hueRotation: 0.0, sharpness: 0.1, gamma: 1.0),
+                            geometry: .init(scale: 1.0, spacing: 2.0, outputWidth: 240),
+                            color: .init(mode: .foregroundBackground, backgroundIntensity: 0.18),
+                            textCell: .init(characterSet: .classicASCII, variant: .matrixRain)
+                        )
+                    ))
+                ]
+            )),
+            ("GPU Halftone Print", ProcessingConfig(
+                outputFormat: .png,
+                layers: [
+                    .gpuEffect(GPUEffectLayerParams(
+                        kind: .halftone,
+                        params: .printSampling(
+                            common: .init(brightness: 0.0, contrast: 1.15, saturation: 1.0, hueRotation: 0.0, sharpness: 0.2, gamma: 1.0),
+                            geometry: .init(scale: 0.9, spacing: 3.0, outputWidth: 240),
+                            color: .init(mode: .source, backgroundIntensity: 0.0),
+                            printSampling: .init(variant: .halftone, sampleDensity: 0.7, threshold: 0.4)
+                        )
+                    ))
+                ]
+            )),
+            ("GPU Wave Field", ProcessingConfig(
+                outputFormat: .png,
+                layers: [
+                    .gpuEffect(GPUEffectLayerParams(
+                        kind: .waveLines,
+                        params: .edgeField(
+                            common: .init(brightness: 0.0, contrast: 1.0, saturation: 1.1, hueRotation: 0.06, sharpness: 0.2, gamma: 1.0),
+                            geometry: .init(scale: 1.2, spacing: 4.0, outputWidth: 240),
+                            color: .init(mode: .palette, backgroundIntensity: 0.2),
+                            edgeField: .init(variant: .waveLines, lineStrength: 0.5, fieldIntensity: 0.9)
+                        )
+                    ))
+                ]
+            )),
+            ("GPU VHS Static", ProcessingConfig(
+                outputFormat: .png,
+                layers: [
+                    .gpuEffect(GPUEffectLayerParams(
+                        kind: .vhs,
+                        params: .glitch(
+                            common: .init(brightness: 0.0, contrast: 1.2, saturation: 1.0, hueRotation: 0.0, sharpness: 0.0, gamma: 1.0),
+                            geometry: .init(scale: 1.0, spacing: 2.0, outputWidth: 240),
+                            color: .init(mode: .foregroundBackground, backgroundIntensity: 0.08),
+                            glitch: .init(variant: .vhs, amount: 0.75, threshold: 0.5)
+                        )
+                    ))
+                ]
+            )),
         ]
 
         do {

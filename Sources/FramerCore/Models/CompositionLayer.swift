@@ -1436,6 +1436,7 @@ public enum CompositionLayer: Identifiable, Codable, Equatable, Sendable {
     case aspectRatio(AspectRatioLayerParams)
     case lut(LUTLayerParams)
     case shader(ShaderLayerParams)
+    case gpuEffect(GPUEffectLayerParams)
 
     public var id: UUID {
         switch self {
@@ -1450,6 +1451,7 @@ public enum CompositionLayer: Identifiable, Codable, Equatable, Sendable {
         case .aspectRatio(let p): return p.id
         case .lut(let p): return p.id
         case .shader(let p): return p.id
+        case .gpuEffect(let p): return p.id
         }
     }
 
@@ -1466,6 +1468,7 @@ public enum CompositionLayer: Identifiable, Codable, Equatable, Sendable {
         case .aspectRatio: return "Aspect Ratio"
         case .lut: return "LUT"
         case .shader(let p): return p.style.label
+        case .gpuEffect(let p): return p.kind.label
         }
     }
 
@@ -1483,6 +1486,7 @@ public enum CompositionLayer: Identifiable, Codable, Equatable, Sendable {
             case .aspectRatio(let p): return p.enabled
             case .lut(let p): return p.enabled
             case .shader(let p): return p.enabled
+            case .gpuEffect(let p): return p.enabled
             }
         }
         set {
@@ -1520,6 +1524,9 @@ public enum CompositionLayer: Identifiable, Codable, Equatable, Sendable {
             case .shader(var p):
                 p.enabled = newValue
                 self = .shader(p)
+            case .gpuEffect(var p):
+                p.enabled = newValue
+                self = .gpuEffect(p)
             }
         }
     }
@@ -1537,6 +1544,7 @@ public enum CompositionLayer: Identifiable, Codable, Equatable, Sendable {
         case .aspectRatio: return "crop"
         case .lut: return "photo.artframe"
         case .shader: return "sparkles"
+        case .gpuEffect: return "sparkles.rectangle.stack"
         }
     }
 
@@ -1544,6 +1552,7 @@ public enum CompositionLayer: Identifiable, Codable, Equatable, Sendable {
         switch self {
         case .lut(let p): return p.lutName.isEmpty ? "None" : p.lutName
         case .shader(let p): return p.style.label
+        case .gpuEffect(let p): return p.kind.label
         default: return ""
         }
     }
@@ -1580,6 +1589,8 @@ public enum CompositionLayer: Identifiable, Codable, Equatable, Sendable {
             self = .lut(try container.decode(LUTLayerParams.self, forKey: .params))
         case "shader":
             self = .shader(try container.decode(ShaderLayerParams.self, forKey: .params))
+        case "gpuEffect":
+            self = .gpuEffect(try container.decode(GPUEffectLayerParams.self, forKey: .params))
         default:
             throw DecodingError.dataCorruptedError(
                 forKey: .type, in: container,
@@ -1623,6 +1634,9 @@ public enum CompositionLayer: Identifiable, Codable, Equatable, Sendable {
             try container.encode(p, forKey: .params)
         case .shader(let p):
             try container.encode("shader", forKey: .type)
+            try container.encode(p, forKey: .params)
+        case .gpuEffect(let p):
+            try container.encode("gpuEffect", forKey: .type)
             try container.encode(p, forKey: .params)
         }
     }

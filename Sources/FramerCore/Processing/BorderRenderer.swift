@@ -207,6 +207,9 @@ public enum BorderRenderer {
                     previewBaseDimension: previewBaseDimension,
                     sourceImage: sourceImage
                 )
+
+            case .gpuEffect:
+                break
             }
             i += 1
         }

@@ -205,6 +205,7 @@ struct LayerRow: View {
         case .aspectRatio(let p): return "\(p.ratioWidth):\(p.ratioHeight)"
         case .lut(let p): return p.lutName.isEmpty ? "None" : p.lutName
         case .shader(let p): return p.style.label
+        case .gpuEffect(let p): return p.kind.label
         }
     }
 }
