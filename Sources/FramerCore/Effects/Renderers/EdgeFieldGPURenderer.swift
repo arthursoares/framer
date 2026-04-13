@@ -36,6 +36,11 @@ public enum EdgeFieldGPURenderer {
         var frequency: Float = 1.0
         var lineCount: Float = 12
         var spacing:   Float = 8.0
+        var cellSize:  Float = 16.0
+
+        var edgeWidth:   Float  = 0.25
+        var randomize:   UInt32 = 0
+        var fieldWeight: Float  = 0.5
         var _pad0: Float = 0
 
         var edgeColor: SIMD4<Float> = SIMD4(0, 0, 0, 0)
@@ -181,6 +186,84 @@ public enum EdgeFieldGPURenderer {
             source: sourceTexture,
             auxTextures: [],
             sampler: sampler,
+            uniformBytes: uniformBytes(uniforms),
+            outputSize: (width, height),
+            library: library
+        )
+        return try MetalTextureSupport.makeCGImage(from: outputTexture)
+    }
+
+    // MARK: - Voronoi
+
+    public static func renderVoronoi(
+        input: CGImage,
+        common: GPUEffectCommonParameters,
+        geometry: GPUEffectGeometryParameters,
+        color: GPUEffectColorParameters,
+        params: EdgeFieldParameters,
+        outputSize: CGSize
+    ) throws -> CGImage {
+        guard let library = MetalEffectLibrary.shared else { throw MetalEffectError.metalUnavailable }
+        let width  = max(1, Int(outputSize.width.rounded()))
+        let height = max(1, Int(outputSize.height.rounded()))
+
+        var uniforms = Uniforms()
+        mapCommon(common, into: &uniforms.common)
+        mapGeometry(geometry, into: &uniforms.geometry)
+        mapColor(color, into: &uniforms.color)
+        uniforms.variant      = 3
+        uniforms.intensity    = 1.0
+        uniforms.lineStrength = Float(clamp01(params.lineStrength))
+        uniforms.invert       = params.invert ? 1 : 0
+        uniforms.cellSize     = Float(max(2.0, params.cellSize))
+        uniforms.edgeWidth    = Float(clamp01(params.edgeWidth))
+        uniforms.randomize    = params.randomize ? 1 : 0
+        uniforms.fieldWeight  = Float(clamp01(params.fieldIntensity))
+        uniforms.edgeColor    = params.edgeColor.map { simdColor($0) } ?? SIMD4(0, 0, 0, 0)
+
+        let outputTexture = try MetalRenderPass.encode(
+            pipeline: try library.pipeline(for: "edgeFieldFragment"),
+            source: try MetalTextureSupport.makeTexture(from: input, device: library.device),
+            auxTextures: [],
+            sampler: try library.linearClamp(),
+            uniformBytes: uniformBytes(uniforms),
+            outputSize: (width, height),
+            library: library
+        )
+        return try MetalTextureSupport.makeCGImage(from: outputTexture)
+    }
+
+    // MARK: - Noise Field
+
+    public static func renderNoiseField(
+        input: CGImage,
+        common: GPUEffectCommonParameters,
+        geometry: GPUEffectGeometryParameters,
+        color: GPUEffectColorParameters,
+        params: EdgeFieldParameters,
+        outputSize: CGSize
+    ) throws -> CGImage {
+        guard let library = MetalEffectLibrary.shared else { throw MetalEffectError.metalUnavailable }
+        let width  = max(1, Int(outputSize.width.rounded()))
+        let height = max(1, Int(outputSize.height.rounded()))
+
+        var uniforms = Uniforms()
+        mapCommon(common, into: &uniforms.common)
+        mapGeometry(geometry, into: &uniforms.geometry)
+        mapColor(color, into: &uniforms.color)
+        uniforms.variant      = 4
+        uniforms.intensity    = 1.0
+        uniforms.lineStrength = Float(clamp01(params.lineStrength))
+        uniforms.invert       = params.invert ? 1 : 0
+        uniforms.amplitude    = Float(clamp01(params.amplitude))
+        uniforms.fieldWeight  = Float(clamp01(params.fieldIntensity))
+        uniforms.edgeColor    = params.edgeColor.map { simdColor($0) } ?? SIMD4(0, 0, 0, 0)
+
+        let outputTexture = try MetalRenderPass.encode(
+            pipeline: try library.pipeline(for: "edgeFieldFragment"),
+            source: try MetalTextureSupport.makeTexture(from: input, device: library.device),
+            auxTextures: [],
+            sampler: try library.linearClamp(),
             uniformBytes: uniformBytes(uniforms),
             outputSize: (width, height),
             library: library
