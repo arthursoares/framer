@@ -64,6 +64,47 @@ public enum GPUEffectKind: String, Codable, Hashable, Sendable, CaseIterable {
         }
     }
 
+    // MARK: - Shader capability flags (drives per-variant UI pruning)
+    //
+    // The UI exposes a common / geometry / color block on every variant today
+    // even when the shader ignores them. These flags let the UI render only
+    // controls whose values the variant's Metal shader actually reads.
+    // Source: docs/gpu-effects-parameter-matrix.md (per-variant inventory).
+
+    /// Does the shader read `geometry.scale` + `geometry.spacing` for cell
+    /// pitch? Only TextCell family (the shared `textCellFragment` uses
+    /// `8.0 * spacing * scale` as the base cell pitch).
+    public var usesGeometry: Bool {
+        switch self {
+        case .dots, .blockify, .matrixRain, .ascii: return true
+        default: return false
+        }
+    }
+
+    /// Does the shader consume `color.mode` + foregroundRGBA / backgroundRGBA
+    /// to paint ink / paper colours?
+    public var usesColorModeAndFgBg: Bool {
+        switch self {
+        case .dots, .blockify, .matrixRain, .threshold, .crosshatch, .edgeDetection: return true
+        default: return false
+        }
+    }
+
+    /// Does the shader use `color.backgroundIntensity` as a general "paper
+    /// level" (max'd against the computed ink)?
+    public var usesBackgroundIntensity: Bool {
+        switch self {
+        case .edgeDetection, .contour, .waveLines, .voronoi, .noiseField: return true
+        default: return false
+        }
+    }
+
+    /// Common adjustments (brightness / contrast / saturation / hueRotation /
+    /// sharpness / gamma). Currently no bucket shader consumes these — they
+    /// were carried through for uniform layout symmetry but never wired into
+    /// any fragment. Hide globally.
+    public var usesCommonAdjustments: Bool { false }
+
     /// SF Symbol name for the layer-add menu entry.
     public var menuIcon: String {
         switch self {

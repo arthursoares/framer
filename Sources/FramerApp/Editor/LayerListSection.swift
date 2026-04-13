@@ -468,60 +468,69 @@ struct GPUEffectLayerControls: View {
                 Spacer()
             }
 
-            HStack {
-                Text("Scale")
-                    .font(AppFont.controlLabel)
-                    .foregroundStyle(Color.text2)
-                Slider(value: scaleBinding, in: 0.5...2.0)
-                Text(String(format: "%.2f", scaleBinding.wrappedValue))
-                    .monospacedDigit()
-                    .frame(width: 44)
+            // Global control blocks are gated by GPUEffectKind capability flags.
+            // Each variant's shader only reads a subset of the shared
+            // common/geometry/color uniforms — showing sliders the shader
+            // ignores felt "unwired" to the user, per the parameter matrix at
+            // docs/gpu-effects-parameter-matrix.md. We only render each group
+            // when the current kind actually consumes it.
+
+            if params.kind.usesGeometry {
+                HStack {
+                    Text("Scale")
+                        .font(AppFont.controlLabel)
+                        .foregroundStyle(Color.text2)
+                    Slider(value: scaleBinding, in: 0.5...2.0)
+                    Text(String(format: "%.2f", scaleBinding.wrappedValue))
+                        .monospacedDigit()
+                        .frame(width: 44)
+                }
+
+                HStack {
+                    Text("Spacing")
+                        .font(AppFont.controlLabel)
+                        .foregroundStyle(Color.text2)
+                    Slider(value: spacingBinding, in: 1...8)
+                    Text(String(format: "%.1f", spacingBinding.wrappedValue))
+                        .monospacedDigit()
+                        .frame(width: 40)
+                }
             }
 
-            HStack {
-                Text("Spacing")
-                    .font(AppFont.controlLabel)
-                    .foregroundStyle(Color.text2)
-                Slider(value: spacingBinding, in: 1...8)
-                Text(String(format: "%.1f", spacingBinding.wrappedValue))
-                    .monospacedDigit()
-                    .frame(width: 40)
+            if params.kind.usesColorModeAndFgBg {
+                Picker("Color Mode", selection: colorModeBinding) {
+                    Text("Source").tag(GPUEffectColorMode.source)
+                    Text("FG/BG").tag(GPUEffectColorMode.foregroundBackground)
+                    Text("Mono").tag(GPUEffectColorMode.monochrome)
+                    Text("Palette").tag(GPUEffectColorMode.palette)
+                }
+                .pickerStyle(.menu)
             }
 
-            HStack {
-                Text("Output")
-                    .font(AppFont.controlLabel)
-                    .foregroundStyle(Color.text2)
-                Slider(value: outputWidthBinding, in: 120...640, step: 1)
-                Text("\(Int(outputWidthBinding.wrappedValue))")
-                    .monospacedDigit()
-                    .frame(width: 44)
+            if params.kind.usesBackgroundIntensity || params.kind.usesColorModeAndFgBg {
+                HStack {
+                    Text("Background")
+                        .font(AppFont.controlLabel)
+                        .foregroundStyle(Color.text2)
+                    Slider(value: backgroundIntensityBinding, in: 0...1)
+                    Text(String(format: "%.2f", backgroundIntensityBinding.wrappedValue))
+                        .monospacedDigit()
+                        .frame(width: 44)
+                }
             }
 
-            Picker("Color Mode", selection: colorModeBinding) {
-                Text("Source").tag(GPUEffectColorMode.source)
-                Text("FG/BG").tag(GPUEffectColorMode.foregroundBackground)
-                Text("Mono").tag(GPUEffectColorMode.monochrome)
-                Text("Palette").tag(GPUEffectColorMode.palette)
+            // Common adjustments (brightness / contrast / etc.) are NOT consumed
+            // by any bucket shader today — per GPUEffectKind.usesCommonAdjustments.
+            // Hidden globally. If shaders are later extended to apply them,
+            // flip the flag and they'll light up on the correct variants.
+            if params.kind.usesCommonAdjustments {
+                adjustmentSlider(label: "Brightness", binding: commonBinding(\.brightness), range: -1...1)
+                adjustmentSlider(label: "Contrast", binding: commonBinding(\.contrast), range: 0...3)
+                adjustmentSlider(label: "Saturation", binding: commonBinding(\.saturation), range: 0...2)
+                adjustmentSlider(label: "Hue", binding: commonBinding(\.hueRotation), range: -1...1)
+                adjustmentSlider(label: "Sharpness", binding: commonBinding(\.sharpness), range: 0...2)
+                adjustmentSlider(label: "Gamma", binding: commonBinding(\.gamma), range: 0.2...2)
             }
-            .pickerStyle(.menu)
-
-            HStack {
-                Text("Background")
-                    .font(AppFont.controlLabel)
-                    .foregroundStyle(Color.text2)
-                Slider(value: backgroundIntensityBinding, in: 0...1)
-                Text(String(format: "%.2f", backgroundIntensityBinding.wrappedValue))
-                    .monospacedDigit()
-                    .frame(width: 44)
-            }
-
-            adjustmentSlider(label: "Brightness", binding: commonBinding(\.brightness), range: -1...1)
-            adjustmentSlider(label: "Contrast", binding: commonBinding(\.contrast), range: 0...3)
-            adjustmentSlider(label: "Saturation", binding: commonBinding(\.saturation), range: 0...2)
-            adjustmentSlider(label: "Hue", binding: commonBinding(\.hueRotation), range: -1...1)
-            adjustmentSlider(label: "Sharpness", binding: commonBinding(\.sharpness), range: 0...2)
-            adjustmentSlider(label: "Gamma", binding: commonBinding(\.gamma), range: 0.2...2)
 
             if case .textCell(let common, let geometry, let color, let payload) = params.params,
                params.kind == .ascii {
