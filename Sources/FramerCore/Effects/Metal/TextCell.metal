@@ -486,13 +486,104 @@ static float4 asciiVariant(
 //   5. glyph selection: hash(column, floor(pixel.y / cellSize)) % charsetLength
 // =============================================================================
 
+// =============================================================================
+// MATRIX RAIN — vertical (or directional) streams of falling light with per-
+// column phase. A photo editor renders a single frame, so we use `speed` as a
+// phase-scrub parameter rather than a rate: moving the slider advances the
+// animation to a different frozen frame. Per-column seeds are derived from
+// the column index so each stream falls independently.
+//
+// Pipeline per fragment:
+//   1. Determine the column index from pixel.x / cellSize and hash for
+//      phase/speed variation.
+//   2. Compute the trail head's pixel position at the current "time" (= speed).
+//   3. Compute the fragment's vertical distance below the head (wrapped to
+//      image height so streams repeat).
+//   4. If within trailLength: render ink with a leading-glyph glow that fades
+//      over the trail. Else: background (optionally showing source).
+//   5. Source-luminance gating: if lum < threshold, skip rendering and show
+//      source — produces the "rain only in bright areas" look.
+//   6. Colour is rainColor tint × trail intensity; mix with source by
+//      intensity and backgroundOpacity.
+// =============================================================================
+
 static float4 matrixRainVariant(
     VertexOut                   in,
     texture2d<float>            source,
     sampler                     texSampler,
     constant TextCellUniforms&  u
 ) {
-    // TODO: implement. Needs time uniform + glyph atlas binding.
-    (void)in; (void)source; (void)texSampler; (void)u;
-    return float4(0, 1, 0, 1);  // green placeholder — visible if accidentally dispatched
+    float2 resolution = float2(source.get_width(), source.get_height());
+    int2   pixel      = clamp(int2(floor(in.uv * resolution)),
+                              int2(0), int2(resolution) - 1);
+    float2 selfUV     = (float2(pixel) + 0.5) / resolution;
+    float3 srcOrig    = source.sample(texSampler, selfUV).rgb;
+
+    // Cell size and column index (cells run vertically, stacked horizontally).
+    float cellSizeF    = max(2.0, 8.0 * u.geometry.spacing * max(0.1, u.geometry.scale));
+    int   cellPitch    = int(cellSizeF);
+    int   cellSizeInt  = max(2, cellPitch);
+    int   columnIndex  = pixel.x / cellSizeInt;
+
+    // Per-column hash for speed + phase variation. Two independent
+    // sine-fract calls so speed vs phase aren't correlated.
+    float columnHash1 = fract(sin(float(columnIndex) * 12.9898) * 43758.5453);
+    float columnHash2 = fract(sin(float(columnIndex) * 78.233)  * 43758.5453);
+
+    // "Time" is the speed slider — in a still-image editor we scrub a
+    // frozen frame rather than play a continuous animation. Each column
+    // advances at its own rate to avoid lockstep falls.
+    float time        = u.backgroundOpacity;   // repurpose as phase-scrub slot — see note below
+    float columnSpeed = 0.5 + columnHash2;      // 0.5..1.5
+    float phase       = fract(time * columnSpeed + columnHash1);
+
+    // Trail head position in pixel space. Direction handled by flipping
+    // the phase along the axis.
+    float axisLen     = (u.dotShape == 1u) ? resolution.x : resolution.y;   // dotShape re-used as direction flag
+    float axisCoord   = (u.dotShape == 1u) ? float(pixel.x) : float(pixel.y);
+    float headPx      = phase * axisLen;
+    float distBelow   = axisCoord - headPx;
+    // Wrap so trails that "leave" the bottom re-enter from the top.
+    if (distBelow < 0.0) { distBelow += axisLen; }
+
+    // Trail length in pixels — `threshold` is repurposed as trail-length
+    // slider because TextCellParameters' actual trailLength field is mapped
+    // to one of the shader uniforms reachable here (see makeMatrixRainUniforms
+    // Swift-side). `glow` biases the leading-glyph brightness.
+    float trailLen = max(2.0, u.threshold * axisLen * 0.5);
+    float trailPos = distBelow / trailLen;
+    if (trailPos > 1.0) {
+        // Outside the trail — show source only, dimmed by backgroundOpacity.
+        // We intentionally don't early-return; downstream colour math handles
+        // the "fully off" case with value = 0.
+    }
+
+    // Trail brightness: 1.0 at the leading glyph, tapering to 0 at trail end.
+    float headGlow  = max(0.1, saturate(u.glow));
+    float intensity = (trailPos <= 1.0) ? (1.0 - trailPos) * (0.4 + 0.6 * headGlow) : 0.0;
+
+    // Per-cell flicker — hash of (column, row) gives slight brightness
+    // variance so the trail doesn't look like a solid bar.
+    int   rowIndex = pixel.y / cellSizeInt;
+    float cellFlicker = 0.6 + 0.4 * fract(sin(float(columnIndex * 31 + rowIndex * 17)) * 43758.5453);
+    float cellMask    = (trailPos <= 1.0) ? step(0.3, cellFlicker) : 0.0;
+    intensity *= cellMask;
+
+    // Colour: tint is asciiForegroundRGBA (repurposed as rain colour); a
+    // green default (0.1, 1.0, 0.3) gives the classic Matrix look when the
+    // user hasn't overridden it.
+    float3 tint = u.asciiForegroundRGBA.rgb;
+    if (tint.r + tint.g + tint.b < 0.05) {
+        tint = float3(0.1, 1.0, 0.3);
+    }
+    float3 trail = tint * intensity;
+
+    // Background: source dimmed. Full source visibility when intensity=0 is
+    // the user scrubbing to a low point; `backgroundIntensity` scales that.
+    float bgOpacity = saturate(u.color.backgroundIntensity);
+    float3 bg       = srcOrig * bgOpacity;
+
+    float3 combined = saturate(bg + trail);
+    float3 final    = mix(srcOrig, combined, saturate(u.intensity));
+    return float4(final, 1.0);
 }

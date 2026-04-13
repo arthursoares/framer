@@ -38,6 +38,14 @@ public enum TextCellBucketRenderer {
             } catch is MetalEffectError {
                 // fall through to CPU
             }
+        case .matrixRain:
+            do {
+                return try TextCellRenderer.renderMatrixRainFromBucket(
+                    input: input, common: common, geometry: geometry,
+                    color: color, params: textCell, outputSize: outputSize)
+            } catch is MetalEffectError {
+                // fall through to CPU
+            }
         default:
             break
         }

@@ -321,6 +321,62 @@ public enum TextCellRenderer {
         return u
     }
 
+    // MARK: - Matrix Rain entry point (.gpuEffect.textCell bucket)
+
+    /// Render Matrix Rain on the GPU via the bucket-system parameter surface.
+    /// Reuses the textCellFragment pipeline (variant=3). Several
+    /// TextCellUniforms fields are repurposed so the same MSL struct can
+    /// carry matrixRain-specific data without growing the uniform block:
+    ///   - `backgroundOpacity` → time/phase-scrub (drives per-column offset)
+    ///   - `threshold`         → trail length (as fraction of axis dimension)
+    ///   - `glow`              → leading-glyph brightness
+    ///   - `dotShape`          → direction (0 = down, 1 = right)
+    ///   - `asciiForegroundRGBA` → rain colour tint (defaults green if unset)
+    /// See Sources/FramerCore/Effects/Metal/TextCell.metal::matrixRainVariant
+    /// for the per-pixel pipeline.
+    public static func renderMatrixRainFromBucket(
+        input: CGImage,
+        common: GPUEffectCommonParameters,
+        geometry: GPUEffectGeometryParameters,
+        color: GPUEffectColorParameters,
+        params: TextCellParameters,
+        outputSize: CGSize
+    ) throws -> CGImage {
+        guard let library = MetalEffectLibrary.shared else {
+            throw MetalEffectError.metalUnavailable
+        }
+        let width  = max(1, Int(outputSize.width.rounded()))
+        let height = max(1, Int(outputSize.height.rounded()))
+
+        let pipeline = try library.pipeline(for: "textCellFragment")
+        let sampler  = try library.linearClamp()
+        let sourceTexture = try MetalTextureSupport.makeTexture(from: input, device: library.device)
+
+        var uniforms = makeDotsUniforms(common: common, geometry: geometry, color: color, params: params)
+        uniforms.variant           = 3                                     // matrixRain
+        uniforms.dotShape          = (params.direction == .left || params.direction == .right) ? 1 : 0
+        uniforms.glow              = Float(clamp01(params.glow))
+        uniforms.threshold         = Float(clamp01(max(0.1, params.trailLength)))
+        uniforms.backgroundOpacity = Float(clamp01(params.speed))          // phase-scrub
+        uniforms.color.backgroundIntensity = Float(clamp01(params.backgroundOpacity))
+        if let rainColor = params.rainColor {
+            uniforms.asciiForegroundRGBA = simdColor(rainColor)
+        } else {
+            uniforms.asciiForegroundRGBA = SIMD4(0.1, 1.0, 0.3, 1.0)       // classic Matrix green
+        }
+
+        let outputTexture = try MetalRenderPass.encode(
+            pipeline: pipeline,
+            source: sourceTexture,
+            auxTextures: [sourceTexture, sourceTexture],                   // dummy atlas binds
+            sampler: sampler,
+            uniformBytes: uniformBytes(uniforms),
+            outputSize: (width, height),
+            library: library
+        )
+        return try MetalTextureSupport.makeCGImage(from: outputTexture)
+    }
+
     private static func dotShapeRawValue(_ shape: DotShape) -> Int {
         switch shape {
         case .circle:  return 0
