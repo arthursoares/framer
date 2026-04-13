@@ -10,7 +10,7 @@
 
 #include "ShaderCommon.h"
 
-vertex VertexOut fullscreenVertex(uint vid [[vertex_index]]) {
+vertex VertexOut fullscreenVertex(uint vid [[vertex_id]]) {
     float2 positions[3] = { float2(-1, -1), float2(3, -1), float2(-1, 3) };
     float2 uvs[3]       = { float2(0,  1), float2(2,  1), float2(0, -1) };
 

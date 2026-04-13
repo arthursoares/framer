@@ -55,15 +55,46 @@ public final class MetalEffectLibrary: @unchecked Sendable {
         guard let dev = MTLCreateSystemDefaultDevice() else { return nil }
         guard let queue = dev.makeCommandQueue() else { return nil }
 
-        // SPM places the compiled metallib inside Bundle.module for the package
-        // resource bundle. We try the bundle library first, then fall back to
-        // the device default (for hosts that link the shaders into the binary).
+        // SwiftPM 5.10's `.process(...)` rule for .metal files does NOT compile
+        // them into a metallib — it just copies them into Bundle.module as
+        // opaque text resources. (Despite Apple's docs implying otherwise on
+        // some toolchain combos, on the Swift 6.3 toolchain we observe loose
+        // .metal files in the bundle and no default.metallib generated.)
+        //
+        // Workaround: read each .metal file as text at startup, inline the
+        // shared header, concatenate, and compile via makeLibrary(source:).
+        // Single library shared across all effect pipelines.
+        let bundle = Bundle.module
+
+        guard
+            let headerURL = bundle.url(forResource: "ShaderCommon", withExtension: "h"),
+            let headerSource = try? String(contentsOf: headerURL, encoding: .utf8)
+        else {
+            return nil
+        }
+
+        let metalURLs = (bundle.urls(forResourcesWithExtension: "metal", subdirectory: nil) ?? [])
+            .sorted { $0.lastPathComponent < $1.lastPathComponent }
+        guard !metalURLs.isEmpty else { return nil }
+
+        var combined = headerSource + "\n"
+        for url in metalURLs {
+            guard let source = try? String(contentsOf: url, encoding: .utf8) else { continue }
+            // Strip `#include "ShaderCommon.h"` lines — header is inlined above.
+            let stripped = source
+                .split(separator: "\n", omittingEmptySubsequences: false)
+                .filter { !$0.trimmingCharacters(in: .whitespaces).hasPrefix(#"#include "ShaderCommon.h""#) }
+                .joined(separator: "\n")
+            combined += "\n// === \(url.lastPathComponent) ===\n" + stripped + "\n"
+        }
+
         let lib: MTLLibrary
-        if let bundleLib = try? dev.makeDefaultLibrary(bundle: .module) {
-            lib = bundleLib
-        } else if let systemLib = dev.makeDefaultLibrary() {
-            lib = systemLib
-        } else {
+        do {
+            lib = try dev.makeLibrary(source: combined, options: nil)
+        } catch {
+            // Shader compile error — likely a syntax issue in one of the
+            // .metal files. Surfaced here so it shows in CLI/test logs.
+            print("MetalEffectLibrary: makeLibrary failed: \(error)")
             return nil
         }
 

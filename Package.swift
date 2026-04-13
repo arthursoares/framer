@@ -18,14 +18,25 @@ let package = Package(
             dependencies: [
                 .product(name: "Yams", package: "Yams"),
             ],
-            // Effects/Metal contains the .metal shader sources + the shared
-            // ShaderCommon.h header. Declaring them as processed resources
-            // makes SwiftPM (and the Xcode toolchain it shells out to) compile
-            // the .metal files into `default.metallib` inside Bundle.module
-            // and copy the header alongside for include resolution. Required
-            // for `MetalEffectLibrary.makeDefaultLibrary(bundle: .module)`.
+            // SwiftPM compiles individual .metal files into a metallib when
+            // declared per-file as `.process` resources. The directory form
+            // (.process("Effects/Metal")) treats them as opaque files to copy
+            // — a known SPM gotcha. ShaderCommon.h ships as the include
+            // header. _EffectTemplate.metal is excluded (scaffold with TODOs).
+            exclude: [
+                "Effects/Metal/_EffectTemplate.metal",
+            ],
             resources: [
-                .process("Effects/Metal"),
+                .process("Effects/Metal/ShaderCommon.h"),
+                .process("Effects/Metal/FullscreenVertex.metal"),
+                .process("Effects/Metal/TextCell.metal"),
+                .process("Effects/Metal/ColorGrade.metal"),
+                .process("Effects/Metal/DistantPast.metal"),
+                .process("Effects/Metal/CRT.metal"),
+                .process("Effects/Metal/Halftone.metal"),
+                .process("Effects/Metal/Kuwahara.metal"),
+                .process("Effects/Metal/PixelSort.metal"),
+                .process("Effects/Metal/Dither.metal"),
             ]
         ),
         .executableTarget(
