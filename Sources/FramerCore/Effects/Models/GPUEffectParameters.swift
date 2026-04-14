@@ -464,11 +464,56 @@ public struct GPUEffectLayerParams: Identifiable, Codable, Equatable, Sendable {
     public var enabled: Bool
     public var kind: GPUEffectKind
     public var params: GPUEffectParameters
+    /// Layer-stack opacity consumed by `LayerCompositor.compose` when
+    /// laying the effect's rendered output onto the current pipeline
+    /// buffer. Default 1.0 preserves pre-blend-modes behaviour.
+    /// Orthogonal to per-variant intensity fields (e.g.
+    /// `TextCellParameters.intensity`) which control the shader's
+    /// internal mix before the compose step.
+    public var opacity: Double
+    /// Blend mode used by the final compose. `.normal` at opacity 1.0
+    /// matches the pre-blend-modes pipeline exactly.
+    public var blendMode: LayerBlendMode
 
-    public init(id: UUID = UUID(), enabled: Bool = true, kind: GPUEffectKind, params: GPUEffectParameters) {
+    public init(
+        id: UUID = UUID(),
+        enabled: Bool = true,
+        kind: GPUEffectKind,
+        params: GPUEffectParameters,
+        opacity: Double = 1.0,
+        blendMode: LayerBlendMode = .normal
+    ) {
         self.id = id
         self.enabled = enabled
         self.kind = kind
         self.params = params
+        self.opacity = max(0, min(1, opacity))
+        self.blendMode = blendMode
+    }
+
+    private enum CodingKeys: String, CodingKey {
+        case id, enabled, kind, params, opacity, blendMode
+    }
+
+    public init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        self.init(
+            id: try c.decode(UUID.self, forKey: .id),
+            enabled: try c.decodeIfPresent(Bool.self, forKey: .enabled) ?? true,
+            kind: try c.decode(GPUEffectKind.self, forKey: .kind),
+            params: try c.decode(GPUEffectParameters.self, forKey: .params),
+            opacity: try c.decodeIfPresent(Double.self, forKey: .opacity) ?? 1.0,
+            blendMode: try c.decodeIfPresent(LayerBlendMode.self, forKey: .blendMode) ?? .normal
+        )
+    }
+
+    public func encode(to encoder: Encoder) throws {
+        var c = encoder.container(keyedBy: CodingKeys.self)
+        try c.encode(id, forKey: .id)
+        try c.encode(enabled, forKey: .enabled)
+        try c.encode(kind, forKey: .kind)
+        try c.encode(params, forKey: .params)
+        if opacity != 1.0 { try c.encode(opacity, forKey: .opacity) }
+        if blendMode != .normal { try c.encode(blendMode, forKey: .blendMode) }
     }
 }
