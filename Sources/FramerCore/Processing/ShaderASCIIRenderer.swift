@@ -156,13 +156,29 @@ enum ShaderASCIIRenderer {
             asciiParams: asciiParams, paletteSource: paletteSource
         )
 
-        // Load LUTs. When the user supplies a custom character palette, build
-        // the atlases via Core Text (same cache the GPU path uses — CGImage
-        // side) rather than reading the baked PNGs.
+        // Load LUTs. When the user supplies a custom character palette *or* a
+        // font override, build the atlases via Core Text (same cache the GPU
+        // path uses — CGImage side) rather than reading the baked PNGs.
+        // Setting `fontName` alone (with characters == nil) falls back to the
+        // classic palette rasterised in the chosen font — that's the point of
+        // the font-picker feature.
         let edges: LUT?
         let fill: LUT?
-        if let chars = asciiParams.characters, !chars.isEmpty {
-            let style = ASCIIAtlasGenerator.Style(fillCharacters: chars)
+        let hasCustomChars = (asciiParams.characters ?? "").isEmpty == false
+        let hasCustomFont  = (asciiParams.fontName   ?? "").isEmpty == false
+        let hiDetail       = asciiParams.highDetail
+        // Route to runtime Core Text generation if *anything* is customised
+        // OR the user wants hi-res. Pure-defaults state still reads the
+        // baked pixel-art PNG, so toggling High Detail alone only changes
+        // the cell size — it no longer swaps the glyph source (that only
+        // happens if you also touch Characters or Font).
+        if hasCustomChars || hasCustomFont || hiDetail {
+            let charsForStyle = hasCustomChars ? asciiParams.characters! : " .:-=+*#%@"
+            let style = ASCIIAtlasGenerator.Style(
+                fillCharacters: charsForStyle,
+                fontName: hasCustomFont ? asciiParams.fontName : nil,
+                cellSize: hiDetail ? 16 : 8
+            )
             if let edgesImg = try? ASCIIAtlasGenerator.atlasCGImage(for: style, kind: .edges),
                let fillImg  = try? ASCIIAtlasGenerator.atlasCGImage(for: style, kind: .fill) {
                 edges = extractGrayscale(from: edgesImg)
@@ -470,20 +486,24 @@ enum ShaderASCIIRenderer {
         localX: Int, localY: Int,
         cellW: Int, cellH: Int
     ) -> Double {
-        // Map local pixel coordinates into the 8x8 glyph space
-        let glyphX = (localX * 8) / max(1, cellW)
-        let glyphY = (localY * 8) / max(1, cellH)
-        let gx = min(7, glyphX)
-        let gy = min(7, glyphY)
+        // Atlas cell size is derived from the LUT height — matches the
+        // shader's `atlasCell = fillAtlas.get_height()`. Baked PNGs are 8 px,
+        // High Detail runtime atlases are 16 px.
+        let atlasCell = max(4, fill.height)
+        let glyphX = (localX * atlasCell) / max(1, cellW)
+        let glyphY = (localY * atlasCell) / max(1, cellH)
+        let gx = min(atlasCell - 1, glyphX)
+        let gy = min(atlasCell - 1, glyphY)
 
         if let direction = edgeDirection {
-            // Edge glyph: offset = (direction + 1) * 8, matching reference shader
-            let offset = (direction.rawValue + 1) * 8
+            // Edge glyph: offset = (direction + 1) * atlasCell, matching shader.
+            let offset = (direction.rawValue + 1) * atlasCell
             return edges.sample(x: gx + offset, y: gy)
         } else {
-            // Fill glyph: quantize luminance to 0-9, then offset into 80px wide LUT
+            // Fill glyph: quantize luminance to 0-9, offset into the N-cell-
+            // wide LUT (80 px baked / 160 px High Detail).
             let quantized = max(0, min(9, Int(floor(luminance * 9.999))))
-            let offset = quantized * 8
+            let offset = quantized * atlasCell
             return fill.sample(x: gx + offset, y: gy)
         }
     }

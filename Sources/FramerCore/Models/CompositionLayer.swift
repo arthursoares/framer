@@ -1085,6 +1085,23 @@ public struct ASCIIShaderParams: Codable, Equatable, Sendable {
     /// `fillASCII.png` / `edgesASCII.png` atlases. Non-nil triggers runtime
     /// atlas generation via `ASCIIAtlasGenerator`.
     public var characters: String?
+    /// PostScript font name for runtime glyph rasterisation. `nil` picks
+    /// Menlo. Any installed system font name is accepted.
+    public var fontName: String?
+    /// Orthogonal to `characters` / `fontName`. Controls the atlas cell
+    /// size independently:
+    ///   - false (default): 8×8 atlas. Pure-default case (no chars, no
+    ///     font, no hi-res) reads the baked `fillASCII.png` pixel-art PNG;
+    ///     anything customised rasterises through Core Text at 8×8.
+    ///   - true: 16×16 atlas, always Core Text. Sharper serif / antialias
+    ///     edge at 4× the atlas bytes.
+    ///
+    /// The toggle was previously coupled to "whether we rasterise at all",
+    /// which made flipping it also swap the glyph *source* (baked PNG →
+    /// Core Text). That was the UX trap the user flagged. Now the toggle
+    /// only controls resolution; glyph source changes only with
+    /// characters/font edits.
+    public var highDetail: Bool
 
     public init(
         cellSize: Int = 10,
@@ -1096,7 +1113,9 @@ public struct ASCIIShaderParams: Codable, Equatable, Sendable {
         exposure: Double = 1.0,
         attenuation: Double = 1.0,
         blackLevel: Double = 0.0,
-        characters: String? = nil
+        characters: String? = nil,
+        fontName: String? = nil,
+        highDetail: Bool = false
     ) {
         self.cellSize = cellSize
         self.edgeBias = edgeBias
@@ -1106,11 +1125,13 @@ public struct ASCIIShaderParams: Codable, Equatable, Sendable {
         self.attenuation = attenuation
         self.blackLevel = blackLevel
         self.characters = characters
+        self.fontName = fontName
+        self.highDetail = highDetail
     }
 
     private enum CodingKeys: String, CodingKey {
         case cellSize, edgeBias, colorMode, foreground, background, invert
-        case exposure, attenuation, blackLevel, characters
+        case exposure, attenuation, blackLevel, characters, fontName, highDetail
     }
 
     public init(from decoder: Decoder) throws {
@@ -1133,7 +1154,9 @@ public struct ASCIIShaderParams: Codable, Equatable, Sendable {
             exposure: try container.decodeIfPresent(Double.self, forKey: .exposure) ?? 1.0,
             attenuation: try container.decodeIfPresent(Double.self, forKey: .attenuation) ?? 1.0,
             blackLevel: try container.decodeIfPresent(Double.self, forKey: .blackLevel) ?? 0.0,
-            characters: try container.decodeIfPresent(String.self, forKey: .characters)
+            characters: try container.decodeIfPresent(String.self, forKey: .characters),
+            fontName: try container.decodeIfPresent(String.self, forKey: .fontName),
+            highDetail: try container.decodeIfPresent(Bool.self, forKey: .highDetail) ?? false
         )
     }
 
@@ -1149,6 +1172,10 @@ public struct ASCIIShaderParams: Codable, Equatable, Sendable {
         if let characters, !characters.isEmpty {
             try container.encode(characters, forKey: .characters)
         }
+        if let fontName, !fontName.isEmpty {
+            try container.encode(fontName, forKey: .fontName)
+        }
+        if highDetail { try container.encode(highDetail, forKey: .highDetail) }
     }
 }
 
