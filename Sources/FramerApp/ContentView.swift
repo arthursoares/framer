@@ -14,7 +14,6 @@ struct ContentView: View {
             HStack(spacing: 0) {
                 CanvasView(showOriginal: $showOriginal)
                 InspectorView()
-                    .frame(width: 320)
             }
         }
         .frame(minWidth: 900, minHeight: 650)
