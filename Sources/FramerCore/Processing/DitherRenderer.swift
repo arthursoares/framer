@@ -1473,7 +1473,6 @@ public enum DitherRenderer {
         palette: [CodableColor]
     ) throws {
         guard !palette.isEmpty else { return }
-        let count = width * height
 
         // Pre-convert palette to linear RGB once.
         let paletteLinear: [(Double, Double, Double)] = palette.map { c in

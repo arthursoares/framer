@@ -317,7 +317,6 @@ static float4 asciiVariant(
     // Cell coordinates (origin = top-left of the cell, in pixel space).
     float2 cellIdx       = floor(pixel * invCell);
     float2 cellOriginPx  = cellIdx * cellSizeF;
-    float2 cellCenterPx  = cellOriginPx + float2(cellSizeF * 0.5);
     float2 localPx       = pixel - cellOriginPx;       // 0 .. cellSize
 
     // ---- Per-pixel cell statistics (faithful port of CPU algorithm) --------

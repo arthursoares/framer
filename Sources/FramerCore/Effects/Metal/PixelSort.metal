@@ -51,13 +51,16 @@ struct PixelSortUniforms {
     float _pad2;
 };
 
-constant uint PS_MODE_LUMINANCE = 0u;
+// Mode 0 is luminance (the default); referenced implicitly via switch
+// `default:`. The Kim-Asendorf modes below need explicit constants for
+// clarity in the per-mode passthrough logic.
 constant uint PS_MODE_KIM_BLACK = 1u;
 constant uint PS_MODE_KIM_WHITE = 2u;
 constant uint PS_MODE_KIM_BRIGHT = 3u;
 constant uint PS_MODE_KIM_DARK = 4u;
 
-constant uint PS_DIR_HORIZONTAL = 0u;
+// Direction 0 is horizontal (default); vertical + diagonal need explicit
+// constants for the axis-selection branches.
 constant uint PS_DIR_VERTICAL = 1u;
 constant uint PS_DIR_DIAGONAL = 2u;
 
