@@ -26,6 +26,7 @@
 		520BFA062991397A6556B18B /* PresetPreviewCard.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1987EB46D78379EB25A7E6A5 /* PresetPreviewCard.swift */; };
 		561898C8DF6823EB3F4391AC /* AsyncThumbnail.swift in Sources */ = {isa = PBXBuildFile; fileRef = 419FD91DCB79FF87568D1118 /* AsyncThumbnail.swift */; };
 		5892BBEB7A0417F38655E94A /* EditorView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 64CED49C5EAE3C454E6EFF20 /* EditorView.swift */; };
+		5936B8F040EAD4CACF703F02 /* SidebarCompoundControlBlock.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9FCDE64F375DC8E762C4EF08 /* SidebarCompoundControlBlock.swift */; };
 		5A2B972194FE5D29D42336D4 /* InspectorView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 388ADD8B50D095C06DE84470 /* InspectorView.swift */; };
 		6008AC967F78C371F1DE8F51 /* PreviewArea.swift in Sources */ = {isa = PBXBuildFile; fileRef = B2205885A0B72C7BB1800460 /* PreviewArea.swift */; };
 		62B6DBD3B476520075DE5BB6 /* BottomPanel.swift in Sources */ = {isa = PBXBuildFile; fileRef = FC61E7BD757670C3FC26800E /* BottomPanel.swift */; };
@@ -39,6 +40,7 @@
 		7E26ACB4EBE5DD197F9C9E0C /* ExifInfoBar.swift in Sources */ = {isa = PBXBuildFile; fileRef = 69843CE860C9D64774BF6A76 /* ExifInfoBar.swift */; };
 		83C339C5F6907392A7F11225 /* ImageThumbnailLoader.swift in Sources */ = {isa = PBXBuildFile; fileRef = D5BE1B7F799CD269EE2C1411 /* ImageThumbnailLoader.swift */; };
 		8B4266040896BBED84762794 /* textures in Resources */ = {isa = PBXBuildFile; fileRef = B1EC2164F8A3DF317311D2C8 /* textures */; };
+		978253B97253BE5ACF13ABA0 /* SidebarStateStyle.swift in Sources */ = {isa = PBXBuildFile; fileRef = 31D2CC0ACDC965EF2817C67B /* SidebarStateStyle.swift */; };
 		9F2D984FABBFC95FBD860A67 /* fonts in Resources */ = {isa = PBXBuildFile; fileRef = F74958A269010D4B0BF9A7DE /* fonts */; };
 		A33B23C72428E520B21D613C /* SidebarSection.swift in Sources */ = {isa = PBXBuildFile; fileRef = F897939392FCE2D13C8C970F /* SidebarSection.swift */; };
 		A687E051304ECD37FDB039D2 /* SidebarShell.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3542BBBACEDB4B91751AC57E /* SidebarShell.swift */; };
@@ -54,6 +56,7 @@
 		D7FE5C7F33D376CDFFC38EF1 /* DesignTokens.swift in Sources */ = {isa = PBXBuildFile; fileRef = 25B70C60CE00225EA953971F /* DesignTokens.swift */; };
 		DAF4447EF4E27C19DC3B3FF0 /* FramerApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = E4A8C555BBECD2011E74D76D /* FramerApp.swift */; };
 		DBDA64D074DBEBB47CA50CD5 /* fonts in Resources */ = {isa = PBXBuildFile; fileRef = F74958A269010D4B0BF9A7DE /* fonts */; };
+		E4773A5DAA593611F249C759 /* SidebarControlRow.swift in Sources */ = {isa = PBXBuildFile; fileRef = 47D49D16C308457CF2ABD0E6 /* SidebarControlRow.swift */; };
 		EF8F6E68028E690EFF0EA667 /* AppState.swift in Sources */ = {isa = PBXBuildFile; fileRef = F5FEA0A44FC6AF06DDC8F260 /* AppState.swift */; };
 		F28CEFF9394A0CAD1B963EDC /* LayerStrip.swift in Sources */ = {isa = PBXBuildFile; fileRef = CE5B96A143FA192F9CB0A8C1 /* LayerStrip.swift */; };
 		FC5BB028D5897E5F76991EA5 /* ContentView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8154A40DD384301E5946B867 /* ContentView.swift */; };
@@ -81,11 +84,13 @@
 		265766D49FCE4081CCC68D33 /* ZoomState.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ZoomState.swift; sourceTree = "<group>"; };
 		2CCD20EFA5AE852B42CBE53D /* AppState.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppState.swift; sourceTree = "<group>"; };
 		2ECE914F3685664254BD04DB /* ExportBar.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ExportBar.swift; sourceTree = "<group>"; };
+		31D2CC0ACDC965EF2817C67B /* SidebarStateStyle.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SidebarStateStyle.swift; sourceTree = "<group>"; };
 		3542BBBACEDB4B91751AC57E /* SidebarShell.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SidebarShell.swift; sourceTree = "<group>"; };
 		388ADD8B50D095C06DE84470 /* InspectorView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = InspectorView.swift; sourceTree = "<group>"; };
 		414976629E834E023AEDF80D /* BlendModeControls.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BlendModeControls.swift; sourceTree = "<group>"; };
 		419FD91DCB79FF87568D1118 /* AsyncThumbnail.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AsyncThumbnail.swift; sourceTree = "<group>"; };
 		448D6F42AA7A9F492A2E3436 /* ColorPickerWithHex.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ColorPickerWithHex.swift; sourceTree = "<group>"; };
+		47D49D16C308457CF2ABD0E6 /* SidebarControlRow.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SidebarControlRow.swift; sourceTree = "<group>"; };
 		4DE56DAAC5828B812648B0F7 /* ZoomIndicator.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ZoomIndicator.swift; sourceTree = "<group>"; };
 		5185171443CC5F670066735A /* SidebarLayoutPolicy.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SidebarLayoutPolicy.swift; sourceTree = "<group>"; };
 		581B811C4BA8979C815A4C7F /* FramerAppTests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = FramerAppTests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
@@ -101,6 +106,7 @@
 		8A6E6F60B12048759BD1E60C /* PreviewViewModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PreviewViewModel.swift; sourceTree = "<group>"; };
 		99841491BD0A545FF7E469B5 /* FramerMobile.app */ = {isa = PBXFileReference; includeInIndex = 0; lastKnownFileType = wrapper.application; path = FramerMobile.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		9B9A4BC738FB9F539C9A7AFB /* Framer.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = Framer.app; sourceTree = BUILT_PRODUCTS_DIR; };
+		9FCDE64F375DC8E762C4EF08 /* SidebarCompoundControlBlock.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SidebarCompoundControlBlock.swift; sourceTree = "<group>"; };
 		A8E704CEA7DD5812C7E8E102 /* SidebarLayoutPolicyTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SidebarLayoutPolicyTests.swift; sourceTree = "<group>"; };
 		AE7BB8B482ABBCD04C635554 /* swiftui-review */ = {isa = PBXFileReference; lastKnownFileType = folder; name = "swiftui-review"; path = .; sourceTree = SOURCE_ROOT; };
 		AF1AFA1E768D2A7B8991C8FA /* ZoomIndicator.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ZoomIndicator.swift; sourceTree = "<group>"; };
@@ -271,10 +277,13 @@
 		92DD413C9F3B3F8B7CAF2ACF /* Sidebar */ = {
 			isa = PBXGroup;
 			children = (
+				9FCDE64F375DC8E762C4EF08 /* SidebarCompoundControlBlock.swift */,
+				47D49D16C308457CF2ABD0E6 /* SidebarControlRow.swift */,
 				5185171443CC5F670066735A /* SidebarLayoutPolicy.swift */,
 				7A91B04DC698FB944769C025 /* SidebarMetrics.swift */,
 				F897939392FCE2D13C8C970F /* SidebarSection.swift */,
 				3542BBBACEDB4B91751AC57E /* SidebarShell.swift */,
+				31D2CC0ACDC965EF2817C67B /* SidebarStateStyle.swift */,
 			);
 			path = Sidebar;
 			sourceTree = "<group>";
@@ -531,10 +540,13 @@
 				520BFA062991397A6556B18B /* PresetPreviewCard.swift in Sources */,
 				189C0C29CB6FD5F19617D667 /* PresetPreviewGrid.swift in Sources */,
 				02AB8ECED2BAEEB2B7CC18BA /* PreviewViewModel.swift in Sources */,
+				5936B8F040EAD4CACF703F02 /* SidebarCompoundControlBlock.swift in Sources */,
+				E4773A5DAA593611F249C759 /* SidebarControlRow.swift in Sources */,
 				BFD5228CA6C009F13C4D327A /* SidebarLayoutPolicy.swift in Sources */,
 				27840E879F2D1EFA8AC27B30 /* SidebarMetrics.swift in Sources */,
 				A33B23C72428E520B21D613C /* SidebarSection.swift in Sources */,
 				A687E051304ECD37FDB039D2 /* SidebarShell.swift in Sources */,
+				978253B97253BE5ACF13ABA0 /* SidebarStateStyle.swift in Sources */,
 				FC79FBDAF4E782AEE11A281A /* StyledSlider.swift in Sources */,
 				6D03D0240A8EA39304652EE3 /* StyledToggle.swift in Sources */,
 				6DB96B62D16D31C822C1E0FD /* ZoomIndicator.swift in Sources */,
