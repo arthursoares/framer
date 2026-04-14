@@ -45,13 +45,22 @@ public enum MetalTextureSupport {
     /// Upload a `CGImage` to a private-storage `MTLTexture` suitable as a
     /// fragment-shader input. Disables sRGB conversion so colour values come
     /// through unchanged (the .metal helpers expect linear/passthrough input).
+    ///
+    /// Inputs are normalised to `.premultipliedLast` RGBA before upload.
+    /// Without this, `MTKTextureLoader` internally attempts
+    /// `CGBitmapContextCreate` using the source image's native alpha info —
+    /// some images (notably certain PNG/HEIC decodes) produce
+    /// `.alphaLast` (non-premultiplied), which `CGBitmapContextCreate`
+    /// rejects with "unsupported parameter combination". The loader then
+    /// falls back to an incorrect path, producing visibly wrong colours.
     public static func makeTexture(
         from image: CGImage,
         device: MTLDevice
     ) throws -> MTLTexture {
+        let normalized = normalizedForTextureUpload(image)
         let loader = MTKTextureLoader(device: device)
         do {
-            return try loader.newTexture(cgImage: image, options: [
+            return try loader.newTexture(cgImage: normalized, options: [
                 .SRGB: NSNumber(value: false),
                 .textureUsage: NSNumber(value: MTLTextureUsage.shaderRead.rawValue),
                 .textureStorageMode: NSNumber(value: MTLStorageMode.private.rawValue),
@@ -59,6 +68,41 @@ public enum MetalTextureSupport {
         } catch {
             throw MetalEffectError.textureLoadFailed(error.localizedDescription)
         }
+    }
+
+    /// If `image` already has a CGBitmapContext-compatible alpha layout,
+    /// returns it unchanged. Otherwise redraws into a `.premultipliedLast`
+    /// RGBA8 context. The compatible set is the one Core Graphics accepts
+    /// for 8-bit-per-component RGB contexts per Apple's supported-pixel-
+    /// formats documentation.
+    private static func normalizedForTextureUpload(_ image: CGImage) -> CGImage {
+        let rawMasked = image.bitmapInfo.rawValue & CGBitmapInfo.alphaInfoMask.rawValue
+        let supported: Set<UInt32> = [
+            CGImageAlphaInfo.premultipliedLast.rawValue,
+            CGImageAlphaInfo.premultipliedFirst.rawValue,
+            CGImageAlphaInfo.noneSkipLast.rawValue,
+            CGImageAlphaInfo.noneSkipFirst.rawValue,
+            CGImageAlphaInfo.none.rawValue,
+        ]
+        if supported.contains(rawMasked) {
+            return image
+        }
+
+        let w = image.width
+        let h = image.height
+        guard let ctx = CGContext(
+            data: nil,
+            width: w,
+            height: h,
+            bitsPerComponent: 8,
+            bytesPerRow: w * 4,
+            space: CGColorSpaceCreateDeviceRGB(),
+            bitmapInfo: CGImageAlphaInfo.premultipliedLast.rawValue
+        ) else {
+            return image  // Best effort: let MTKTextureLoader fail downstream.
+        }
+        ctx.draw(image, in: CGRect(x: 0, y: 0, width: w, height: h))
+        return ctx.makeImage() ?? image
     }
 
     // MARK: - LUT atlas loader (cached)
