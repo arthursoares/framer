@@ -26,6 +26,51 @@ import CoreGraphics
 import CoreText
 import Metal
 
+/// Human-facing character palette choices. Not persisted directly — the UI
+/// translates presets to / from `ASCIIShaderParams.characters`:
+///
+///   - `.default`: nil `characters` (uses the baked `fillASCII.png` atlas,
+///     which is hand-tuned pixel art at the 8×8 cell size — higher quality
+///     than Core-Text-rasterised 8pt glyphs for the classic ramp).
+///   - preset case: `characters` = the preset's literal string; the atlas
+///     generator rasterises it at load time.
+///   - `.custom`: `characters` holds an arbitrary user string that doesn't
+///     match any preset.
+public enum ASCIIPreset: String, CaseIterable, Sendable {
+    case `default` = "Default"
+    case classic   = "Classic"
+    case blocks    = "Blocks"
+    case binary    = "Binary"
+    case dense     = "Dense"
+    case custom    = "Custom"
+
+    /// Returns `nil` for `.default` (caller should store nil on the params)
+    /// and `nil` for `.custom` (caller preserves the user's live string).
+    /// Every other case returns its literal palette string.
+    public var characters: String? {
+        switch self {
+        case .default: return nil
+        case .classic: return " .:-=+*#%@"
+        case .blocks:  return " ░▒▓█"
+        case .binary:  return " 01"
+        case .dense:   return " .·•●"
+        case .custom:  return nil
+        }
+    }
+
+    /// Derive the preset that matches a stored `characters` value. Used to
+    /// initialise the picker selection from a saved layer: `nil` → Default,
+    /// any string matching a known preset → that preset, anything else →
+    /// Custom.
+    public static func matching(_ characters: String?) -> ASCIIPreset {
+        guard let characters else { return .default }
+        for preset in ASCIIPreset.allCases where preset != .custom && preset != .default {
+            if preset.characters == characters { return preset }
+        }
+        return .custom
+    }
+}
+
 public enum ASCIIAtlasGenerator {
 
     // MARK: - Public API
@@ -96,7 +141,7 @@ public enum ASCIIAtlasGenerator {
         let leading: Int
         switch kind {
         case .fill:
-            glyphs = paddedFillGlyphs(style.fillCharacters)
+            glyphs = Self.mappedFillGlyphs(style.fillCharacters)
             leading = 0
         case .edges:
             glyphs = paddedEdgeGlyphs(style.edgeCharacters)
@@ -136,19 +181,26 @@ public enum ASCIIAtlasGenerator {
     private static let atlasWidth = 80      // cellSize * totalCells
     private static let atlasHeight = 8
 
-    /// Pad or truncate the fill string to exactly 10 characters, preserving
-    /// the user's dim-to-bright ordering. Short strings fill the tail with
-    /// spaces (dim), so `"@"` alone becomes `"        @ "` — entirely blank
-    /// until the brightest level lights up the `@`.
-    private static func paddedFillGlyphs(_ s: String) -> [Character] {
-        var chars = Array(s)
-        if chars.count >= totalCells {
-            return Array(chars.prefix(totalCells))
+    /// Distribute N user characters across the 10 luminance slots so any
+    /// palette size produces a coherent ramp. Slot i (0..9, dim → bright)
+    /// samples `chars[floor(i * N / 10)]`. One-character strings therefore
+    /// render a solid field of that character at every luminance level;
+    /// three-character `"0.@"` splits into 4/3/3 dark/mid/bright bands;
+    /// exactly ten characters is a one-to-one mapping. More than ten
+    /// characters truncate to the first ten.
+    ///
+    /// The old implementation padded short strings with leading spaces,
+    /// which meant `"@"` rendered as mostly blank output — confusing
+    /// failure mode for a beginner exploring the UI. This replacement
+    /// makes any N ≥ 1 produce a visibly active ramp.
+    public static func mappedFillGlyphs(_ s: String) -> [Character] {
+        let chars = Array(s)
+        guard !chars.isEmpty else { return Array(repeating: " ", count: totalCells) }
+        let n = min(chars.count, totalCells)
+        return (0..<totalCells).map { slot in
+            let idx = min(n - 1, slot * n / totalCells)
+            return chars[idx]
         }
-        while chars.count < totalCells {
-            chars.insert(" ", at: 0)  // dim end of ramp
-        }
-        return chars
     }
 
     /// Edges always occupy slots 1..4 in the atlas (per shader offset). Pad
