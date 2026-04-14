@@ -153,6 +153,27 @@ struct LayerDetailView: View {
     }
 }
 
+/// Mobile blend-mode + opacity picker used by every visual adjustment
+/// layer's inspector. Mirrors `BlendModeControls` on the desktop.
+private struct MobileBlendModeControls: View {
+    @Binding var blendMode: LayerBlendMode
+    @Binding var opacity: Double
+
+    var body: some View {
+        ControlRow(label: "Blend") {
+            Picker("", selection: $blendMode) {
+                ForEach(LayerBlendMode.allCases, id: \.self) { mode in
+                    Text(mode.label).tag(mode)
+                }
+            }
+            .pickerStyle(.menu)
+        }
+        ControlRow(label: "Opacity (\(Int((opacity * 100).rounded()))%)") {
+            Slider(value: $opacity, in: 0...1, step: 0.01)
+        }
+    }
+}
+
 private struct GPUEffectControls: View {
     var params: GPUEffectLayerParams
     var onChange: (GPUEffectLayerParams) -> Void
@@ -165,6 +186,16 @@ private struct GPUEffectControls: View {
             ControlRow(label: "Effect") {
                 Label(params.kind.label, systemImage: params.kind.menuIcon)
             }
+            MobileBlendModeControls(
+                blendMode: Binding(
+                    get: { params.blendMode },
+                    set: { var p = params; p.blendMode = $0; onChange(p) }
+                ),
+                opacity: Binding(
+                    get: { params.opacity },
+                    set: { var p = params; p.opacity = $0; onChange(p) }
+                )
+            )
 
             ControlRow(label: "Scale") {
                 HStack {
@@ -1993,6 +2024,16 @@ private struct DitherControls: View {
 
     var body: some View {
         VStack(spacing: 8) {
+            MobileBlendModeControls(
+                blendMode: Binding(
+                    get: { params.blendMode },
+                    set: { var p = params; p.blendMode = $0; onChange(p) }
+                ),
+                opacity: Binding(
+                    get: { params.opacity },
+                    set: { var p = params; p.opacity = $0; onChange(p) }
+                )
+            )
             ControlRow(label: "Algorithm") {
                 Picker("", selection: Binding(
                     get: { params.algorithm },
@@ -2330,6 +2371,16 @@ private struct ShaderControls: View {
 
     var body: some View {
         VStack(spacing: 8) {
+            MobileBlendModeControls(
+                blendMode: Binding(
+                    get: { params.blendMode },
+                    set: { var p = params; p.blendMode = $0; onChange(p) }
+                ),
+                opacity: Binding(
+                    get: { params.opacity },
+                    set: { var p = params; p.opacity = $0; onChange(p) }
+                )
+            )
             ControlRow(label: "Style") {
                 Picker("", selection: Binding(
                     get: { params.style },
@@ -3026,6 +3077,16 @@ private struct LUTControls: View {
 
     var body: some View {
         VStack(spacing: 8) {
+            MobileBlendModeControls(
+                blendMode: Binding(
+                    get: { params.blendMode },
+                    set: { var p = params; p.blendMode = $0; onChange(p) }
+                ),
+                opacity: Binding(
+                    get: { params.opacity },
+                    set: { var p = params; p.opacity = $0; onChange(p) }
+                )
+            )
             if availableLUTs.isEmpty {
                 emptyState
             } else {

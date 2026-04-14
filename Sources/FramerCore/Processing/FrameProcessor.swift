@@ -160,7 +160,17 @@ public actor FrameProcessor {
                     parameters: params.params,
                     outputSize: CGSize(width: result.image.width, height: result.image.height)
                 )
-                result = BorderResult(image: rendered, imageOrigin: result.imageOrigin, imageSize: result.imageSize)
+                // Compose with layer-level blend mode + opacity. At defaults
+                // (.normal, 1.0) the compositor short-circuits to a direct
+                // return of `rendered`, so pre-blend-modes presets render
+                // identically to before this commit.
+                let composed = try LayerCompositor.compose(
+                    base: result.image,
+                    over: rendered,
+                    mode: params.blendMode,
+                    opacity: params.opacity
+                )
+                result = BorderResult(image: composed, imageOrigin: result.imageOrigin, imageSize: result.imageSize)
 
             default:
                 result = try BorderRenderer.applyLayers(

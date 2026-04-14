@@ -474,6 +474,17 @@ struct GPUEffectLayerControls: View {
                 Spacer()
             }
 
+            BlendModeControls(
+                blendMode: Binding(
+                    get: { params.blendMode },
+                    set: { var p = params; p.blendMode = $0; onChange(p) }
+                ),
+                opacity: Binding(
+                    get: { params.opacity },
+                    set: { var p = params; p.opacity = $0; onChange(p) }
+                )
+            )
+
             // Global control blocks are gated by GPUEffectKind capability flags.
             // Each variant's shader only reads a subset of the shared
             // common/geometry/color uniforms — showing sliders the shader
@@ -3118,6 +3129,17 @@ struct DitherLayerControls: View {
     var onChange: (DitherLayerParams) -> Void
 
     var body: some View {
+        BlendModeControls(
+            blendMode: Binding(
+                get: { params.blendMode },
+                set: { var p = params; p.blendMode = $0; onChange(p) }
+            ),
+            opacity: Binding(
+                get: { params.opacity },
+                set: { var p = params; p.opacity = $0; onChange(p) }
+            )
+        )
+
         Picker("Algorithm", selection: algorithmBinding) {
             ForEach(DitherAlgorithm.allCases, id: \.self) { algo in
                 Text(algo.label).tag(algo)
@@ -3462,6 +3484,16 @@ struct LUTLayerControls: View {
 
     var body: some View {
         VStack(spacing: 12) {
+            BlendModeControls(
+                blendMode: Binding(
+                    get: { params.blendMode },
+                    set: { var p = params; p.blendMode = $0; onChange(p) }
+                ),
+                opacity: Binding(
+                    get: { params.opacity },
+                    set: { var p = params; p.opacity = $0; onChange(p) }
+                )
+            )
             lutPicker
             lutThumbnailStrip
             intensityControl
@@ -3805,6 +3837,17 @@ struct ShaderLayerControls: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 8) {
+            BlendModeControls(
+                blendMode: Binding(
+                    get: { params.blendMode },
+                    set: { var p = params; p.blendMode = $0; onChange(p) }
+                ),
+                opacity: Binding(
+                    get: { params.opacity },
+                    set: { var p = params; p.opacity = $0; onChange(p) }
+                )
+            )
+
             Picker("Style", selection: Binding(
                 get: { params.style },
                 set: { onChange(params.withStyle($0)) }
