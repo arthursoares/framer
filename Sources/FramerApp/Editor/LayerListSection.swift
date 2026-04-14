@@ -4146,6 +4146,27 @@ struct ShaderLayerControls: View {
             }
         }
 
+        // Span criterion. Luminance is the classic Framer behaviour; the four
+        // Kim Asendorf cases come from the original 2010 ASDF Pixel Sort
+        // Processing sketch — each picks a different kind of "keep sorting"
+        // predicate so the sorted streaks emerge from different regions of
+        // the image. Previously shipping in the data model + shader but
+        // hidden from the UI.
+        Picker("Span Mode", selection: Binding(
+            get: { pixelSortParams.spanMode },
+            set: { value in
+                var updated = pixelSortParams; updated.spanMode = value
+                onChange(params.withParams(.pixelSort(updated)))
+            }
+        )) {
+            Text("Luminance").tag(PixelSortSpanMode.luminance)
+            Text("Black (Kim)").tag(PixelSortSpanMode.kimBlack)
+            Text("White (Kim)").tag(PixelSortSpanMode.kimWhite)
+            Text("Bright (Kim)").tag(PixelSortSpanMode.kimBright)
+            Text("Dark (Kim)").tag(PixelSortSpanMode.kimDark)
+        }
+        .pickerStyle(.menu)
+
         sliderRow(
             title: "Threshold",
             value: pixelSortParams.threshold,
@@ -4166,6 +4187,20 @@ struct ShaderLayerControls: View {
             updated.span = Int(value.rounded())
             onChange(params.withParams(.pixelSort(updated)))
         }
+        // Per-line threshold jitter: each row/column/diagonal gets a
+        // deterministic hash of its line coordinate modulating the
+        // threshold by up to ±25% (at randomness=1). Breaks up the
+        // mechanical "every row the same length" look without making the
+        // effect non-deterministic between renders.
+        sliderRow(
+            title: "Randomness",
+            value: pixelSortParams.randomness,
+            range: 0...1,
+            step: 0.05
+        ) { value in
+            var updated = pixelSortParams; updated.randomness = value
+            onChange(params.withParams(.pixelSort(updated)))
+        }
         sliderRow(
             title: "Amount",
             value: pixelSortParams.amount,
@@ -4176,6 +4211,15 @@ struct ShaderLayerControls: View {
             updated.amount = value
             onChange(params.withParams(.pixelSort(updated)))
         }
+        // Flip sort direction — sorts descending by luminance (bright at
+        // start of span) instead of ascending.
+        Toggle("Reverse", isOn: Binding(
+            get: { pixelSortParams.reverse },
+            set: { value in
+                var updated = pixelSortParams; updated.reverse = value
+                onChange(params.withParams(.pixelSort(updated)))
+            }
+        ))
     }
 
     @ViewBuilder

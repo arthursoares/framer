@@ -2690,6 +2690,25 @@ private struct ShaderControls: View {
             .pickerStyle(.segmented)
         }
 
+        // Span criterion: Luminance (classic) + 4 Kim Asendorf modes. See
+        // LayerListSection.pixelSortControls for the rationale.
+        ControlRow(label: "Span Mode") {
+            Picker("", selection: Binding(
+                get: { pixelSortParams.spanMode },
+                set: { value in
+                    var updated = pixelSortParams; updated.spanMode = value
+                    onChange(params.withParams(.pixelSort(updated)))
+                }
+            )) {
+                Text("Luminance").tag(PixelSortSpanMode.luminance)
+                Text("Black (Kim)").tag(PixelSortSpanMode.kimBlack)
+                Text("White (Kim)").tag(PixelSortSpanMode.kimWhite)
+                Text("Bright (Kim)").tag(PixelSortSpanMode.kimBright)
+                Text("Dark (Kim)").tag(PixelSortSpanMode.kimDark)
+            }
+            .pickerStyle(.menu)
+        }
+
         sliderRow(
             label: "Threshold",
             value: pixelSortParams.threshold,
@@ -2711,6 +2730,15 @@ private struct ShaderControls: View {
             onChange(params.withParams(.pixelSort(updated)))
         }
         sliderRow(
+            label: "Randomness",
+            value: pixelSortParams.randomness,
+            range: 0...1,
+            step: 0.05
+        ) { value in
+            var updated = pixelSortParams; updated.randomness = value
+            onChange(params.withParams(.pixelSort(updated)))
+        }
+        sliderRow(
             label: "Amount",
             value: pixelSortParams.amount,
             range: expandedRange(0...1, including: pixelSortParams.amount),
@@ -2719,6 +2747,17 @@ private struct ShaderControls: View {
             var updated = pixelSortParams
             updated.amount = value
             onChange(params.withParams(.pixelSort(updated)))
+        }
+
+        ControlRow(label: "Reverse") {
+            Toggle("", isOn: Binding(
+                get: { pixelSortParams.reverse },
+                set: { value in
+                    var updated = pixelSortParams; updated.reverse = value
+                    onChange(params.withParams(.pixelSort(updated)))
+                }
+            ))
+            .labelsHidden()
         }
     }
 
