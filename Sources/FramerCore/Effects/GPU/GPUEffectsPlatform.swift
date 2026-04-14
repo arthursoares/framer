@@ -27,9 +27,25 @@ public final class GPUEffectsPlatform {
         parameters: GPUEffectParameters,
         outputSize: CGSize
     ) throws -> CGImage {
-        _ = effect
-        _ = encodedParameters(for: parameters)
+        try Self.dispatchRenderPreview(
+            input: input,
+            effect: effect,
+            parameters: parameters,
+            outputSize: outputSize
+        )
+    }
 
+    /// Stateless dispatch entry point. Routes a `.gpuEffect` parameter set to
+    /// the corresponding bucket renderer. Each renderer attempts its GPU path
+    /// and falls back to CPU on `MetalEffectError`, so callers can dispatch
+    /// without first proving Metal is available — required to support headless
+    /// hosts where `MTLCreateSystemDefaultDevice()` returns nil.
+    public static func dispatchRenderPreview(
+        input: CGImage,
+        effect: GPUEffectKind,
+        parameters: GPUEffectParameters,
+        outputSize: CGSize
+    ) throws -> CGImage {
         switch parameters {
         case .textCell:
             return try TextCellBucketRenderer.renderPreview(input: input, effect: effect, parameters: parameters, outputSize: outputSize)
