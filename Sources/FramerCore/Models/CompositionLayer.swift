@@ -1145,6 +1145,15 @@ public enum PixelSortSpanMode: String, Codable, Equatable, Sendable, CaseIterabl
     case kimDark
 }
 
+/// What value each pixel is ranked by when sorting inside a span. Orthogonal
+/// to `PixelSortSpanMode` (which decides what counts as a span): span mode
+/// picks the *region*, sort criterion picks the *ordering*. Reusing the
+/// existing `PixelSortMode` enum from the `.gpuEffect.glitch.pixelSort`
+/// bucket — same semantics (brightness = max(r,g,b), luminance = Rec.601,
+/// hue = HSV angle), just now reachable from the `.shader.pixelSort` path
+/// too.
+public typealias PixelSortCriterion = PixelSortMode
+
 public struct PixelSortShaderParams: Codable, Equatable, Sendable {
     public var threshold: Double
     public var direction: PixelSortDirection
@@ -1153,12 +1162,16 @@ public struct PixelSortShaderParams: Codable, Equatable, Sendable {
     /// Span detection criterion. Defaults to `.luminance` so existing presets
     /// behave identically to before this knob existed.
     public var spanMode: PixelSortSpanMode
+    /// Sort criterion — what value each pixel contributes to the ordering
+    /// inside a span. Orthogonal to `spanMode`. Default `.luminance` keeps
+    /// the classic behaviour (sort streaks by perceived intensity).
+    public var sortBy: PixelSortCriterion
     /// Per-line threshold jitter (0 = uniform, 1 = ±25% per row/column/diagonal).
     /// Each line gets a deterministic hash of its `lineCoord` modulating the
     /// effective threshold — adjacent lines get different span lengths,
     /// breaking up the mechanical look. Stable frame-to-frame for stills.
     public var randomness: Double
-    /// Sort descending by luminance instead of ascending.
+    /// Sort descending by the chosen criterion instead of ascending.
     public var reverse: Bool
 
     public init(
@@ -1167,6 +1180,7 @@ public struct PixelSortShaderParams: Codable, Equatable, Sendable {
         span: Int = 24,
         amount: Double = 1.0,
         spanMode: PixelSortSpanMode = .luminance,
+        sortBy: PixelSortCriterion = .luminance,
         randomness: Double = 0.0,
         reverse: Bool = false
     ) {
@@ -1175,12 +1189,13 @@ public struct PixelSortShaderParams: Codable, Equatable, Sendable {
         self.span = span
         self.amount = amount
         self.spanMode = spanMode
+        self.sortBy = sortBy
         self.randomness = randomness
         self.reverse = reverse
     }
 
     private enum CodingKeys: String, CodingKey {
-        case threshold, direction, span, amount, spanMode, randomness, reverse
+        case threshold, direction, span, amount, spanMode, sortBy, randomness, reverse
     }
 
     public init(from decoder: Decoder) throws {
@@ -1193,6 +1208,7 @@ public struct PixelSortShaderParams: Codable, Equatable, Sendable {
             span: try container.decodeIfPresent(Int.self, forKey: .span) ?? 24,
             amount: try container.decodeIfPresent(Double.self, forKey: .amount) ?? 1.0,
             spanMode: try container.decodeIfPresent(PixelSortSpanMode.self, forKey: .spanMode) ?? .luminance,
+            sortBy: try container.decodeIfPresent(PixelSortCriterion.self, forKey: .sortBy) ?? .luminance,
             randomness: try container.decodeIfPresent(Double.self, forKey: .randomness) ?? 0.0,
             reverse: try container.decodeIfPresent(Bool.self, forKey: .reverse) ?? false
         )
@@ -1206,6 +1222,7 @@ public struct PixelSortShaderParams: Codable, Equatable, Sendable {
         try container.encode(amount, forKey: .amount)
         // Skip emitting defaults so existing-style YAML stays clean.
         if spanMode != .luminance { try container.encode(spanMode, forKey: .spanMode) }
+        if sortBy != .luminance { try container.encode(sortBy, forKey: .sortBy) }
         if randomness != 0 { try container.encode(randomness, forKey: .randomness) }
         if reverse { try container.encode(reverse, forKey: .reverse) }
     }

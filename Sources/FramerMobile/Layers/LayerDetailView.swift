@@ -2709,6 +2709,23 @@ private struct ShaderControls: View {
             .pickerStyle(.menu)
         }
 
+        // Sort criterion — what each pixel is ranked by inside a span.
+        // Orthogonal to span mode.
+        ControlRow(label: "Sort By") {
+            Picker("", selection: Binding(
+                get: { pixelSortParams.sortBy },
+                set: { value in
+                    var updated = pixelSortParams; updated.sortBy = value
+                    onChange(params.withParams(.pixelSort(updated)))
+                }
+            )) {
+                Text("Luminance").tag(PixelSortCriterion.luminance)
+                Text("Brightness").tag(PixelSortCriterion.brightness)
+                Text("Hue").tag(PixelSortCriterion.hue)
+            }
+            .pickerStyle(.menu)
+        }
+
         sliderRow(
             label: "Threshold",
             value: pixelSortParams.threshold,

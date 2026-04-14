@@ -54,6 +54,7 @@ enum ShaderPixelSortRenderer {
         let span = max(1, min(256, pixelSortParams.span))
         let randomness = ShaderPrimitives.clamp01(pixelSortParams.randomness)
         let spanMode = pixelSortParams.spanMode
+        let sortBy = pixelSortParams.sortBy
         let reverse = pixelSortParams.reverse
 
         struct PixelSample {
@@ -61,7 +62,9 @@ enum ShaderPixelSortRenderer {
             let g: UInt8
             let b: UInt8
             let a: UInt8
-            let luminance: Double
+            /// Pre-computed sort key — value depends on `sortBy`
+            /// (luminance / brightness=max(r,g,b) / hue).
+            let sortKey: Double
         }
 
         @inline(__always)
@@ -85,6 +88,34 @@ enum ShaderPixelSortRenderer {
             let g = Double(sourcePixels[idx + 1])
             let b = Double(sourcePixels[idx + 2])
             return max(r, max(g, b)) / 255.0
+        }
+
+        // Sort criterion — orthogonal to `spanMode`. Matches the
+        // `psSortValue` switch in PixelSort.metal so CPU and GPU produce
+        // identical sort orderings at matching parameters.
+        @inline(__always)
+        func sortKeyAt(x: Int, y: Int) -> Double {
+            switch sortBy {
+            case .luminance:
+                return luminanceAt(x: x, y: y)
+            case .brightness:
+                return maxRGBAt(x: x, y: y)
+            case .hue:
+                let idx = pixelIndex(x: x, y: y)
+                let r = Double(sourcePixels[idx]) / 255.0
+                let g = Double(sourcePixels[idx + 1]) / 255.0
+                let b = Double(sourcePixels[idx + 2]) / 255.0
+                let cMax = max(r, max(g, b))
+                let cMin = min(r, min(g, b))
+                let delta = cMax - cMin
+                if delta < 1e-5 { return 0 }
+                var h: Double
+                if      cMax == r { h = (g - b) / delta }
+                else if cMax == g { h = 2.0 + (b - r) / delta }
+                else              { h = 4.0 + (r - g) / delta }
+                h /= 6.0
+                return h < 0 ? h + 1.0 : h
+            }
         }
 
         // Same hash recipe as the GPU shader (sin-based fract) so per-line
@@ -122,8 +153,9 @@ enum ShaderPixelSortRenderer {
         }
 
         func sortAndBlit(coords: [(x: Int, y: Int)]) {
-            // Sample, sort by luminance (ascending or descending), write back
-            // blended with the original output buffer by intensity.
+            // Sample, sort by the chosen criterion (luminance / brightness /
+            // hue, ascending or descending), write back blended with the
+            // original output buffer by intensity.
             let samples: [PixelSample] = coords.map { c in
                 let idx = pixelIndex(x: c.x, y: c.y)
                 return PixelSample(
@@ -131,12 +163,12 @@ enum ShaderPixelSortRenderer {
                     g: sourcePixels[idx + 1],
                     b: sourcePixels[idx + 2],
                     a: sourcePixels[idx + 3],
-                    luminance: luminanceAt(x: c.x, y: c.y)
+                    sortKey: sortKeyAt(x: c.x, y: c.y)
                 )
             }
             let sorted = reverse
-                ? samples.sorted { $0.luminance > $1.luminance }
-                : samples.sorted { $0.luminance < $1.luminance }
+                ? samples.sorted { $0.sortKey > $1.sortKey }
+                : samples.sorted { $0.sortKey < $1.sortKey }
             for (offset, c) in coords.enumerated() {
                 let idx = pixelIndex(x: c.x, y: c.y)
                 let s = sorted[offset]
