@@ -2528,7 +2528,14 @@ private struct ShaderControls: View {
                         case .default:
                             updateASCII(asciiParams, characters: .some(nil))
                         case .custom:
-                            let seed = asciiParams.characters ?? ASCIIPreset.classic.characters ?? ""
+                            // Same non-preset-seed logic as desktop: seeding
+                            // with Classic's literal makes `matching(...)`
+                            // flip the picker back to Classic on the next
+                            // render. A short non-preset starter lets the
+                            // user land on Custom and then edit from there.
+                            let current = asciiParams.characters
+                            let alreadyCustom = current.map { ASCIIPreset.matching($0) == .custom } ?? false
+                            let seed: String = alreadyCustom ? (current ?? "") : " .:*@"
                             updateASCII(asciiParams, characters: .some(seed))
                         default:
                             updateASCII(asciiParams, characters: .some(newValue.characters))

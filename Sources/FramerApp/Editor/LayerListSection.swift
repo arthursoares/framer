@@ -3974,10 +3974,15 @@ struct ShaderLayerControls: View {
                     case .default:
                         updateASCII(asciiParams, characters: .some(nil))
                     case .custom:
-                        // Preserve whatever string the user currently has —
-                        // seed with the classic palette if they're picking
-                        // Custom for the first time.
-                        let seed = asciiParams.characters ?? ASCIIPreset.classic.characters ?? ""
+                        // Preserve whatever string the user currently has if
+                        // it's already non-preset. Otherwise seed with a
+                        // deliberately-not-a-preset starter so the picker
+                        // actually stays on Custom — if we seeded with
+                        // Classic's literal the next render would re-derive
+                        // `.classic` and snap the picker back.
+                        let current = asciiParams.characters
+                        let alreadyCustom = current.map { ASCIIPreset.matching($0) == .custom } ?? false
+                        let seed: String = alreadyCustom ? (current ?? "") : " .:*@"
                         updateASCII(asciiParams, characters: .some(seed))
                     default:
                         updateASCII(asciiParams, characters: .some(newValue.characters))
