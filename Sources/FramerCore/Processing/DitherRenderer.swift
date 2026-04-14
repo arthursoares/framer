@@ -124,7 +124,40 @@ public enum DitherRenderer {
     ///   - previewBaseDimension: When set (export path), the max dimension that the preview
     ///     downscaled to. The effective pixel scale is adjusted so the dither cell count
     ///     matches what the preview produced, ensuring consistent visual output.
-    public static func apply(to image: CGImage, params: DitherLayerParams, previewBaseDimension: Int? = nil, sourceImage: CGImage? = nil) throws -> CGImage {
+    /// Public entry point. Tries the GPU path first
+    /// (`DitherGPURenderer.apply`); falls back to `applyCPU` on
+    /// `MetalEffectError` (Metal unavailable, Riemersma which has no GPU
+    /// implementation, or pipeline build failure).
+    ///
+    /// Same signature as the legacy CPU entry — callers (BorderRenderer,
+    /// tests) need no changes.
+    public static func apply(
+        to image: CGImage,
+        params: DitherLayerParams,
+        previewBaseDimension: Int? = nil,
+        sourceImage: CGImage? = nil
+    ) throws -> CGImage {
+        do {
+            return try DitherGPURenderer.apply(
+                to: image,
+                params: params,
+                previewBaseDimension: previewBaseDimension,
+                sourceImage: sourceImage
+            )
+        } catch is MetalEffectError {
+            return try applyCPU(
+                to: image,
+                params: params,
+                previewBaseDimension: previewBaseDimension,
+                sourceImage: sourceImage
+            )
+        }
+    }
+
+    /// CPU implementation. Reachable from tests and from the GPU fallback in
+    /// `apply(...)`. The body is unchanged from the original CPU dither
+    /// renderer; only the entry-point name changed.
+    public static func applyCPU(to image: CGImage, params: DitherLayerParams, previewBaseDimension: Int? = nil, sourceImage: CGImage? = nil) throws -> CGImage {
         let width = image.width
         let height = image.height
         guard width > 0, height > 0 else {
@@ -195,6 +228,12 @@ public enum DitherRenderer {
                 pixels: pixels, width: workW, height: workH,
                 algorithm: params.algorithm, bayerLevel: params.bayerLevel,
                 levels: max(2, min(8, levels)), threshold: threshold
+            )
+        case .palette(let colors):
+            try applyPaletteDither(
+                pixels: pixels, width: workW, height: workH,
+                algorithm: params.algorithm, bayerLevel: params.bayerLevel,
+                threshold: threshold, palette: colors
             )
         }
         try Task.checkCancellation()
@@ -427,6 +466,23 @@ public enum DitherRenderer {
 
         case .riemersma:
             output = try riemersmaDither(lumBuf: &lumBuf, width: width, height: height)
+
+        case .sierra:
+            output = try sierraDither(lumBuf: &lumBuf, width: width, height: height)
+        case .sierraTwoRow:
+            output = try sierraTwoRowDither(lumBuf: &lumBuf, width: width, height: height)
+        case .sierraLite:
+            output = try sierraLiteDither(lumBuf: &lumBuf, width: width, height: height)
+        case .jarvisJudiceNinke:
+            output = try jarvisJudiceNinkeDither(lumBuf: &lumBuf, width: width, height: height)
+        case .burkes:
+            output = try burkesDither(lumBuf: &lumBuf, width: width, height: height)
+        case .interleavedGradientNoise:
+            output = try ignDither(lumBuf: &lumBuf, width: width, height: height)
+        case .cmykHalftone:
+            // CPU fallback: monochrome 6×6 clustered dot. True per-channel
+            // CMYK rotation lives only on the GPU path.
+            output = try cmykHalftoneDither(lumBuf: &lumBuf, width: width, height: height)
         }
 
         // Write back to pixel buffer
@@ -483,7 +539,9 @@ public enum DitherRenderer {
         // Fast path: for ordered algorithms, fuse all 3 channels in a single pass
         // (the threshold value is the same for R, G, B at each pixel)
         let isOrdered = algorithm == .bayer || algorithm == .blueNoise ||
-                        algorithm == .halftone || algorithm == .whiteNoise
+                        algorithm == .halftone || algorithm == .whiteNoise ||
+                        algorithm == .interleavedGradientNoise ||
+                        algorithm == .cmykHalftone
         if isOrdered {
             try applyOrderedColorDitherFused(
                 pixels: pixels, rBuf: &rBuf, gBuf: &gBuf, bBuf: &bBuf,
@@ -535,10 +593,14 @@ public enum DitherRenderer {
                     threshold = cached.data[(y & mask) * cached.size + (x & mask)] - 0.5
                 case .blueNoise:
                     threshold = cachedBlueNoise[(y & 63) * 64 + (x & 63)] - 0.5
-                case .halftone:
+                case .halftone, .cmykHalftone:
+                    // CMYK halftone degrades to monochrome 6×6 on CPU (the
+                    // GPU path handles the per-channel rotated screens).
                     threshold = cachedHalftoneFlat[(y % 6) * 6 + (x % 6)] - 0.5
                 case .whiteNoise:
                     threshold = seededRandom(x: x, y: y) - 0.5
+                case .interleavedGradientNoise:
+                    threshold = ignThreshold(x, y) - 0.5
                 default:
                     threshold = 0 // should not reach here
                 }
@@ -655,6 +717,50 @@ public enum DitherRenderer {
 
         case .riemersma:
             try riemersmaChannelDither(buf: &buf, output: &output, width: width, height: height, maxLevel: maxLevel)
+
+        case .sierra:
+            try serpentineErrorDiffusion(
+                errors: &buf, output: &output, width: width, height: height,
+                maxLevel: maxLevel, distribute: distributeSierra
+            )
+        case .sierraTwoRow:
+            try serpentineErrorDiffusion(
+                errors: &buf, output: &output, width: width, height: height,
+                maxLevel: maxLevel, distribute: distributeSierraTwoRow
+            )
+        case .sierraLite:
+            try serpentineErrorDiffusion(
+                errors: &buf, output: &output, width: width, height: height,
+                maxLevel: maxLevel, distribute: distributeSierraLite
+            )
+        case .jarvisJudiceNinke:
+            try serpentineErrorDiffusion(
+                errors: &buf, output: &output, width: width, height: height,
+                maxLevel: maxLevel, distribute: distributeJJN
+            )
+        case .burkes:
+            try serpentineErrorDiffusion(
+                errors: &buf, output: &output, width: width, height: height,
+                maxLevel: maxLevel, distribute: distributeBurkes
+            )
+
+        // Ordered cases handled by applyOrderedColorDitherFused — these
+        // shouldn't reach here, but provide a safe fallthrough so the switch
+        // stays exhaustive.
+        case .interleavedGradientNoise, .cmykHalftone:
+            for y in 0..<height {
+                if (y & 31) == 0 { try Task.checkCancellation() }
+                let rowOff = y * width
+                for x in 0..<width {
+                    let i = rowOff + x
+                    let threshold = (algorithm == .interleavedGradientNoise
+                                     ? ignThreshold(x, y)
+                                     : cachedHalftoneFlat[(y % 6) * 6 + (x % 6)]) - 0.5
+                    let adjusted = buf[i] + threshold / maxLevel
+                    let quantized = round(adjusted * maxLevel) / maxLevel
+                    output[i] = linearToSRGBByte(quantized)
+                }
+            }
         }
 
         return output
@@ -1025,6 +1131,435 @@ public enum DitherRenderer {
             errors[(y + 2) * width + x] += error * 4.0 / 42.0
             if x + fwd >= 0 && x + fwd < width { errors[(y + 2) * width + (x + fwd)] += error * 2.0 / 42.0 }
             if x + 2 * fwd >= 0 && x + 2 * fwd < width { errors[(y + 2) * width + (x + 2 * fwd)] += error * 1.0 / 42.0 }
+        }
+    }
+
+    // MARK: - Sierra (3-row) Error Diffusion
+    //
+    // Frankie Sierra's filter, divisor 32:
+    //               X 5 3
+    //   2 4 5 4 2
+    //     2 3 2
+
+    private static func sierraDither(
+        lumBuf: inout [Double],
+        width: Int, height: Int
+    ) throws -> [UInt8] {
+        let count = width * height
+        var output = [UInt8](repeating: 0, count: count)
+
+        for y in 0..<height {
+            if (y & 31) == 0 { try Task.checkCancellation() }
+            let leftToRight = (y % 2 == 0)
+            let xRange = leftToRight
+                ? stride(from: 0, to: width, by: 1)
+                : stride(from: width - 1, to: -1, by: -1)
+            for x in xRange {
+                let i = y * width + x
+                let oldVal = max(0, min(1, lumBuf[i]))
+                let newVal: Double = oldVal > 0.5 ? 1.0 : 0.0
+                let err = oldVal - newVal
+                output[i] = newVal > 0.5 ? 255 : 0
+                distributeSierra(&lumBuf, x, y, width, height, err, leftToRight)
+            }
+        }
+        return output
+    }
+
+    private static func distributeSierra(
+        _ errors: inout [Double],
+        _ x: Int, _ y: Int, _ width: Int, _ height: Int,
+        _ error: Double, _ leftToRight: Bool
+    ) {
+        let fwd = leftToRight ? 1 : -1
+        let inv: Double = 1.0 / 32.0
+        if x + fwd >= 0 && x + fwd < width {
+            errors[y * width + (x + fwd)] += error * 5.0 * inv
+        }
+        if x + 2 * fwd >= 0 && x + 2 * fwd < width {
+            errors[y * width + (x + 2 * fwd)] += error * 3.0 * inv
+        }
+        if y + 1 < height {
+            if x - 2 * fwd >= 0 && x - 2 * fwd < width { errors[(y + 1) * width + (x - 2 * fwd)] += error * 2.0 * inv }
+            if x - fwd >= 0 && x - fwd < width { errors[(y + 1) * width + (x - fwd)] += error * 4.0 * inv }
+            errors[(y + 1) * width + x] += error * 5.0 * inv
+            if x + fwd >= 0 && x + fwd < width { errors[(y + 1) * width + (x + fwd)] += error * 4.0 * inv }
+            if x + 2 * fwd >= 0 && x + 2 * fwd < width { errors[(y + 1) * width + (x + 2 * fwd)] += error * 2.0 * inv }
+        }
+        if y + 2 < height {
+            if x - fwd >= 0 && x - fwd < width { errors[(y + 2) * width + (x - fwd)] += error * 2.0 * inv }
+            errors[(y + 2) * width + x] += error * 3.0 * inv
+            if x + fwd >= 0 && x + fwd < width { errors[(y + 2) * width + (x + fwd)] += error * 2.0 * inv }
+        }
+    }
+
+    // MARK: - Sierra Two-Row Error Diffusion
+    //
+    // Divisor 16:
+    //         X 4 3
+    //   1 2 3 2 1
+
+    private static func sierraTwoRowDither(
+        lumBuf: inout [Double],
+        width: Int, height: Int
+    ) throws -> [UInt8] {
+        let count = width * height
+        var output = [UInt8](repeating: 0, count: count)
+
+        for y in 0..<height {
+            if (y & 31) == 0 { try Task.checkCancellation() }
+            let leftToRight = (y % 2 == 0)
+            let xRange = leftToRight
+                ? stride(from: 0, to: width, by: 1)
+                : stride(from: width - 1, to: -1, by: -1)
+            for x in xRange {
+                let i = y * width + x
+                let oldVal = max(0, min(1, lumBuf[i]))
+                let newVal: Double = oldVal > 0.5 ? 1.0 : 0.0
+                let err = oldVal - newVal
+                output[i] = newVal > 0.5 ? 255 : 0
+                distributeSierraTwoRow(&lumBuf, x, y, width, height, err, leftToRight)
+            }
+        }
+        return output
+    }
+
+    private static func distributeSierraTwoRow(
+        _ errors: inout [Double],
+        _ x: Int, _ y: Int, _ width: Int, _ height: Int,
+        _ error: Double, _ leftToRight: Bool
+    ) {
+        let fwd = leftToRight ? 1 : -1
+        let inv: Double = 1.0 / 16.0
+        if x + fwd >= 0 && x + fwd < width {
+            errors[y * width + (x + fwd)] += error * 4.0 * inv
+        }
+        if x + 2 * fwd >= 0 && x + 2 * fwd < width {
+            errors[y * width + (x + 2 * fwd)] += error * 3.0 * inv
+        }
+        if y + 1 < height {
+            if x - 2 * fwd >= 0 && x - 2 * fwd < width { errors[(y + 1) * width + (x - 2 * fwd)] += error * 1.0 * inv }
+            if x - fwd >= 0 && x - fwd < width { errors[(y + 1) * width + (x - fwd)] += error * 2.0 * inv }
+            errors[(y + 1) * width + x] += error * 3.0 * inv
+            if x + fwd >= 0 && x + fwd < width { errors[(y + 1) * width + (x + fwd)] += error * 2.0 * inv }
+            if x + 2 * fwd >= 0 && x + 2 * fwd < width { errors[(y + 1) * width + (x + 2 * fwd)] += error * 1.0 * inv }
+        }
+    }
+
+    // MARK: - Sierra Lite Error Diffusion
+    //
+    // Divisor 4:
+    //       X 2
+    //   1 1
+
+    private static func sierraLiteDither(
+        lumBuf: inout [Double],
+        width: Int, height: Int
+    ) throws -> [UInt8] {
+        let count = width * height
+        var output = [UInt8](repeating: 0, count: count)
+
+        for y in 0..<height {
+            if (y & 31) == 0 { try Task.checkCancellation() }
+            let leftToRight = (y % 2 == 0)
+            let xRange = leftToRight
+                ? stride(from: 0, to: width, by: 1)
+                : stride(from: width - 1, to: -1, by: -1)
+            for x in xRange {
+                let i = y * width + x
+                let oldVal = max(0, min(1, lumBuf[i]))
+                let newVal: Double = oldVal > 0.5 ? 1.0 : 0.0
+                let err = oldVal - newVal
+                output[i] = newVal > 0.5 ? 255 : 0
+                distributeSierraLite(&lumBuf, x, y, width, height, err, leftToRight)
+            }
+        }
+        return output
+    }
+
+    private static func distributeSierraLite(
+        _ errors: inout [Double],
+        _ x: Int, _ y: Int, _ width: Int, _ height: Int,
+        _ error: Double, _ leftToRight: Bool
+    ) {
+        let fwd = leftToRight ? 1 : -1
+        let inv: Double = 1.0 / 4.0
+        if x + fwd >= 0 && x + fwd < width {
+            errors[y * width + (x + fwd)] += error * 2.0 * inv
+        }
+        if y + 1 < height {
+            if x - fwd >= 0 && x - fwd < width { errors[(y + 1) * width + (x - fwd)] += error * 1.0 * inv }
+            errors[(y + 1) * width + x] += error * 1.0 * inv
+        }
+    }
+
+    // MARK: - Jarvis-Judice-Ninke Error Diffusion
+    //
+    // Divisor 48:
+    //                 X 7 5
+    //   3 5 7 5 3
+    //   1 3 5 3 1
+
+    private static func jarvisJudiceNinkeDither(
+        lumBuf: inout [Double],
+        width: Int, height: Int
+    ) throws -> [UInt8] {
+        let count = width * height
+        var output = [UInt8](repeating: 0, count: count)
+
+        for y in 0..<height {
+            if (y & 31) == 0 { try Task.checkCancellation() }
+            let leftToRight = (y % 2 == 0)
+            let xRange = leftToRight
+                ? stride(from: 0, to: width, by: 1)
+                : stride(from: width - 1, to: -1, by: -1)
+            for x in xRange {
+                let i = y * width + x
+                let oldVal = max(0, min(1, lumBuf[i]))
+                let newVal: Double = oldVal > 0.5 ? 1.0 : 0.0
+                let err = oldVal - newVal
+                output[i] = newVal > 0.5 ? 255 : 0
+                distributeJJN(&lumBuf, x, y, width, height, err, leftToRight)
+            }
+        }
+        return output
+    }
+
+    private static func distributeJJN(
+        _ errors: inout [Double],
+        _ x: Int, _ y: Int, _ width: Int, _ height: Int,
+        _ error: Double, _ leftToRight: Bool
+    ) {
+        let fwd = leftToRight ? 1 : -1
+        let inv: Double = 1.0 / 48.0
+        if x + fwd >= 0 && x + fwd < width { errors[y * width + (x + fwd)] += error * 7.0 * inv }
+        if x + 2 * fwd >= 0 && x + 2 * fwd < width { errors[y * width + (x + 2 * fwd)] += error * 5.0 * inv }
+        if y + 1 < height {
+            if x - 2 * fwd >= 0 && x - 2 * fwd < width { errors[(y + 1) * width + (x - 2 * fwd)] += error * 3.0 * inv }
+            if x - fwd >= 0 && x - fwd < width { errors[(y + 1) * width + (x - fwd)] += error * 5.0 * inv }
+            errors[(y + 1) * width + x] += error * 7.0 * inv
+            if x + fwd >= 0 && x + fwd < width { errors[(y + 1) * width + (x + fwd)] += error * 5.0 * inv }
+            if x + 2 * fwd >= 0 && x + 2 * fwd < width { errors[(y + 1) * width + (x + 2 * fwd)] += error * 3.0 * inv }
+        }
+        if y + 2 < height {
+            if x - 2 * fwd >= 0 && x - 2 * fwd < width { errors[(y + 2) * width + (x - 2 * fwd)] += error * 1.0 * inv }
+            if x - fwd >= 0 && x - fwd < width { errors[(y + 2) * width + (x - fwd)] += error * 3.0 * inv }
+            errors[(y + 2) * width + x] += error * 5.0 * inv
+            if x + fwd >= 0 && x + fwd < width { errors[(y + 2) * width + (x + fwd)] += error * 3.0 * inv }
+            if x + 2 * fwd >= 0 && x + 2 * fwd < width { errors[(y + 2) * width + (x + 2 * fwd)] += error * 1.0 * inv }
+        }
+    }
+
+    // MARK: - Burkes Error Diffusion
+    //
+    // Divisor 32:
+    //                 X 8 4
+    //   2 4 8 4 2
+
+    private static func burkesDither(
+        lumBuf: inout [Double],
+        width: Int, height: Int
+    ) throws -> [UInt8] {
+        let count = width * height
+        var output = [UInt8](repeating: 0, count: count)
+
+        for y in 0..<height {
+            if (y & 31) == 0 { try Task.checkCancellation() }
+            let leftToRight = (y % 2 == 0)
+            let xRange = leftToRight
+                ? stride(from: 0, to: width, by: 1)
+                : stride(from: width - 1, to: -1, by: -1)
+            for x in xRange {
+                let i = y * width + x
+                let oldVal = max(0, min(1, lumBuf[i]))
+                let newVal: Double = oldVal > 0.5 ? 1.0 : 0.0
+                let err = oldVal - newVal
+                output[i] = newVal > 0.5 ? 255 : 0
+                distributeBurkes(&lumBuf, x, y, width, height, err, leftToRight)
+            }
+        }
+        return output
+    }
+
+    private static func distributeBurkes(
+        _ errors: inout [Double],
+        _ x: Int, _ y: Int, _ width: Int, _ height: Int,
+        _ error: Double, _ leftToRight: Bool
+    ) {
+        let fwd = leftToRight ? 1 : -1
+        let inv: Double = 1.0 / 32.0
+        if x + fwd >= 0 && x + fwd < width { errors[y * width + (x + fwd)] += error * 8.0 * inv }
+        if x + 2 * fwd >= 0 && x + 2 * fwd < width { errors[y * width + (x + 2 * fwd)] += error * 4.0 * inv }
+        if y + 1 < height {
+            if x - 2 * fwd >= 0 && x - 2 * fwd < width { errors[(y + 1) * width + (x - 2 * fwd)] += error * 2.0 * inv }
+            if x - fwd >= 0 && x - fwd < width { errors[(y + 1) * width + (x - fwd)] += error * 4.0 * inv }
+            errors[(y + 1) * width + x] += error * 8.0 * inv
+            if x + fwd >= 0 && x + fwd < width { errors[(y + 1) * width + (x + fwd)] += error * 4.0 * inv }
+            if x + 2 * fwd >= 0 && x + 2 * fwd < width { errors[(y + 1) * width + (x + 2 * fwd)] += error * 2.0 * inv }
+        }
+    }
+
+    // MARK: - Interleaved Gradient Noise (Jorge Jimenez SIGGRAPH 2014)
+    //
+    // Procedural blue-noise approximation. Cheap (one fma + fract per pixel),
+    // visually similar to a real blue-noise mask. Distinct from `.blueNoise`
+    // which uses an R2-quasi-random texture lookup.
+
+    @inline(__always)
+    private static func ignThreshold(_ x: Int, _ y: Int) -> Double {
+        let dot = 0.06711056 * Double(x) + 0.00583715 * Double(y)
+        let frac = dot - floor(dot)
+        let scaled = 52.9829189 * frac
+        return scaled - floor(scaled)
+    }
+
+    private static func ignDither(
+        lumBuf: inout [Double],
+        width: Int, height: Int
+    ) throws -> [UInt8] {
+        let count = width * height
+        var output = [UInt8](repeating: 0, count: count)
+        for y in 0..<height {
+            if (y & 31) == 0 { try Task.checkCancellation() }
+            let rowOff = y * width
+            for x in 0..<width {
+                let i = rowOff + x
+                output[i] = lumBuf[i] > ignThreshold(x, y) ? 255 : 0
+            }
+        }
+        return output
+    }
+
+    // MARK: - CMYK Halftone Dither
+    //
+    // GPU-only feature. CPU fallback degrades to monochrome halftone — true
+    // CMYK rotation is an expensive per-channel resampling pass that's not
+    // worth implementing CPU-side when the GPU path covers it. Caller will
+    // see slightly different aesthetics on Metal-unavailable hosts.
+
+    private static func cmykHalftoneDither(
+        lumBuf: inout [Double],
+        width: Int, height: Int
+    ) throws -> [UInt8] {
+        let count = width * height
+        var output = [UInt8](repeating: 0, count: count)
+        let matData = cachedHalftoneFlat
+        for y in 0..<height {
+            if (y & 31) == 0 { try Task.checkCancellation() }
+            let yOff = (y % 6) * 6
+            let rowOff = y * width
+            for x in 0..<width {
+                let i = rowOff + x
+                output[i] = lumBuf[i] > matData[yOff + (x % 6)] ? 255 : 0
+            }
+        }
+        return output
+    }
+
+    // MARK: - Palette Dither
+    //
+    // Maps each pixel to the nearest colour in the palette (Euclidean
+    // distance in linear RGB), with optional ordered / blue-noise threshold
+    // offset to nudge pixels across palette boundaries — the trick that
+    // makes vintage palettes (GameBoy, NES, C64) look painterly instead of
+    // posterised.
+
+    private static func applyPaletteDither(
+        pixels: UnsafeMutablePointer<UInt8>,
+        width: Int, height: Int,
+        algorithm: DitherAlgorithm,
+        bayerLevel: Int,
+        threshold: Double,
+        palette: [CodableColor]
+    ) throws {
+        guard !palette.isEmpty else { return }
+
+        // Pre-convert palette to linear RGB once.
+        let paletteLinear: [(Double, Double, Double)] = palette.map { c in
+            (sRGBToLinearLUT[Int(c.red * 255.0)],
+             sRGBToLinearLUT[Int(c.green * 255.0)],
+             sRGBToLinearLUT[Int(c.blue * 255.0)])
+        }
+        // Final sRGB representations for write-back.
+        let paletteSRGB: [(UInt8, UInt8, UInt8)] = palette.map { c in
+            (UInt8(round(c.red * 255.0)),
+             UInt8(round(c.green * 255.0)),
+             UInt8(round(c.blue * 255.0)))
+        }
+
+        // Resolve the ordered-threshold matrix once if applicable.
+        let cached = cachedBayerMatrices[max(0, min(3, bayerLevel - 1))]
+        let bayerData = cached.data
+        let bayerSize = cached.size
+        let bayerMask = bayerSize - 1
+
+        // Threshold offset matches the IGN-derived per-algorithm coefficients
+        // we use on the GPU so picks across CPU/GPU look similar.
+        let coefficient: Double
+        switch algorithm {
+        case .floydSteinberg, .sierra, .burkes: coefficient = 0.85
+        case .stucki, .jarvisJudiceNinke:       coefficient = 0.80
+        case .atkinson, .sierraTwoRow:          coefficient = 0.75
+        case .sierraLite, .artisticDrip:        coefficient = 0.65
+        default:                                coefficient = 1.0
+        }
+
+        for y in 0..<height {
+            if (y & 31) == 0 { try Task.checkCancellation() }
+            for x in 0..<width {
+                let idx = (y * width + x) * 4
+                var r = sRGBToLinearLUT[Int(pixels[idx])]
+                var g = sRGBToLinearLUT[Int(pixels[idx + 1])]
+                var b = sRGBToLinearLUT[Int(pixels[idx + 2])]
+
+                // Compute per-channel jitter.
+                let jitter: Double
+                switch algorithm {
+                case .bayer:
+                    jitter = (bayerData[(y & bayerMask) * bayerSize + (x & bayerMask)] - 0.5) * 0.1
+                case .blueNoise:
+                    jitter = (cachedBlueNoise[(y & 63) * 64 + (x & 63)] - 0.5) * 0.1
+                case .interleavedGradientNoise:
+                    jitter = (ignThreshold(x, y) - 0.5) * 0.1
+                case .whiteNoise:
+                    let seed = (UInt64(x) &* 374761393 &+ UInt64(y) &* 668265263) & 0xFFFF
+                    jitter = (Double(seed) / 65535.0 - 0.5) * 0.1
+                case .halftone, .cmykHalftone:
+                    jitter = (cachedHalftoneFlat[(y % 6) * 6 + (x % 6)] - 0.5) * 0.1
+                default:
+                    // For error-diffusion-style algorithms on the CPU palette
+                    // path, use a per-pixel hash modulated by the algorithm's
+                    // coefficient. True error diffusion on a palette is an
+                    // open problem (the colour error is multidimensional);
+                    // this gives a visually reasonable result without the
+                    // serial bottleneck.
+                    let seed = (UInt64(x) &* 31 &+ UInt64(y) &* 17 &+ UInt64(x ^ y) &* 13) & 0xFFFF
+                    jitter = (Double(seed) / 65535.0 - 0.5) * 0.1 * coefficient
+                }
+                r = max(0.0, min(1.0, r + jitter))
+                g = max(0.0, min(1.0, g + jitter))
+                b = max(0.0, min(1.0, b + jitter))
+
+                // Apply user threshold as a global brightness offset on the
+                // jittered linear RGB.
+                let brightnessShift = threshold - 0.5
+                r = max(0.0, min(1.0, r + brightnessShift))
+                g = max(0.0, min(1.0, g + brightnessShift))
+                b = max(0.0, min(1.0, b + brightnessShift))
+
+                // Nearest palette colour (squared Euclidean distance).
+                var bestDist = Double.greatestFiniteMagnitude
+                var bestIdx = 0
+                for (i, p) in paletteLinear.enumerated() {
+                    let dr = p.0 - r, dg = p.1 - g, db = p.2 - b
+                    let d = dr * dr + dg * dg + db * db
+                    if d < bestDist { bestDist = d; bestIdx = i }
+                }
+                let chosen = paletteSRGB[bestIdx]
+                pixels[idx]     = chosen.0
+                pixels[idx + 1] = chosen.1
+                pixels[idx + 2] = chosen.2
+            }
         }
     }
 

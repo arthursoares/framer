@@ -17,6 +17,34 @@ let package = Package(
             name: "FramerCore",
             dependencies: [
                 .product(name: "Yams", package: "Yams"),
+            ],
+            // SwiftPM compiles individual .metal files into a metallib when
+            // declared per-file as `.process` resources. The directory form
+            // (.process("Effects/Metal")) treats them as opaque files to copy
+            // — a known SPM gotcha. ShaderCommon.h ships as the include
+            // header. _EffectTemplate.metal is excluded (scaffold with TODOs).
+            exclude: [
+                "Effects/Metal/_EffectTemplate.metal",
+            ],
+            resources: [
+                .process("Effects/Metal/ShaderCommon.h"),
+                .process("Effects/Metal/FullscreenVertex.metal"),
+                .process("Effects/Metal/TextCell.metal"),
+                .process("Effects/Metal/ColorGrade.metal"),
+                .process("Effects/Metal/DistantPast.metal"),
+                .process("Effects/Metal/CRT.metal"),
+                .process("Effects/Metal/Halftone.metal"),
+                .process("Effects/Metal/Kuwahara.metal"),
+                .process("Effects/Metal/PixelSort.metal"),
+                .process("Effects/Metal/Dither.metal"),
+                .process("Effects/Metal/PrintSampling.metal"),
+                .process("Effects/Metal/EdgeField.metal"),
+                .process("Effects/Metal/Glitch.metal"),
+                // ASCII LUT atlases — duplicated here from assets/textures/ so
+                // the CLI / test runner / any FramerCore consumer can reach
+                // them via Bundle.module without depending on the macOS app
+                // bundle's folder reference (which only exists at app scope).
+                .copy("Resources/textures"),
             ]
         ),
         .executableTarget(

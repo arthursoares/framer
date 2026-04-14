@@ -147,6 +147,1269 @@ struct LayerDetailView: View {
             LUTControls(params: params) { layer = .lut($0) }
         case .shader(let params):
             ShaderControls(params: params) { layer = .shader($0) }
+        case .gpuEffect(let params):
+            GPUEffectControls(params: params) { layer = .gpuEffect($0) }
+        }
+    }
+}
+
+/// Mobile blend-mode + opacity picker used by every visual adjustment
+/// layer's inspector. Mirrors `BlendModeControls` on the desktop.
+private struct MobileBlendModeControls: View {
+    @Binding var blendMode: LayerBlendMode
+    @Binding var opacity: Double
+
+    var body: some View {
+        ControlRow(label: "Blend") {
+            Picker("", selection: $blendMode) {
+                ForEach(LayerBlendMode.allCases, id: \.self) { mode in
+                    Text(mode.label).tag(mode)
+                }
+            }
+            .pickerStyle(.menu)
+        }
+        ControlRow(label: "Opacity (\(Int((opacity * 100).rounded()))%)") {
+            Slider(value: $opacity, in: 0...1, step: 0.01)
+        }
+    }
+}
+
+private struct GPUEffectControls: View {
+    var params: GPUEffectLayerParams
+    var onChange: (GPUEffectLayerParams) -> Void
+
+    var body: some View {
+        VStack(spacing: 8) {
+            // Kind is fixed at layer creation (each variant is its own
+            // layer-add menu entry). Show read-only for orientation; don't
+            // offer a Picker to switch variants mid-flight.
+            ControlRow(label: "Effect") {
+                Label(params.kind.label, systemImage: params.kind.menuIcon)
+            }
+            MobileBlendModeControls(
+                blendMode: Binding(
+                    get: { params.blendMode },
+                    set: { var p = params; p.blendMode = $0; onChange(p) }
+                ),
+                opacity: Binding(
+                    get: { params.opacity },
+                    set: { var p = params; p.opacity = $0; onChange(p) }
+                )
+            )
+
+            ControlRow(label: "Scale") {
+                HStack {
+                    Slider(value: scaleBinding, in: 0.5...2.0)
+                    Text(String(format: "%.2f", scaleBinding.wrappedValue))
+                        .font(AppFont.mono(12))
+                        .frame(width: 44, alignment: .trailing)
+                }
+            }
+
+            ControlRow(label: "Spacing") {
+                HStack {
+                    Slider(value: spacingBinding, in: 1...8)
+                    Text(String(format: "%.1f", spacingBinding.wrappedValue))
+                        .font(AppFont.mono(12))
+                        .frame(width: 44, alignment: .trailing)
+                }
+            }
+
+            ControlRow(label: "Output Width") {
+                HStack {
+                    Slider(value: outputWidthBinding, in: 120...640, step: 1)
+                    Text("\(Int(outputWidthBinding.wrappedValue))")
+                        .font(AppFont.mono(12))
+                        .frame(width: 50, alignment: .trailing)
+                }
+            }
+
+            ControlRow(label: "Color Mode") {
+                Picker("Color Mode", selection: colorModeBinding) {
+                    // Palette dropped — see LayerListSection.swift; none of
+                    // the GPU-effect bucket shaders read a palette uniform.
+                    Text("Source").tag(GPUEffectColorMode.source)
+                    Text("FG/BG").tag(GPUEffectColorMode.foregroundBackground)
+                    Text("Mono").tag(GPUEffectColorMode.monochrome)
+                }
+                .pickerStyle(.menu)
+            }
+
+            SliderRow(label: "Background", value: backgroundIntensityBinding, range: 0...1)
+            SliderRow(label: "Brightness", value: commonBinding(\.brightness), range: -1...1)
+            SliderRow(label: "Contrast", value: commonBinding(\.contrast), range: 0...3)
+            SliderRow(label: "Saturation", value: commonBinding(\.saturation), range: 0...2)
+            SliderRow(label: "Hue", value: commonBinding(\.hueRotation), range: -1...1)
+            SliderRow(label: "Sharpness", value: commonBinding(\.sharpness), range: 0...2)
+            SliderRow(label: "Gamma", value: commonBinding(\.gamma), range: 0.2...2)
+
+            if case .textCell(let common, let geometry, let color, let payload) = params.params,
+               params.kind == .ascii {
+                ControlRow(label: "Character Set") {
+                    Picker("Character Set", selection: characterSetBinding) {
+                        Text("ASCII").tag(GPUEffectCharacterSet.classicASCII)
+                        Text("Blocks").tag(GPUEffectCharacterSet.blocks)
+                        Text("Binary").tag(GPUEffectCharacterSet.binary)
+                        Text("Dense").tag(GPUEffectCharacterSet.dense)
+                    }
+                    .pickerStyle(.menu)
+                }
+
+                SliderRow(label: "Intensity", value: textCellBinding(\.intensity), range: 0...1)
+
+                ControlRow(label: "Foreground") {
+                    ColorPicker("", selection: Binding(
+                        get: { Color(cgColor: (payload.foreground ?? CodableColor(unchecked: "#FFFFFF")).cgColor) },
+                        set: { newColor in
+                            guard let hex = newColor.hexString, let codable = try? CodableColor(hex: hex) else { return }
+                            var updatedPayload = payload
+                            updatedPayload.foreground = codable
+                            onChange(updated(layer: params, params: .textCell(common: common, geometry: geometry, color: color, textCell: updatedPayload)))
+                        }
+                    ))
+                    .labelsHidden()
+                }
+
+                ControlRow(label: "Background") {
+                    ColorPicker("", selection: Binding(
+                        get: { Color(cgColor: (payload.background ?? CodableColor(unchecked: "#101010")).cgColor) },
+                        set: { newColor in
+                            guard let hex = newColor.hexString, let codable = try? CodableColor(hex: hex) else { return }
+                            var updatedPayload = payload
+                            updatedPayload.background = codable
+                            onChange(updated(layer: params, params: .textCell(common: common, geometry: geometry, color: color, textCell: updatedPayload)))
+                        }
+                    ))
+                    .labelsHidden()
+                }
+            }
+
+            if case .textCell(let common, let geometry, let color, let payload) = params.params,
+               params.kind == .dots {
+                ControlRow(label: "Dot Shape") {
+                    Picker("Dot Shape", selection: dotShapeBinding) {
+                        Text("Circle").tag(DotShape.circle)
+                        Text("Square").tag(DotShape.square)
+                        Text("Diamond").tag(DotShape.diamond)
+                    }
+                    .pickerStyle(.menu)
+                }
+
+                ControlRow(label: "Grid") {
+                    Picker("Grid", selection: dotGridBinding) {
+                        Text("Square").tag(DotGridType.square)
+                        Text("Hex").tag(DotGridType.hex)
+                    }
+                    .pickerStyle(.menu)
+                }
+
+                SliderRow(label: "Dot Size", value: textCellBinding(\.sizeMultiplier), range: 0.1...2.0)
+                SliderRow(label: "Intensity", value: textCellBinding(\.intensity), range: 0...1)
+
+                ControlRow(label: "Invert") {
+                    Toggle("Invert", isOn: textInvertBinding)
+                        .labelsHidden()
+                }
+
+                ControlRow(label: "Foreground") {
+                    ColorPicker("", selection: Binding(
+                        get: { Color(cgColor: (payload.foreground ?? CodableColor(unchecked: "#FFFFFF")).cgColor) },
+                        set: { newColor in
+                            guard let hex = newColor.hexString, let codable = try? CodableColor(hex: hex) else { return }
+                            var updatedPayload = payload
+                            updatedPayload.foreground = codable
+                            onChange(updated(layer: params, params: .textCell(common: common, geometry: geometry, color: color, textCell: updatedPayload)))
+                        }
+                    ))
+                    .labelsHidden()
+                }
+
+                ControlRow(label: "Background") {
+                    ColorPicker("", selection: Binding(
+                        get: { Color(cgColor: (payload.background ?? CodableColor(unchecked: "#111111")).cgColor) },
+                        set: { newColor in
+                            guard let hex = newColor.hexString, let codable = try? CodableColor(hex: hex) else { return }
+                            var updatedPayload = payload
+                            updatedPayload.background = codable
+                            onChange(updated(layer: params, params: .textCell(common: common, geometry: geometry, color: color, textCell: updatedPayload)))
+                        }
+                    ))
+                    .labelsHidden()
+                }
+            }
+
+            if case .textCell(let common, let geometry, let color, let payload) = params.params,
+               params.kind == .blockify {
+                ControlRow(label: "Style") {
+                    Picker("Style", selection: blockStyleBinding) {
+                        Text("Solid").tag(BlockStyle.solid)
+                        Text("Shaded").tag(BlockStyle.shaded)
+                        Text("Outlined").tag(BlockStyle.outlined)
+                    }
+                    .pickerStyle(.menu)
+                }
+
+                SliderRow(label: "Border Width", value: blockBorderWidthBinding, range: 0...1)
+
+                ControlRow(label: "Foreground") {
+                    ColorPicker("", selection: Binding(
+                        get: { Color(cgColor: (payload.foreground ?? CodableColor(unchecked: "#FFFFFF")).cgColor) },
+                        set: { newColor in
+                            guard let hex = newColor.hexString, let codable = try? CodableColor(hex: hex) else { return }
+                            var updatedPayload = payload
+                            updatedPayload.foreground = codable
+                            onChange(updated(layer: params, params: .textCell(common: common, geometry: geometry, color: color, textCell: updatedPayload)))
+                        }
+                    ))
+                    .labelsHidden()
+                }
+
+                ControlRow(label: "Background") {
+                    ColorPicker("", selection: Binding(
+                        get: { Color(cgColor: (payload.background ?? CodableColor(unchecked: "#111111")).cgColor) },
+                        set: { newColor in
+                            guard let hex = newColor.hexString, let codable = try? CodableColor(hex: hex) else { return }
+                            var updatedPayload = payload
+                            updatedPayload.background = codable
+                            onChange(updated(layer: params, params: .textCell(common: common, geometry: geometry, color: color, textCell: updatedPayload)))
+                        }
+                    ))
+                    .labelsHidden()
+                }
+
+                ControlRow(label: "Border Color") {
+                    ColorPicker("", selection: Binding(
+                        get: { Color(cgColor: (payload.borderColor ?? CodableColor(unchecked: "#00FFAA")).cgColor) },
+                        set: { newColor in
+                            guard let hex = newColor.hexString, let codable = try? CodableColor(hex: hex) else { return }
+                            var updatedPayload = payload
+                            updatedPayload.borderColor = codable
+                            onChange(updated(layer: params, params: .textCell(common: common, geometry: geometry, color: color, textCell: updatedPayload)))
+                        }
+                    ))
+                    .labelsHidden()
+                }
+            }
+
+            if case .textCell(let common, let geometry, let color, let payload) = params.params,
+               params.kind == .matrixRain {
+                SliderRow(label: "Speed", value: matrixBinding(\.speed), range: 0...1)
+                SliderRow(label: "Trail", value: matrixBinding(\.trailLength), range: 0...1)
+                SliderRow(label: "Glow", value: matrixBinding(\.glow), range: 0...1)
+                SliderRow(label: "BG Opacity", value: matrixBinding(\.backgroundOpacity), range: 0...1)
+                // Threshold slider dropped — see LayerListSection.swift for
+                // rationale (dead control: GPU encoder writes trailLength to
+                // the shader's `threshold` uniform, never params.threshold).
+
+                ControlRow(label: "Direction") {
+                    Picker("Direction", selection: matrixDirectionBinding) {
+                        Text("Down").tag(TextCellFlowDirection.down)
+                        Text("Up").tag(TextCellFlowDirection.up)
+                        Text("Left").tag(TextCellFlowDirection.left)
+                        Text("Right").tag(TextCellFlowDirection.right)
+                    }
+                    .pickerStyle(.menu)
+                }
+
+                ControlRow(label: "Rain Color") {
+                    ColorPicker("", selection: Binding(
+                        get: { Color(cgColor: (payload.rainColor ?? CodableColor(unchecked: "#00FF66")).cgColor) },
+                        set: { newColor in
+                            guard let hex = newColor.hexString, let codable = try? CodableColor(hex: hex) else { return }
+                            var updatedPayload = payload
+                            updatedPayload.rainColor = codable
+                            onChange(updated(layer: params, params: .textCell(common: common, geometry: geometry, color: color, textCell: updatedPayload)))
+                        }
+                    ))
+                    .labelsHidden()
+                }
+            }
+
+            if case .glitch(let common, let geometry, let color, let payload) = params.params,
+               params.kind == .pixelSort {
+                ControlRow(label: "Direction") {
+                    Picker("Direction", selection: glitchDirectionBinding) {
+                        Text("Horizontal").tag(GlitchDirection.horizontal)
+                        Text("Vertical").tag(GlitchDirection.vertical)
+                    }
+                    .pickerStyle(.menu)
+                }
+
+                ControlRow(label: "Sort Mode") {
+                    Picker("Sort Mode", selection: sortModeBinding) {
+                        Text("Brightness").tag(PixelSortMode.brightness)
+                        Text("Luminance").tag(PixelSortMode.luminance)
+                        Text("Hue").tag(PixelSortMode.hue)
+                    }
+                    .pickerStyle(.menu)
+                }
+
+                SliderRow(label: "Streak", value: glitchBinding(\.streakLength), range: 0...1)
+                SliderRow(label: "Random", value: glitchBinding(\.randomness), range: 0...1)
+
+                ControlRow(label: "Reverse") {
+                    Toggle("Reverse", isOn: reverseBinding)
+                        .labelsHidden()
+                }
+            }
+
+            if case .glitch(_, _, _, _) = params.params,
+               params.kind == .vhs {
+                SliderRow(label: "Distortion", value: glitchBinding(\.distortion), range: 0...1)
+                SliderRow(label: "Color Bleed", value: glitchBinding(\.colorBleed), range: 0...1)
+                SliderRow(label: "Scanlines", value: glitchBinding(\.scanlines), range: 0...1)
+                SliderRow(label: "Tracking", value: glitchBinding(\.trackingError), range: 0...1)
+            }
+
+            if case .edgeField(let common, let geometry, let color, let payload) = params.params,
+               params.kind == .waveLines {
+                SliderRow(label: "Line Count", value: edgeFieldBinding(\.lineCount), range: 1...64)
+                SliderRow(label: "Amplitude", value: edgeFieldBinding(\.amplitude), range: 0...1)
+                SliderRow(label: "Frequency", value: edgeFieldBinding(\.frequency), range: 0.1...4)
+                SliderRow(label: "Thickness", value: edgeFieldBinding(\.thickness), range: 0.05...1)
+
+                ControlRow(label: "Direction") {
+                    Picker("Direction", selection: edgeDirectionBinding) {
+                        Text("Horizontal").tag("horizontal")
+                        Text("Vertical").tag("vertical")
+                    }
+                    .pickerStyle(.menu)
+                }
+
+                ControlRow(label: "Animate") {
+                    Toggle("Animate", isOn: edgeAnimateBinding)
+                        .labelsHidden()
+                }
+            }
+
+            if case .edgeField(let common, let geometry, let color, let payload) = params.params,
+               params.kind == .noiseField {
+                ControlRow(label: "Noise Type") {
+                    Picker("Noise Type", selection: noiseTypeBinding) {
+                        Text("Value").tag(NoiseFieldType.value)
+                        Text("Simplex").tag(NoiseFieldType.simplex)
+                        Text("Cellular").tag(NoiseFieldType.cellular)
+                    }
+                    .pickerStyle(.menu)
+                }
+
+                SliderRow(label: "Octaves", value: noiseOctavesBinding, range: 1...8)
+                SliderRow(label: "Scale", value: edgeFieldBinding(\.amplitude), range: 0.1...1)
+                SliderRow(label: "Speed", value: noiseSpeedBinding, range: 0...1)
+
+                ControlRow(label: "Animate") {
+                    Toggle("Animate", isOn: edgeAnimateBinding)
+                        .labelsHidden()
+                }
+
+                ControlRow(label: "Distort Only") {
+                    Toggle("Distort Only", isOn: noiseDistortOnlyBinding)
+                        .labelsHidden()
+                }
+            }
+
+            if case .edgeField(let common, let geometry, let color, let payload) = params.params,
+               params.kind == .edgeDetection {
+                ControlRow(label: "Algorithm") {
+                    Picker("Algorithm", selection: edgeAlgorithmBinding) {
+                        Text("Sobel").tag(EdgeAlgorithm.sobel)
+                        Text("Laplacian").tag(EdgeAlgorithm.laplacian)
+                    }
+                    .pickerStyle(.menu)
+                }
+
+                SliderRow(label: "Threshold", value: edgeThresholdBinding, range: 0...1)
+                SliderRow(label: "Line Width", value: edgeFieldBinding(\.thickness), range: 0.05...1)
+
+                ControlRow(label: "Invert") {
+                    Toggle("Invert", isOn: edgeInvertBinding)
+                        .labelsHidden()
+                }
+
+                ControlRow(label: "Edge Color") {
+                    ColorPicker("", selection: Binding(
+                        get: { Color(cgColor: (payload.edgeColor ?? CodableColor(unchecked: "#FFFFFF")).cgColor) },
+                        set: { newColor in
+                            guard let hex = newColor.hexString, let codable = try? CodableColor(hex: hex) else { return }
+                            var updatedPayload = payload
+                            updatedPayload.edgeColor = codable
+                            onChange(updated(layer: params, params: .edgeField(common: common, geometry: geometry, color: color, edgeField: updatedPayload)))
+                        }
+                    ))
+                    .labelsHidden()
+                }
+            }
+
+            if case .edgeField(let common, let geometry, let color, let payload) = params.params,
+               params.kind == .contour {
+                ControlRow(label: "Fill Mode") {
+                    Picker("Fill Mode", selection: contourFillModeBinding) {
+                        Text("Lines").tag(ContourFillMode.linesOnly)
+                        Text("Bands").tag(ContourFillMode.filledBands)
+                    }
+                    .pickerStyle(.menu)
+                }
+
+                SliderRow(label: "Line Strength", value: edgeFieldBinding(\.lineStrength), range: 0...1)
+                SliderRow(label: "Field Intensity", value: edgeFieldBinding(\.fieldIntensity), range: 0.01...1)
+                SliderRow(label: "Levels", value: contourLevelsBinding, range: 2...24)
+                SliderRow(label: "Line Width", value: edgeFieldBinding(\.thickness), range: 0.05...1)
+
+                ControlRow(label: "Invert") {
+                    Toggle("Invert", isOn: edgeInvertBinding)
+                        .labelsHidden()
+                }
+
+                ControlRow(label: "Contour Color") {
+                    ColorPicker("", selection: Binding(
+                        get: { Color(cgColor: (payload.edgeColor ?? CodableColor(unchecked: "#FFFFFF")).cgColor) },
+                        set: { newColor in
+                            guard let hex = newColor.hexString, let codable = try? CodableColor(hex: hex) else { return }
+                            var updatedPayload = payload
+                            updatedPayload.edgeColor = codable
+                            onChange(updated(layer: params, params: .edgeField(common: common, geometry: geometry, color: color, edgeField: updatedPayload)))
+                        }
+                    ))
+                    .labelsHidden()
+                }
+            }
+
+            if case .edgeField(let common, let geometry, let color, let payload) = params.params,
+               params.kind == .voronoi {
+                SliderRow(label: "Cell Size", value: voronoiCellSizeBinding, range: 2...64)
+                SliderRow(label: "Wall Strength", value: edgeFieldBinding(\.lineStrength), range: 0...1)
+                SliderRow(label: "Cell Fill", value: edgeFieldBinding(\.fieldIntensity), range: 0...1)
+                SliderRow(label: "Edge Width", value: voronoiEdgeWidthBinding, range: 0.05...1)
+
+                ControlRow(label: "Randomize") {
+                    Toggle("Randomize", isOn: voronoiRandomizeBinding)
+                        .labelsHidden()
+                }
+
+                ControlRow(label: "Edge Color") {
+                    ColorPicker("", selection: Binding(
+                        get: { Color(cgColor: (payload.edgeColor ?? CodableColor(unchecked: "#FFFFFF")).cgColor) },
+                        set: { newColor in
+                            guard let hex = newColor.hexString, let codable = try? CodableColor(hex: hex) else { return }
+                            var updatedPayload = payload
+                            updatedPayload.edgeColor = codable
+                            onChange(updated(layer: params, params: .edgeField(common: common, geometry: geometry, color: color, edgeField: updatedPayload)))
+                        }
+                    ))
+                    .labelsHidden()
+                }
+            }
+
+            if case .printSampling(let common, let geometry, let color, let payload) = params.params {
+                if params.kind == .halftone {
+                    ControlRow(label: "Shape") {
+                        Picker("Shape", selection: halftoneShapeBinding) {
+                            Text("Circle").tag(HalftoneShape.circle)
+                            Text("Square").tag(HalftoneShape.square)
+                            Text("Diamond").tag(HalftoneShape.diamond)
+                        }
+                        .pickerStyle(.menu)
+                    }
+
+                    SliderRow(label: "Angle", value: halftoneAngleBinding, range: 0...90)
+
+                    ControlRow(label: "Invert") {
+                        Toggle("Invert", isOn: invertBinding)
+                            .labelsHidden()
+                    }
+                }
+
+                if params.kind == .crosshatch {
+                    SliderRow(label: "Density", value: hatchDensityBinding, range: 0...1)
+                    SliderRow(label: "Layers", value: hatchLayersBinding, range: 1...4)
+                    SliderRow(label: "Angle", value: hatchAngleBinding, range: 0...90)
+                    SliderRow(label: "Line Width", value: hatchLineWidthBinding, range: 0.05...1)
+                    SliderRow(label: "Random", value: hatchRandomnessBinding, range: 0...1)
+
+                    ControlRow(label: "Invert") {
+                        Toggle("Invert", isOn: invertBinding)
+                            .labelsHidden()
+                    }
+                }
+
+                if params.kind == .threshold {
+                    SliderRow(label: "Levels", value: thresholdLevelsBinding, range: 2...8)
+
+                    ControlRow(label: "Dither") {
+                        Toggle("Dither", isOn: thresholdDitherBinding)
+                            .labelsHidden()
+                    }
+
+                    ControlRow(label: "Invert") {
+                        Toggle("Invert", isOn: invertBinding)
+                            .labelsHidden()
+                    }
+                }
+
+                ControlRow(label: "Foreground") {
+                    ColorPicker("", selection: Binding(
+                        get: { Color(cgColor: (payload.foreground ?? CodableColor(unchecked: "#FFFFFF")).cgColor) },
+                        set: { newColor in
+                            guard let hex = newColor.hexString, let codable = try? CodableColor(hex: hex) else { return }
+                            var updatedPayload = payload
+                            updatedPayload.foreground = codable
+                            onChange(updated(layer: params, params: .printSampling(common: common, geometry: geometry, color: color, printSampling: updatedPayload)))
+                        }
+                    ))
+                    .labelsHidden()
+                }
+
+                ControlRow(label: "Background") {
+                    ColorPicker("", selection: Binding(
+                        get: { Color(cgColor: (payload.background ?? CodableColor(unchecked: "#000000")).cgColor) },
+                        set: { newColor in
+                            guard let hex = newColor.hexString, let codable = try? CodableColor(hex: hex) else { return }
+                            var updatedPayload = payload
+                            updatedPayload.background = codable
+                            onChange(updated(layer: params, params: .printSampling(common: common, geometry: geometry, color: color, printSampling: updatedPayload)))
+                        }
+                    ))
+                    .labelsHidden()
+                }
+            }
+        }
+    }
+
+    private var kindBinding: Binding<GPUEffectKind> {
+        Binding(
+            get: { params.kind },
+            set: { newKind in
+                var copy = params
+                copy.kind = newKind
+                copy.params = Self.defaultParams(for: newKind)
+                onChange(copy)
+            }
+        )
+    }
+
+    private var scaleBinding: Binding<Double> {
+        Binding(get: { Self.geometry(for: params.params).scale }, set: { onChange(Self.updatingGeometry(params, scale: $0, spacing: nil, outputWidth: nil)) })
+    }
+
+    private var spacingBinding: Binding<Double> {
+        Binding(get: { Self.geometry(for: params.params).spacing }, set: { onChange(Self.updatingGeometry(params, scale: nil, spacing: $0, outputWidth: nil)) })
+    }
+
+    private var outputWidthBinding: Binding<Double> {
+        Binding(get: { Double(Self.geometry(for: params.params).outputWidth) }, set: { onChange(Self.updatingGeometry(params, scale: nil, spacing: nil, outputWidth: Int($0.rounded()))) })
+    }
+
+    private var colorModeBinding: Binding<GPUEffectColorMode> {
+        Binding(
+            get: { Self.color(for: params.params).mode },
+            set: {
+                var current = Self.color(for: params.params)
+                current.mode = $0
+                onChange(Self.updatingColor(params, color: current))
+            }
+        )
+    }
+
+    private var backgroundIntensityBinding: Binding<Double> {
+        Binding(
+            get: { Self.color(for: params.params).backgroundIntensity },
+            set: {
+                var current = Self.color(for: params.params)
+                current.backgroundIntensity = $0
+                onChange(Self.updatingColor(params, color: current))
+            }
+        )
+    }
+
+    private func commonBinding(_ keyPath: WritableKeyPath<GPUEffectCommonParameters, Double>) -> Binding<Double> {
+        Binding(
+            get: { Self.common(for: params.params)[keyPath: keyPath] },
+            set: {
+                var current = Self.common(for: params.params)
+                current[keyPath: keyPath] = $0
+                onChange(Self.updatingCommon(params, common: current))
+            }
+        )
+    }
+
+    private func matrixBinding(_ keyPath: WritableKeyPath<TextCellParameters, Double>) -> Binding<Double> {
+        Binding(
+            get: {
+                if case .textCell(_, _, _, let payload) = params.params {
+                    return payload[keyPath: keyPath]
+                }
+                return 0
+            },
+            set: {
+                guard case .textCell(let common, let geometry, let color, var payload) = params.params else { return }
+                payload[keyPath: keyPath] = $0
+                onChange(updated(layer: params, params: .textCell(common: common, geometry: geometry, color: color, textCell: payload)))
+            }
+        )
+    }
+
+    private var matrixDirectionBinding: Binding<TextCellFlowDirection> {
+        Binding(
+            get: {
+                if case .textCell(_, _, _, let payload) = params.params {
+                    return payload.direction
+                }
+                return .down
+            },
+            set: {
+                guard case .textCell(let common, let geometry, let color, var payload) = params.params else { return }
+                payload.direction = $0
+                onChange(updated(layer: params, params: .textCell(common: common, geometry: geometry, color: color, textCell: payload)))
+            }
+        )
+    }
+
+    private var characterSetBinding: Binding<GPUEffectCharacterSet> {
+        Binding(
+            get: {
+                if case .textCell(_, _, _, let payload) = params.params {
+                    return payload.characterSet
+                }
+                return .classicASCII
+            },
+            set: {
+                guard case .textCell(let common, let geometry, let color, var payload) = params.params else { return }
+                payload.characterSet = $0
+                onChange(updated(layer: params, params: .textCell(common: common, geometry: geometry, color: color, textCell: payload)))
+            }
+        )
+    }
+
+    private var dotShapeBinding: Binding<DotShape> {
+        Binding(
+            get: {
+                if case .textCell(_, _, _, let payload) = params.params { return payload.dotShape }
+                return .circle
+            },
+            set: {
+                guard case .textCell(let common, let geometry, let color, var payload) = params.params else { return }
+                payload.dotShape = $0
+                onChange(updated(layer: params, params: .textCell(common: common, geometry: geometry, color: color, textCell: payload)))
+            }
+        )
+    }
+
+    private var dotGridBinding: Binding<DotGridType> {
+        Binding(
+            get: {
+                if case .textCell(_, _, _, let payload) = params.params { return payload.gridType }
+                return .square
+            },
+            set: {
+                guard case .textCell(let common, let geometry, let color, var payload) = params.params else { return }
+                payload.gridType = $0
+                onChange(updated(layer: params, params: .textCell(common: common, geometry: geometry, color: color, textCell: payload)))
+            }
+        )
+    }
+
+    private var textInvertBinding: Binding<Bool> {
+        Binding(
+            get: {
+                if case .textCell(_, _, _, let payload) = params.params { return payload.invert }
+                return false
+            },
+            set: {
+                guard case .textCell(let common, let geometry, let color, var payload) = params.params else { return }
+                payload.invert = $0
+                onChange(updated(layer: params, params: .textCell(common: common, geometry: geometry, color: color, textCell: payload)))
+            }
+        )
+    }
+
+    private var blockStyleBinding: Binding<BlockStyle> {
+        Binding(
+            get: {
+                if case .textCell(_, _, _, let payload) = params.params { return payload.blockStyle }
+                return .solid
+            },
+            set: {
+                guard case .textCell(let common, let geometry, let color, var payload) = params.params else { return }
+                payload.blockStyle = $0
+                onChange(updated(layer: params, params: .textCell(common: common, geometry: geometry, color: color, textCell: payload)))
+            }
+        )
+    }
+
+    private var blockBorderWidthBinding: Binding<Double> {
+        Binding(
+            get: {
+                if case .textCell(_, _, _, let payload) = params.params { return payload.borderWidth }
+                return 0
+            },
+            set: {
+                guard case .textCell(let common, let geometry, let color, var payload) = params.params else { return }
+                payload.borderWidth = $0
+                onChange(updated(layer: params, params: .textCell(common: common, geometry: geometry, color: color, textCell: payload)))
+            }
+        )
+    }
+
+    private func textCellBinding(_ keyPath: WritableKeyPath<TextCellParameters, Double>) -> Binding<Double> {
+        Binding(
+            get: {
+                if case .textCell(_, _, _, let payload) = params.params {
+                    return payload[keyPath: keyPath]
+                }
+                return 0
+            },
+            set: {
+                guard case .textCell(let common, let geometry, let color, var payload) = params.params else { return }
+                payload[keyPath: keyPath] = $0
+                onChange(updated(layer: params, params: .textCell(common: common, geometry: geometry, color: color, textCell: payload)))
+            }
+        )
+    }
+
+    private var halftoneShapeBinding: Binding<HalftoneShape> {
+        Binding(
+            get: {
+                if case .printSampling(_, _, _, let payload) = params.params {
+                    return payload.halftoneShape
+                }
+                return .circle
+            },
+            set: {
+                guard case .printSampling(let common, let geometry, let color, var payload) = params.params else { return }
+                payload.halftoneShape = $0
+                onChange(updated(layer: params, params: .printSampling(common: common, geometry: geometry, color: color, printSampling: payload)))
+            }
+        )
+    }
+
+    private var halftoneAngleBinding: Binding<Double> {
+        Binding(
+            get: {
+                if case .printSampling(_, _, _, let payload) = params.params {
+                    return payload.halftoneAngle
+                }
+                return 0
+            },
+            set: {
+                guard case .printSampling(let common, let geometry, let color, var payload) = params.params else { return }
+                payload.halftoneAngle = $0
+                onChange(updated(layer: params, params: .printSampling(common: common, geometry: geometry, color: color, printSampling: payload)))
+            }
+        )
+    }
+
+    private var invertBinding: Binding<Bool> {
+        Binding(
+            get: {
+                if case .printSampling(_, _, _, let payload) = params.params {
+                    return payload.invert
+                }
+                return false
+            },
+            set: {
+                guard case .printSampling(let common, let geometry, let color, var payload) = params.params else { return }
+                payload.invert = $0
+                onChange(updated(layer: params, params: .printSampling(common: common, geometry: geometry, color: color, printSampling: payload)))
+            }
+        )
+    }
+
+    private var hatchDensityBinding: Binding<Double> {
+        Binding(
+            get: {
+                if case .printSampling(_, _, _, let payload) = params.params { return payload.hatchDensity }
+                return 0.5
+            },
+            set: {
+                guard case .printSampling(let common, let geometry, let color, var payload) = params.params else { return }
+                payload.hatchDensity = $0
+                onChange(updated(layer: params, params: .printSampling(common: common, geometry: geometry, color: color, printSampling: payload)))
+            }
+        )
+    }
+
+    private var hatchLayersBinding: Binding<Double> {
+        Binding(
+            get: {
+                if case .printSampling(_, _, _, let payload) = params.params { return Double(payload.hatchLayers) }
+                return 2
+            },
+            set: {
+                guard case .printSampling(let common, let geometry, let color, var payload) = params.params else { return }
+                payload.hatchLayers = max(1, Int($0.rounded()))
+                onChange(updated(layer: params, params: .printSampling(common: common, geometry: geometry, color: color, printSampling: payload)))
+            }
+        )
+    }
+
+    private var hatchAngleBinding: Binding<Double> {
+        Binding(
+            get: {
+                if case .printSampling(_, _, _, let payload) = params.params { return payload.hatchAngle }
+                return 45
+            },
+            set: {
+                guard case .printSampling(let common, let geometry, let color, var payload) = params.params else { return }
+                payload.hatchAngle = $0
+                onChange(updated(layer: params, params: .printSampling(common: common, geometry: geometry, color: color, printSampling: payload)))
+            }
+        )
+    }
+
+    private var hatchLineWidthBinding: Binding<Double> {
+        Binding(
+            get: {
+                if case .printSampling(_, _, _, let payload) = params.params { return payload.hatchLineWidth }
+                return 0.25
+            },
+            set: {
+                guard case .printSampling(let common, let geometry, let color, var payload) = params.params else { return }
+                payload.hatchLineWidth = $0
+                onChange(updated(layer: params, params: .printSampling(common: common, geometry: geometry, color: color, printSampling: payload)))
+            }
+        )
+    }
+
+    private var hatchRandomnessBinding: Binding<Double> {
+        Binding(
+            get: {
+                if case .printSampling(_, _, _, let payload) = params.params { return payload.hatchRandomness }
+                return 0
+            },
+            set: {
+                guard case .printSampling(let common, let geometry, let color, var payload) = params.params else { return }
+                payload.hatchRandomness = $0
+                onChange(updated(layer: params, params: .printSampling(common: common, geometry: geometry, color: color, printSampling: payload)))
+            }
+        )
+    }
+
+    private var thresholdLevelsBinding: Binding<Double> {
+        Binding(
+            get: {
+                if case .printSampling(_, _, _, let payload) = params.params { return Double(payload.thresholdLevels) }
+                return 2
+            },
+            set: {
+                guard case .printSampling(let common, let geometry, let color, var payload) = params.params else { return }
+                payload.thresholdLevels = max(2, Int($0.rounded()))
+                onChange(updated(layer: params, params: .printSampling(common: common, geometry: geometry, color: color, printSampling: payload)))
+            }
+        )
+    }
+
+    private var thresholdDitherBinding: Binding<Bool> {
+        Binding(
+            get: {
+                if case .printSampling(_, _, _, let payload) = params.params { return payload.thresholdDither }
+                return false
+            },
+            set: {
+                guard case .printSampling(let common, let geometry, let color, var payload) = params.params else { return }
+                payload.thresholdDither = $0
+                onChange(updated(layer: params, params: .printSampling(common: common, geometry: geometry, color: color, printSampling: payload)))
+            }
+        )
+    }
+
+    private func glitchBinding(_ keyPath: WritableKeyPath<GlitchParameters, Double>) -> Binding<Double> {
+        Binding(
+            get: {
+                if case .glitch(_, _, _, let payload) = params.params {
+                    return payload[keyPath: keyPath]
+                }
+                return 0
+            },
+            set: {
+                guard case .glitch(let common, let geometry, let color, var payload) = params.params else { return }
+                payload[keyPath: keyPath] = $0
+                onChange(updated(layer: params, params: .glitch(common: common, geometry: geometry, color: color, glitch: payload)))
+            }
+        )
+    }
+
+    private var glitchDirectionBinding: Binding<GlitchDirection> {
+        Binding(
+            get: {
+                if case .glitch(_, _, _, let payload) = params.params {
+                    return payload.direction
+                }
+                return .horizontal
+            },
+            set: {
+                guard case .glitch(let common, let geometry, let color, var payload) = params.params else { return }
+                payload.direction = $0
+                onChange(updated(layer: params, params: .glitch(common: common, geometry: geometry, color: color, glitch: payload)))
+            }
+        )
+    }
+
+    private var sortModeBinding: Binding<PixelSortMode> {
+        Binding(
+            get: {
+                if case .glitch(_, _, _, let payload) = params.params {
+                    return payload.sortMode
+                }
+                return .brightness
+            },
+            set: {
+                guard case .glitch(let common, let geometry, let color, var payload) = params.params else { return }
+                payload.sortMode = $0
+                onChange(updated(layer: params, params: .glitch(common: common, geometry: geometry, color: color, glitch: payload)))
+            }
+        )
+    }
+
+    private var reverseBinding: Binding<Bool> {
+        Binding(
+            get: {
+                if case .glitch(_, _, _, let payload) = params.params {
+                    return payload.reverse
+                }
+                return false
+            },
+            set: {
+                guard case .glitch(let common, let geometry, let color, var payload) = params.params else { return }
+                payload.reverse = $0
+                onChange(updated(layer: params, params: .glitch(common: common, geometry: geometry, color: color, glitch: payload)))
+            }
+        )
+    }
+
+    private func edgeFieldBinding(_ keyPath: WritableKeyPath<EdgeFieldParameters, Double>) -> Binding<Double> {
+        Binding(
+            get: {
+                if case .edgeField(_, _, _, let payload) = params.params {
+                    return payload[keyPath: keyPath]
+                }
+                return 0
+            },
+            set: {
+                guard case .edgeField(let common, let geometry, let color, var payload) = params.params else { return }
+                payload[keyPath: keyPath] = $0
+                onChange(updated(layer: params, params: .edgeField(common: common, geometry: geometry, color: color, edgeField: payload)))
+            }
+        )
+    }
+
+    private var edgeDirectionBinding: Binding<String> {
+        Binding(
+            get: {
+                if case .edgeField(_, _, _, let payload) = params.params {
+                    return payload.direction.rawValue
+                }
+                return "horizontal"
+            },
+            set: {
+                guard case .edgeField(let common, let geometry, let color, var payload) = params.params else { return }
+                payload.direction = EdgeFieldDirection(rawValue: $0) ?? .horizontal
+                onChange(updated(layer: params, params: .edgeField(common: common, geometry: geometry, color: color, edgeField: payload)))
+            }
+        )
+    }
+
+    private var edgeAnimateBinding: Binding<Bool> {
+        Binding(
+            get: {
+                if case .edgeField(_, _, _, let payload) = params.params {
+                    return payload.animate
+                }
+                return false
+            },
+            set: {
+                guard case .edgeField(let common, let geometry, let color, var payload) = params.params else { return }
+                payload.animate = $0
+                onChange(updated(layer: params, params: .edgeField(common: common, geometry: geometry, color: color, edgeField: payload)))
+            }
+        )
+    }
+
+    private var noiseTypeBinding: Binding<NoiseFieldType> {
+        Binding(
+            get: {
+                if case .edgeField(_, _, _, let payload) = params.params {
+                    return payload.noiseType
+                }
+                return .value
+            },
+            set: {
+                guard case .edgeField(let common, let geometry, let color, var payload) = params.params else { return }
+                payload.noiseType = $0
+                onChange(updated(layer: params, params: .edgeField(common: common, geometry: geometry, color: color, edgeField: payload)))
+            }
+        )
+    }
+
+    private var noiseOctavesBinding: Binding<Double> {
+        Binding(
+            get: {
+                if case .edgeField(_, _, _, let payload) = params.params {
+                    return Double(payload.octaves)
+                }
+                return 1
+            },
+            set: {
+                guard case .edgeField(let common, let geometry, let color, var payload) = params.params else { return }
+                payload.octaves = max(1, Int($0.rounded()))
+                onChange(updated(layer: params, params: .edgeField(common: common, geometry: geometry, color: color, edgeField: payload)))
+            }
+        )
+    }
+
+    private var noiseSpeedBinding: Binding<Double> {
+        Binding(
+            get: {
+                if case .edgeField(_, _, _, let payload) = params.params {
+                    return payload.speed
+                }
+                return 0
+            },
+            set: {
+                guard case .edgeField(let common, let geometry, let color, var payload) = params.params else { return }
+                payload.speed = $0
+                onChange(updated(layer: params, params: .edgeField(common: common, geometry: geometry, color: color, edgeField: payload)))
+            }
+        )
+    }
+
+    private var noiseDistortOnlyBinding: Binding<Bool> {
+        Binding(
+            get: {
+                if case .edgeField(_, _, _, let payload) = params.params {
+                    return payload.distortOnly
+                }
+                return false
+            },
+            set: {
+                guard case .edgeField(let common, let geometry, let color, var payload) = params.params else { return }
+                payload.distortOnly = $0
+                onChange(updated(layer: params, params: .edgeField(common: common, geometry: geometry, color: color, edgeField: payload)))
+            }
+        )
+    }
+
+    private var edgeAlgorithmBinding: Binding<EdgeAlgorithm> {
+        Binding(
+            get: {
+                if case .edgeField(_, _, _, let payload) = params.params {
+                    return payload.edgeAlgorithm
+                }
+                return .sobel
+            },
+            set: {
+                guard case .edgeField(let common, let geometry, let color, var payload) = params.params else { return }
+                payload.edgeAlgorithm = $0
+                onChange(updated(layer: params, params: .edgeField(common: common, geometry: geometry, color: color, edgeField: payload)))
+            }
+        )
+    }
+
+    private var edgeThresholdBinding: Binding<Double> {
+        Binding(
+            get: {
+                if case .edgeField(_, _, _, let payload) = params.params {
+                    return payload.edgeThreshold
+                }
+                return 0.5
+            },
+            set: {
+                guard case .edgeField(let common, let geometry, let color, var payload) = params.params else { return }
+                payload.edgeThreshold = $0
+                onChange(updated(layer: params, params: .edgeField(common: common, geometry: geometry, color: color, edgeField: payload)))
+            }
+        )
+    }
+
+    private var edgeInvertBinding: Binding<Bool> {
+        Binding(
+            get: {
+                if case .edgeField(_, _, _, let payload) = params.params {
+                    return payload.invert
+                }
+                return false
+            },
+            set: {
+                guard case .edgeField(let common, let geometry, let color, var payload) = params.params else { return }
+                payload.invert = $0
+                onChange(updated(layer: params, params: .edgeField(common: common, geometry: geometry, color: color, edgeField: payload)))
+            }
+        )
+    }
+
+    private var contourFillModeBinding: Binding<ContourFillMode> {
+        Binding(
+            get: {
+                if case .edgeField(_, _, _, let payload) = params.params { return payload.contourFillMode }
+                return .linesOnly
+            },
+            set: {
+                guard case .edgeField(let common, let geometry, let color, var payload) = params.params else { return }
+                payload.contourFillMode = $0
+                onChange(updated(layer: params, params: .edgeField(common: common, geometry: geometry, color: color, edgeField: payload)))
+            }
+        )
+    }
+
+    private var contourLevelsBinding: Binding<Double> {
+        Binding(
+            get: {
+                if case .edgeField(_, _, _, let payload) = params.params { return Double(payload.contourLevels) }
+                return 8
+            },
+            set: {
+                guard case .edgeField(let common, let geometry, let color, var payload) = params.params else { return }
+                payload.contourLevels = max(2, Int($0.rounded()))
+                onChange(updated(layer: params, params: .edgeField(common: common, geometry: geometry, color: color, edgeField: payload)))
+            }
+        )
+    }
+
+    private var voronoiCellSizeBinding: Binding<Double> {
+        Binding(
+            get: {
+                if case .edgeField(_, _, _, let payload) = params.params { return payload.cellSize }
+                return 16
+            },
+            set: {
+                guard case .edgeField(let common, let geometry, let color, var payload) = params.params else { return }
+                payload.cellSize = $0
+                onChange(updated(layer: params, params: .edgeField(common: common, geometry: geometry, color: color, edgeField: payload)))
+            }
+        )
+    }
+
+    private var voronoiEdgeWidthBinding: Binding<Double> {
+        Binding(
+            get: {
+                if case .edgeField(_, _, _, let payload) = params.params { return payload.edgeWidth }
+                return 0.25
+            },
+            set: {
+                guard case .edgeField(let common, let geometry, let color, var payload) = params.params else { return }
+                payload.edgeWidth = $0
+                onChange(updated(layer: params, params: .edgeField(common: common, geometry: geometry, color: color, edgeField: payload)))
+            }
+        )
+    }
+
+    private var voronoiRandomizeBinding: Binding<Bool> {
+        Binding(
+            get: {
+                if case .edgeField(_, _, _, let payload) = params.params { return payload.randomize }
+                return false
+            },
+            set: {
+                guard case .edgeField(let common, let geometry, let color, var payload) = params.params else { return }
+                payload.randomize = $0
+                onChange(updated(layer: params, params: .edgeField(common: common, geometry: geometry, color: color, edgeField: payload)))
+            }
+        )
+    }
+
+    private static func geometry(for params: GPUEffectParameters) -> GPUEffectGeometryParameters {
+        switch params {
+        case .textCell(_, let geometry, _, _), .printSampling(_, let geometry, _, _), .edgeField(_, let geometry, _, _), .glitch(_, let geometry, _, _):
+            return geometry
+        }
+    }
+
+    private static func common(for params: GPUEffectParameters) -> GPUEffectCommonParameters {
+        switch params {
+        case .textCell(let common, _, _, _), .printSampling(let common, _, _, _), .edgeField(let common, _, _, _), .glitch(let common, _, _, _):
+            return common
+        }
+    }
+
+    private static func color(for params: GPUEffectParameters) -> GPUEffectColorParameters {
+        switch params {
+        case .textCell(_, _, let color, _), .printSampling(_, _, let color, _), .edgeField(_, _, let color, _), .glitch(_, _, let color, _):
+            return color
+        }
+    }
+
+    private static func updatingGeometry(_ layer: GPUEffectLayerParams, scale: Double?, spacing: Double?, outputWidth: Int?) -> GPUEffectLayerParams {
+        var copy = layer
+        switch layer.params {
+        case .textCell(let common, let geometry, let color, let payload):
+            copy.params = .textCell(common: common, geometry: .init(scale: scale ?? geometry.scale, spacing: spacing ?? geometry.spacing, outputWidth: outputWidth ?? geometry.outputWidth), color: color, textCell: payload)
+        case .printSampling(let common, let geometry, let color, let payload):
+            copy.params = .printSampling(common: common, geometry: .init(scale: scale ?? geometry.scale, spacing: spacing ?? geometry.spacing, outputWidth: outputWidth ?? geometry.outputWidth), color: color, printSampling: payload)
+        case .edgeField(let common, let geometry, let color, let payload):
+            copy.params = .edgeField(common: common, geometry: .init(scale: scale ?? geometry.scale, spacing: spacing ?? geometry.spacing, outputWidth: outputWidth ?? geometry.outputWidth), color: color, edgeField: payload)
+        case .glitch(let common, let geometry, let color, let payload):
+            copy.params = .glitch(common: common, geometry: .init(scale: scale ?? geometry.scale, spacing: spacing ?? geometry.spacing, outputWidth: outputWidth ?? geometry.outputWidth), color: color, glitch: payload)
+        }
+        return copy
+    }
+
+    private static func updatingCommon(_ layer: GPUEffectLayerParams, common: GPUEffectCommonParameters) -> GPUEffectLayerParams {
+        var copy = layer
+        switch layer.params {
+        case .textCell(_, let geometry, let color, let payload):
+            copy.params = .textCell(common: common, geometry: geometry, color: color, textCell: payload)
+        case .printSampling(_, let geometry, let color, let payload):
+            copy.params = .printSampling(common: common, geometry: geometry, color: color, printSampling: payload)
+        case .edgeField(_, let geometry, let color, let payload):
+            copy.params = .edgeField(common: common, geometry: geometry, color: color, edgeField: payload)
+        case .glitch(_, let geometry, let color, let payload):
+            copy.params = .glitch(common: common, geometry: geometry, color: color, glitch: payload)
+        }
+        return copy
+    }
+
+    private static func updatingColor(_ layer: GPUEffectLayerParams, color: GPUEffectColorParameters) -> GPUEffectLayerParams {
+        var copy = layer
+        switch layer.params {
+        case .textCell(let common, let geometry, _, let payload):
+            copy.params = .textCell(common: common, geometry: geometry, color: color, textCell: payload)
+        case .printSampling(let common, let geometry, _, let payload):
+            copy.params = .printSampling(common: common, geometry: geometry, color: color, printSampling: payload)
+        case .edgeField(let common, let geometry, _, let payload):
+            copy.params = .edgeField(common: common, geometry: geometry, color: color, edgeField: payload)
+        case .glitch(let common, let geometry, _, let payload):
+            copy.params = .glitch(common: common, geometry: geometry, color: color, glitch: payload)
+        }
+        return copy
+    }
+
+    private func updated(layer: GPUEffectLayerParams, params newParams: GPUEffectParameters) -> GPUEffectLayerParams {
+        var copy = layer
+        copy.params = newParams
+        return copy
+    }
+
+    private static func defaultParams(for kind: GPUEffectKind) -> GPUEffectParameters {
+        switch kind {
+        case .ascii:
+            return .textCell(common: .init(), geometry: .init(scale: 1.0, spacing: 2.0, outputWidth: 240), color: .init(mode: .foregroundBackground, backgroundIntensity: 0.2), textCell: .init(characterSet: .classicASCII, variant: .ascii))
+        case .matrixRain:
+            return .textCell(common: .init(), geometry: .init(scale: 1.0, spacing: 2.0, outputWidth: 240), color: .init(mode: .foregroundBackground, backgroundIntensity: 0.2), textCell: .init(characterSet: .classicASCII, variant: .matrixRain))
+        case .blockify:
+            return .textCell(common: .init(), geometry: .init(scale: 1.0, spacing: 3.0, outputWidth: 240), color: .init(mode: .source, backgroundIntensity: 0.0), textCell: .init(characterSet: .classicASCII, variant: .blockify))
+        case .dots:
+            return .textCell(common: .init(), geometry: .init(scale: 0.9, spacing: 4.0, outputWidth: 240), color: .init(mode: .monochrome, backgroundIntensity: 0.1), textCell: .init(characterSet: .classicASCII, variant: .dots))
+        case .dithering:
+            return .printSampling(common: .init(), geometry: .init(scale: 1.0, spacing: 2.0, outputWidth: 240), color: .init(mode: .monochrome, backgroundIntensity: 0.1), printSampling: .init(variant: .dithering, sampleDensity: 0.5, threshold: 0.5))
+        case .halftone:
+            return .printSampling(common: .init(), geometry: .init(scale: 0.9, spacing: 3.0, outputWidth: 240), color: .init(mode: .source, backgroundIntensity: 0.0), printSampling: .init(variant: .halftone, sampleDensity: 0.7, threshold: 0.4))
+        case .threshold:
+            return .printSampling(common: .init(), geometry: .init(scale: 1.0, spacing: 2.0, outputWidth: 240), color: .init(mode: .monochrome, backgroundIntensity: 0.2), printSampling: .init(variant: .threshold, sampleDensity: 0.5, threshold: 0.6))
+        case .crosshatch:
+            return .printSampling(common: .init(), geometry: .init(scale: 0.8, spacing: 4.0, outputWidth: 240), color: .init(mode: .foregroundBackground, backgroundIntensity: 0.15), printSampling: .init(variant: .crosshatch, sampleDensity: 0.65, threshold: 0.45))
+        case .contour:
+            return .edgeField(common: .init(), geometry: .init(scale: 1.0, spacing: 2.0, outputWidth: 240), color: .init(mode: .monochrome, backgroundIntensity: 0.05), edgeField: .init(variant: .contour, lineStrength: 0.6, fieldIntensity: 0.7))
+        case .edgeDetection:
+            return .edgeField(common: .init(), geometry: .init(scale: 0.9, spacing: 2.0, outputWidth: 240), color: .init(mode: .foregroundBackground, backgroundIntensity: 0.1), edgeField: .init(variant: .edgeDetection, lineStrength: 0.8, fieldIntensity: 0.5))
+        case .waveLines:
+            return .edgeField(common: .init(), geometry: .init(scale: 1.2, spacing: 4.0, outputWidth: 240), color: .init(mode: .palette, backgroundIntensity: 0.2), edgeField: .init(variant: .waveLines, lineStrength: 0.5, fieldIntensity: 0.9))
+        case .voronoi:
+            return .edgeField(common: .init(), geometry: .init(scale: 1.1, spacing: 3.0, outputWidth: 240), color: .init(mode: .source, backgroundIntensity: 0.0), edgeField: .init(variant: .voronoi, lineStrength: 0.55, fieldIntensity: 0.85))
+        case .noiseField:
+            return .edgeField(common: .init(), geometry: .init(scale: 0.8, spacing: 5.0, outputWidth: 240), color: .init(mode: .monochrome, backgroundIntensity: 0.15), edgeField: .init(variant: .noiseField, lineStrength: 0.45, fieldIntensity: 0.95))
+        case .pixelSort:
+            return .glitch(common: .init(), geometry: .init(scale: 1.0, spacing: 1.0, outputWidth: 240), color: .init(mode: .source, backgroundIntensity: 0.0), glitch: .init(variant: .pixelSort, amount: 0.65, threshold: 0.42))
+        case .vhs:
+            return .glitch(common: .init(), geometry: .init(scale: 1.0, spacing: 2.0, outputWidth: 240), color: .init(mode: .foregroundBackground, backgroundIntensity: 0.08), glitch: .init(variant: .vhs, amount: 0.75, threshold: 0.5))
         }
     }
 }
@@ -770,6 +2033,16 @@ private struct DitherControls: View {
 
     var body: some View {
         VStack(spacing: 8) {
+            MobileBlendModeControls(
+                blendMode: Binding(
+                    get: { params.blendMode },
+                    set: { var p = params; p.blendMode = $0; onChange(p) }
+                ),
+                opacity: Binding(
+                    get: { params.opacity },
+                    set: { var p = params; p.opacity = $0; onChange(p) }
+                )
+            )
             ControlRow(label: "Algorithm") {
                 Picker("", selection: Binding(
                     get: { params.algorithm },
@@ -790,6 +2063,7 @@ private struct DitherControls: View {
                         case .twoTone: return 1
                         case .color: return 2
                         case .dominantTwoTone: return 3
+                        case .palette: return 4
                         }
                     },
                     set: { tag in
@@ -799,6 +2073,7 @@ private struct DitherControls: View {
                         case 1: p.colorMode = .twoTone(foreground: (try? CodableColor(hex: "#0251FF")) ?? .black, background: .black)
                         case 2: p.colorMode = .color(levels: 4)
                         case 3: p.colorMode = .dominantTwoTone(flipped: false, saturationShift: 0, lightnessShift: 0)
+                        case 4: p.colorMode = .palette(VintagePalette.gameBoy)
                         default: break
                         }
                         onChange(p)
@@ -808,6 +2083,7 @@ private struct DitherControls: View {
                     Text("Two-Tone").tag(1)
                     Text("Color").tag(2)
                     Text("Dominant").tag(3)
+                    Text("Palette").tag(4)
                 }
                 .pickerStyle(.segmented)
             }
@@ -901,6 +2177,80 @@ private struct DitherControls: View {
                     ), in: 2...8)
                     .labelsHidden()
                     .accessibilityLabel("Color Levels")
+                }
+            }
+
+            // Palette mode — preset picker + per-colour editor. Mirrors
+            // LayerListSection.paletteEditor's derivation-from-stored-colours
+            // pattern so the picker stays in sync with the saved palette
+            // (editing a swatch flips the preset to Custom automatically).
+            if case .palette(let colors) = params.colorMode {
+                let selectedPreset = VintagePalette.Preset.matching(colors)
+                ControlRow(label: "Preset") {
+                    Picker("", selection: Binding(
+                        get: { selectedPreset },
+                        set: { newValue in
+                            var p = params
+                            switch newValue {
+                            case .custom:
+                                let seed = (selectedPreset == .custom) ? colors : VintagePalette.gameBoy
+                                p.colorMode = .palette(seed)
+                            default:
+                                p.colorMode = .palette(newValue.colors)
+                            }
+                            onChange(p)
+                        }
+                    )) {
+                        ForEach(VintagePalette.Preset.allCases, id: \.self) { preset in
+                            Text(preset.rawValue).tag(preset)
+                        }
+                    }
+                    .pickerStyle(.menu)
+                }
+
+                ForEach(Array(colors.enumerated()), id: \.offset) { idx, color in
+                    ControlRow(label: "Colour \(idx + 1)") {
+                        HStack(spacing: 8) {
+                            ColorPicker("", selection: Binding(
+                                get: { Color(cgColor: color.cgColor) },
+                                set: { newColor in
+                                    guard let hex = newColor.hexString,
+                                          let codable = try? CodableColor(hex: hex) else { return }
+                                    var p = params
+                                    var next = colors
+                                    next[idx] = codable
+                                    p.colorMode = .palette(next)
+                                    onChange(p)
+                                }
+                            ))
+                            .labelsHidden()
+                            if colors.count > 2 {
+                                Button {
+                                    var p = params
+                                    var next = colors
+                                    next.remove(at: idx)
+                                    p.colorMode = .palette(next)
+                                    onChange(p)
+                                } label: {
+                                    Image(systemName: "minus.circle")
+                                }
+                                .buttonStyle(.borderless)
+                            }
+                        }
+                    }
+                }
+
+                if colors.count < DitherColorMode.MAX_PALETTE_COLORS {
+                    Button {
+                        var p = params
+                        var next = colors
+                        next.append(colors.last ?? CodableColor(unchecked: "#000000"))
+                        p.colorMode = .palette(next)
+                        onChange(p)
+                    } label: {
+                        Label("Add Colour", systemImage: "plus.circle")
+                    }
+                    .buttonStyle(.borderless)
                 }
             }
 
@@ -1030,18 +2380,16 @@ private struct ShaderControls: View {
 
     var body: some View {
         VStack(spacing: 8) {
-            ControlRow(label: "Style") {
-                Picker("", selection: Binding(
-                    get: { params.style },
-                    set: { onChange(params.withStyle($0)) }
-                )) {
-                    ForEach(ShaderStyle.allCases, id: \.self) { style in
-                        Text(style.label).tag(style)
-                    }
-                }
-                .pickerStyle(.menu)
-            }
-
+            MobileBlendModeControls(
+                blendMode: Binding(
+                    get: { params.blendMode },
+                    set: { var p = params; p.blendMode = $0; onChange(p) }
+                ),
+                opacity: Binding(
+                    get: { params.opacity },
+                    set: { var p = params; p.opacity = $0; onChange(p) }
+                )
+            )
             sliderRow(
                 label: "Intensity",
                 value: params.intensity,
@@ -1121,6 +2469,17 @@ private struct ShaderControls: View {
             step: 0.05
         ) { value in
             updateASCII(asciiParams, blackLevel: value)
+        }
+
+        asciiCharactersControl(asciiParams)
+        asciiFontControl(asciiParams)
+
+        ControlRow(label: "High Detail") {
+            Toggle("16×16 atlas", isOn: Binding(
+                get: { asciiParams.highDetail },
+                set: { updateASCII(asciiParams, highDetail: $0) }
+            ))
+            .labelsHidden()
         }
 
         ControlRow(label: "Colors") {
@@ -1282,6 +2641,89 @@ private struct ShaderControls: View {
         }
     }
 
+    /// Character palette picker + Custom text field + ramp preview. Mirrors
+    /// the desktop editor in LayerListSection so the two feel identical; see
+    /// that file for the rationale behind the preset-derived-from-string
+    /// approach (no separate persisted enum, picker always re-syncs with the
+    /// stored characters).
+    @ViewBuilder
+    private func asciiCharactersControl(_ asciiParams: ASCIIShaderParams) -> some View {
+        let selectedPreset = ASCIIPreset.matching(asciiParams.characters)
+        let characterCount = (asciiParams.characters ?? "").count
+
+        VStack(alignment: .leading, spacing: 8) {
+            ControlRow(label: "Characters") {
+                Picker("", selection: Binding<ASCIIPreset>(
+                    get: { selectedPreset },
+                    set: { newValue in
+                        switch newValue {
+                        case .default:
+                            updateASCII(asciiParams, characters: .some(nil))
+                        case .custom:
+                            // Same non-preset-seed logic as desktop: seeding
+                            // with Classic's literal makes `matching(...)`
+                            // flip the picker back to Classic on the next
+                            // render. A short non-preset starter lets the
+                            // user land on Custom and then edit from there.
+                            let current = asciiParams.characters
+                            let alreadyCustom = current.map { ASCIIPreset.matching($0) == .custom } ?? false
+                            let seed: String = alreadyCustom ? (current ?? "") : " .:*@"
+                            updateASCII(asciiParams, characters: .some(seed))
+                        default:
+                            updateASCII(asciiParams, characters: .some(newValue.characters))
+                        }
+                    }
+                )) {
+                    ForEach(ASCIIPreset.allCases, id: \.self) { preset in
+                        Text(preset.rawValue).tag(preset)
+                    }
+                }
+                .pickerStyle(.menu)
+                .labelsHidden()
+            }
+
+            if selectedPreset == .custom {
+                TextField(
+                    " .:-=+*#%@",
+                    text: Binding(
+                        get: { asciiParams.characters ?? "" },
+                        set: { newValue in
+                            let trimmed = String(newValue.prefix(10))
+                            updateASCII(asciiParams, characters: .some(trimmed.isEmpty ? nil : trimmed))
+                        }
+                    )
+                )
+                .font(.system(.body, design: .monospaced))
+                .textFieldStyle(.roundedBorder)
+
+                Text("\(characterCount) / 10")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+
+                asciiRampPreview(for: asciiParams.characters ?? "")
+            }
+        }
+    }
+
+    @ViewBuilder
+    private func asciiRampPreview(for characters: String) -> some View {
+        let glyphs = ASCIIAtlasGenerator.mappedFillGlyphs(characters)
+        HStack(spacing: 2) {
+            ForEach(0..<glyphs.count, id: \.self) { i in
+                let lum = Double(i) / Double(max(1, glyphs.count - 1))
+                ZStack {
+                    Rectangle()
+                        .fill(Color(white: lum))
+                    Text(String(glyphs[i]))
+                        .font(.system(size: 10, design: .monospaced))
+                        .foregroundStyle(lum < 0.5 ? Color.white : Color.black)
+                }
+                .frame(width: 22, height: 22)
+                .overlay(Rectangle().stroke(Color.secondary.opacity(0.3), lineWidth: 0.5))
+            }
+        }
+    }
+
     private func updateASCII(
         _ asciiParams: ASCIIShaderParams,
         cellSize: Int? = nil,
@@ -1290,7 +2732,10 @@ private struct ShaderControls: View {
         invert: Bool? = nil,
         exposure: Double? = nil,
         attenuation: Double? = nil,
-        blackLevel: Double? = nil
+        blackLevel: Double? = nil,
+        characters: String?? = nil,
+        fontName: String?? = nil,
+        highDetail: Bool? = nil
     ) {
         onChange(params.withParams(.ascii(ASCIIShaderParams(
             cellSize: cellSize ?? asciiParams.cellSize,
@@ -1299,9 +2744,37 @@ private struct ShaderControls: View {
             invert: invert ?? asciiParams.invert,
             exposure: exposure ?? asciiParams.exposure,
             attenuation: attenuation ?? asciiParams.attenuation,
-            blackLevel: blackLevel ?? asciiParams.blackLevel
+            blackLevel: blackLevel ?? asciiParams.blackLevel,
+            characters: characters ?? asciiParams.characters,
+            fontName: fontName ?? asciiParams.fontName,
+            highDetail: highDetail ?? asciiParams.highDetail
         ))))
     }
+
+    /// Mobile font picker. `UIFont.familyNames` is the system-installed list;
+    /// nil `fontName` → "System Default" sentinel.
+    @ViewBuilder
+    private func asciiFontControl(_ asciiParams: ASCIIShaderParams) -> some View {
+        let families = Self.systemFontFamilies
+        ControlRow(label: "Font") {
+            Picker("", selection: Binding<String>(
+                get: { asciiParams.fontName ?? "" },
+                set: { newValue in
+                    updateASCII(asciiParams, fontName: .some(newValue.isEmpty ? nil : newValue))
+                }
+            )) {
+                Text("System Default").tag("")
+                ForEach(families, id: \.self) { family in
+                    Text(family).tag(family)
+                }
+            }
+            .pickerStyle(.menu)
+        }
+    }
+
+    private static let systemFontFamilies: [String] = {
+        UIFont.familyNames.sorted()
+    }()
 
     @ViewBuilder
     private func crimewaveControls(_ crimewaveParams: CrimewaveShaderParams) -> some View {
@@ -1378,6 +2851,42 @@ private struct ShaderControls: View {
             .pickerStyle(.segmented)
         }
 
+        // Span criterion: Luminance (classic) + 4 Kim Asendorf modes. See
+        // LayerListSection.pixelSortControls for the rationale.
+        ControlRow(label: "Span Mode") {
+            Picker("", selection: Binding(
+                get: { pixelSortParams.spanMode },
+                set: { value in
+                    var updated = pixelSortParams; updated.spanMode = value
+                    onChange(params.withParams(.pixelSort(updated)))
+                }
+            )) {
+                Text("Luminance").tag(PixelSortSpanMode.luminance)
+                Text("Black (Kim)").tag(PixelSortSpanMode.kimBlack)
+                Text("White (Kim)").tag(PixelSortSpanMode.kimWhite)
+                Text("Bright (Kim)").tag(PixelSortSpanMode.kimBright)
+                Text("Dark (Kim)").tag(PixelSortSpanMode.kimDark)
+            }
+            .pickerStyle(.menu)
+        }
+
+        // Sort criterion — what each pixel is ranked by inside a span.
+        // Orthogonal to span mode.
+        ControlRow(label: "Sort By") {
+            Picker("", selection: Binding(
+                get: { pixelSortParams.sortBy },
+                set: { value in
+                    var updated = pixelSortParams; updated.sortBy = value
+                    onChange(params.withParams(.pixelSort(updated)))
+                }
+            )) {
+                Text("Luminance").tag(PixelSortCriterion.luminance)
+                Text("Brightness").tag(PixelSortCriterion.brightness)
+                Text("Hue").tag(PixelSortCriterion.hue)
+            }
+            .pickerStyle(.menu)
+        }
+
         sliderRow(
             label: "Threshold",
             value: pixelSortParams.threshold,
@@ -1399,6 +2908,15 @@ private struct ShaderControls: View {
             onChange(params.withParams(.pixelSort(updated)))
         }
         sliderRow(
+            label: "Randomness",
+            value: pixelSortParams.randomness,
+            range: 0...1,
+            step: 0.05
+        ) { value in
+            var updated = pixelSortParams; updated.randomness = value
+            onChange(params.withParams(.pixelSort(updated)))
+        }
+        sliderRow(
             label: "Amount",
             value: pixelSortParams.amount,
             range: expandedRange(0...1, including: pixelSortParams.amount),
@@ -1407,6 +2925,17 @@ private struct ShaderControls: View {
             var updated = pixelSortParams
             updated.amount = value
             onChange(params.withParams(.pixelSort(updated)))
+        }
+
+        ControlRow(label: "Reverse") {
+            Toggle("", isOn: Binding(
+                get: { pixelSortParams.reverse },
+                set: { value in
+                    var updated = pixelSortParams; updated.reverse = value
+                    onChange(params.withParams(.pixelSort(updated)))
+                }
+            ))
+            .labelsHidden()
         }
     }
 
@@ -1503,12 +3032,12 @@ private struct ShaderControls: View {
             onChange(params.withParams(.kuwahara(updated)))
         }
         sliderRow(
-            label: "Sharpness",
-            value: kuwaharaParams.sharpness,
-            range: expandedRange(1...16, including: kuwaharaParams.sharpness),
-            step: 0.5
+            label: "Softness",
+            value: kuwaharaParams.softness,
+            range: expandedRange(0...1, including: kuwaharaParams.softness),
+            step: 0.05
         ) { value in
-            var updated = kuwaharaParams; updated.sharpness = value
+            var updated = kuwaharaParams; updated.softness = value
             onChange(params.withParams(.kuwahara(updated)))
         }
     }
@@ -1583,6 +3112,16 @@ private struct LUTControls: View {
 
     var body: some View {
         VStack(spacing: 8) {
+            MobileBlendModeControls(
+                blendMode: Binding(
+                    get: { params.blendMode },
+                    set: { var p = params; p.blendMode = $0; onChange(p) }
+                ),
+                opacity: Binding(
+                    get: { params.opacity },
+                    set: { var p = params; p.opacity = $0; onChange(p) }
+                )
+            )
             if availableLUTs.isEmpty {
                 emptyState
             } else {
