@@ -1514,6 +1514,34 @@ struct GPUEffectLayerControls: View {
 
 // MARK: - BorderLayerControls
 
+private enum SimpleLayerEditorLayout {
+    static let groupSpacing = SidebarMetrics().expandedBodyInset
+    static let fieldWidth = 55.0
+    static let compactFieldWidth = 50.0
+    static let suffixWidth = 24.0
+    static let valueTextWidth = 36.0
+    static let thicknessModeWidth = 80.0
+    static let unitPickerWidth = 100.0
+}
+
+private extension View {
+    func simpleLayerEditorInputStyle(width: CGFloat? = SimpleLayerEditorLayout.fieldWidth) -> some View {
+        self
+            .textFieldStyle(.plain)
+            .font(AppFont.numericInput)
+            .foregroundStyle(Color.text1)
+            .multilineTextAlignment(.trailing)
+            .padding(.horizontal, 6)
+            .padding(.vertical, 3)
+            .frame(width: width)
+            .background(Color.surface3, in: RoundedRectangle(cornerRadius: CornerRadius.sm))
+            .overlay(
+                RoundedRectangle(cornerRadius: CornerRadius.sm)
+                    .stroke(Color.borderDefault, lineWidth: 1)
+            )
+    }
+}
+
 struct BorderLayerControls: View {
     var params: BorderLayerParams
     var onChange: (BorderLayerParams) -> Void
@@ -1526,36 +1554,38 @@ struct BorderLayerControls: View {
     }
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 4) {
-            HStack {
-                Text("Thickness")
-                    .font(AppFont.controlLabel)
-                    .foregroundStyle(Color.text2)
-                Spacer()
-                Picker("", selection: $thicknessMode) {
-                    ForEach(ThicknessMode.allCases, id: \.self) { mode in
-                        Text(mode.rawValue).tag(mode)
+        VStack(alignment: .leading, spacing: SimpleLayerEditorLayout.groupSpacing) {
+            SidebarCompoundControlBlock {
+                SidebarControlRow("Mode") {
+                    Picker("Thickness Mode", selection: $thicknessMode) {
+                        ForEach(ThicknessMode.allCases, id: \.self) { mode in
+                            Text(mode.rawValue).tag(mode)
+                        }
+                    }
+                    .pickerStyle(.segmented)
+                    .frame(width: SimpleLayerEditorLayout.thicknessModeWidth)
+                    .labelsHidden()
+                }
+            } secondary: {
+                SidebarControlRow("Thickness") {
+                    Slider(value: thicknessValue, in: thicknessRange)
+                        .tint(Color.accentDim)
+                } trailingValue: {
+                    HStack(spacing: Spacing.xs) {
+                        TextField("", value: thicknessValue, format: .number)
+                            .simpleLayerEditorInputStyle()
+                            .monospacedDigit()
+
+                        Text(thicknessMode.rawValue)
+                            .font(AppFont.mono(9))
+                            .foregroundStyle(Color.text3)
+                            .frame(width: SimpleLayerEditorLayout.suffixWidth, alignment: .leading)
                     }
                 }
-                .pickerStyle(.segmented)
-                .frame(width: 80)
-                .labelsHidden()
             }
 
-            HStack {
-                Slider(value: thicknessValue, in: thicknessRange)
-                TextField("", value: thicknessValue, format: .number)
-                    .textFieldStyle(.roundedBorder)
-                    .frame(width: 55)
-                    .multilineTextAlignment(.trailing)
-                    .monospacedDigit()
-                Text(thicknessMode.rawValue)
-                    .foregroundStyle(Color.text2)
-                    .frame(width: 20)
-            }
+            ColorPickerWithHex("Color", selection: colorBinding)
         }
-
-        ColorPickerWithHex("Color", selection: colorBinding)
     }
 
     private var thicknessValue: Binding<Double> {
@@ -1602,27 +1632,28 @@ struct PaddingLayerControls: View {
     var onChange: (PaddingLayerParams) -> Void
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 4) {
-            Text("Thickness")
-                .font(AppFont.controlLabel)
-                .foregroundStyle(Color.text2)
-            HStack {
+        VStack(alignment: .leading, spacing: SimpleLayerEditorLayout.groupSpacing) {
+            SidebarControlRow("Thickness") {
                 Slider(value: thicknessBinding, in: 0...400)
-                TextField("", value: thicknessBinding, format: .number)
-                    .textFieldStyle(.roundedBorder)
-                    .frame(width: 55)
-                    .multilineTextAlignment(.trailing)
-                    .monospacedDigit()
-                Text("px")
-                    .foregroundStyle(Color.text2)
-                    .frame(width: 20)
-            }
-        }
+                    .tint(Color.accentDim)
+            } trailingValue: {
+                HStack(spacing: Spacing.xs) {
+                    TextField("", value: thicknessBinding, format: .number)
+                        .simpleLayerEditorInputStyle()
+                        .monospacedDigit()
 
-        LayerFillPicker(fill: params.fill) { newFill in
-            var p = params
-            p.fill = newFill
-            onChange(p)
+                    Text("px")
+                        .font(AppFont.mono(9))
+                        .foregroundStyle(Color.text3)
+                        .frame(width: SimpleLayerEditorLayout.suffixWidth, alignment: .leading)
+                }
+            }
+
+            LayerFillPicker(fill: params.fill) { newFill in
+                var p = params
+                p.fill = newFill
+                onChange(p)
+            }
         }
     }
 
@@ -1669,27 +1700,36 @@ struct CanvasLayerControls: View {
     }
 
     var body: some View {
-        presetPicker
-
-        Picker("Size Mode", selection: $sizeMode) {
-            ForEach(SizeMode.allCases, id: \.self) { mode in
-                Text(mode.rawValue).tag(mode)
+        VStack(alignment: .leading, spacing: SimpleLayerEditorLayout.groupSpacing) {
+            SidebarCompoundControlBlock {
+                SidebarControlRow("Preset") {
+                    presetPicker
+                        .labelsHidden()
+                }
+            } secondary: {
+                SidebarControlRow("Size Mode") {
+                    Picker("Size Mode", selection: $sizeMode) {
+                        ForEach(SizeMode.allCases, id: \.self) { mode in
+                            Text(mode.rawValue).tag(mode)
+                        }
+                    }
+                    .pickerStyle(.segmented)
+                    .labelsHidden()
+                }
             }
-        }
-        .pickerStyle(.segmented)
 
-        if sizeMode == .pixels {
-            pixelFields
-        } else {
-            physicalFields
-        }
+            if sizeMode == .pixels {
+                pixelFields
+            } else {
+                physicalFields
+                pixelSummary
+            }
 
-        pixelSummary
-
-        LayerFillPicker(fill: params.fill) { newFill in
-            var p = params
-            p.fill = newFill
-            onChange(p)
+            LayerFillPicker(fill: params.fill) { newFill in
+                var p = params
+                p.fill = newFill
+                onChange(p)
+            }
         }
     }
 
@@ -1709,84 +1749,79 @@ struct CanvasLayerControls: View {
     }
 
     private var pixelFields: some View {
-        HStack(spacing: 12) {
-            VStack(alignment: .leading, spacing: 4) {
-                Text("Width")
-                    .font(AppFont.controlLabel)
-                    .foregroundStyle(Color.text2)
-                HStack(spacing: 4) {
-                    TextField("", value: widthBinding, format: .number)
-                        .textFieldStyle(.roundedBorder)
-                        .monospacedDigit()
-                    Text("px").foregroundStyle(Color.text2)
-                }
+        SidebarCompoundControlBlock {
+            SidebarControlRow("Width") {
+                TextField("", value: widthBinding, format: .number)
+                    .simpleLayerEditorInputStyle(width: nil)
+                    .monospacedDigit()
+            } trailingValue: {
+                Text("px")
+                    .font(AppFont.mono(9))
+                    .foregroundStyle(Color.text3)
             }
-            VStack(alignment: .leading, spacing: 4) {
-                Text("Height")
-                    .font(AppFont.controlLabel)
-                    .foregroundStyle(Color.text2)
-                HStack(spacing: 4) {
-                    TextField("", value: heightBinding, format: .number)
-                        .textFieldStyle(.roundedBorder)
-                        .monospacedDigit()
-                    Text("px").foregroundStyle(Color.text2)
-                }
+        } secondary: {
+            SidebarControlRow("Height") {
+                TextField("", value: heightBinding, format: .number)
+                    .simpleLayerEditorInputStyle(width: nil)
+                    .monospacedDigit()
+            } trailingValue: {
+                Text("px")
+                    .font(AppFont.mono(9))
+                    .foregroundStyle(Color.text3)
             }
         }
     }
 
     private var physicalFields: some View {
-        VStack(spacing: 8) {
-            HStack {
-                Picker("Unit", selection: $physicalUnit) {
-                    ForEach(PhysicalUnit.allCases, id: \.self) { u in
-                        Text(u.rawValue).tag(u)
+        VStack(alignment: .leading, spacing: SimpleLayerEditorLayout.groupSpacing) {
+            SidebarCompoundControlBlock {
+                SidebarControlRow("Unit") {
+                    Picker("Unit", selection: $physicalUnit) {
+                        ForEach(PhysicalUnit.allCases, id: \.self) { u in
+                            Text(u.rawValue).tag(u)
+                        }
+                    }
+                    .pickerStyle(.segmented)
+                    .frame(width: SimpleLayerEditorLayout.unitPickerWidth)
+                    .labelsHidden()
+                    .onChange(of: physicalUnit) { oldUnit, newUnit in
+                        convertUnit(from: oldUnit, to: newUnit)
                     }
                 }
-                .pickerStyle(.segmented)
-                .frame(width: 100)
-                .onChange(of: physicalUnit) { oldUnit, newUnit in
-                    convertUnit(from: oldUnit, to: newUnit)
-                }
-
-                Spacer()
-
-                VStack(alignment: .leading, spacing: 2) {
-                    Text("DPI")
-                        .font(AppFont.controlLabel)
-                        .foregroundStyle(Color.text2)
+            } secondary: {
+                SidebarControlRow("DPI") {
                     TextField("", value: $dpi, format: .number)
-                        .frame(width: 50)
-                        .textFieldStyle(.roundedBorder)
+                        .simpleLayerEditorInputStyle(width: nil)
                         .monospacedDigit()
                         .onChange(of: dpi) { _, _ in syncPhysicalToPixels() }
+                } trailingValue: {
+                    Text("dpi")
+                        .font(AppFont.mono(9))
+                        .foregroundStyle(Color.text3)
                 }
             }
 
-            HStack(spacing: 12) {
-                VStack(alignment: .leading, spacing: 4) {
-                    Text("Width")
-                        .font(AppFont.controlLabel)
-                        .foregroundStyle(Color.text2)
-                    HStack(spacing: 4) {
-                        TextField("", value: $widthPhysical, format: .number.precision(.fractionLength(1)))
-                            .textFieldStyle(.roundedBorder)
-                            .monospacedDigit()
-                            .onChange(of: widthPhysical) { _, _ in syncPhysicalToPixels() }
-                        Text(physicalUnit.rawValue).foregroundStyle(Color.text2)
-                    }
+            SidebarCompoundControlBlock {
+                SidebarControlRow("Width") {
+                    TextField("", value: $widthPhysical, format: .number.precision(.fractionLength(1)))
+                        .simpleLayerEditorInputStyle(width: nil)
+                        .monospacedDigit()
+                        .onChange(of: widthPhysical) { _, _ in syncPhysicalToPixels() }
+                } trailingValue: {
+                    Text(physicalUnit.rawValue)
+                        .font(AppFont.mono(9))
+                        .foregroundStyle(Color.text3)
                 }
-                VStack(alignment: .leading, spacing: 4) {
-                    Text("Height")
-                        .font(AppFont.controlLabel)
-                        .foregroundStyle(Color.text2)
-                    HStack(spacing: 4) {
-                        TextField("", value: $heightPhysical, format: .number.precision(.fractionLength(1)))
-                            .textFieldStyle(.roundedBorder)
-                            .monospacedDigit()
-                            .onChange(of: heightPhysical) { _, _ in syncPhysicalToPixels() }
-                        Text(physicalUnit.rawValue).foregroundStyle(Color.text2)
-                    }
+            } secondary: {
+                SidebarControlRow("Height") {
+                    TextField("", value: $heightPhysical, format: .number.precision(.fractionLength(1)))
+                        .simpleLayerEditorInputStyle(width: nil)
+                        .monospacedDigit()
+                        .onChange(of: heightPhysical) { _, _ in syncPhysicalToPixels() }
+                } trailingValue: {
+                    Text(physicalUnit.rawValue)
+                        .font(AppFont.mono(9))
+                        .foregroundStyle(Color.text3)
                 }
             }
         }
@@ -1795,8 +1830,9 @@ struct CanvasLayerControls: View {
     @ViewBuilder
     private var pixelSummary: some View {
         if sizeMode == .physical {
-            HStack {
-                Spacer()
+            SidebarControlRow("Output Pixels") {
+                EmptyView()
+            } trailingValue: {
                 Text("\(params.width) x \(params.height) px")
                     .font(AppFont.mono(10))
                     .foregroundStyle(Color.text3)
@@ -1904,21 +1940,16 @@ struct ResizeLayerControls: View {
     var onChange: (ResizeLayerParams) -> Void
 
     var body: some View {
-        HStack(spacing: 12) {
-            VStack(alignment: .leading, spacing: 4) {
-                Text("Max Width")
-                    .font(AppFont.controlLabel)
-                    .foregroundStyle(Color.text2)
+        SidebarCompoundControlBlock {
+            SidebarControlRow("Max Width") {
                 TextField("", value: maxWidthBinding, format: .number)
-                    .textFieldStyle(.roundedBorder)
+                    .simpleLayerEditorInputStyle(width: nil)
                     .monospacedDigit()
             }
-            VStack(alignment: .leading, spacing: 4) {
-                Text("Max Height")
-                    .font(AppFont.controlLabel)
-                    .foregroundStyle(Color.text2)
+        } secondary: {
+            SidebarControlRow("Max Height") {
                 TextField("", value: maxHeightBinding, format: .number)
-                    .textFieldStyle(.roundedBorder)
+                    .simpleLayerEditorInputStyle(width: nil)
                     .monospacedDigit()
             }
         }
@@ -1968,72 +1999,61 @@ struct AspectRatioLayerControls: View {
     }
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 4) {
-            Text("Ratio")
-                .font(AppFont.controlLabel)
-                .foregroundStyle(Color.text2)
-            Picker("", selection: ratioBinding) {
-                ForEach(presets, id: \.label) { preset in
-                    Text(preset.label).tag("\(preset.w):\(preset.h)")
+        VStack(alignment: .leading, spacing: SimpleLayerEditorLayout.groupSpacing) {
+            SidebarControlRow("Ratio") {
+                Picker("Ratio", selection: ratioBinding) {
+                    ForEach(presets, id: \.label) { preset in
+                        Text(preset.label).tag("\(preset.w):\(preset.h)")
+                    }
+                    Text("Custom").tag("custom")
                 }
-                Text("Custom").tag("custom")
+                .labelsHidden()
             }
-            .labelsHidden()
-        }
 
-        if isCustom {
-            HStack(spacing: 8) {
-                VStack(alignment: .leading, spacing: 4) {
-                    Text("Width")
-                        .font(AppFont.controlLabel)
-                        .foregroundStyle(Color.text2)
-                    TextField("W", value: Binding(
-                        get: { params.ratioWidth },
-                        set: { onChange(AspectRatioLayerParams(id: params.id, ratioWidth: max(1, $0), ratioHeight: params.ratioHeight, offsetX: params.offsetX, offsetY: params.offsetY)) }
-                    ), format: .number)
-                    .textFieldStyle(.roundedBorder)
-                    .monospacedDigit()
-                }
-                Text(":")
-                    .foregroundStyle(Color.text3)
-                    .padding(.top, 18)
-                VStack(alignment: .leading, spacing: 4) {
-                    Text("Height")
-                        .font(AppFont.controlLabel)
-                        .foregroundStyle(Color.text2)
-                    TextField("H", value: Binding(
-                        get: { params.ratioHeight },
-                        set: { onChange(AspectRatioLayerParams(id: params.id, ratioWidth: params.ratioWidth, ratioHeight: max(1, $0), offsetX: params.offsetX, offsetY: params.offsetY)) }
-                    ), format: .number)
-                    .textFieldStyle(.roundedBorder)
-                    .monospacedDigit()
+            if isCustom {
+                SidebarCompoundControlBlock {
+                    SidebarControlRow("Width") {
+                        TextField("W", value: Binding(
+                            get: { params.ratioWidth },
+                            set: { onChange(AspectRatioLayerParams(id: params.id, ratioWidth: max(1, $0), ratioHeight: params.ratioHeight, offsetX: params.offsetX, offsetY: params.offsetY)) }
+                        ), format: .number)
+                        .simpleLayerEditorInputStyle(width: nil)
+                        .monospacedDigit()
+                    }
+                } secondary: {
+                    SidebarControlRow("Height") {
+                        TextField("H", value: Binding(
+                            get: { params.ratioHeight },
+                            set: { onChange(AspectRatioLayerParams(id: params.id, ratioWidth: params.ratioWidth, ratioHeight: max(1, $0), offsetX: params.offsetX, offsetY: params.offsetY)) }
+                        ), format: .number)
+                        .simpleLayerEditorInputStyle(width: nil)
+                        .monospacedDigit()
+                    }
                 }
             }
-        }
 
-        VStack(alignment: .leading, spacing: 4) {
-            Text("Offset X")
-                .font(AppFont.controlLabel)
-                .foregroundStyle(Color.text2)
-            HStack {
-                Slider(value: offsetXBinding, in: -1...1)
-                Text(String(format: "%.1f", params.offsetX))
-                    .font(AppFont.mono(10))
-                    .monospacedDigit()
-                    .frame(width: 30)
-            }
-        }
-
-        VStack(alignment: .leading, spacing: 4) {
-            Text("Offset Y")
-                .font(AppFont.controlLabel)
-                .foregroundStyle(Color.text2)
-            HStack {
-                Slider(value: offsetYBinding, in: -1...1)
-                Text(String(format: "%.1f", params.offsetY))
-                    .font(AppFont.mono(10))
-                    .monospacedDigit()
-                    .frame(width: 30)
+            SidebarCompoundControlBlock {
+                SidebarControlRow("Offset X") {
+                    Slider(value: offsetXBinding, in: -1...1)
+                        .tint(Color.accentDim)
+                } trailingValue: {
+                    Text(String(format: "%.1f", params.offsetX))
+                        .font(AppFont.mono(10))
+                        .foregroundStyle(Color.text3)
+                        .monospacedDigit()
+                        .frame(width: SimpleLayerEditorLayout.valueTextWidth, alignment: .trailing)
+                }
+            } secondary: {
+                SidebarControlRow("Offset Y") {
+                    Slider(value: offsetYBinding, in: -1...1)
+                        .tint(Color.accentDim)
+                } trailingValue: {
+                    Text(String(format: "%.1f", params.offsetY))
+                        .font(AppFont.mono(10))
+                        .foregroundStyle(Color.text3)
+                        .monospacedDigit()
+                        .frame(width: SimpleLayerEditorLayout.valueTextWidth, alignment: .trailing)
+                }
             }
         }
     }
@@ -2075,12 +2095,15 @@ struct OrientationLayerControls: View {
     var onChange: (OrientationLayerParams) -> Void
 
     var body: some View {
-        Picker("Target", selection: targetBinding) {
-            ForEach(OrientationTarget.allCases, id: \.self) { target in
-                Text(target.rawValue.capitalized).tag(target)
+        SidebarControlRow("Target") {
+            Picker("Target", selection: targetBinding) {
+                ForEach(OrientationTarget.allCases, id: \.self) { target in
+                    Text(target.rawValue.capitalized).tag(target)
+                }
             }
+            .pickerStyle(.segmented)
+            .labelsHidden()
         }
-        .pickerStyle(.segmented)
     }
 
     private var targetBinding: Binding<OrientationTarget> {
@@ -2332,49 +2355,47 @@ struct LayerFillPicker: View {
     }()
 
     var body: some View {
-        Picker("Fill", selection: fillModeBinding) {
-            Text("Solid Color").tag(0)
-            Text("Dominant Color").tag(1)
-            Text("Linear Gradient").tag(2)
-            Text("Radial Gradient").tag(3)
-        }
-
-        if case .color(let c) = fill {
-            ColorPickerWithHex("Fill Color", selection: Binding(
-                get: { Color(nsColor: NSColor(cgColor: c.cgColor) ?? .white) },
-                set: { newColor in
-                    guard let hex = newColor.hexString else { return }
-                    guard let codable = try? CodableColor(hex: hex) else { return }
-                    onChange(.color(codable))
+        VStack(alignment: .leading, spacing: SimpleLayerEditorLayout.groupSpacing) {
+            SidebarControlRow("Fill") {
+                Picker("Fill", selection: fillModeBinding) {
+                    Text("Solid Color").tag(0)
+                    Text("Dominant Color").tag(1)
+                    Text("Linear Gradient").tag(2)
+                    Text("Radial Gradient").tag(3)
                 }
-            ))
-        }
-
-        if let params = fill.gradientParams {
-            VStack(alignment: .leading, spacing: 4) {
-                Text("Saturation")
-                    .font(AppFont.controlLabel)
-                    .foregroundStyle(Color.text2)
-                HStack {
-                    Slider(value: saturationBinding(params), in: -50...50)
-                    TextField("", value: saturationBinding(params), formatter: Self.signedFormatter)
-                        .textFieldStyle(.roundedBorder)
-                        .frame(width: 50)
-                        .multilineTextAlignment(.trailing)
-                        .monospacedDigit()
-                }
+                .labelsHidden()
             }
-            VStack(alignment: .leading, spacing: 4) {
-                Text("Brightness")
-                    .font(AppFont.controlLabel)
-                    .foregroundStyle(Color.text2)
-                HStack {
-                    Slider(value: lightnessBinding(params), in: -50...50)
-                    TextField("", value: lightnessBinding(params), formatter: Self.signedFormatter)
-                        .textFieldStyle(.roundedBorder)
-                        .frame(width: 50)
-                        .multilineTextAlignment(.trailing)
-                        .monospacedDigit()
+
+            if case .color(let c) = fill {
+                ColorPickerWithHex("Fill Color", selection: Binding(
+                    get: { Color(nsColor: NSColor(cgColor: c.cgColor) ?? .white) },
+                    set: { newColor in
+                        guard let hex = newColor.hexString else { return }
+                        guard let codable = try? CodableColor(hex: hex) else { return }
+                        onChange(.color(codable))
+                    }
+                ))
+            }
+
+            if let params = fill.gradientParams {
+                SidebarCompoundControlBlock {
+                    SidebarControlRow("Saturation") {
+                        Slider(value: saturationBinding(params), in: -50...50)
+                            .tint(Color.accentDim)
+                    } trailingValue: {
+                        TextField("", value: saturationBinding(params), formatter: Self.signedFormatter)
+                            .simpleLayerEditorInputStyle(width: SimpleLayerEditorLayout.compactFieldWidth)
+                            .monospacedDigit()
+                    }
+                } secondary: {
+                    SidebarControlRow("Brightness") {
+                        Slider(value: lightnessBinding(params), in: -50...50)
+                            .tint(Color.accentDim)
+                    } trailingValue: {
+                        TextField("", value: lightnessBinding(params), formatter: Self.signedFormatter)
+                            .simpleLayerEditorInputStyle(width: SimpleLayerEditorLayout.compactFieldWidth)
+                            .monospacedDigit()
+                    }
                 }
             }
         }
