@@ -777,10 +777,19 @@ public enum BorderRenderer {
         vDSP_vsma(oG, 1, &wg, lum, 1, lum, 1, n)           // lum += 0.587 * oG
         vDSP_vsma(oB, 1, &wb, lum, 1, lum, 1, n)           // lum += 0.114 * oB
 
-        // ── Strength mask: alpha = clamp(|lum - 0.5| * 2 * opacity * overlay.alpha, 0, 1) ───
+        // ── Strength mask: clamp(max(0, |lum - 0.5| - deadband) * 2 * opacity * overlay.alpha, 0, 1) ─
+        // Deadband addresses JPEG-authored frame overlays where the
+        // "transparent" centre is a mid-gray fill at byte 128 (lum ≈ 0.502)
+        // rather than exactly 0.5 — without the deadband the 1-byte
+        // deviation caused a visible darkening of every pixel in the frame's
+        // window. The chosen 0.005 covers ~1/255 of luminance range; real
+        // frame ink sits well outside this band so user-intended contributions
+        // pass through essentially unchanged.
         var negHalf: Float = -0.5
         vDSP_vsadd(lum, 1, &negHalf, lum, 1, n)            // lum -= 0.5
         vDSP_vabs(lum, 1, lum, 1, n)                       // lum  = |lum|
+        var negDeadband: Float = -0.005
+        vDSP_vsadd(lum, 1, &negDeadband, lum, 1, n)        // lum -= deadband (negatives clip below)
         var strengthScale: Float = 2.0 * Float(opacity)
         vDSP_vsmul(lum, 1, &strengthScale, lum, 1, n)      // lum *= 2*opacity
         vDSP_vmul(lum, 1, oA, 1, lum, 1, n)                // lum *= overlay.alpha  ← Frame Overlay fix
