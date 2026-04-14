@@ -45,3 +45,4 @@
 - `LayerPanelRow` can drop the raw `.onTapGesture` without changing the visible header by turning the leading header content into a plain `Button` and leaving the eye/delete affordances as sibling buttons; this preserves current layout while giving VoiceOver and keyboard users a real expandable action target.
 - `StyledSlider` needs one shared constraint path for drag and typed entry; a small pure resolver reused by both bindings is an easy TDD seam and prevents text-field edits from bypassing range/step rules.
 - `PresetPreviewGrid` rerenders reliably after save/update/rename/import/delete when its `.onChange` watches a pure key built from `selectedPhoto?.id` plus the full `Preset` array rather than only the selected photo ID.
+- `PresetPreviewGrid` also needs `selectedPhoto?.rotation` in that render key; otherwise rotation-only edits never retrigger preview generation even though the renderer already consumes the rotation value.
