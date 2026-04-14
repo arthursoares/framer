@@ -4167,6 +4167,23 @@ struct ShaderLayerControls: View {
         }
         .pickerStyle(.menu)
 
+        // Sort criterion — orthogonal to span mode. Decides what value
+        // pixels are RANKED by inside a span: Luminance (classic Rec.601),
+        // Brightness (max(r,g,b), preserves saturated colours), or Hue
+        // (HSV angle, rainbow-streak effect).
+        Picker("Sort By", selection: Binding(
+            get: { pixelSortParams.sortBy },
+            set: { value in
+                var updated = pixelSortParams; updated.sortBy = value
+                onChange(params.withParams(.pixelSort(updated)))
+            }
+        )) {
+            Text("Luminance").tag(PixelSortCriterion.luminance)
+            Text("Brightness").tag(PixelSortCriterion.brightness)
+            Text("Hue").tag(PixelSortCriterion.hue)
+        }
+        .pickerStyle(.menu)
+
         sliderRow(
             title: "Threshold",
             value: pixelSortParams.threshold,

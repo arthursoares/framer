@@ -33,9 +33,9 @@ public enum PixelSortRenderer {
         var reverse: UInt32 = 0       // 0/1
 
         var randomness: Float = 0
+        var sortBy: UInt32 = 0        // 0 luminance, 1 brightness, 2 hue
         var _pad0: Float = 0
         var _pad1: Float = 0
-        var _pad2: Float = 0
     }
 
     public static func render(
@@ -59,6 +59,7 @@ public enum PixelSortRenderer {
         uniforms.spanMode = spanModeID(ps.spanMode)
         uniforms.reverse = ps.reverse ? 1 : 0
         uniforms.randomness = Float(max(0.0, min(1.0, ps.randomness)))
+        uniforms.sortBy     = sortByID(ps.sortBy)
 
         let pipeline = try library.pipeline(for: "pixelSortFragment")
         // Nearest sampling — span detection compares per-pixel luminance and
@@ -98,6 +99,15 @@ public enum PixelSortRenderer {
         case .kimWhite:  return 2
         case .kimBright: return 3
         case .kimDark:   return 4
+        }
+    }
+
+    @inline(__always)
+    private static func sortByID(_ mode: PixelSortCriterion) -> UInt32 {
+        switch mode {
+        case .luminance:  return 0
+        case .brightness: return 1
+        case .hue:        return 2
         }
     }
 }

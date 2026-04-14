@@ -46,9 +46,9 @@ struct PixelSortUniforms {
     uint  reverse;          // 0/1 — descending sort when 1
 
     float randomness;       // 0..1 — per-line threshold jitter
+    uint  sortBy;           // 0 luminance, 1 brightness=max(r,g,b), 2 hue
     float _pad0;
     float _pad1;
-    float _pad2;
 };
 
 // Mode 0 is luminance (the default); referenced implicitly via switch
@@ -63,6 +63,14 @@ constant uint PS_MODE_KIM_DARK = 4u;
 // constants for the axis-selection branches.
 constant uint PS_DIR_VERTICAL = 1u;
 constant uint PS_DIR_DIAGONAL = 2u;
+
+// Sort criterion — what value pixels are RANKED by inside a span (orthogonal
+// to the span-detection mode above). 0 = luminance (Rec.601) is the default
+// and matches Framer's pre-refactor behaviour; 1 = max(r,g,b) aka
+// "brightness" in Kim Asendorf's sketch preserves saturated colours better;
+// 2 = HSV hue angle produces the characteristic rainbow-sorted streaks.
+constant uint PS_SORT_BRIGHTNESS = 1u;
+constant uint PS_SORT_HUE        = 2u;
 
 // Sample helpers — pixel-coordinate access through the bound sampler. The
 // sampler is clamp-to-edge so out-of-bounds reads silently fold to the border;
@@ -99,11 +107,35 @@ inline bool psInSpan(float3 c, float effective, uint mode) {
     }
 }
 
-// Sort criterion — luminance for now, regardless of span mode. Kim Asendorf's
-// original sketch uses brightness (= luminance) for sort even in the bright /
-// dark modes so the output sorts by perceived intensity. Matches CPU.
-inline float psSortValue(float3 c) {
-    return luminance(c);
+// Sort criterion — orthogonal to span mode. Default luminance matches the
+// shader's prior behaviour so existing presets without an explicit `sortBy`
+// keep producing identical output. Brightness = max(r,g,b) preserves
+// saturated colours during the sort (a deliberately-different look from
+// luminance). Hue sorts pixels by their HSV angle, producing the classic
+// rainbow-streak effect when applied to varied-hue spans.
+inline float psSortValue(float3 c, uint sortBy) {
+    switch (sortBy) {
+        case PS_SORT_BRIGHTNESS:
+            return maxRGB(c);
+        case PS_SORT_HUE: {
+            // Standard HSV hue derivation — returns 0..1 matching
+            // atan2(√3·(G-B), 2R-G-B) / (2π). Cheap enough for a per-pixel
+            // sort-key evaluation (runs at most 24 times per fragment via
+            // the local sort loop).
+            float cMax = max(c.r, max(c.g, c.b));
+            float cMin = min(c.r, min(c.g, c.b));
+            float delta = cMax - cMin;
+            if (delta < 1e-5) { return 0.0; }
+            float h;
+            if      (cMax == c.r) { h = (c.g - c.b) / delta; }
+            else if (cMax == c.g) { h = 2.0 + (c.b - c.r) / delta; }
+            else                  { h = 4.0 + (c.r - c.g) / delta; }
+            h /= 6.0;
+            return (h < 0.0) ? (h + 1.0) : h;
+        }
+        default:
+            return luminance(c);
+    }
 }
 
 // Per-line jitter: same recipe the CPU function uses
@@ -218,7 +250,7 @@ fragment float4 pixelSortFragment(
         int2 q = spanStart + dir * offset;
         float3 c = psSampleAt(source, texSampler, q, invRes);
         colors[i] = c;
-        lums[i]   = psSortValue(c);
+        lums[i]   = psSortValue(c, uniforms.sortBy);
     }
 
     // ---- Bubble sort (ascending or descending by luminance) ---------------
