@@ -391,9 +391,10 @@ static float4 asciiVariant(
     if (u.blackLevel > 0.0) {
         adjustedLum = u.blackLevel + adjustedLum * (1.0 - u.blackLevel);
     }
-    if (u.invert == 1u) {
-        adjustedLum = 1.0 - adjustedLum;
-    }
+    // Invert is applied below as a fg/bg swap — see the colour-resolution
+    // block. The old implementation flipped `adjustedLum` here, which only
+    // affected the fill-level selection; edge cells (the majority of most
+    // real photos) ignored `invert` entirely.
 
     // ---- Edge classification (matches CPU threshold + direction bucketing) -
     // edgeBias 1.0 = very sensitive (low threshold), 0.0 = never edge.
@@ -458,6 +459,15 @@ static float4 asciiVariant(
     } else {
         // Flat foreground (also covers dominantTwoTone — colours resolved CPU-side)
         fg = u.asciiForegroundRGBA.rgb;
+    }
+
+    // Invert = negative-image: swap glyph ink and paper colours. Affects
+    // both edge glyphs (where the old `adjustedLum` flip was a no-op) and
+    // fill glyphs uniformly.
+    if (u.invert == 1u) {
+        float3 tmp = fg;
+        fg = bg;
+        bg = tmp;
     }
 
     float3 glyphColor = mix(bg, fg, glyphValue);

@@ -143,7 +143,20 @@ public enum TextCellRenderer {
         // Nearest-clamp sampling matches the CPU path (which indexes exact
         // pixels) and gives crisp atlas glyph reads.
         let sampler = try library.nearestClamp()
-        let sourceTexture = try MetalTextureSupport.makeTexture(from: image, device: library.device)
+        // Pre-downsample the source to work size before uploading so per-cell
+        // sampling in the shader averages the same pixels as the CPU path's
+        // `sourceCtx` high-quality downscale. Without this, GPU export
+        // (large source → small work size via nearest sampling) saw a
+        // fundamentally different image than GPU preview (already-downsampled
+        // source at 1:1), and the two outputs diverged well beyond the
+        // match-ratio tolerance in `test_asciiShader_previewDimensionMatchesPreviewSampling`.
+        let preparedSource: CGImage
+        if workSize.width == image.width && workSize.height == image.height {
+            preparedSource = image
+        } else {
+            preparedSource = try resize(image, to: workSize.width, height: workSize.height, quality: .high)
+        }
+        let sourceTexture = try MetalTextureSupport.makeTexture(from: preparedSource, device: library.device)
 
         let uniforms = makeUniforms(
             asciiParams: asciiParams,
@@ -490,7 +503,7 @@ public enum TextCellRenderer {
 
     // MARK: - Final upscale to original dimensions
 
-    private static func resize(_ image: CGImage, to width: Int, height: Int) throws -> CGImage {
+    private static func resize(_ image: CGImage, to width: Int, height: Int, quality: CGInterpolationQuality = .none) throws -> CGImage {
         let colorSpace = CGColorSpaceCreateDeviceRGB()
         guard let context = CGContext(
             data: nil,
@@ -503,7 +516,12 @@ public enum TextCellRenderer {
         ) else {
             throw FramerError.invalidImage(URL(fileURLWithPath: ""))
         }
-        context.interpolationQuality = .high
+        // Upscale callers pass `.none` (nearest-neighbour) to keep pixel-art
+        // glyph edges crisp — matches the CPU path's ShaderASCIIRenderer
+        // upscale convention. Downscale callers (source → work size) pass
+        // `.high` so per-cell luminance averaging reflects all source pixels
+        // that contribute to the cell, matching CPU's `sourceCtx` behaviour.
+        context.interpolationQuality = quality
         context.draw(image, in: CGRect(x: 0, y: 0, width: width, height: height))
         guard let result = context.makeImage() else {
             throw FramerError.invalidImage(URL(fileURLWithPath: ""))
