@@ -292,12 +292,10 @@ struct GPUEffectLayerControls: View {
             // read-only label so users know which layer they're editing
             // without offering mid-flight variant switching (which would
             // require re-picking every parameter for the new kind).
-            HStack {
-                Label(params.kind.label, systemImage: params.kind.menuIcon)
-                    .font(AppFont.controlLabel)
-                    .foregroundStyle(Color.text1)
-                Spacer()
-            }
+            Label(params.kind.label, systemImage: params.kind.menuIcon)
+                .font(AppFont.controlLabel)
+                .foregroundStyle(Color.text1)
+                .denseControlRow("Effect")
 
             BlendModeControls(
                 blendMode: Binding(
@@ -318,24 +316,20 @@ struct GPUEffectLayerControls: View {
             // when the current kind actually consumes it.
 
             if params.kind.usesGeometry {
-                HStack {
-                    Text("Scale")
-                        .font(AppFont.controlLabel)
-                        .foregroundStyle(Color.text2)
-                    Slider(value: scaleBinding, in: 0.5...2.0)
-                    Text(String(format: "%.2f", scaleBinding.wrappedValue))
-                        .monospacedDigit()
-                        .frame(width: 44)
-                }
-
-                HStack {
-                    Text("Spacing")
-                        .font(AppFont.controlLabel)
-                        .foregroundStyle(Color.text2)
-                    Slider(value: spacingBinding, in: 1...8)
-                    Text(String(format: "%.1f", spacingBinding.wrappedValue))
-                        .monospacedDigit()
-                        .frame(width: 40)
+                SidebarCompoundControlBlock {
+                    DenseSliderControlRow(
+                        title: "Scale",
+                        value: scaleBinding,
+                        range: 0.5...2.0,
+                        step: 0.05
+                    )
+                } secondary: {
+                    DenseSliderControlRow(
+                        title: "Spacing",
+                        value: spacingBinding,
+                        range: 1...8,
+                        step: 0.1
+                    )
                 }
             }
 
@@ -346,24 +340,23 @@ struct GPUEffectLayerControls: View {
                 // array, so the shader had nothing to quantise against.
                 // Dropped from the menu until the bucket renderer grows a
                 // palette uniform the way DitherGPURenderer has.
-                Picker("Color Mode", selection: colorModeBinding) {
+                Picker("", selection: colorModeBinding) {
                     Text("Source").tag(GPUEffectColorMode.source)
                     Text("FG/BG").tag(GPUEffectColorMode.foregroundBackground)
                     Text("Mono").tag(GPUEffectColorMode.monochrome)
                 }
                 .pickerStyle(.menu)
+                .labelsHidden()
+                .denseControlRow("Color Mode")
             }
 
             if params.kind.usesBackgroundIntensity || params.kind.usesColorModeAndFgBg {
-                HStack {
-                    Text("Background")
-                        .font(AppFont.controlLabel)
-                        .foregroundStyle(Color.text2)
-                    Slider(value: backgroundIntensityBinding, in: 0...1)
-                    Text(String(format: "%.2f", backgroundIntensityBinding.wrappedValue))
-                        .monospacedDigit()
-                        .frame(width: 44)
-                }
+                DenseSliderControlRow(
+                    title: "Background",
+                    value: backgroundIntensityBinding,
+                    range: 0...1,
+                    step: 0.05
+                )
             }
 
             // Common adjustments (brightness / contrast / etc.) are NOT consumed
@@ -381,13 +374,15 @@ struct GPUEffectLayerControls: View {
 
             if case .textCell(let common, let geometry, let color, let payload) = params.params,
                params.kind == .ascii {
-                Picker("Character Set", selection: characterSetBinding) {
+                Picker("", selection: characterSetBinding) {
                     Text("ASCII").tag(GPUEffectCharacterSet.classicASCII)
                     Text("Blocks").tag(GPUEffectCharacterSet.blocks)
                     Text("Binary").tag(GPUEffectCharacterSet.binary)
                     Text("Dense").tag(GPUEffectCharacterSet.dense)
                 }
                 .pickerStyle(.menu)
+                .labelsHidden()
+                .denseControlRow("Character Set")
 
                 adjustmentSlider(label: "Intensity", binding: textCellBinding(\.intensity), range: 0...1)
 
@@ -414,22 +409,30 @@ struct GPUEffectLayerControls: View {
 
             if case .textCell(let common, let geometry, let color, let payload) = params.params,
                params.kind == .dots {
-                Picker("Dot Shape", selection: dotShapeBinding) {
+                Picker("", selection: dotShapeBinding) {
                     Text("Circle").tag(DotShape.circle)
                     Text("Square").tag(DotShape.square)
                     Text("Diamond").tag(DotShape.diamond)
                 }
                 .pickerStyle(.menu)
+                .labelsHidden()
+                .denseControlRow("Dot Shape")
 
-                Picker("Grid", selection: dotGridBinding) {
+                Picker("", selection: dotGridBinding) {
                     Text("Square").tag(DotGridType.square)
                     Text("Hex").tag(DotGridType.hex)
                 }
                 .pickerStyle(.menu)
+                .labelsHidden()
+                .denseControlRow("Grid")
 
                 adjustmentSlider(label: "Dot Size", binding: textCellBinding(\.sizeMultiplier), range: 0.1...2.0)
                 adjustmentSlider(label: "Intensity", binding: textCellBinding(\.intensity), range: 0...1)
-                Toggle("Invert", isOn: textInvertBinding)
+                SidebarControlRow("Invert") {
+                    EmptyView()
+                } trailingValue: {
+                    StyledToggle(isOn: textInvertBinding)
+                }
 
                 ColorPickerWithHex("Foreground", selection: Binding(
                     get: { nsColor(from: payload.foreground ?? CodableColor(unchecked: "#FFFFFF")) },
@@ -454,12 +457,14 @@ struct GPUEffectLayerControls: View {
 
             if case .textCell(let common, let geometry, let color, let payload) = params.params,
                params.kind == .blockify {
-                Picker("Style", selection: blockStyleBinding) {
+                Picker("", selection: blockStyleBinding) {
                     Text("Solid").tag(BlockStyle.solid)
                     Text("Shaded").tag(BlockStyle.shaded)
                     Text("Outlined").tag(BlockStyle.outlined)
                 }
                 .pickerStyle(.menu)
+                .labelsHidden()
+                .denseControlRow("Style")
 
                 // Shaded mode reuses `borderWidth` as the radial-falloff
                 // strength (0 = flat like solid, 1 = full bubble). Outlined
@@ -512,13 +517,15 @@ struct GPUEffectLayerControls: View {
                 // repurposing scheme. Kept out of the UI until one of those
                 // lands so users stop chasing a slider that does nothing.
 
-                Picker("Direction", selection: matrixDirectionBinding) {
+                Picker("", selection: matrixDirectionBinding) {
                     Text("Down").tag(TextCellFlowDirection.down)
                     Text("Up").tag(TextCellFlowDirection.up)
                     Text("Left").tag(TextCellFlowDirection.left)
                     Text("Right").tag(TextCellFlowDirection.right)
                 }
                 .pickerStyle(.menu)
+                .labelsHidden()
+                .denseControlRow("Direction")
 
                 ColorPickerWithHex("Rain Color", selection: Binding(
                     get: { nsColor(from: payload.rainColor ?? CodableColor(unchecked: "#00FF66")) },
@@ -533,22 +540,30 @@ struct GPUEffectLayerControls: View {
 
             if case .glitch = params.params,
                params.kind == .pixelSort {
-                Picker("Direction", selection: glitchDirectionBinding) {
+                Picker("", selection: glitchDirectionBinding) {
                     Text("Horizontal").tag(GlitchDirection.horizontal)
                     Text("Vertical").tag(GlitchDirection.vertical)
                 }
                 .pickerStyle(.menu)
+                .labelsHidden()
+                .denseControlRow("Direction")
 
-                Picker("Sort Mode", selection: sortModeBinding) {
+                Picker("", selection: sortModeBinding) {
                     Text("Brightness").tag(PixelSortMode.brightness)
                     Text("Luminance").tag(PixelSortMode.luminance)
                     Text("Hue").tag(PixelSortMode.hue)
                 }
                 .pickerStyle(.menu)
+                .labelsHidden()
+                .denseControlRow("Sort Mode")
 
                 adjustmentSlider(label: "Streak", binding: glitchBinding(\.streakLength), range: 0...1)
                 adjustmentSlider(label: "Random", binding: glitchBinding(\.randomness), range: 0...1)
-                Toggle("Reverse", isOn: reverseBinding)
+                SidebarControlRow("Reverse") {
+                    EmptyView()
+                } trailingValue: {
+                    StyledToggle(isOn: reverseBinding)
+                }
             }
 
             if case .glitch(_, _, _, _) = params.params,
@@ -568,11 +583,13 @@ struct GPUEffectLayerControls: View {
                 adjustmentSlider(label: "Frequency", binding: edgeFieldBinding(\.frequency), range: 0.1...4)
                 adjustmentSlider(label: "Thickness", binding: edgeFieldBinding(\.thickness), range: 0.05...1)
 
-                Picker("Direction", selection: edgeDirectionBinding) {
+                Picker("", selection: edgeDirectionBinding) {
                     Text("Horizontal").tag(EdgeFieldDirection.horizontal)
                     Text("Vertical").tag(EdgeFieldDirection.vertical)
                 }
                 .pickerStyle(.menu)
+                .labelsHidden()
+                .denseControlRow("Direction")
                 // Line Count multiplies the wave-band frequency: the shader
                 // computes countFactor = max(1, lineCount/spacing) and
                 // multiplies `frequency` by it. Range 1..40 covers from "no
@@ -590,13 +607,19 @@ struct GPUEffectLayerControls: View {
                 adjustmentSlider(label: "Field Intensity", binding: edgeFieldBinding(\.fieldIntensity), range: 0...1)
                 adjustmentSlider(label: "Octaves", binding: noiseOctavesBinding, range: 1...6)
                 adjustmentSlider(label: "Scale", binding: edgeFieldBinding(\.amplitude), range: 0.1...1)
-                Picker("Noise Type", selection: noiseTypeBinding) {
+                Picker("", selection: noiseTypeBinding) {
                     Text("Value (IGN)").tag(NoiseFieldType.value)
                     Text("Simplex").tag(NoiseFieldType.simplex)
                     Text("Cellular").tag(NoiseFieldType.cellular)
                 }
                 .pickerStyle(.menu)
-                Toggle("Invert", isOn: edgeInvertBinding)
+                .labelsHidden()
+                .denseControlRow("Noise Type")
+                SidebarControlRow("Invert") {
+                    EmptyView()
+                } trailingValue: {
+                    StyledToggle(isOn: edgeInvertBinding)
+                }
                 // Speed + Animate stay hidden (no time uniform yet).
                 // Distort Only stays hidden (shader generates standalone,
                 // doesn't distort source UVs).
@@ -604,16 +627,22 @@ struct GPUEffectLayerControls: View {
 
             if case .edgeField(let common, let geometry, let color, let payload) = params.params,
                params.kind == .edgeDetection {
-                Picker("Algorithm", selection: edgeAlgorithmBinding) {
+                Picker("", selection: edgeAlgorithmBinding) {
                     Text("Sobel").tag(EdgeAlgorithm.sobel)
                     Text("Laplacian").tag(EdgeAlgorithm.laplacian)
                 }
                 .pickerStyle(.menu)
+                .labelsHidden()
+                .denseControlRow("Algorithm")
 
                 adjustmentSlider(label: "Line Strength", binding: edgeFieldBinding(\.lineStrength), range: 0...1)
                 adjustmentSlider(label: "Threshold", binding: edgeThresholdBinding, range: 0...1)
                 adjustmentSlider(label: "Line Width", binding: edgeFieldBinding(\.thickness), range: 0.05...1)
-                Toggle("Invert", isOn: edgeInvertBinding)
+                SidebarControlRow("Invert") {
+                    EmptyView()
+                } trailingValue: {
+                    StyledToggle(isOn: edgeInvertBinding)
+                }
 
                 ColorPickerWithHex("Edge Color", selection: Binding(
                     get: { nsColor(from: payload.edgeColor ?? CodableColor(unchecked: "#FFFFFF")) },
@@ -628,17 +657,23 @@ struct GPUEffectLayerControls: View {
 
             if case .edgeField(let common, let geometry, let color, let payload) = params.params,
                params.kind == .contour {
-                Picker("Fill Mode", selection: contourFillModeBinding) {
+                Picker("", selection: contourFillModeBinding) {
                     Text("Lines").tag(ContourFillMode.linesOnly)
                     Text("Bands").tag(ContourFillMode.filledBands)
                 }
                 .pickerStyle(.menu)
+                .labelsHidden()
+                .denseControlRow("Fill Mode")
 
                 adjustmentSlider(label: "Line Strength", binding: edgeFieldBinding(\.lineStrength), range: 0...1)
                 adjustmentSlider(label: "Field Intensity", binding: edgeFieldBinding(\.fieldIntensity), range: 0.01...1)
                 adjustmentSlider(label: "Levels", binding: contourLevelsBinding, range: 2...24)
                 adjustmentSlider(label: "Line Width", binding: edgeFieldBinding(\.thickness), range: 0.05...1)
-                Toggle("Invert", isOn: edgeInvertBinding)
+                SidebarControlRow("Invert") {
+                    EmptyView()
+                } trailingValue: {
+                    StyledToggle(isOn: edgeInvertBinding)
+                }
 
                 ColorPickerWithHex("Contour Color", selection: Binding(
                     get: { nsColor(from: payload.edgeColor ?? CodableColor(unchecked: "#FFFFFF")) },
@@ -657,7 +692,11 @@ struct GPUEffectLayerControls: View {
                 adjustmentSlider(label: "Wall Strength", binding: edgeFieldBinding(\.lineStrength), range: 0...1)
                 adjustmentSlider(label: "Cell Fill", binding: edgeFieldBinding(\.fieldIntensity), range: 0...1)
                 adjustmentSlider(label: "Edge Width", binding: voronoiEdgeWidthBinding, range: 0.05...1)
-                Toggle("Randomize", isOn: voronoiRandomizeBinding)
+                SidebarControlRow("Randomize") {
+                    EmptyView()
+                } trailingValue: {
+                    StyledToggle(isOn: voronoiRandomizeBinding)
+                }
 
                 ColorPickerWithHex("Edge Color", selection: Binding(
                     get: { nsColor(from: payload.edgeColor ?? CodableColor(unchecked: "#FFFFFF")) },
@@ -672,16 +711,22 @@ struct GPUEffectLayerControls: View {
 
             if case .printSampling(let common, let geometry, let color, let payload) = params.params {
                 if params.kind == .halftone {
-                    Picker("Shape", selection: halftoneShapeBinding) {
+                    Picker("", selection: halftoneShapeBinding) {
                         Text("Circle").tag(HalftoneShape.circle)
                         Text("Square").tag(HalftoneShape.square)
                         Text("Diamond").tag(HalftoneShape.diamond)
                     }
                     .pickerStyle(.menu)
+                    .labelsHidden()
+                    .denseControlRow("Shape")
 
                     adjustmentSlider(label: "Angle", binding: halftoneAngleBinding, range: 0...90)
 
-                    Toggle("Invert", isOn: invertBinding)
+                    SidebarControlRow("Invert") {
+                        EmptyView()
+                    } trailingValue: {
+                        StyledToggle(isOn: invertBinding)
+                    }
                 }
 
                 if params.kind == .crosshatch {
@@ -694,7 +739,11 @@ struct GPUEffectLayerControls: View {
                     adjustmentSlider(label: "Angle", binding: hatchAngleBinding, range: 0...90)
                     adjustmentSlider(label: "Line Width", binding: hatchLineWidthBinding, range: 0.05...1)
                     adjustmentSlider(label: "Random", binding: hatchRandomnessBinding, range: 0...1)
-                    Toggle("Invert", isOn: invertBinding)
+                    SidebarControlRow("Invert") {
+                        EmptyView()
+                    } trailingValue: {
+                        StyledToggle(isOn: invertBinding)
+                    }
                 }
 
                 if params.kind == .threshold {
@@ -702,8 +751,16 @@ struct GPUEffectLayerControls: View {
                     // Not exposed before so users were stuck at the default.
                     adjustmentSlider(label: "Threshold", binding: printSamplingBinding(\.threshold), range: 0...1)
                     adjustmentSlider(label: "Levels", binding: thresholdLevelsBinding, range: 2...8)
-                    Toggle("Dither", isOn: thresholdDitherBinding)
-                    Toggle("Invert", isOn: invertBinding)
+                    SidebarControlRow("Dither") {
+                        EmptyView()
+                    } trailingValue: {
+                        StyledToggle(isOn: thresholdDitherBinding)
+                    }
+                    SidebarControlRow("Invert") {
+                        EmptyView()
+                    } trailingValue: {
+                        StyledToggle(isOn: invertBinding)
+                    }
                 }
 
                 ColorPickerWithHex("Foreground", selection: Binding(
@@ -823,15 +880,12 @@ struct GPUEffectLayerControls: View {
     }
 
     private func adjustmentSlider(label: String, binding: Binding<Double>, range: ClosedRange<Double>) -> some View {
-        HStack {
-            Text(label)
-                .font(AppFont.controlLabel)
-                .foregroundStyle(Color.text2)
-            Slider(value: binding, in: range)
-            Text(String(format: "%.2f", binding.wrappedValue))
-                .monospacedDigit()
-                .frame(width: 44)
-        }
+        DenseSliderControlRow(
+            title: LocalizedStringKey(label),
+            value: binding,
+            range: range,
+            step: 0.05
+        )
     }
 
     private var colorModeBinding: Binding<GPUEffectColorMode> {
@@ -2495,88 +2549,80 @@ struct CaptionLayerControls: View {
     }
 
     var body: some View {
-        // Caption mode
-        Picker("Mode", selection: captionModeIndex) {
+        Picker("", selection: captionModeIndex) {
             Text("Template").tag(0)
             Text("Custom").tag(1)
             Text("None").tag(2)
         }
-        .pickerStyle(.segmented)
+        .pickerStyle(.menu)
+        .labelsHidden()
+        .denseControlRow("Mode")
 
         switch params.mode {
         case .template:
-            TextField("Template", text: captionTemplateText)
-                .font(.system(.body, design: .monospaced))
-            TemplateTokenBar(text: captionTemplateText)
+            SidebarCompoundControlBlock {
+                TextField("Template", text: captionTemplateText)
+                    .font(.system(.body, design: .monospaced))
+                    .denseControlRow("Template")
+            } secondary: {
+                TemplateTokenBar(text: captionTemplateText)
+                    .denseControlRow("Tokens")
+            }
         case .custom:
             TextField("Caption text", text: captionCustomText)
+                .denseControlRow("Caption")
         case .none:
             EmptyView()
         }
 
         if captionEnabled {
-            // Position
-            Picker("Position", selection: positionBinding) {
-                Text("Bottom").tag(CaptionPosition.bottom)
-                Text("Top").tag(CaptionPosition.top)
-            }
-            .pickerStyle(.segmented)
-
-            // Alignment
-            Picker("Alignment", selection: alignmentBinding) {
-                Text("Left").tag(CaptionAlignment.left)
-                Text("Center").tag(CaptionAlignment.center)
-                Text("Right").tag(CaptionAlignment.right)
-            }
-            .pickerStyle(.segmented)
-
-            // Offset X
-            VStack(alignment: .leading, spacing: 4) {
-                Text("Offset X")
-                    .font(AppFont.controlLabel)
-                    .foregroundStyle(Color.text2)
-                HStack {
-                    Slider(value: offsetXBinding, in: -200...200)
-                    TextField("", value: offsetXBinding, formatter: Self.signedIntFormatter)
-                        .textFieldStyle(.roundedBorder)
-                        .frame(width: 55)
-                        .multilineTextAlignment(.trailing)
-                        .monospacedDigit()
-                    Text("px")
-                        .foregroundStyle(Color.text2)
-                        .frame(width: 20)
+            SidebarCompoundControlBlock {
+                Picker("", selection: positionBinding) {
+                    Text("Bottom").tag(CaptionPosition.bottom)
+                    Text("Top").tag(CaptionPosition.top)
                 }
-            }
-
-            // Offset Y
-            VStack(alignment: .leading, spacing: 4) {
-                Text("Offset Y")
-                    .font(AppFont.controlLabel)
-                    .foregroundStyle(Color.text2)
-                HStack {
-                    Slider(value: offsetYBinding, in: -200...200)
-                    TextField("", value: offsetYBinding, formatter: Self.signedIntFormatter)
-                        .textFieldStyle(.roundedBorder)
-                        .frame(width: 55)
-                        .multilineTextAlignment(.trailing)
-                        .monospacedDigit()
-                    Text("px")
-                        .foregroundStyle(Color.text2)
-                        .frame(width: 20)
+                .pickerStyle(.menu)
+                .labelsHidden()
+                .denseControlRow("Position")
+            } secondary: {
+                Picker("", selection: alignmentBinding) {
+                    Text("Left").tag(CaptionAlignment.left)
+                    Text("Center").tag(CaptionAlignment.center)
+                    Text("Right").tag(CaptionAlignment.right)
                 }
+                .pickerStyle(.menu)
+                .labelsHidden()
+                .denseControlRow("Alignment")
             }
 
-            // Font
-            Picker("Font", selection: fontNameBinding) {
+            SidebarCompoundControlBlock {
+                DenseSliderControlRow(
+                    title: "Offset X",
+                    value: offsetXBinding,
+                    range: -200...200,
+                    step: 1,
+                    suffix: "px"
+                )
+            } secondary: {
+                DenseSliderControlRow(
+                    title: "Offset Y",
+                    value: offsetYBinding,
+                    range: -200...200,
+                    step: 1,
+                    suffix: "px"
+                )
+            }
+
+            Picker("", selection: fontNameBinding) {
                 ForEach(monospacedFontList, id: \.self) { name in
                     Text(name).tag(name)
                 }
             }
+            .pickerStyle(.menu)
+            .labelsHidden()
+            .denseControlRow("Font")
 
-            // Style toggles
             HStack(spacing: 8) {
-                Text("Style")
-                Spacer()
                 Toggle(isOn: fontStyleBinding(.bold)) {
                     Text("B").bold()
                 }
@@ -2587,65 +2633,55 @@ struct CaptionLayerControls: View {
                 }
                 .toggleStyle(.button)
             }
+            .denseControlRow("Style")
 
-            // Font size
-            Picker("Size", selection: $fontSizeMode) {
-                ForEach(FontSizeMode.allCases, id: \.self) { mode in
-                    Text(mode.rawValue).tag(mode)
-                }
-            }
-            .pickerStyle(.segmented)
-            .onAppear {
-                switch params.fontSize {
-                case .auto: fontSizeMode = .auto
-                case .fixed: fontSizeMode = .custom
-                }
-            }
-            .onChange(of: fontSizeMode) { _, newValue in
-                var p = params
-                switch newValue {
-                case .auto:
-                    p.fontSize = .auto
-                case .custom:
-                    if case .auto = params.fontSize {
-                        p.fontSize = .fixed(24)
+            SidebarCompoundControlBlock {
+                Picker("", selection: $fontSizeMode) {
+                    ForEach(FontSizeMode.allCases, id: \.self) { mode in
+                        Text(mode.rawValue).tag(mode)
                     }
                 }
-                onChange(p)
-            }
-
-            if case .fixed(let pts) = params.fontSize {
-                VStack(alignment: .leading, spacing: 4) {
-                    Text("Font Size")
-                        .font(AppFont.controlLabel)
-                        .foregroundStyle(Color.text2)
-                    HStack {
-                        Slider(value: fontSizeBinding(pts), in: 8...120)
-                        TextField("", value: fontSizeBinding(pts), format: .number)
-                            .textFieldStyle(.roundedBorder)
-                            .frame(width: 55)
-                            .multilineTextAlignment(.trailing)
-                            .monospacedDigit()
-                        Text("pt")
-                            .foregroundStyle(Color.text2)
-                            .frame(width: 20)
+                .pickerStyle(.menu)
+                .labelsHidden()
+                .denseControlRow("Size")
+                .onAppear {
+                    switch params.fontSize {
+                    case .auto: fontSizeMode = .auto
+                    case .fixed: fontSizeMode = .custom
                     }
+                }
+                .onChange(of: fontSizeMode) { _, newValue in
+                    var p = params
+                    switch newValue {
+                    case .auto:
+                        p.fontSize = .auto
+                    case .custom:
+                        if case .auto = params.fontSize {
+                            p.fontSize = .fixed(24)
+                        }
+                    }
+                    onChange(p)
+                }
+            } secondary: {
+                if case .fixed(let pts) = params.fontSize {
+                    DenseSliderControlRow(
+                        title: "Font Size",
+                        value: fontSizeBinding(pts),
+                        range: 8...120,
+                        step: 1,
+                        suffix: "pt"
+                    )
                 }
             }
 
-            // Font color mode
-            VStack(alignment: .leading, spacing: 4) {
-                Text("Font Color")
-                    .font(AppFont.controlLabel)
-                    .foregroundStyle(Color.text2)
-                Picker("", selection: fontColorModeIndex) {
+            Picker("", selection: fontColorModeIndex) {
                     Text("Custom").tag(0)
                     Text("Dominant").tag(1)
                     Text("Invert").tag(2)
                 }
-                .pickerStyle(.segmented)
-                .labelsHidden()
-            }
+            .pickerStyle(.menu)
+            .labelsHidden()
+            .denseControlRow("Font Color")
 
             if case .fixed = params.fontColorMode {
                 ColorPickerWithHex("Color", selection: fontColorBinding)
@@ -2666,31 +2702,20 @@ struct CaptionLayerControls: View {
 
     @ViewBuilder
     private func captionColorAdjustmentSliders(saturation: Double, lightness: Double, onChange: @escaping (Double, Double) -> Void) -> some View {
-        VStack(alignment: .leading, spacing: 4) {
-            Text("Saturation")
-                .font(AppFont.controlLabel)
-                .foregroundStyle(Color.text2)
-            HStack {
-                Slider(value: Binding(get: { saturation }, set: { onChange($0, lightness) }), in: -50...50)
-                TextField("", value: Binding(get: { saturation }, set: { onChange($0, lightness) }), format: .number)
-                    .textFieldStyle(.roundedBorder)
-                    .frame(width: 50)
-                    .multilineTextAlignment(.trailing)
-                    .monospacedDigit()
-            }
-        }
-        VStack(alignment: .leading, spacing: 4) {
-            Text("Brightness")
-                .font(AppFont.controlLabel)
-                .foregroundStyle(Color.text2)
-            HStack {
-                Slider(value: Binding(get: { lightness }, set: { onChange(saturation, $0) }), in: -50...50)
-                TextField("", value: Binding(get: { lightness }, set: { onChange(saturation, $0) }), format: .number)
-                    .textFieldStyle(.roundedBorder)
-                    .frame(width: 50)
-                    .multilineTextAlignment(.trailing)
-                    .monospacedDigit()
-            }
+        SidebarCompoundControlBlock {
+            DenseSliderControlRow(
+                title: "Saturation",
+                value: Binding(get: { saturation }, set: { onChange($0, lightness) }),
+                range: -50...50,
+                step: 1
+            )
+        } secondary: {
+            DenseSliderControlRow(
+                title: "Brightness",
+                value: Binding(get: { lightness }, set: { onChange(saturation, $0) }),
+                range: -50...50,
+                step: 1
+            )
         }
     }
 
@@ -2985,6 +3010,36 @@ struct FlowLayout: Layout {
     }
 }
 
+private struct DenseSliderControlRow: View {
+    let title: LocalizedStringKey
+    @Binding var value: Double
+    let range: ClosedRange<Double>
+    let step: Double
+    var suffix: String = ""
+    var inputWidth: CGFloat = 55
+
+    var body: some View {
+        SidebarControlRow(title) {
+            StyledSlider(
+                value: $value,
+                range: range,
+                step: step,
+                suffix: suffix,
+                inputWidth: inputWidth
+            )
+        }
+    }
+}
+
+private extension View {
+    func denseControlRow(_ title: LocalizedStringKey) -> some View {
+        SidebarControlRow(title) {
+            self
+                .frame(maxWidth: .infinity, alignment: .leading)
+        }
+    }
+}
+
 // MARK: - DitherLayerControls
 
 struct DitherLayerControls: View {
@@ -3003,34 +3058,53 @@ struct DitherLayerControls: View {
             )
         )
 
-        Picker("Algorithm", selection: algorithmBinding) {
+        Picker("", selection: algorithmBinding) {
             ForEach(DitherAlgorithm.allCases, id: \.self) { algo in
                 Text(algo.label).tag(algo)
             }
         }
+        .pickerStyle(.menu)
+        .labelsHidden()
+        .denseControlRow("Algorithm")
 
-        Picker("Color Mode", selection: colorModeTag) {
+        Picker("", selection: colorModeTag) {
             Text("B&W").tag(0)
             Text("Two-Tone").tag(1)
             Text("Dominant").tag(3)
             Text("Color").tag(2)
             Text("Palette").tag(4)
         }
-        .pickerStyle(.segmented)
+        .pickerStyle(.menu)
+        .labelsHidden()
+        .denseControlRow("Color Mode")
 
         if params.algorithm == .bayer {
-            Stepper(
-                "Bayer Level: \(params.bayerLevel)",
-                value: bayerLevelBinding,
-                in: 1...4
-            )
-            .caption("(\(1 << (params.bayerLevel + 1))×\(1 << (params.bayerLevel + 1)))")
+            SidebarCompoundControlBlock {
+                Picker("", selection: bayerLevelBinding) {
+                    ForEach(1...4, id: \.self) { level in
+                        Text("Level \(level)").tag(level)
+                    }
+                }
+                .pickerStyle(.menu)
+                .labelsHidden()
+                .denseControlRow("Bayer Level")
+            } secondary: {
+                Text("\(1 << (params.bayerLevel + 1))×\(1 << (params.bayerLevel + 1)) matrix")
+                    .font(AppFont.numericInput)
+                    .foregroundStyle(Color.text1)
+                    .denseControlRow("Pattern")
+            }
         }
 
-        Stepper(
-            "Pixel Scale: \(params.pixelScale)×",
-            value: pixelScaleBinding,
-            in: 1...8
+        DenseSliderControlRow(
+            title: "Pixel Scale",
+            value: Binding(
+                get: { Double(params.pixelScale) },
+                set: { pixelScaleBinding.wrappedValue = Int($0.rounded()) }
+            ),
+            range: 1...8,
+            step: 1,
+            suffix: "×"
         )
 
         if case .twoTone(let fg, let bg) = params.colorMode {
@@ -3039,37 +3113,54 @@ struct DitherLayerControls: View {
         }
 
         if case .dominantTwoTone(let flipped, let sat, let light) = params.colorMode {
-            Toggle("Flip Colors", isOn: Binding(
-                get: { flipped },
-                set: { var p = params; p.colorMode = .dominantTwoTone(flipped: $0, saturationShift: sat, lightnessShift: light); onChange(p) }
-            ))
-            .caption("Swap foreground and background")
-
-            VStack(alignment: .leading, spacing: 4) {
-                Text("Saturation")
+            SidebarCompoundControlBlock {
+                SidebarControlRow("Flip Colors") {
+                    EmptyView()
+                } trailingValue: {
+                    StyledToggle(isOn: Binding(
+                        get: { flipped },
+                        set: { var p = params; p.colorMode = .dominantTwoTone(flipped: $0, saturationShift: sat, lightnessShift: light); onChange(p) }
+                    ))
+                }
+            } secondary: {
+                Text("Swap foreground and background")
                     .font(AppFont.controlLabel)
                     .foregroundStyle(Color.text2)
-                Slider(value: Binding(
-                    get: { sat },
-                    set: { var p = params; p.colorMode = .dominantTwoTone(flipped: flipped, saturationShift: $0, lightnessShift: light); onChange(p) }
-                ), in: -50...50)
+                    .denseControlRow("Details")
             }
-            VStack(alignment: .leading, spacing: 4) {
-                Text("Brightness")
-                    .font(AppFont.controlLabel)
-                    .foregroundStyle(Color.text2)
-                Slider(value: Binding(
-                    get: { light },
-                    set: { var p = params; p.colorMode = .dominantTwoTone(flipped: flipped, saturationShift: sat, lightnessShift: $0); onChange(p) }
-                ), in: -50...50)
+
+            SidebarCompoundControlBlock {
+                DenseSliderControlRow(
+                    title: "Saturation",
+                    value: Binding(
+                        get: { sat },
+                        set: { var p = params; p.colorMode = .dominantTwoTone(flipped: flipped, saturationShift: $0, lightnessShift: light); onChange(p) }
+                    ),
+                    range: -50...50,
+                    step: 1
+                )
+            } secondary: {
+                DenseSliderControlRow(
+                    title: "Brightness",
+                    value: Binding(
+                        get: { light },
+                        set: { var p = params; p.colorMode = .dominantTwoTone(flipped: flipped, saturationShift: sat, lightnessShift: $0); onChange(p) }
+                    ),
+                    range: -50...50,
+                    step: 1
+                )
             }
         }
 
         if case .color(let levels) = params.colorMode {
-            Stepper(
-                "Levels: \(levels) per channel",
-                value: levelsBinding(levels),
-                in: 2...8
+            DenseSliderControlRow(
+                title: "Levels",
+                value: Binding(
+                    get: { Double(levels) },
+                    set: { levelsBinding(levels).wrappedValue = Int($0.rounded()) }
+                ),
+                range: 2...8,
+                step: 1
             )
         }
 
@@ -3077,29 +3168,55 @@ struct DitherLayerControls: View {
             paletteEditor(colors: colors)
         }
 
-        VStack(alignment: .leading, spacing: 4) {
-            Text("Threshold: \(String(format: "%.2f", params.threshold))")
+        SidebarCompoundControlBlock {
+            DenseSliderControlRow(
+                title: "Threshold",
+                value: thresholdBinding,
+                range: 0.1...0.9,
+                step: 0.05
+            )
+        } secondary: {
+            Text("Lower = darker, higher = brighter")
                 .font(AppFont.controlLabel)
                 .foregroundStyle(Color.text2)
-            Slider(value: thresholdBinding, in: 0.1...0.9, step: 0.05)
+                .denseControlRow("Details")
         }
-        .caption("Lower = darker, Higher = brighter")
 
-        VStack(alignment: .leading, spacing: 4) {
-            Text("Sharpen: \(String(format: "%.0f%%", params.sharpen * 100))")
+        SidebarCompoundControlBlock {
+            DenseSliderControlRow(
+                title: "Sharpen",
+                value: Binding(
+                    get: { params.sharpen * 100 },
+                    set: { sharpenBinding.wrappedValue = $0 / 100 }
+                ),
+                range: 0...100,
+                step: 10,
+                suffix: "%"
+            )
+        } secondary: {
+            Text("Pre-sharpen to preserve edge detail")
                 .font(AppFont.controlLabel)
                 .foregroundStyle(Color.text2)
-            Slider(value: sharpenBinding, in: 0...1, step: 0.1)
+                .denseControlRow("Details")
         }
-        .caption("Pre-sharpen to preserve edge detail")
 
-        VStack(alignment: .leading, spacing: 4) {
-            Text("Contrast: \(String(format: "%.0f%%", params.contrast * 100))")
+        SidebarCompoundControlBlock {
+            DenseSliderControlRow(
+                title: "Contrast",
+                value: Binding(
+                    get: { params.contrast * 100 },
+                    set: { contrastBinding.wrappedValue = $0 / 100 }
+                ),
+                range: 0...100,
+                step: 10,
+                suffix: "%"
+            )
+        } secondary: {
+            Text("Boost contrast before dithering")
                 .font(AppFont.controlLabel)
                 .foregroundStyle(Color.text2)
-            Slider(value: contrastBinding, in: 0...1, step: 0.1)
+                .denseControlRow("Details")
         }
-        .caption("Boost contrast before dithering")
     }
 
     // MARK: - Bindings
@@ -3393,12 +3510,15 @@ struct LUTLayerControls: View {
     }
 
     private var lutPicker: some View {
-        Picker("LUT", selection: lutNameBinding) {
+        Picker("", selection: lutNameBinding) {
             Text("None").tag("")
             ForEach(availableLUTs) { lut in
                 Text(lut.displayName).tag(lut.id)
             }
         }
+        .pickerStyle(.menu)
+        .labelsHidden()
+        .denseControlRow("LUT")
     }
 
     @MainActor
@@ -3443,6 +3563,7 @@ struct LUTLayerControls: View {
             }
             .frame(maxWidth: .infinity)
             .padding(.vertical, 16)
+            .denseControlRow("Preview")
         } else {
             ScrollView(.horizontal, showsIndicators: false) {
                 HStack(spacing: 6) {
@@ -3452,22 +3573,21 @@ struct LUTLayerControls: View {
                 }
                 .padding(.vertical, 4)
             }
+            .denseControlRow("Preview")
         }
     }
 
     private var intensityControl: some View {
-        VStack(alignment: .leading, spacing: 4) {
-            HStack {
-                Text("Intensity")
-                    .font(AppFont.controlLabel)
-                    .foregroundStyle(Color.text2)
-                Spacer()
-                Text("\(Int(params.intensity * 100))%")
-                    .font(AppFont.controlLabel)
-                    .foregroundStyle(Color.text2)
-            }
-            Slider(value: intensityBinding, in: 0...1, step: 0.05)
-        }
+        DenseSliderControlRow(
+            title: "Intensity",
+            value: Binding(
+                get: { params.intensity * 100 },
+                set: { intensityBinding.wrappedValue = $0 / 100 }
+            ),
+            range: 0...100,
+            step: 5,
+            suffix: "%"
+        )
     }
 
     private var importButtons: some View {
@@ -3490,6 +3610,7 @@ struct LUTLayerControls: View {
             .buttonStyle(.plain)
             .foregroundStyle(Color.text2)
         }
+        .denseControlRow("Library")
     }
 
     private func lutThumb(_ lut: LUTInfo) -> some View {
@@ -3797,45 +3918,45 @@ struct ShaderLayerControls: View {
 
         // Resolution toggle. Independent of character set / font — see
         // ASCIIShaderParams.highDetail for the axis split.
-        Toggle("High Detail (16×16 atlas)", isOn: Binding(
-            get: { asciiParams.highDetail },
-            set: { updateASCII(asciiParams, highDetail: $0) }
-        ))
-
-        VStack(alignment: .leading, spacing: 4) {
-            Text("Colors")
-                .font(AppFont.controlLabel)
-                .foregroundStyle(Color.text2)
-            Picker("", selection: Binding(
-                get: {
-                    switch asciiParams.colorMode {
-                    case .manual: return 0
-                    case .dominantTwoTone: return 1
-                    case .source: return 2
-                    case .gradient: return 3
-                    }
-                },
-                set: { mode in
-                    switch mode {
-                    case 1:
-                        updateASCII(asciiParams, colorMode: .dominantTwoTone())
-                    case 2:
-                        updateASCII(asciiParams, colorMode: .source())
-                    case 3:
-                        updateASCII(asciiParams, colorMode: .gradient(color1: .black, color2: .white))
-                    default:
-                        updateASCII(asciiParams, colorMode: .manual(foreground: .white, background: .black))
-                    }
-                }
-            )) {
-                Text("Manual").tag(0)
-                Text("Dominant").tag(1)
-                Text("Source").tag(2)
-                Text("Gradient").tag(3)
-            }
-            .labelsHidden()
-            .pickerStyle(.segmented)
+        SidebarControlRow("High Detail") {
+            EmptyView()
+        } trailingValue: {
+            StyledToggle(isOn: Binding(
+                get: { asciiParams.highDetail },
+                set: { updateASCII(asciiParams, highDetail: $0) }
+            ))
         }
+
+        Picker("", selection: Binding(
+            get: {
+                switch asciiParams.colorMode {
+                case .manual: return 0
+                case .dominantTwoTone: return 1
+                case .source: return 2
+                case .gradient: return 3
+                }
+            },
+            set: { mode in
+                switch mode {
+                case 1:
+                    updateASCII(asciiParams, colorMode: .dominantTwoTone())
+                case 2:
+                    updateASCII(asciiParams, colorMode: .source())
+                case 3:
+                    updateASCII(asciiParams, colorMode: .gradient(color1: .black, color2: .white))
+                default:
+                    updateASCII(asciiParams, colorMode: .manual(foreground: .white, background: .black))
+                }
+            }
+        )) {
+            Text("Manual").tag(0)
+            Text("Dominant").tag(1)
+            Text("Source").tag(2)
+            Text("Gradient").tag(3)
+        }
+        .pickerStyle(.menu)
+        .labelsHidden()
+        .denseControlRow("Colors")
 
         switch asciiParams.colorMode {
         case .manual(let foreground, let background):
@@ -3859,16 +3980,20 @@ struct ShaderLayerControls: View {
                 updateASCII(asciiParams, colorMode: .manual(foreground: foreground, background: color))
             })
         case .dominantTwoTone(let flipped, let saturationShift, let lightnessShift):
-            Toggle("Flip Palette", isOn: Binding(
-                get: { flipped },
-                set: { value in
-                    updateASCII(asciiParams, colorMode: .dominantTwoTone(
-                        flipped: value,
-                        saturationShift: saturationShift,
-                        lightnessShift: lightnessShift
-                    ))
-                }
-            ))
+            SidebarControlRow("Flip Palette") {
+                EmptyView()
+            } trailingValue: {
+                StyledToggle(isOn: Binding(
+                    get: { flipped },
+                    set: { value in
+                        updateASCII(asciiParams, colorMode: .dominantTwoTone(
+                            flipped: value,
+                            saturationShift: saturationShift,
+                            lightnessShift: lightnessShift
+                        ))
+                    }
+                ))
+            }
 
             sliderRow(
                 title: "Saturation",
@@ -3937,12 +4062,18 @@ struct ShaderLayerControls: View {
             })
         }
 
-        Toggle("Invert", isOn: Binding(
-            get: { asciiParams.invert },
-            set: { value in
-                updateASCII(asciiParams, invert: value)
-            }
-        ))
+        SidebarControlRow("Invert") {
+            EmptyView()
+        } trailingValue: {
+            StyledToggle(isOn: Binding(
+                get: {
+                    asciiParams.invert
+                },
+                set: { value in
+                    updateASCII(asciiParams, invert: value)
+                }
+            ))
+        }
     }
 
     /// Character-palette picker. Presets are derived from the stored string
@@ -3955,67 +4086,52 @@ struct ShaderLayerControls: View {
         let selectedPreset = ASCIIPreset.matching(asciiParams.characters)
         let characterCount = (asciiParams.characters ?? "").count
 
-        VStack(alignment: .leading, spacing: 8) {
-            Text("Characters")
-                .font(AppFont.controlLabel)
-                .foregroundStyle(Color.text2)
+        Picker("", selection: Binding<ASCIIPreset>(
+            get: { selectedPreset },
+            set: { newValue in
+                switch newValue {
+                case .default:
+                    updateASCII(asciiParams, characters: .some(nil))
+                case .custom:
+                    let current = asciiParams.characters
+                    let alreadyCustom = current.map { ASCIIPreset.matching($0) == .custom } ?? false
+                    let seed: String = alreadyCustom ? (current ?? "") : " .:*@"
+                    updateASCII(asciiParams, characters: .some(seed))
+                default:
+                    updateASCII(asciiParams, characters: .some(newValue.characters))
+                }
+            }
+        )) {
+            ForEach(ASCIIPreset.allCases, id: \.self) { preset in
+                Text(preset.rawValue).tag(preset)
+            }
+        }
+        .pickerStyle(.menu)
+        .labelsHidden()
+        .denseControlRow("Characters")
 
-            Picker("", selection: Binding<ASCIIPreset>(
-                get: { selectedPreset },
-                set: { newValue in
-                    switch newValue {
-                    case .default:
-                        updateASCII(asciiParams, characters: .some(nil))
-                    case .custom:
-                        // Preserve whatever string the user currently has if
-                        // it's already non-preset. Otherwise seed with a
-                        // deliberately-not-a-preset starter so the picker
-                        // actually stays on Custom — if we seeded with
-                        // Classic's literal the next render would re-derive
-                        // `.classic` and snap the picker back.
-                        let current = asciiParams.characters
-                        let alreadyCustom = current.map { ASCIIPreset.matching($0) == .custom } ?? false
-                        let seed: String = alreadyCustom ? (current ?? "") : " .:*@"
-                        updateASCII(asciiParams, characters: .some(seed))
-                    default:
-                        updateASCII(asciiParams, characters: .some(newValue.characters))
+        if selectedPreset == .custom {
+            TextField(
+                " .:-=+*#%@",
+                text: Binding(
+                    get: { asciiParams.characters ?? "" },
+                    set: { newValue in
+                        let trimmed = String(newValue.prefix(10))
+                        updateASCII(asciiParams, characters: .some(trimmed.isEmpty ? nil : trimmed))
                     }
-                }
-            )) {
-                ForEach(ASCIIPreset.allCases, id: \.self) { preset in
-                    Text(preset.rawValue).tag(preset)
-                }
-            }
-            .pickerStyle(.menu)
-            .labelsHidden()
-
-            if selectedPreset == .custom {
-                TextField(
-                    " .:-=+*#%@",
-                    text: Binding(
-                        get: { asciiParams.characters ?? "" },
-                        set: { newValue in
-                            let trimmed = String(newValue.prefix(10))
-                            updateASCII(asciiParams, characters: .some(trimmed.isEmpty ? nil : trimmed))
-                        }
-                    )
                 )
-                .font(.system(.body, design: .monospaced))
-                .textFieldStyle(.roundedBorder)
+            )
+            .font(.system(.body, design: .monospaced))
+            .textFieldStyle(.roundedBorder)
+            .denseControlRow("Custom")
 
-                HStack(spacing: 6) {
-                    Text("\(characterCount) / 10")
-                        .font(.caption)
-                        .foregroundStyle(Color.text2)
-                    Spacer()
-                }
+            Text("\(characterCount) / 10")
+                .font(.caption)
+                .foregroundStyle(Color.text2)
+                .denseControlRow("Length")
 
-                // Mini ramp preview: 10 cells, each the character that would
-                // rasterise at that luminance slot over a gray background
-                // matching the relative luma. Makes the N-across-10 mapping
-                // explicit without the user having to apply + re-render.
-                asciiRampPreview(for: asciiParams.characters ?? "")
-            }
+            asciiRampPreview(for: asciiParams.characters ?? "")
+                .denseControlRow("Preview")
         }
     }
 
@@ -4030,25 +4146,21 @@ struct ShaderLayerControls: View {
     @ViewBuilder
     private func asciiFontControl(_ asciiParams: ASCIIShaderParams) -> some View {
         let families = Self.systemFontFamilies
-        VStack(alignment: .leading, spacing: 4) {
-            Text("Font")
-                .font(AppFont.controlLabel)
-                .foregroundStyle(Color.text2)
-            Picker("", selection: Binding<String>(
-                get: { asciiParams.fontName ?? "" },
-                set: { newValue in
-                    updateASCII(asciiParams, fontName: .some(newValue.isEmpty ? nil : newValue))
-                }
-            )) {
-                Text("System Default").tag("")
-                Divider()
-                ForEach(families, id: \.self) { family in
-                    Text(family).tag(family)
-                }
+        Picker("", selection: Binding<String>(
+            get: { asciiParams.fontName ?? "" },
+            set: { newValue in
+                updateASCII(asciiParams, fontName: .some(newValue.isEmpty ? nil : newValue))
             }
-            .pickerStyle(.menu)
-            .labelsHidden()
+        )) {
+            Text("System Default").tag("")
+            Divider()
+            ForEach(families, id: \.self) { family in
+                Text(family).tag(family)
+            }
         }
+        .pickerStyle(.menu)
+        .labelsHidden()
+        .denseControlRow("Font")
     }
 
     private static let systemFontFamilies: [String] = {
@@ -4160,7 +4272,7 @@ struct ShaderLayerControls: View {
 
     @ViewBuilder
     private func pixelSortControls(_ pixelSortParams: PixelSortShaderParams) -> some View {
-        Picker("Direction", selection: Binding(
+        Picker("", selection: Binding(
             get: { pixelSortParams.direction },
             set: { value in
                 var updated = pixelSortParams
@@ -4172,6 +4284,9 @@ struct ShaderLayerControls: View {
                 Text(direction.rawValue.capitalized).tag(direction)
             }
         }
+        .pickerStyle(.menu)
+        .labelsHidden()
+        .denseControlRow("Direction")
 
         // Span criterion. Luminance is the classic Framer behaviour; the four
         // Kim Asendorf cases come from the original 2010 ASDF Pixel Sort
@@ -4179,7 +4294,7 @@ struct ShaderLayerControls: View {
         // predicate so the sorted streaks emerge from different regions of
         // the image. Previously shipping in the data model + shader but
         // hidden from the UI.
-        Picker("Span Mode", selection: Binding(
+        Picker("", selection: Binding(
             get: { pixelSortParams.spanMode },
             set: { value in
                 var updated = pixelSortParams; updated.spanMode = value
@@ -4193,12 +4308,14 @@ struct ShaderLayerControls: View {
             Text("Dark (Kim)").tag(PixelSortSpanMode.kimDark)
         }
         .pickerStyle(.menu)
+        .labelsHidden()
+        .denseControlRow("Span Mode")
 
         // Sort criterion — orthogonal to span mode. Decides what value
         // pixels are RANKED by inside a span: Luminance (classic Rec.601),
         // Brightness (max(r,g,b), preserves saturated colours), or Hue
         // (HSV angle, rainbow-streak effect).
-        Picker("Sort By", selection: Binding(
+        Picker("", selection: Binding(
             get: { pixelSortParams.sortBy },
             set: { value in
                 var updated = pixelSortParams; updated.sortBy = value
@@ -4210,6 +4327,8 @@ struct ShaderLayerControls: View {
             Text("Hue").tag(PixelSortCriterion.hue)
         }
         .pickerStyle(.menu)
+        .labelsHidden()
+        .denseControlRow("Sort By")
 
         sliderRow(
             title: "Threshold",
@@ -4257,13 +4376,17 @@ struct ShaderLayerControls: View {
         }
         // Flip sort direction — sorts descending by luminance (bright at
         // start of span) instead of ascending.
-        Toggle("Reverse", isOn: Binding(
-            get: { pixelSortParams.reverse },
-            set: { value in
-                var updated = pixelSortParams; updated.reverse = value
-                onChange(params.withParams(.pixelSort(updated)))
-            }
-        ))
+        SidebarControlRow("Reverse") {
+            EmptyView()
+        } trailingValue: {
+            StyledToggle(isOn: Binding(
+                get: { pixelSortParams.reverse },
+                set: { value in
+                    var updated = pixelSortParams; updated.reverse = value
+                    onChange(params.withParams(.pixelSort(updated)))
+                }
+            ))
+        }
     }
 
     @ViewBuilder
@@ -4335,13 +4458,17 @@ struct ShaderLayerControls: View {
             var updated = halftoneParams; updated.contrast = value
             onChange(params.withParams(.halftone(updated)))
         }
-        Toggle("Monochrome", isOn: Binding(
-            get: { halftoneParams.monochrome },
-            set: { value in
-                var updated = halftoneParams; updated.monochrome = value
-                onChange(params.withParams(.halftone(updated)))
-            }
-        ))
+        SidebarControlRow("Monochrome") {
+            EmptyView()
+        } trailingValue: {
+            StyledToggle(isOn: Binding(
+                get: { halftoneParams.monochrome },
+                set: { value in
+                    var updated = halftoneParams; updated.monochrome = value
+                    onChange(params.withParams(.halftone(updated)))
+                }
+            ))
+        }
     }
 
     @ViewBuilder
@@ -4411,18 +4538,12 @@ struct ShaderLayerControls: View {
         step: Double,
         onSet: @escaping @MainActor @Sendable (Double) -> Void
     ) -> some View {
-        VStack(alignment: .leading, spacing: 4) {
-            HStack {
-                Text(title)
-                    .font(AppFont.controlLabel)
-                    .foregroundStyle(Color.text2)
-                Spacer()
-                Text(step >= 1 ? "\(Int(value.rounded()))" : String(format: "%.2f", value))
-                    .font(AppFont.controlLabel)
-                    .foregroundStyle(Color.text2)
-            }
-            Slider(value: Binding(get: { value }, set: onSet), in: range, step: step)
-        }
+        DenseSliderControlRow(
+            title: LocalizedStringKey(title),
+            value: Binding(get: { value }, set: onSet),
+            range: range,
+            step: step
+        )
     }
 }
 
