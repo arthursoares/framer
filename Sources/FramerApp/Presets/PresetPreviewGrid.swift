@@ -1,6 +1,11 @@
 import SwiftUI
 import FramerCore
 
+private enum PresetPreviewGridLayout {
+    static let actionVerticalPadding = 7.0
+    static let saveCardBorderDash: [CGFloat] = [4]
+}
+
 struct PresetPreviewGrid: View {
     @Environment(AppState.self) var appState
     @State private var presetPreviews: [UUID: NSImage] = [:]
@@ -8,84 +13,79 @@ struct PresetPreviewGrid: View {
     @State private var renamingPreset: Preset?
     @State private var renameText = ""
 
-    private let columns = [
-        GridItem(.flexible(), spacing: 6),
-        GridItem(.flexible(), spacing: 6),
-        GridItem(.flexible(), spacing: 6),
-    ]
+    private let metrics = SidebarMetrics()
     private let maxConcurrentPresetRenders = 4
 
+    private var columns: [GridItem] {
+        [
+            GridItem(.flexible(), spacing: metrics.expandedBodyInset),
+            GridItem(.flexible(), spacing: metrics.expandedBodyInset),
+            GridItem(.flexible(), spacing: metrics.expandedBodyInset),
+        ]
+    }
+
     var body: some View {
-        LazyVGrid(columns: columns, spacing: 6) {
-            ForEach(appState.presets) { preset in
-                PresetPreviewCard(
-                    preset: preset,
-                    isActive: appState.activePresetName == preset.name,
-                    thumbnail: appState.selectedPhoto != nil ? presetPreviews[preset.id] : nil,
-                    onTap: {
-                        appState.currentConfig = preset.config
-                        appState.activePresetName = preset.name
-                        appState.appliedPresetConfig = preset.config
-                    }
-                )
-                .contextMenu {
-                    Button {
-                        appState.currentConfig = preset.config
-                        appState.activePresetName = preset.name
-                        appState.appliedPresetConfig = preset.config
-                    } label: {
-                        Label("Apply", systemImage: "checkmark.circle")
-                    }
-                    Button {
-                        let updated = Preset(id: preset.id, name: preset.name, config: appState.currentConfig)
-                        try? appState.presetStore.save(updated)
-                        appState.loadPresets()
-                        appState.activePresetName = preset.name
-                        appState.appliedPresetConfig = appState.currentConfig
-                    } label: {
-                        Label("Update with Current Settings", systemImage: "arrow.triangle.2.circlepath")
-                    }
-                    Button {
-                        renameText = preset.name
-                        renamingPreset = preset
-                    } label: {
-                        Label("Rename", systemImage: "pencil")
-                    }
-                    Button {
-                        exportPreset(preset)
-                    } label: {
-                        Label("Export…", systemImage: "square.and.arrow.up")
-                    }
-                    Divider()
-                    Button(role: .destructive) {
-                        try? appState.presetStore.delete(id: preset.id)
-                        appState.loadPresets()
-                    } label: {
-                        Label("Delete", systemImage: "trash")
+        VStack(alignment: .leading, spacing: metrics.expandedBodyInset) {
+            LazyVGrid(columns: columns, spacing: metrics.expandedBodyInset) {
+                ForEach(appState.presets) { preset in
+                    PresetPreviewCard(
+                        preset: preset,
+                        isActive: appState.activePresetName == preset.name,
+                        thumbnail: appState.selectedPhoto != nil ? presetPreviews[preset.id] : nil,
+                        onTap: {
+                            appState.currentConfig = preset.config
+                            appState.activePresetName = preset.name
+                            appState.appliedPresetConfig = preset.config
+                        }
+                    )
+                    .contextMenu {
+                        Button {
+                            appState.currentConfig = preset.config
+                            appState.activePresetName = preset.name
+                            appState.appliedPresetConfig = preset.config
+                        } label: {
+                            Label("Apply", systemImage: "checkmark.circle")
+                        }
+                        Button {
+                            let updated = Preset(id: preset.id, name: preset.name, config: appState.currentConfig)
+                            try? appState.presetStore.save(updated)
+                            appState.loadPresets()
+                            appState.activePresetName = preset.name
+                            appState.appliedPresetConfig = appState.currentConfig
+                        } label: {
+                            Label("Update with Current Settings", systemImage: "arrow.triangle.2.circlepath")
+                        }
+                        Button {
+                            renameText = preset.name
+                            renamingPreset = preset
+                        } label: {
+                            Label("Rename", systemImage: "pencil")
+                        }
+                        Button {
+                            exportPreset(preset)
+                        } label: {
+                            Label("Export…", systemImage: "square.and.arrow.up")
+                        }
+                        Divider()
+                        Button(role: .destructive) {
+                            try? appState.presetStore.delete(id: preset.id)
+                            appState.loadPresets()
+                        } label: {
+                            Label("Delete", systemImage: "trash")
+                        }
                     }
                 }
+
+                saveCard
             }
 
-            // Save card
-            saveCard
-        }
-        // Preset management row
-        HStack(spacing: 8) {
-            Button { importPresets() } label: {
-                Label("Import", systemImage: "square.and.arrow.down")
-                    .font(AppFont.body(10))
-                    .foregroundStyle(Color.text3)
-            }
-            .buttonStyle(.plain)
+            HStack(spacing: Spacing.sm) {
+                supportActionButton("Import", systemImage: "square.and.arrow.down", action: importPresets)
 
-            Spacer()
+                Spacer(minLength: metrics.expandedBodyInset)
 
-            Button { showInFinder() } label: {
-                Label("Show in Finder", systemImage: "folder")
-                    .font(AppFont.body(10))
-                    .foregroundStyle(Color.text3)
+                supportActionButton("Show in Finder", systemImage: "folder", action: showInFinder)
             }
-            .buttonStyle(.plain)
         }
 
         .onChange(of: appState.selectedPhoto?.id) { _, _ in
@@ -118,27 +118,73 @@ struct PresetPreviewGrid: View {
 
     private var saveCard: some View {
         Button(action: saveCurrentAsPreset) {
-            VStack(spacing: 0) {
+            let supportStyle = SidebarStateStyle.hover
+
+            VStack(alignment: .leading, spacing: metrics.expandedBodyInset) {
                 ZStack {
-                    Color.clear
+                    RoundedRectangle(cornerRadius: CornerRadius.md)
+                        .fill(Color.surface3)
+
                     VStack(spacing: 4) {
                         Image(systemName: "plus")
                             .font(.system(size: 14))
-                            .foregroundStyle(Color.text3)
+                            .foregroundStyle(Color.text2)
                         Text("Save")
                             .font(AppFont.templateToken)
-                            .foregroundStyle(Color.text3)
+                            .foregroundStyle(Color.text1)
                     }
                 }
                 .aspectRatio(1, contentMode: .fit)
+                .overlay {
+                    RoundedRectangle(cornerRadius: CornerRadius.md)
+                        .stroke(Color.borderDefault, lineWidth: 1)
+                }
 
-                Color.clear.frame(height: 22)
+                HStack(spacing: Spacing.sm) {
+                    Text("Save")
+                        .font(AppFont.templateToken)
+                        .foregroundStyle(Color.text1)
+
+                    Spacer(minLength: 0)
+
+                    Image(systemName: "plus.circle.fill")
+                        .font(.system(size: 11, weight: .semibold))
+                        .foregroundStyle(Color.text2)
+                }
             }
-            .clipShape(RoundedRectangle(cornerRadius: CornerRadius.md))
-            .overlay(
-                RoundedRectangle(cornerRadius: CornerRadius.md)
-                    .strokeBorder(Color.text3, style: StrokeStyle(lineWidth: 1, dash: [4]))
-            )
+            .padding(metrics.expandedBodyInset)
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .background(supportStyle.backgroundColor, in: RoundedRectangle(cornerRadius: CornerRadius.lg))
+            .overlay {
+                RoundedRectangle(cornerRadius: CornerRadius.lg)
+                    .strokeBorder(
+                        supportStyle.borderColor,
+                        style: StrokeStyle(lineWidth: 1, dash: PresetPreviewGridLayout.saveCardBorderDash)
+                    )
+            }
+        }
+        .buttonStyle(.plain)
+    }
+
+    private func supportActionButton(
+        _ title: LocalizedStringKey,
+        systemImage: String,
+        action: @escaping () -> Void
+    ) -> some View {
+        let supportStyle = SidebarStateStyle.hover
+
+        return Button(action: action) {
+            Label(title, systemImage: systemImage)
+                .font(AppFont.buttonText)
+                .foregroundStyle(Color.text1)
+                .padding(.horizontal, metrics.outerInset)
+                .padding(.vertical, PresetPreviewGridLayout.actionVerticalPadding)
+                .frame(maxWidth: .infinity)
+                .background(supportStyle.backgroundColor, in: RoundedRectangle(cornerRadius: CornerRadius.md))
+                .overlay {
+                    RoundedRectangle(cornerRadius: CornerRadius.md)
+                        .stroke(supportStyle.borderColor, lineWidth: 1)
+                }
         }
         .buttonStyle(.plain)
     }
