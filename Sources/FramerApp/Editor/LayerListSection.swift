@@ -2182,100 +2182,120 @@ struct OverlayLayerControls: View {
     @State private var selectedKind: OverlayKind = .frame
 
     var body: some View {
-        kindPicker
-        overlayPicker
-        overlayThumbnailStrip
-        blendModePicker
-        opacityControl
-        openFolderButton
+        VStack(alignment: .leading, spacing: SimpleLayerEditorLayout.groupSpacing) {
+            SidebarCompoundControlBlock {
+                kindPicker
+            } secondary: {
+                overlayPicker
+            }
+
+            if !filteredOverlays.isEmpty {
+                overlayThumbnailStrip
+            }
+
+            SidebarCompoundControlBlock {
+                blendModePicker
+            } secondary: {
+                opacityControl
+            }
+
+            openFolderButton
+        }
     }
 
     // MARK: - Subviews
 
     private var kindPicker: some View {
-        Picker("Category", selection: $selectedKind) {
-            Text("Frames").tag(OverlayKind.frame)
-            Text("Dust").tag(OverlayKind.dust)
-            Text("Light Leaks").tag(OverlayKind.lightLeak)
-            Text("Wet Plate").tag(OverlayKind.wetPlate)
-        }
-        .pickerStyle(.segmented)
-        .onAppear {
-            selectedKind = params.kind
-            loadOverlays()
-        }
-        .onChange(of: selectedKind) { _, newKind in
-            var p = params
-            p.kind = newKind
-            p.blendMode = OverlayBlendMode.defaultFor(newKind)
-            if !filteredOverlays.contains(where: { $0.id == p.overlayName }) {
-                p.overlayName = ""
+        SidebarControlRow("Category") {
+            Picker("", selection: $selectedKind) {
+                Text("Frames").tag(OverlayKind.frame)
+                Text("Dust").tag(OverlayKind.dust)
+                Text("Light Leaks").tag(OverlayKind.lightLeak)
+                Text("Wet Plate").tag(OverlayKind.wetPlate)
             }
-            onChange(p)
+            .pickerStyle(.segmented)
+            .labelsHidden()
+            .onAppear {
+                selectedKind = params.kind
+                loadOverlays()
+            }
+            .onChange(of: selectedKind) { _, newKind in
+                var p = params
+                p.kind = newKind
+                p.blendMode = OverlayBlendMode.defaultFor(newKind)
+                if !filteredOverlays.contains(where: { $0.id == p.overlayName }) {
+                    p.overlayName = ""
+                }
+                onChange(p)
+            }
         }
     }
 
     private var overlayPicker: some View {
-        Picker("Overlay", selection: overlayNameBinding) {
-            Text("None").tag("")
-            ForEach(filteredOverlays) { overlay in
-                Text(overlay.displayName).tag(overlay.id)
+        SidebarControlRow("Overlay") {
+            Picker("", selection: overlayNameBinding) {
+                Text("None").tag("")
+                ForEach(filteredOverlays) { overlay in
+                    Text(overlay.displayName).tag(overlay.id)
+                }
             }
+            .pickerStyle(.menu)
+            .labelsHidden()
         }
     }
 
     @ViewBuilder
     private var overlayThumbnailStrip: some View {
         if !filteredOverlays.isEmpty {
-            ScrollView(.horizontal, showsIndicators: false) {
-                HStack(spacing: 6) {
-                    ForEach(filteredOverlays) { overlay in
-                        overlayThumb(overlay)
+            SidebarControlRow("Preview") {
+                ScrollView(.horizontal, showsIndicators: false) {
+                    HStack(spacing: 6) {
+                        ForEach(filteredOverlays) { overlay in
+                            overlayThumb(overlay)
+                        }
                     }
+                    .padding(.vertical, 4)
                 }
-                .padding(.vertical, 4)
             }
         }
     }
 
     private var blendModePicker: some View {
-        Picker("Blend Mode", selection: blendModeBinding) {
-            ForEach(OverlayBlendMode.allCases, id: \.self) { mode in
-                Text(mode.label).tag(mode)
+        SidebarControlRow("Blend Mode") {
+            Picker("", selection: blendModeBinding) {
+                ForEach(OverlayBlendMode.allCases, id: \.self) { mode in
+                    Text(mode.label).tag(mode)
+                }
             }
+            .pickerStyle(.menu)
+            .labelsHidden()
         }
     }
 
     private var opacityControl: some View {
-        VStack(alignment: .leading, spacing: 4) {
-            Text("Opacity")
-                .font(AppFont.controlLabel)
-                .foregroundStyle(Color.text2)
-            HStack {
-                Slider(value: opacityBinding, in: 0...100)
-                TextField("", value: opacityBinding, format: .number)
-                    .textFieldStyle(.roundedBorder)
-                    .frame(width: 55)
-                    .multilineTextAlignment(.trailing)
-                    .monospacedDigit()
-                Text("%")
-                    .foregroundStyle(Color.text2)
-                    .frame(width: 20)
-            }
+        SidebarControlRow("Opacity") {
+            StyledSlider(
+                value: opacityBinding,
+                range: 0...100,
+                step: 1,
+                suffix: "%"
+            )
         }
     }
 
     private var openFolderButton: some View {
-        Button {
-            if let dir = TextureFrameProvider.ensureUserOverlayDirectory() {
-                NSWorkspace.shared.open(dir)
+        SidebarControlRow("Library") {
+            Button {
+                if let dir = TextureFrameProvider.ensureUserOverlayDirectory() {
+                    NSWorkspace.shared.open(dir)
+                }
+            } label: {
+                Label("Open Overlays Folder", systemImage: "folder")
+                    .font(AppFont.controlLabel)
             }
-        } label: {
-            Label("Open Overlays Folder", systemImage: "folder")
-                .font(AppFont.controlLabel)
+            .buttonStyle(.plain)
+            .foregroundStyle(Color.text2)
         }
-        .buttonStyle(.plain)
-        .foregroundStyle(Color.text2)
     }
 
     // MARK: - Thumbnail
