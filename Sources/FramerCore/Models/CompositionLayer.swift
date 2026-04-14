@@ -885,6 +885,31 @@ public enum ShaderStyle: String, Codable, CaseIterable, Sendable {
         case .kuwahara: return "Kuwahara"
         }
     }
+
+    /// SF Symbol name for the "+ Add Layer" menu entry. Mirrors the per-
+    /// variant `GPUEffectKind.menuIcon` pattern so each shader surfaces as
+    /// its own first-class filter in the add-layer picker rather than being
+    /// hidden under an umbrella "+ Shader" button.
+    public var menuIcon: String {
+        switch self {
+        case .ascii:       return "textformat"
+        case .crimewave:   return "flame"
+        case .narc:        return "moon.stars"
+        case .shiba:       return "pawprint"
+        case .pixelSort:   return "rectangle.split.3x1"
+        case .distantPast: return "hourglass"
+        case .crt:         return "tv"
+        case .halftone:    return "circle.dotted"
+        case .kuwahara:    return "paintbrush.pointed"
+        }
+    }
+
+    /// Constructs a `.shader` CompositionLayer pre-scoped to this style
+    /// with default parameters. Used by the add-layer menu so clicking
+    /// "+ ASCII" lands the user on a ready-to-tune ASCII layer.
+    public func makeDefaultLayer() -> CompositionLayer {
+        .shader(ShaderLayerParams(style: self))
+    }
 }
 
 public enum ASCIIColorMode: Codable, Equatable, Sendable {

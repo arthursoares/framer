@@ -161,10 +161,16 @@ struct LayerListSection: View {
             } label: {
                 Label("LUT", systemImage: "photo.artframe")
             }
-            Button {
-                addLayer(.shader(ShaderLayerParams()))
-            } label: {
-                Label("Shader", systemImage: "sparkles.rectangle.stack")
+            // One menu entry per shader style. Each constructs a `.shader`
+            // layer pre-scoped to that specific style with its default
+            // parameters. Mirrors the `GPUEffectKind` pattern below so
+            // shaders feel like first-class filters (ASCII, Kuwahara, CRT,
+            // …) rather than being tucked under a single umbrella "+
+            // Shader" button that asks the user to pick a style afterward.
+            ForEach(ShaderStyle.allCases, id: \.self) { style in
+                Button { addLayer(style.makeDefaultLayer()) } label: {
+                    Label(style.label, systemImage: style.menuIcon)
+                }
             }
             Divider()
             // One menu entry per user-facing GPU-effect variant. Each
