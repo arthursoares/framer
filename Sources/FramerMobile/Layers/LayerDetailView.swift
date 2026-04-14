@@ -2033,6 +2033,7 @@ private struct DitherControls: View {
                     Text("Two-Tone").tag(1)
                     Text("Color").tag(2)
                     Text("Dominant").tag(3)
+                    Text("Palette").tag(4)
                 }
                 .pickerStyle(.segmented)
             }
@@ -2126,6 +2127,80 @@ private struct DitherControls: View {
                     ), in: 2...8)
                     .labelsHidden()
                     .accessibilityLabel("Color Levels")
+                }
+            }
+
+            // Palette mode — preset picker + per-colour editor. Mirrors
+            // LayerListSection.paletteEditor's derivation-from-stored-colours
+            // pattern so the picker stays in sync with the saved palette
+            // (editing a swatch flips the preset to Custom automatically).
+            if case .palette(let colors) = params.colorMode {
+                let selectedPreset = VintagePalette.Preset.matching(colors)
+                ControlRow(label: "Preset") {
+                    Picker("", selection: Binding(
+                        get: { selectedPreset },
+                        set: { newValue in
+                            var p = params
+                            switch newValue {
+                            case .custom:
+                                let seed = (selectedPreset == .custom) ? colors : VintagePalette.gameBoy
+                                p.colorMode = .palette(seed)
+                            default:
+                                p.colorMode = .palette(newValue.colors)
+                            }
+                            onChange(p)
+                        }
+                    )) {
+                        ForEach(VintagePalette.Preset.allCases, id: \.self) { preset in
+                            Text(preset.rawValue).tag(preset)
+                        }
+                    }
+                    .pickerStyle(.menu)
+                }
+
+                ForEach(Array(colors.enumerated()), id: \.offset) { idx, color in
+                    ControlRow(label: "Colour \(idx + 1)") {
+                        HStack(spacing: 8) {
+                            ColorPicker("", selection: Binding(
+                                get: { Color(cgColor: color.cgColor) },
+                                set: { newColor in
+                                    guard let hex = newColor.hexString,
+                                          let codable = try? CodableColor(hex: hex) else { return }
+                                    var p = params
+                                    var next = colors
+                                    next[idx] = codable
+                                    p.colorMode = .palette(next)
+                                    onChange(p)
+                                }
+                            ))
+                            .labelsHidden()
+                            if colors.count > 2 {
+                                Button {
+                                    var p = params
+                                    var next = colors
+                                    next.remove(at: idx)
+                                    p.colorMode = .palette(next)
+                                    onChange(p)
+                                } label: {
+                                    Image(systemName: "minus.circle")
+                                }
+                                .buttonStyle(.borderless)
+                            }
+                        }
+                    }
+                }
+
+                if colors.count < DitherColorMode.MAX_PALETTE_COLORS {
+                    Button {
+                        var p = params
+                        var next = colors
+                        next.append(colors.last ?? CodableColor(unchecked: "#000000"))
+                        p.colorMode = .palette(next)
+                        onChange(p)
+                    } label: {
+                        Label("Add Colour", systemImage: "plus.circle")
+                    }
+                    .buttonStyle(.borderless)
                 }
             }
 

@@ -680,6 +680,43 @@ public enum VintagePalette {
         CodableColor(unchecked: "#FF55FF"),
         CodableColor(unchecked: "#FFFFFF"),
     ]
+
+    /// UI-facing preset selector. Not persisted directly — the UI translates
+    /// presets to / from `DitherColorMode.palette([CodableColor])` by
+    /// comparing colour arrays: if the stored palette matches one of the
+    /// presets exactly, the picker selects that preset; otherwise it falls
+    /// back to `.custom` and lets the user edit individual swatches.
+    public enum Preset: String, CaseIterable, Hashable, Sendable {
+        case gameBoy = "Game Boy"
+        case nes     = "NES"
+        case c64     = "C64"
+        case cga     = "CGA"
+        case custom  = "Custom"
+
+        /// Concrete palette for the preset. `.custom` returns an empty list
+        /// — callers preserve the user's current colours when switching TO
+        /// custom rather than overwriting them.
+        public var colors: [CodableColor] {
+            switch self {
+            case .gameBoy: return VintagePalette.gameBoy
+            case .nes:     return VintagePalette.nes
+            case .c64:     return VintagePalette.c64
+            case .cga:     return VintagePalette.cga
+            case .custom:  return []
+            }
+        }
+
+        /// Identify which preset (if any) a stored palette matches. Used to
+        /// drive the UI picker so loading a preset round-trips cleanly. Any
+        /// user edit that diverges from all presets flips the picker to
+        /// `.custom` automatically.
+        public static func matching(_ palette: [CodableColor]) -> Preset {
+            for preset in Preset.allCases where preset != .custom {
+                if preset.colors == palette { return preset }
+            }
+            return .custom
+        }
+    }
 }
 
 public struct DitherLayerParams: Identifiable, Codable, Equatable, Sendable {
