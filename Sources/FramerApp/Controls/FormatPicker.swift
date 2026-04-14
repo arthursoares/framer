@@ -9,6 +9,7 @@ struct FormatPicker: View {
             pillButton("PNG", tag: "png")
         }
         .background(Color.surface3, in: Capsule())
+        .fixedSize(horizontal: true, vertical: false)
     }
 
     private func pillButton(_ label: String, tag: String) -> some View {
