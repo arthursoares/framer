@@ -431,7 +431,7 @@ struct GPUEffectLayerControls: View {
                 SidebarControlRow("Invert") {
                     EmptyView()
                 } trailingValue: {
-                    StyledToggle(isOn: textInvertBinding)
+                    StyledToggle("Invert", isOn: textInvertBinding)
                 }
 
                 ColorPickerWithHex("Foreground", selection: Binding(
@@ -562,7 +562,7 @@ struct GPUEffectLayerControls: View {
                 SidebarControlRow("Reverse") {
                     EmptyView()
                 } trailingValue: {
-                    StyledToggle(isOn: reverseBinding)
+                    StyledToggle("Reverse", isOn: reverseBinding)
                 }
             }
 
@@ -618,7 +618,7 @@ struct GPUEffectLayerControls: View {
                 SidebarControlRow("Invert") {
                     EmptyView()
                 } trailingValue: {
-                    StyledToggle(isOn: edgeInvertBinding)
+                    StyledToggle("Invert", isOn: edgeInvertBinding)
                 }
                 // Speed + Animate stay hidden (no time uniform yet).
                 // Distort Only stays hidden (shader generates standalone,
@@ -641,7 +641,7 @@ struct GPUEffectLayerControls: View {
                 SidebarControlRow("Invert") {
                     EmptyView()
                 } trailingValue: {
-                    StyledToggle(isOn: edgeInvertBinding)
+                    StyledToggle("Invert", isOn: edgeInvertBinding)
                 }
 
                 ColorPickerWithHex("Edge Color", selection: Binding(
@@ -672,7 +672,7 @@ struct GPUEffectLayerControls: View {
                 SidebarControlRow("Invert") {
                     EmptyView()
                 } trailingValue: {
-                    StyledToggle(isOn: edgeInvertBinding)
+                    StyledToggle("Invert", isOn: edgeInvertBinding)
                 }
 
                 ColorPickerWithHex("Contour Color", selection: Binding(
@@ -695,7 +695,7 @@ struct GPUEffectLayerControls: View {
                 SidebarControlRow("Randomize") {
                     EmptyView()
                 } trailingValue: {
-                    StyledToggle(isOn: voronoiRandomizeBinding)
+                    StyledToggle("Randomize", isOn: voronoiRandomizeBinding)
                 }
 
                 ColorPickerWithHex("Edge Color", selection: Binding(
@@ -725,7 +725,7 @@ struct GPUEffectLayerControls: View {
                     SidebarControlRow("Invert") {
                         EmptyView()
                     } trailingValue: {
-                        StyledToggle(isOn: invertBinding)
+                        StyledToggle("Invert", isOn: invertBinding)
                     }
                 }
 
@@ -742,7 +742,7 @@ struct GPUEffectLayerControls: View {
                     SidebarControlRow("Invert") {
                         EmptyView()
                     } trailingValue: {
-                        StyledToggle(isOn: invertBinding)
+                        StyledToggle("Invert", isOn: invertBinding)
                     }
                 }
 
@@ -754,12 +754,12 @@ struct GPUEffectLayerControls: View {
                     SidebarControlRow("Dither") {
                         EmptyView()
                     } trailingValue: {
-                        StyledToggle(isOn: thresholdDitherBinding)
+                        StyledToggle("Dither", isOn: thresholdDitherBinding)
                     }
                     SidebarControlRow("Invert") {
                         EmptyView()
                     } trailingValue: {
-                        StyledToggle(isOn: invertBinding)
+                        StyledToggle("Invert", isOn: invertBinding)
                     }
                 }
 
@@ -3137,7 +3137,7 @@ struct DitherLayerControls: View {
                 SidebarControlRow("Flip Colors") {
                     EmptyView()
                 } trailingValue: {
-                    StyledToggle(isOn: Binding(
+                    StyledToggle("Flip Colors", isOn: Binding(
                         get: { flipped },
                         set: { var p = params; p.colorMode = .dominantTwoTone(flipped: $0, saturationShift: sat, lightnessShift: light); onChange(p) }
                     ))
@@ -3941,7 +3941,7 @@ struct ShaderLayerControls: View {
         SidebarControlRow("High Detail") {
             EmptyView()
         } trailingValue: {
-            StyledToggle(isOn: Binding(
+            StyledToggle("High Detail", isOn: Binding(
                 get: { asciiParams.highDetail },
                 set: { updateASCII(asciiParams, highDetail: $0) }
             ))
@@ -4003,7 +4003,7 @@ struct ShaderLayerControls: View {
             SidebarControlRow("Flip Palette") {
                 EmptyView()
             } trailingValue: {
-                StyledToggle(isOn: Binding(
+                StyledToggle("Flip Palette", isOn: Binding(
                     get: { flipped },
                     set: { value in
                         updateASCII(asciiParams, colorMode: .dominantTwoTone(
@@ -4085,7 +4085,7 @@ struct ShaderLayerControls: View {
         SidebarControlRow("Invert") {
             EmptyView()
         } trailingValue: {
-            StyledToggle(isOn: Binding(
+            StyledToggle("Invert", isOn: Binding(
                 get: {
                     asciiParams.invert
                 },
@@ -4399,7 +4399,7 @@ struct ShaderLayerControls: View {
         SidebarControlRow("Reverse") {
             EmptyView()
         } trailingValue: {
-            StyledToggle(isOn: Binding(
+            StyledToggle("Reverse", isOn: Binding(
                 get: { pixelSortParams.reverse },
                 set: { value in
                     var updated = pixelSortParams; updated.reverse = value
@@ -4481,7 +4481,7 @@ struct ShaderLayerControls: View {
         SidebarControlRow("Monochrome") {
             EmptyView()
         } trailingValue: {
-            StyledToggle(isOn: Binding(
+            StyledToggle("Monochrome", isOn: Binding(
                 get: { halftoneParams.monochrome },
                 set: { value in
                     var updated = halftoneParams; updated.monochrome = value

@@ -1,4 +1,6 @@
 import XCTest
+import SwiftUI
+import FramerCore
 @testable import Framer
 
 final class LayerPanelRowStateResolverTests: XCTestCase {
@@ -47,6 +49,23 @@ final class LayerPanelRowStateResolverTests: XCTestCase {
                 chassis: .hover,
                 availability: .default
             )
+        )
+    }
+
+    @MainActor
+    func test_bodyDoesNotUseTapGestureForExpansion() {
+        let row = LayerPanelRow(
+            layer: .constant(.border(BorderLayerParams())),
+            isDragging: false,
+            isDropTarget: false,
+            onDelete: {}
+        )
+
+        let bodyTypeName = String(reflecting: type(of: row.body))
+
+        XCTAssertFalse(
+            bodyTypeName.contains("TapGesture"),
+            "LayerPanelRow should use actionable disclosure semantics instead of a raw tap gesture. Body type: \(bodyTypeName)"
         )
     }
 }

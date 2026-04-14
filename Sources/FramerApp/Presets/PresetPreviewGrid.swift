@@ -1,6 +1,11 @@
 import SwiftUI
 import FramerCore
 
+struct PresetPreviewRenderKey: Equatable {
+    let photoID: UUID?
+    let presets: [Preset]
+}
+
 private enum PresetPreviewGridLayout {
     static let actionVerticalPadding = 7.0
     static let saveCardBorderDash: [CGFloat] = [4]
@@ -22,6 +27,10 @@ struct PresetPreviewGrid: View {
             GridItem(.flexible(), spacing: metrics.expandedBodyInset),
             GridItem(.flexible(), spacing: metrics.expandedBodyInset),
         ]
+    }
+
+    private var renderKey: PresetPreviewRenderKey {
+        PresetPreviewRenderKey(photoID: appState.selectedPhoto?.id, presets: appState.presets)
     }
 
     var body: some View {
@@ -88,7 +97,7 @@ struct PresetPreviewGrid: View {
             }
         }
 
-        .onChange(of: appState.selectedPhoto?.id) { _, _ in
+        .onChange(of: renderKey) { _, _ in
             schedulePreviewRenders()
         }
         .onAppear {

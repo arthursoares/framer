@@ -51,34 +51,44 @@ struct LayerPanelRow: View {
     var body: some View {
         VStack(spacing: 0) {
             HStack(spacing: LayerPanelRowLayout.headerSpacing) {
-                Image(systemName: "chevron.right")
-                    .font(.system(size: 9, weight: .bold))
-                    .foregroundStyle(Color.text3)
-                    .rotationEffect(.degrees(isExpanded ? 90 : 0))
-                    .frame(width: LayerPanelRowLayout.disclosureSize, height: LayerPanelRowLayout.disclosureSize)
+                Button(action: toggleExpanded) {
+                    HStack(spacing: LayerPanelRowLayout.headerSpacing) {
+                        Image(systemName: "chevron.right")
+                            .font(.system(size: 9, weight: .bold))
+                            .foregroundStyle(Color.text3)
+                            .rotationEffect(.degrees(isExpanded ? 90 : 0))
+                            .frame(width: LayerPanelRowLayout.disclosureSize, height: LayerPanelRowLayout.disclosureSize)
 
-                Image(systemName: "line.3.horizontal")
-                    .font(.system(size: 11))
-                    .foregroundStyle(Color.text3)
-                    .frame(width: LayerPanelRowLayout.handleWidth)
-                    .opacity(0.6)
+                        Image(systemName: "line.3.horizontal")
+                            .font(.system(size: 11))
+                            .foregroundStyle(Color.text3)
+                            .frame(width: LayerPanelRowLayout.handleWidth)
+                            .opacity(0.6)
 
-                Image(systemName: layer.iconName)
-                    .foregroundStyle(iconColor)
-                    .frame(width: LayerPanelRowLayout.iconWidth)
+                        Image(systemName: layer.iconName)
+                            .foregroundStyle(iconColor)
+                            .frame(width: LayerPanelRowLayout.iconWidth)
 
-                Text(layer.label)
-                    .font(AppFont.layerName)
-                    .foregroundStyle(titleColor)
+                        Text(layer.label)
+                            .font(AppFont.layerName)
+                            .foregroundStyle(titleColor)
 
-                Spacer()
+                        Spacer()
 
-                Text(layerSummary)
-                    .font(AppFont.badgeSummary)
-                    .foregroundStyle(summaryColor)
-                    .padding(.horizontal, LayerPanelRowLayout.badgeHorizontalPadding)
-                    .padding(.vertical, LayerPanelRowLayout.badgeVerticalPadding)
-                    .background(Color.surface4, in: Capsule())
+                        Text(layerSummary)
+                            .font(AppFont.badgeSummary)
+                            .foregroundStyle(summaryColor)
+                            .padding(.horizontal, LayerPanelRowLayout.badgeHorizontalPadding)
+                            .padding(.vertical, LayerPanelRowLayout.badgeVerticalPadding)
+                            .background(Color.surface4, in: Capsule())
+                    }
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .contentShape(Rectangle())
+                }
+                .buttonStyle(.plain)
+                .accessibilityLabel(layer.label)
+                .accessibilityValue(isExpanded ? "Expanded" : "Collapsed")
+                .accessibilityHint("Expand or collapse layer controls")
 
                 Button {
                     layer.isEnabled.toggle()
@@ -110,12 +120,6 @@ struct LayerPanelRow: View {
             }
             .padding(.horizontal, LayerPanelRowLayout.headerHorizontalPadding)
             .padding(.vertical, LayerPanelRowLayout.headerVerticalPadding)
-            .contentShape(Rectangle())
-            .onTapGesture {
-                withAnimation(LayerPanelRowLayout.expandAnimation) {
-                    isExpanded.toggle()
-                }
-            }
             .onHover { isHovering = $0 }
 
             if isExpanded {
@@ -218,6 +222,12 @@ struct LayerPanelRow: View {
 
     private var deleteIconColor: Color {
         isHoveringDelete ? Color.error : Color.text3
+    }
+
+    private func toggleExpanded() {
+        withAnimation(LayerPanelRowLayout.expandAnimation) {
+            isExpanded.toggle()
+        }
     }
 
     @ViewBuilder

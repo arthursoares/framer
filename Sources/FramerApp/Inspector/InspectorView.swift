@@ -147,7 +147,7 @@ struct InspectorView: View {
             SidebarControlRow("Strip EXIF metadata") {
                 EmptyView()
             } trailingValue: {
-                StyledToggle(isOn: noMetadataBinding)
+                StyledToggle("Strip EXIF metadata", isOn: noMetadataBinding)
                     .padding(.trailing, 1)
             }
         }
