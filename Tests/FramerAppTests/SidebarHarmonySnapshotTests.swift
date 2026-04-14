@@ -7,6 +7,14 @@ import FramerCore
 
 @MainActor
 final class SidebarHarmonySnapshotTests: XCTestCase {
+    func test_styledToggleUsesToggleSemantics() {
+        let bodyTypeName = String(reflecting: type(of: StyledToggle(isOn: .constant(true)).body))
+        XCTAssertTrue(
+            bodyTypeName.contains("Toggle"),
+            "StyledToggle should be built from Toggle semantics. Body type: \(bodyTypeName)"
+        )
+    }
+
     func test_shellAndPolicyWiring() {
         let metrics = SidebarMetrics()
 
@@ -130,6 +138,15 @@ final class SidebarHarmonySnapshotTests: XCTestCase {
             of: DitherLayerControls(params: DitherLayerParams()) { _ in },
             size: CGSize(width: 320, height: 900),
             expectedSHA256: "bc8380c207a59d77d3c2ee05cf5034795c2d106bb1877ad087a213f6566c2292"
+        )
+    }
+
+    func test_overlayEditorSurface() {
+        assertSnapshot(
+            named: "overlay-editor",
+            of: OverlayLayerControls(params: OverlayLayerParams()) { _ in },
+            size: CGSize(width: 320, height: 420),
+            expectedSHA256: "484cbf91109c9f3510ce610ffc22fcf6dd48582fb5682706c82ad9918bcf891d"
         )
     }
 

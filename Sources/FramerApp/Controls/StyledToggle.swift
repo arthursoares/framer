@@ -4,15 +4,24 @@ struct StyledToggle: View {
     @Binding var isOn: Bool
 
     var body: some View {
+        Toggle("", isOn: $isOn)
+            .labelsHidden()
+            .toggleStyle(StyledToggleControlStyle())
+            .accessibilityValue(isOn ? "On" : "Off")
+    }
+}
+
+private struct StyledToggleControlStyle: ToggleStyle {
+    func makeBody(configuration: Configuration) -> some View {
         Button {
-            isOn.toggle()
+            configuration.isOn.toggle()
         } label: {
             Capsule()
-                .fill(isOn ? Color.accentDim : Color.surface4)
+                .fill(configuration.isOn ? Color.accentDim : Color.surface4)
                 .frame(width: 32, height: 18)
-                .overlay(alignment: isOn ? .trailing : .leading) {
+                .overlay(alignment: configuration.isOn ? .trailing : .leading) {
                     Circle()
-                        .fill(isOn ? Color.text0 : Color.text2)
+                        .fill(configuration.isOn ? Color.text0 : Color.text2)
                         .frame(width: 12, height: 12)
                         .padding(3)
                 }
