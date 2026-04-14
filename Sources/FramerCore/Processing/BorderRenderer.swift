@@ -177,7 +177,11 @@ public enum BorderRenderer {
                 current = try CaptionRenderer.renderCaption(on: current, params: params, exif: exif, sourceImage: sourceImage)
 
             case .dither(let params):
-                current = try DitherRenderer.apply(to: current, params: params, previewBaseDimension: previewBaseDimension, sourceImage: sourceImage)
+                let rendered = try DitherRenderer.apply(to: current, params: params, previewBaseDimension: previewBaseDimension, sourceImage: sourceImage)
+                current = try LayerCompositor.compose(
+                    base: current, over: rendered,
+                    mode: params.blendMode, opacity: params.opacity
+                )
 
             case .aspectRatio(let params):
                 let currentSize = CGSize(width: current.width, height: current.height)
@@ -193,19 +197,27 @@ public enum BorderRenderer {
                       let lut = LUTProvider.loadLUT(named: params.lutFileName) else {
                     i += 1; continue
                 }
-                current = try LUTRenderer.apply(
+                let rendered = try LUTRenderer.apply(
                     to: current,
                     lut: lut,
                     intensity: params.intensity,
                     previewBaseDimension: previewBaseDimension
                 )
+                current = try LayerCompositor.compose(
+                    base: current, over: rendered,
+                    mode: params.blendMode, opacity: params.opacity
+                )
 
             case .shader(let params):
-                current = try ShaderRenderer.apply(
+                let rendered = try ShaderRenderer.apply(
                     to: current,
                     params: params,
                     previewBaseDimension: previewBaseDimension,
                     sourceImage: sourceImage
+                )
+                current = try LayerCompositor.compose(
+                    base: current, over: rendered,
+                    mode: params.blendMode, opacity: params.opacity
                 )
 
             case .gpuEffect:
