@@ -226,52 +226,68 @@ inline float thresholdForAlgorithm(uint algorithm, uint2 pos, uint bayerLevel,
         case DITHER_WHITE_NOISE: {
             return clamp(whiteNoise(pos) + (baseThreshold - 0.5), 0.0, 1.0);
         }
+        // Error-diffusion algorithms can't be implemented in a fragment
+        // shader (they need serial cell-to-cell error propagation). Each is
+        // approximated as `baseThreshold + (ign-shifted - 0.5) * scale`,
+        // mirroring Grainrad's blue-noise approximation. Two knobs make the
+        // approximations actually look different: a per-algorithm spatial
+        // phase offset on the noise sample (so neighbours pick differently
+        // ordered noise values) and a per-algorithm scale (so the noise's
+        // amplitude varies with the algorithm's "softness"). Without
+        // distinct phases, several algorithms collapse to byte-identical
+        // output despite shipping under different names.
         case DITHER_FLOYD: {
-            float n = ign(float2(pos));
+            float n = ign(float2(pos) + float2( 7.31, 11.17));
             return clamp(baseThreshold + (n - 0.5) * 0.85, 0.0, 1.0);
         }
         case DITHER_STUCKI: {
-            float n = ign(float2(pos));
+            float n = ign(float2(pos) + float2(13.49, 17.83));
             return clamp(baseThreshold + (n - 0.5) * 0.80, 0.0, 1.0);
         }
         case DITHER_ATKINSON: {
-            float n = ign(float2(pos));
+            float n = ign(float2(pos) + float2(19.71, 23.59));
             return clamp(baseThreshold + (n - 0.5) * 0.75, 0.0, 1.0);
         }
         case DITHER_ARTISTIC_DRIP: {
-            float n = ign(float2(pos));
+            float n = ign(float2(pos) + float2(29.13, 31.07));
             return clamp(baseThreshold + (n - 0.5) * 0.65, 0.0, 1.0);
         }
         case DITHER_SIERRA: {
-            float n = ign(float2(pos));
-            return clamp(baseThreshold + (n - 0.5) * 0.85, 0.0, 1.0);
+            float n = ign(float2(pos) + float2(37.41, 41.97));
+            return clamp(baseThreshold + (n - 0.5) * 0.84, 0.0, 1.0);
         }
         case DITHER_SIERRA_TWO_ROW: {
-            float n = ign(float2(pos));
-            return clamp(baseThreshold + (n - 0.5) * 0.75, 0.0, 1.0);
+            float n = ign(float2(pos) + float2(43.27, 47.51));
+            return clamp(baseThreshold + (n - 0.5) * 0.74, 0.0, 1.0);
         }
         case DITHER_SIERRA_LITE: {
-            float n = ign(float2(pos));
-            return clamp(baseThreshold + (n - 0.5) * 0.65, 0.0, 1.0);
+            float n = ign(float2(pos) + float2(53.69, 59.13));
+            return clamp(baseThreshold + (n - 0.5) * 0.64, 0.0, 1.0);
         }
         case DITHER_JJN: {
-            float n = ign(float2(pos));
+            float n = ign(float2(pos) + float2(61.83, 67.29));
             return clamp(baseThreshold + (n - 0.5) * 0.90, 0.0, 1.0);
         }
         case DITHER_BURKES: {
-            float n = ign(float2(pos));
-            return clamp(baseThreshold + (n - 0.5) * 0.85, 0.0, 1.0);
+            float n = ign(float2(pos) + float2(71.57, 73.93));
+            return clamp(baseThreshold + (n - 0.5) * 0.83, 0.0, 1.0);
         }
         case DITHER_IGN: {
-            // Same shape as DITHER_BLUE_NOISE for now — distinct ID so the UI
-            // can label it correctly. If we add a different blue-noise mask
-            // (void-and-cluster etc.), DITHER_BLUE_NOISE diverges from this.
-            return clamp(ign(float2(pos)) + (baseThreshold - 0.5), 0.0, 1.0);
+            // Distinct phase from DITHER_BLUE_NOISE so the two register
+            // visually different in the UI even though both are pure
+            // interleaved-gradient noise. If a true void-and-cluster blue
+            // noise mask is ever added, DITHER_BLUE_NOISE switches to it
+            // and this offset can drop.
+            float n = ign(float2(pos) + float2(83.11, 89.47));
+            return clamp(n + (baseThreshold - 0.5), 0.0, 1.0);
         }
         case DITHER_CMYK_HALFTONE: {
-            // For mono mode this falls back to the standard halftone matrix.
-            // CMYK rotation only kicks in inside the palette / colour paths.
-            float m = halftoneThreshold(pos);
+            // Mono mode collapses to the halftone matrix. Slight axis
+            // rotation so the dot pattern reads differently from plain
+            // halftone — keeps the UI distinction honest even when no
+            // colour separation is happening.
+            float2 r = float2(pos.x, pos.y) + float2(2.0, 4.0);
+            float m = halftoneThreshold(uint2(r));
             return clamp(m + (baseThreshold - 0.5), 0.0, 1.0);
         }
         default:
