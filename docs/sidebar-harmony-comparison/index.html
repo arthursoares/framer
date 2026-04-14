@@ -1,0 +1,1856 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Sidebar Harmony Comparison Brief</title>
+  <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Crect width='100' height='100' rx='24' fill='%23141416'/%3E%3Cpath d='M24 24h20v52H24zM56 24h20v52H56z' fill='%23d4956a'/%3E%3C/svg%3E">
+  <meta
+    name="description"
+    content="Sidebar harmony comparison brief documenting the shipped Conservative, Balanced, and Bold directions for the macOS inspector sidebar, with Balanced implemented and recommended."
+  >
+  <style>
+    :root {
+      --surface-0: #0e0e10;
+      --surface-1: #141416;
+      --surface-2: #1a1a1e;
+      --surface-3: #222226;
+      --surface-4: #2a2a2f;
+      --text-0: #f0ede8;
+      --text-1: #b8b4ad;
+      --text-2: #7d7a74;
+      --text-3: #4e4c48;
+      --accent: #d4956a;
+      --accent-dim: #a06840;
+      --accent-glow: rgba(212, 149, 106, 0.08);
+      --accent-subtle: rgba(212, 149, 106, 0.15);
+      --success: #5e9f6d;
+      --warning: #f1c27d;
+      --border: rgba(255, 255, 255, 0.08);
+      --border-strong: rgba(255, 255, 255, 0.14);
+      --shadow-soft: 0 22px 60px rgba(0, 0, 0, 0.34);
+      --shadow-card: 0 18px 44px rgba(0, 0, 0, 0.22);
+      --space-1: 0.25rem;
+      --space-2: 0.5rem;
+      --space-3: 0.75rem;
+      --space-4: 1rem;
+      --space-5: 1.5rem;
+      --space-6: 2rem;
+      --space-7: 3rem;
+      --radius-sm: 0.5rem;
+      --radius-md: 0.75rem;
+      --radius-lg: 1.25rem;
+      --radius-xl: 1.75rem;
+      --font-ui: "Atkinson Hyperlegible Next", "Atkinson Hyperlegible", "Avenir Next", "Segoe UI", sans-serif;
+      --font-display: "Iowan Old Style", "Palatino Linotype", "Book Antiqua", Georgia, serif;
+      --font-mono: "Source Code Pro", "SF Mono", "SFMono-Regular", Consolas, monospace;
+    }
+
+    * {
+      box-sizing: border-box;
+    }
+
+    html {
+      scroll-behavior: smooth;
+    }
+
+    body {
+      margin: 0;
+      font-family: var(--font-ui);
+      background:
+        radial-gradient(circle at top, rgba(212, 149, 106, 0.12), transparent 32%),
+        linear-gradient(180deg, #171618 0%, var(--surface-0) 24%, #0b0b0d 100%);
+      color: var(--text-0);
+      line-height: 1.6;
+    }
+
+    a {
+      color: inherit;
+    }
+
+    .shell {
+      width: min(1200px, calc(100% - 2rem));
+      margin: 0 auto;
+    }
+
+    .eyebrow,
+    .kicker,
+    .section-label,
+    th,
+    .metric-label,
+    .mini-label {
+      font-family: var(--font-mono);
+      letter-spacing: 0.12em;
+      text-transform: uppercase;
+    }
+
+    header {
+      position: relative;
+      padding: var(--space-5) 0 var(--space-7);
+      overflow: hidden;
+    }
+
+    header::after {
+      content: "";
+      position: absolute;
+      inset: 2rem -10% auto;
+      height: 420px;
+      background:
+        linear-gradient(135deg, rgba(212, 149, 106, 0.12), transparent 48%),
+        repeating-linear-gradient(
+          90deg,
+          transparent,
+          transparent 26px,
+          rgba(255, 255, 255, 0.03) 26px,
+          rgba(255, 255, 255, 0.03) 27px
+        );
+      pointer-events: none;
+      mask-image: linear-gradient(180deg, rgba(0, 0, 0, 1), transparent);
+    }
+
+    nav {
+      position: sticky;
+      top: 0;
+      z-index: 10;
+      backdrop-filter: blur(18px);
+      background: rgba(20, 20, 22, 0.82);
+      border-bottom: 1px solid rgba(255, 255, 255, 0.06);
+    }
+
+    .nav-inner {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: var(--space-4);
+      padding: 0.9rem 0;
+    }
+
+    .brand {
+      display: flex;
+      align-items: center;
+      gap: var(--space-3);
+      font-family: var(--font-mono);
+      text-decoration: none;
+    }
+
+    .brand-badge {
+      width: 2.25rem;
+      height: 2.25rem;
+      display: grid;
+      place-items: center;
+      border-radius: 0.7rem;
+      background: linear-gradient(145deg, rgba(212, 149, 106, 0.2), rgba(212, 149, 106, 0.04));
+      border: 1px solid rgba(212, 149, 106, 0.24);
+      box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.08);
+    }
+
+    .brand-text {
+      font-size: 0.9rem;
+      color: var(--text-1);
+    }
+
+    .nav-links {
+      display: flex;
+      flex-wrap: wrap;
+      justify-content: flex-end;
+      gap: var(--space-3);
+      list-style: none;
+      padding: 0;
+      margin: 0;
+      color: var(--text-2);
+      font-size: 0.9rem;
+    }
+
+    .nav-links a {
+      text-decoration: none;
+    }
+
+    .hero {
+      position: relative;
+      display: grid;
+      grid-template-columns: minmax(0, 1.15fr) minmax(300px, 0.85fr);
+      gap: var(--space-6);
+      align-items: start;
+      z-index: 1;
+    }
+
+    .eyebrow {
+      display: inline-flex;
+      gap: var(--space-2);
+      align-items: center;
+      padding: 0.45rem 0.7rem;
+      border-radius: 999px;
+      color: var(--text-1);
+      background: rgba(255, 255, 255, 0.04);
+      border: 1px solid rgba(255, 255, 255, 0.08);
+      margin-bottom: var(--space-4);
+      font-size: 0.75rem;
+    }
+
+    h1,
+    h2,
+    h3 {
+      line-height: 1.1;
+      margin: 0;
+    }
+
+    h1 {
+      font-family: var(--font-display);
+      font-size: clamp(2.8rem, 6vw, 4.8rem);
+      letter-spacing: -0.03em;
+      margin-bottom: var(--space-4);
+      max-width: 10ch;
+    }
+
+    .hero-copy p {
+      margin: 0;
+      max-width: 66ch;
+      font-size: 1.08rem;
+      color: var(--text-1);
+    }
+
+    .hero-summary {
+      display: grid;
+      gap: var(--space-4);
+      padding: var(--space-5);
+      border-radius: var(--radius-xl);
+      background:
+        linear-gradient(180deg, rgba(34, 34, 38, 0.9), rgba(20, 20, 22, 0.96)),
+        var(--surface-1);
+      border: 1px solid rgba(255, 255, 255, 0.08);
+      box-shadow: var(--shadow-soft);
+    }
+
+    .notice,
+    .recommendation-hero,
+    .summary-list,
+    .card,
+    .matrix-wrap,
+    .analysis-grid article,
+    .borrow-grid article,
+    .footer-note {
+      border-radius: var(--radius-lg);
+      border: 1px solid var(--border);
+      background: linear-gradient(180deg, rgba(34, 34, 38, 0.82), rgba(20, 20, 22, 0.94));
+      box-shadow: var(--shadow-card);
+    }
+
+    .notice {
+      padding: var(--space-4);
+      background: linear-gradient(180deg, rgba(160, 104, 64, 0.18), rgba(34, 34, 38, 0.95));
+      border-color: rgba(212, 149, 106, 0.22);
+    }
+
+    .notice strong,
+    .recommendation-hero strong {
+      color: var(--text-0);
+    }
+
+    .recommendation-hero {
+      padding: var(--space-5);
+      background:
+        radial-gradient(circle at top right, rgba(212, 149, 106, 0.16), transparent 40%),
+        linear-gradient(180deg, rgba(34, 34, 38, 0.9), rgba(20, 20, 22, 0.96));
+      border-color: rgba(212, 149, 106, 0.26);
+    }
+
+    .recommendation-hero h2 {
+      font-family: var(--font-display);
+      font-size: clamp(1.8rem, 3vw, 2.5rem);
+      margin-bottom: var(--space-3);
+    }
+
+    .recommendation-tag {
+      display: inline-flex;
+      align-items: center;
+      gap: var(--space-2);
+      margin-bottom: var(--space-3);
+      padding: 0.38rem 0.68rem;
+      border-radius: 999px;
+      background: var(--accent-glow);
+      border: 1px solid rgba(212, 149, 106, 0.22);
+      color: var(--accent);
+      font-size: 0.8rem;
+    }
+
+    .summary-list {
+      padding: var(--space-4);
+    }
+
+    .summary-list ul {
+      margin: 0;
+      padding-left: 1.1rem;
+      color: var(--text-1);
+    }
+
+    .summary-list li + li {
+      margin-top: var(--space-2);
+    }
+
+    main {
+      padding-bottom: var(--space-7);
+    }
+
+    section {
+      padding: 0 0 var(--space-7);
+    }
+
+    .section-head {
+      display: grid;
+      gap: var(--space-3);
+      margin-bottom: var(--space-5);
+      max-width: 72ch;
+    }
+
+    .section-label {
+      color: var(--accent);
+      font-size: 0.82rem;
+    }
+
+    h2 {
+      font-family: var(--font-display);
+      font-size: clamp(2rem, 4vw, 3rem);
+    }
+
+    .section-head p,
+    article p,
+    td,
+    li {
+      color: var(--text-1);
+    }
+
+    .principles {
+      display: grid;
+      grid-template-columns: repeat(4, minmax(0, 1fr));
+      gap: var(--space-4);
+    }
+
+    .card {
+      padding: var(--space-5);
+    }
+
+    .card h3 {
+      font-family: var(--font-display);
+      font-size: 1.5rem;
+      margin-bottom: var(--space-3);
+    }
+
+    .kicker {
+      color: var(--accent);
+      font-size: 0.78rem;
+      margin-bottom: var(--space-2);
+    }
+
+    .option-grid {
+      display: grid;
+      grid-template-columns: repeat(3, minmax(0, 1fr));
+      gap: var(--space-4);
+      margin-bottom: var(--space-6);
+    }
+
+    .option-card {
+      position: relative;
+      overflow: hidden;
+    }
+
+    .option-card::before {
+      content: "";
+      position: absolute;
+      inset: 0 auto 0 0;
+      width: 4px;
+      background: rgba(255, 255, 255, 0.08);
+    }
+
+    .option-card.recommended {
+      border-color: rgba(212, 149, 106, 0.26);
+      background:
+        radial-gradient(circle at top right, rgba(212, 149, 106, 0.14), transparent 38%),
+        linear-gradient(180deg, rgba(34, 34, 38, 0.88), rgba(20, 20, 22, 0.96));
+    }
+
+    .option-card.recommended::before {
+      background: linear-gradient(180deg, var(--accent), rgba(212, 149, 106, 0.24));
+    }
+
+    .mock-stage {
+      margin: var(--space-5) 0;
+      padding: 1.1rem;
+      border-radius: calc(var(--radius-lg) - 0.2rem);
+      background:
+        radial-gradient(circle at top, rgba(212, 149, 106, 0.08), transparent 42%),
+        linear-gradient(180deg, rgba(255, 255, 255, 0.03), rgba(255, 255, 255, 0.01));
+      border: 1px solid rgba(255, 255, 255, 0.05);
+    }
+
+    .mock-caption {
+      display: flex;
+      justify-content: space-between;
+      gap: var(--space-3);
+      margin-bottom: var(--space-3);
+      color: var(--text-2);
+      font-size: 0.82rem;
+    }
+
+    .mock-caption strong {
+      color: var(--text-0);
+    }
+
+    .sidebar-mock {
+      --mock-width: 88%;
+      --mock-radius: 1.2rem;
+      --mock-gap: 0.9rem;
+      --mock-padding: 0.95rem;
+      --mock-border: rgba(255, 255, 255, 0.08);
+      --mock-glow: rgba(212, 149, 106, 0.12);
+      --mock-row-radius: 0.9rem;
+      --mock-section-gap: 0.85rem;
+      --mock-footer-bg: rgba(255, 255, 255, 0.03);
+      position: relative;
+      width: var(--mock-width);
+      margin: 0 auto;
+      padding: var(--mock-padding);
+      border-radius: var(--mock-radius);
+      background: linear-gradient(180deg, rgba(26, 26, 30, 0.96), rgba(14, 14, 16, 0.98));
+      border: 1px solid var(--mock-border);
+      box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.05), 0 22px 34px rgba(0, 0, 0, 0.34), 0 0 0 1px rgba(255, 255, 255, 0.01);
+      overflow: hidden;
+    }
+
+    .sidebar-mock::before {
+      content: "";
+      position: absolute;
+      inset: 0;
+      background:
+        radial-gradient(circle at top, var(--mock-glow), transparent 38%),
+        linear-gradient(180deg, rgba(255, 255, 255, 0.03), transparent 12%);
+      pointer-events: none;
+    }
+
+    .sidebar-mock > * {
+      position: relative;
+      z-index: 1;
+    }
+
+    .mock-topbar,
+    .mock-footer,
+    .mock-row,
+    .mock-output-row,
+    .mock-banner,
+    .mock-control-block,
+    .mock-support-row {
+      display: flex;
+      align-items: center;
+    }
+
+    .mock-topbar {
+      justify-content: space-between;
+      gap: var(--space-3);
+      margin-bottom: var(--mock-gap);
+      color: var(--text-2);
+      font-size: 0.72rem;
+    }
+
+    .mock-topbar strong {
+      color: var(--text-1);
+    }
+
+    .mock-width-tag,
+    .mock-status,
+    .mock-chip,
+    .mock-layer-badge,
+    .mock-pill,
+    .mock-queue {
+      display: inline-flex;
+      align-items: center;
+      gap: 0.25rem;
+      padding: 0.22rem 0.48rem;
+      border-radius: 999px;
+      border: 1px solid rgba(255, 255, 255, 0.08);
+      background: rgba(255, 255, 255, 0.04);
+      font-family: var(--font-mono);
+      font-size: 0.64rem;
+      letter-spacing: 0.08em;
+      text-transform: uppercase;
+      color: var(--text-2);
+    }
+
+    .mock-status,
+    .mock-pill.active,
+    .mock-layer-badge.active,
+    .mock-chip.active {
+      color: var(--accent);
+      background: var(--accent-glow);
+      border-color: rgba(212, 149, 106, 0.24);
+    }
+
+    .mock-banner {
+      justify-content: space-between;
+      gap: var(--space-3);
+      padding: 0.55rem 0.7rem;
+      margin-bottom: var(--mock-gap);
+      border-radius: 0.9rem;
+      background: linear-gradient(180deg, rgba(212, 149, 106, 0.12), rgba(212, 149, 106, 0.04));
+      border: 1px solid rgba(212, 149, 106, 0.18);
+    }
+
+    .mock-banner-title {
+      display: flex;
+      align-items: center;
+      gap: 0.45rem;
+      min-width: 0;
+      color: var(--text-1);
+      font-size: 0.76rem;
+    }
+
+    .mock-banner-dot,
+    .mock-row-icon,
+    .mock-queue-dot {
+      flex: none;
+      width: 0.62rem;
+      height: 0.62rem;
+      border-radius: 999px;
+      background: linear-gradient(180deg, rgba(212, 149, 106, 0.92), rgba(160, 104, 64, 0.7));
+      box-shadow: 0 0 0 0.18rem rgba(212, 149, 106, 0.14);
+    }
+
+    .mock-sections {
+      display: grid;
+      gap: var(--mock-section-gap);
+    }
+
+    .mock-section {
+      display: grid;
+      gap: 0.55rem;
+    }
+
+    .mock-section-card {
+      padding: 0.7rem;
+      border-radius: 1rem;
+      background: rgba(255, 255, 255, 0.03);
+      border: 1px solid rgba(255, 255, 255, 0.05);
+    }
+
+    .mock-section-heading {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: var(--space-2);
+      color: var(--text-3);
+      font-family: var(--font-mono);
+      font-size: 0.62rem;
+      letter-spacing: 0.12em;
+      text-transform: uppercase;
+    }
+
+    .mock-preset-grid {
+      display: grid;
+      grid-template-columns: repeat(3, minmax(0, 1fr));
+      gap: 0.35rem;
+    }
+
+    .mock-preset-card,
+    .mock-preset-save {
+      display: grid;
+      gap: 0.22rem;
+      padding: 0.32rem;
+      border-radius: 0.72rem;
+      background: rgba(255, 255, 255, 0.035);
+      border: 1px solid rgba(255, 255, 255, 0.06);
+      min-height: 4.1rem;
+    }
+
+    .mock-preset-card.active {
+      border-color: rgba(212, 149, 106, 0.28);
+      background: linear-gradient(180deg, rgba(212, 149, 106, 0.11), rgba(255, 255, 255, 0.035));
+      box-shadow: 0 0 0 0.12rem rgba(212, 149, 106, 0.1);
+    }
+
+    .mock-preset-thumb {
+      min-height: 2.55rem;
+      border-radius: 0.5rem;
+      background: linear-gradient(135deg, rgba(212, 149, 106, 0.18), rgba(255, 255, 255, 0.03)), linear-gradient(180deg, rgba(255, 255, 255, 0.05), transparent);
+    }
+
+    .mock-preset-label {
+      font-family: var(--font-mono);
+      font-size: 0.57rem;
+      color: var(--text-2);
+      text-transform: uppercase;
+      letter-spacing: 0.08em;
+    }
+
+    .mock-rows {
+      display: grid;
+      gap: 0.42rem;
+    }
+
+    .mock-row {
+      justify-content: space-between;
+      gap: 0.55rem;
+      padding: 0.54rem 0.62rem;
+      border-radius: var(--mock-row-radius);
+      border: 1px solid rgba(255, 255, 255, 0.05);
+      background: rgba(255, 255, 255, 0.025);
+      min-height: 2.4rem;
+    }
+
+    .mock-row.selected {
+      border-color: rgba(212, 149, 106, 0.24);
+      background: linear-gradient(180deg, rgba(212, 149, 106, 0.11), rgba(255, 255, 255, 0.03));
+    }
+
+    .mock-row.expanded {
+      align-items: stretch;
+      flex-direction: column;
+      gap: 0.6rem;
+      background: linear-gradient(180deg, rgba(255, 255, 255, 0.038), rgba(255, 255, 255, 0.02));
+    }
+
+    .mock-row-main {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 0.6rem;
+      min-width: 0;
+    }
+
+    .mock-row-leading,
+    .mock-row-trailing {
+      display: flex;
+      align-items: center;
+      gap: 0.42rem;
+      min-width: 0;
+    }
+
+    .mock-row-title {
+      color: var(--text-1);
+      font-size: 0.76rem;
+      white-space: nowrap;
+    }
+
+    .mock-row-state {
+      width: 0.78rem;
+      height: 0.78rem;
+      border-radius: 999px;
+      border: 1px solid rgba(255, 255, 255, 0.12);
+      background: rgba(255, 255, 255, 0.04);
+    }
+
+    .mock-row-state.on {
+      background: rgba(212, 149, 106, 0.3);
+      border-color: rgba(212, 149, 106, 0.3);
+    }
+
+    .mock-control-block {
+      align-items: stretch;
+      flex-direction: column;
+      gap: 0.45rem;
+      padding-left: 1.1rem;
+    }
+
+    .mock-output-row,
+    .mock-support-row {
+      justify-content: space-between;
+      gap: 0.5rem;
+      padding: 0.42rem 0;
+      color: var(--text-2);
+      font-size: 0.72rem;
+    }
+
+    .mock-output-row + .mock-output-row,
+    .mock-support-row + .mock-support-row {
+      border-top: 1px solid rgba(255, 255, 255, 0.05);
+    }
+
+    .mock-control {
+      height: 1.25rem;
+      border-radius: 999px;
+      background: rgba(255, 255, 255, 0.05);
+      border: 1px solid rgba(255, 255, 255, 0.07);
+      flex: none;
+    }
+
+    .mock-control.short {
+      width: 4.4rem;
+    }
+
+    .mock-control.medium {
+      width: 6.3rem;
+    }
+
+    .mock-control.long {
+      width: 8rem;
+    }
+
+    .mock-slider {
+      position: relative;
+      width: 7rem;
+      height: 0.42rem;
+      border-radius: 999px;
+      background: rgba(255, 255, 255, 0.08);
+      overflow: hidden;
+      flex: none;
+    }
+
+    .mock-slider::after {
+      content: "";
+      position: absolute;
+      inset: 0 auto 0 0;
+      width: 58%;
+      border-radius: inherit;
+      background: linear-gradient(90deg, rgba(212, 149, 106, 0.95), rgba(160, 104, 64, 0.78));
+    }
+
+    .mock-toggle {
+      position: relative;
+      width: 2rem;
+      height: 1.05rem;
+      border-radius: 999px;
+      background: rgba(255, 255, 255, 0.12);
+      flex: none;
+    }
+
+    .mock-toggle::after {
+      content: "";
+      position: absolute;
+      top: 0.15rem;
+      left: 0.16rem;
+      width: 0.72rem;
+      height: 0.72rem;
+      border-radius: 999px;
+      background: var(--text-0);
+    }
+
+    .mock-toggle.on {
+      background: rgba(212, 149, 106, 0.38);
+    }
+
+    .mock-toggle.on::after {
+      left: 1.1rem;
+      background: var(--accent);
+    }
+
+    .mock-segmented {
+      display: inline-flex;
+      padding: 0.15rem;
+      border-radius: 999px;
+      border: 1px solid rgba(255, 255, 255, 0.06);
+      background: rgba(255, 255, 255, 0.04);
+      gap: 0.18rem;
+    }
+
+    .mock-pill {
+      padding: 0.22rem 0.42rem;
+    }
+
+    .mock-footer {
+      justify-content: space-between;
+      gap: var(--space-3);
+      margin-top: var(--mock-gap);
+      padding-top: 0.75rem;
+      border-top: 1px solid rgba(255, 255, 255, 0.07);
+    }
+
+    .mock-footer-actions {
+      display: flex;
+      align-items: center;
+      gap: 0.45rem;
+      flex-wrap: wrap;
+    }
+
+    .mock-button {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      min-width: 3.9rem;
+      padding: 0.42rem 0.66rem;
+      border-radius: 0.72rem;
+      border: 1px solid rgba(255, 255, 255, 0.08);
+      background: var(--mock-footer-bg);
+      color: var(--text-1);
+      font-size: 0.68rem;
+      font-weight: 600;
+    }
+
+    .mock-button.primary {
+      color: var(--text-0);
+      background: linear-gradient(180deg, rgba(160, 104, 64, 0.92), rgba(132, 83, 49, 0.94));
+      border-color: rgba(212, 149, 106, 0.34);
+    }
+
+    .mock-queue {
+      border-style: dashed;
+    }
+
+    .mock-queue-dot {
+      width: 0.48rem;
+      height: 0.48rem;
+      box-shadow: none;
+    }
+
+    .sidebar-mock.conservative {
+      --mock-width: 79%;
+      --mock-radius: 0.95rem;
+      --mock-gap: 0.72rem;
+      --mock-padding: 0.78rem;
+      --mock-row-radius: 0.68rem;
+      --mock-section-gap: 0.68rem;
+      --mock-border: rgba(255, 255, 255, 0.07);
+      --mock-glow: rgba(255, 255, 255, 0.04);
+      --mock-footer-bg: rgba(255, 255, 255, 0.025);
+    }
+
+    .sidebar-mock.conservative .mock-banner {
+      border-radius: 0.75rem;
+      background: rgba(255, 255, 255, 0.04);
+      border-color: rgba(255, 255, 255, 0.08);
+    }
+
+    .sidebar-mock.conservative .mock-section-card {
+      padding: 0.58rem;
+      border-radius: 0.82rem;
+      background: transparent;
+      border-color: rgba(255, 255, 255, 0.04);
+    }
+
+    .sidebar-mock.conservative .mock-row {
+      min-height: 2.05rem;
+      padding: 0.42rem 0.52rem;
+      background: rgba(255, 255, 255, 0.018);
+    }
+
+    .sidebar-mock.conservative .mock-footer {
+      margin-top: 0.72rem;
+      padding-top: 0.58rem;
+    }
+
+    .sidebar-mock.balanced {
+      --mock-width: 88%;
+      --mock-radius: 1.18rem;
+      --mock-gap: 0.95rem;
+      --mock-padding: 0.95rem;
+      --mock-row-radius: 0.9rem;
+      --mock-section-gap: 0.88rem;
+      --mock-border: rgba(212, 149, 106, 0.16);
+      --mock-glow: rgba(212, 149, 106, 0.12);
+      --mock-footer-bg: rgba(255, 255, 255, 0.04);
+    }
+
+    .sidebar-mock.balanced .mock-section-card {
+      background: rgba(255, 255, 255, 0.035);
+      border-color: rgba(255, 255, 255, 0.06);
+    }
+
+    .sidebar-mock.balanced .mock-row.selected {
+      box-shadow: 0 0 0 0.1rem rgba(212, 149, 106, 0.1);
+    }
+
+    .sidebar-mock.bold {
+      --mock-width: 96%;
+      --mock-radius: 1.45rem;
+      --mock-gap: 1.08rem;
+      --mock-padding: 1.05rem;
+      --mock-row-radius: 1rem;
+      --mock-section-gap: 1rem;
+      --mock-border: rgba(212, 149, 106, 0.2);
+      --mock-glow: rgba(212, 149, 106, 0.18);
+      --mock-footer-bg: rgba(212, 149, 106, 0.09);
+    }
+
+    .sidebar-mock.bold::after {
+      content: "";
+      position: absolute;
+      inset: 0 0 0 auto;
+      width: 0.32rem;
+      background: linear-gradient(180deg, rgba(212, 149, 106, 0.72), rgba(212, 149, 106, 0.08));
+    }
+
+    .sidebar-mock.bold .mock-topbar {
+      margin-bottom: 1rem;
+    }
+
+    .sidebar-mock.bold .mock-section-card {
+      padding: 0.8rem;
+      background: linear-gradient(180deg, rgba(255, 255, 255, 0.045), rgba(255, 255, 255, 0.022));
+      border-color: rgba(212, 149, 106, 0.12);
+      box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.04);
+    }
+
+    .sidebar-mock.bold .mock-row {
+      min-height: 2.65rem;
+      padding: 0.64rem 0.74rem;
+      background: rgba(255, 255, 255, 0.04);
+      border-color: rgba(212, 149, 106, 0.12);
+    }
+
+    .sidebar-mock.bold .mock-banner {
+      border-radius: 1rem;
+      background: linear-gradient(180deg, rgba(212, 149, 106, 0.18), rgba(212, 149, 106, 0.06));
+      box-shadow: 0 12px 24px rgba(0, 0, 0, 0.2);
+    }
+
+    .sidebar-mock.bold .mock-footer {
+      padding-top: 0.9rem;
+    }
+
+    .sidebar-mock.bold .mock-button {
+      min-width: 4.6rem;
+      padding-inline: 0.82rem;
+    }
+
+    .pill-row {
+      display: flex;
+      flex-wrap: wrap;
+      gap: var(--space-2);
+      margin-bottom: var(--space-4);
+    }
+
+    .pill {
+      display: inline-flex;
+      align-items: center;
+      gap: var(--space-2);
+      padding: 0.35rem 0.6rem;
+      border-radius: 999px;
+      font-size: 0.78rem;
+      color: var(--text-1);
+      background: rgba(255, 255, 255, 0.04);
+      border: 1px solid rgba(255, 255, 255, 0.08);
+    }
+
+    .pill.accent {
+      color: var(--accent);
+      background: var(--accent-glow);
+      border-color: rgba(212, 149, 106, 0.2);
+    }
+
+    .metrics {
+      display: grid;
+      grid-template-columns: repeat(3, minmax(0, 1fr));
+      gap: var(--space-3);
+      margin: var(--space-4) 0;
+    }
+
+    .metric {
+      padding: var(--space-3);
+      border-radius: var(--radius-md);
+      background: rgba(255, 255, 255, 0.03);
+      border: 1px solid rgba(255, 255, 255, 0.06);
+    }
+
+    .metric-value {
+      display: block;
+      font-family: var(--font-display);
+      font-size: 1.55rem;
+      margin-top: var(--space-1);
+      color: var(--text-0);
+    }
+
+    .metric-label {
+      font-size: 0.72rem;
+      color: var(--text-2);
+    }
+
+    .matrix-wrap {
+      overflow: hidden;
+    }
+
+    table {
+      width: 100%;
+      border-collapse: collapse;
+    }
+
+    th,
+    td {
+      padding: 1rem 1.1rem;
+      text-align: left;
+      vertical-align: top;
+      border-bottom: 1px solid rgba(255, 255, 255, 0.06);
+    }
+
+    th {
+      font-size: 0.76rem;
+      color: var(--text-2);
+      background: rgba(255, 255, 255, 0.02);
+    }
+
+    td strong {
+      color: var(--text-0);
+    }
+
+    .matrix-best {
+      color: var(--accent);
+      font-weight: 700;
+    }
+
+    .detail-grid,
+    .analysis-grid,
+    .borrow-grid,
+    .recommendation-grid,
+    .footer-grid {
+      display: grid;
+      gap: var(--space-4);
+    }
+
+    .detail-grid {
+      grid-template-columns: repeat(3, minmax(0, 1fr));
+    }
+
+    .analysis-grid {
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+    }
+
+    .borrow-grid,
+    .recommendation-grid,
+    .footer-grid {
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+    }
+
+    .detail-grid ul,
+    .recommendation-grid ul,
+    .borrow-grid ul {
+      margin: var(--space-3) 0 0;
+      padding-left: 1.1rem;
+    }
+
+    .analysis-grid article,
+    .borrow-grid article,
+    .footer-note {
+      padding: var(--space-5);
+    }
+
+    .analysis-grid h3,
+    .borrow-grid h3,
+    .footer-note h3 {
+      margin-bottom: var(--space-3);
+      font-size: 1.35rem;
+    }
+
+    .takeaway {
+      margin-top: var(--space-3);
+      padding-top: var(--space-3);
+      border-top: 1px solid rgba(255, 255, 255, 0.08);
+      color: var(--text-0);
+      font-weight: 600;
+    }
+
+    footer {
+      padding: 0 0 var(--space-7);
+    }
+
+    .footer-note {
+      min-height: 100%;
+    }
+
+    .small-note {
+      color: var(--text-2);
+      font-size: 0.9rem;
+    }
+
+    @media (max-width: 1100px) {
+      .hero,
+      .option-grid,
+      .principles,
+      .detail-grid,
+      .analysis-grid,
+      .borrow-grid,
+      .recommendation-grid,
+      .footer-grid {
+        grid-template-columns: 1fr;
+      }
+
+      .nav-inner {
+        align-items: flex-start;
+        flex-direction: column;
+      }
+    }
+
+    @media (max-width: 760px) {
+      .shell {
+        width: min(100% - 1rem, 1200px);
+      }
+
+      header {
+        padding-top: var(--space-4);
+      }
+
+      .card,
+      .recommendation-hero,
+      .analysis-grid article,
+      .borrow-grid article,
+      .footer-note,
+      .summary-list,
+      .notice {
+        padding: var(--space-4);
+      }
+
+      th,
+      td {
+        padding: 0.8rem;
+      }
+
+      .metrics {
+        grid-template-columns: 1fr;
+      }
+    }
+  </style>
+</head>
+<body>
+  <nav>
+    <div class="shell nav-inner">
+      <a class="brand" href="#top">
+        <span class="brand-badge">◫</span>
+        <span class="brand-text">sidebar harmony · implementation brief</span>
+      </a>
+      <ul class="nav-links">
+        <li><a href="#summary">Summary</a></li>
+        <li><a href="#principles">Principles</a></li>
+        <li><a href="#matrix">Matrix</a></li>
+        <li><a href="#options">Options</a></li>
+        <li><a href="#analysis">Analysis</a></li>
+        <li><a href="#recommendation">Recommendation</a></li>
+      </ul>
+    </div>
+  </nav>
+
+  <header id="top">
+    <div class="shell hero">
+      <div class="hero-copy">
+        <div class="eyebrow">desktop sidebar only · implementation-synced comparison</div>
+        <h1>Sidebar harmony for the macOS inspector.</h1>
+        <p>
+          This brief compares the three sidebar-only directions against the
+          shipped <strong>canvas + inspector</strong> desktop shell. It stays
+          grounded in the implemented sidebar system — <strong>PRESETS</strong>,
+          <strong>LAYERS</strong>, <strong>OUTPUT</strong>, <strong>EXPORT QUEUE</strong>,
+          <strong>Modified</strong>, <strong>Selected</strong>, <strong>All</strong>,
+          and the shared <strong>SidebarShell</strong>, section, row, and state
+          primitives that now define the inspector.
+        </p>
+      </div>
+
+      <div class="hero-summary">
+        <div id="summary" class="recommendation-hero">
+          <div class="recommendation-tag">Recommended above the fold · Balanced</div>
+          <h2>Choose <strong>Balanced</strong> as the shipped direction.</h2>
+          <p>
+            Balanced is the implemented sidebar system: a bounded
+            <strong>304 / 320 / 352</strong> width policy, one
+            <strong>SidebarShell</strong>, shared section rhythm, shared row and
+            control primitives, and aligned support surfaces such as
+            <strong>PresetPreviewGrid</strong>, <strong>PresetPreviewCard</strong>,
+            and <strong>ExportBar</strong>. It is more coherent than
+            Conservative and materially less risky than Bold.
+          </p>
+        </div>
+
+        <div class="summary-list">
+          <div class="mini-label">Summary</div>
+          <h3>Executive summary</h3>
+          <ul>
+            <li>Conservative reduces risk but leaves too much current drift intact.</li>
+            <li>Balanced unifies shell, row grammar, and state language without changing user outcomes.</li>
+            <li>Bold creates the strongest point of view, but asks the implementation to absorb more visual and structural churn than this phase needs.</li>
+          </ul>
+        </div>
+      </div>
+    </div>
+  </header>
+
+  <main class="shell">
+    <section id="principles">
+      <div class="section-head">
+        <div class="section-label">Design principles</div>
+        <h2>Principles</h2>
+        <p>
+          The comparison uses the same decision criteria throughout so the
+          recommendation is traceable instead of stylistic. The target mood stays
+          aligned with the project’s <strong>Darkroom Editorial</strong> brief:
+          dark surfaces, warm analog accents, precise data typography, and a
+          sidebar that reads as one instrument panel.
+        </p>
+      </div>
+
+      <div class="principles">
+        <article class="card">
+          <div class="kicker">01</div>
+          <h3>Clarity first</h3>
+          <p>
+            Keep PRESETS, LAYERS, OUTPUT, and the pinned ExportBar legible at a
+            glance, especially once dense editors expand.
+          </p>
+        </article>
+
+        <article class="card">
+          <div class="kicker">02</div>
+          <h3>One shell contract</h3>
+          <p>
+            Treat the inspector as a single SidebarShell rather than a stack of
+            unrelated panels with slightly different padding, borders, and row
+            behaviors.
+          </p>
+        </article>
+
+        <article class="card">
+          <div class="kicker">03</div>
+          <h3>State consistency</h3>
+          <p>
+            Hover, expanded, selected/current, disabled, dragging, drop target,
+            and focus should read as one family across preset cards, layer rows,
+            controls, and export surfaces.
+          </p>
+        </article>
+
+        <article class="card">
+          <div class="kicker">04</div>
+          <h3>Measured ambition</h3>
+          <p>
+            This phase is sidebar-only. The winning option should avoid drifting
+            into top bar, canvas, filmstrip, or iOS redesign territory.
+          </p>
+        </article>
+      </div>
+    </section>
+
+    <section id="matrix">
+      <div class="section-head">
+        <div class="section-label">At-a-glance comparison</div>
+        <h2>Comparison matrix</h2>
+        <p>
+          Criteria rows stay fixed while the three options change in emphasis.
+          The notes column explains why each decision matters to the current
+          desktop inspector rather than to a generic settings panel.
+        </p>
+      </div>
+
+      <div class="matrix-wrap">
+        <table>
+          <thead>
+            <tr>
+              <th scope="col">Criteria</th>
+              <th scope="col">Conservative</th>
+              <th scope="col">Balanced</th>
+              <th scope="col">Bold</th>
+              <th scope="col">Why it matters</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td><strong>SidebarShell</strong></td>
+              <td>Mostly current shell, cleaner spacing only</td>
+              <td><span class="matrix-best">Unified shell with explicit width band and footer rhythm</span></td>
+              <td>Shell becomes a stronger editorial panel with more visible framing</td>
+              <td>The current `InspectorView` already owns a distinct shell, so this is the fastest place to remove drift.</td>
+            </tr>
+            <tr>
+              <td><strong>Section hierarchy</strong></td>
+              <td>Retains today’s grouping with lighter cleanup</td>
+              <td><span class="matrix-best">Shared section cadence across PRESETS, LAYERS, and OUTPUT</span></td>
+              <td>Sections become more magazine-like and intentionally dramatic</td>
+              <td>Repeated section rhythm makes the sidebar feel authored instead of accumulated.</td>
+            </tr>
+            <tr>
+              <td><strong>Layer row behavior</strong></td>
+              <td>Minimal visual changes, existing row grammar remains mixed</td>
+              <td><span class="matrix-best">One row chassis for badges, controls, disclosure, and actions</span></td>
+              <td>Rows become highly stylized with heavier separation and more theatrical states</td>
+              <td>Layer rows are the densest, most frequently scanned surface in the whole sidebar.</td>
+            </tr>
+            <tr>
+              <td><strong>Implementation risk</strong></td>
+              <td><span class="matrix-best">Lowest</span></td>
+              <td>Low-to-moderate</td>
+              <td>Highest</td>
+              <td>The shipped result confirms why Balanced fit this phase: it raised coherence without asking the implementation to absorb Bold’s heavier visual churn.</td>
+            </tr>
+            <tr>
+              <td><strong>Distinctiveness</strong></td>
+              <td>Subtle improvement, least memorable</td>
+              <td><span class="matrix-best">Editorial but disciplined</span></td>
+              <td>Most memorable, most polarizing</td>
+              <td>The best direction should feel unmistakably Framer without becoming harder to maintain.</td>
+            </tr>
+            <tr>
+              <td><strong>Recommendation fit</strong></td>
+              <td>Good fallback</td>
+              <td><span class="matrix-best">Best overall fit</span></td>
+              <td>Strong future exploration candidate</td>
+              <td>Balanced best supports a sidebar-only modernization that still preserves current product terminology and outcomes.</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+    </section>
+
+    <section id="options">
+      <div class="section-head">
+        <div class="section-label">Option deep dives</div>
+        <h2>Conservative, Balanced, and Bold</h2>
+        <p>
+          Each option uses the same framing: what changes, what stays steady, and
+          who it serves best. The goal is to show why Balanced shipped while
+          still preserving the trade-offs that made Conservative and Bold useful
+          comparison points.
+        </p>
+      </div>
+
+      <div class="option-grid">
+        <article class="card option-card">
+          <div class="pill-row">
+            <span class="pill">Conservative</span>
+            <span class="pill">lowest risk</span>
+          </div>
+          <h3>Conservative</h3>
+          <p>
+            Conservative keeps the current inspector layout almost intact. It
+            tidies padding, evens out border weight, and lightly standardizes row
+            spacing, but avoids stronger changes to section rhythm or control
+            hierarchy.
+          </p>
+          <div class="mock-stage">
+            <div class="mock-caption">
+              <span><strong>Visual mock</strong> · subtle cleanup of the current inspector</span>
+              <span>narrower shell · quieter footer</span>
+            </div>
+            <div class="sidebar-mock conservative" aria-label="Conservative sidebar mock panel">
+              <div class="mock-topbar">
+                <strong>SidebarShell</strong>
+                <span class="mock-width-tag">304 pt feel</span>
+              </div>
+              <div class="mock-banner">
+                <div class="mock-banner-title"><span class="mock-banner-dot"></span>Portra 800</div>
+                <span class="mock-status">Modified</span>
+              </div>
+              <div class="mock-sections">
+                <section class="mock-section">
+                  <div class="mock-section-heading"><span>PRESETS</span><span>steady</span></div>
+                  <div class="mock-section-card">
+                    <div class="mock-preset-grid">
+                      <div class="mock-preset-card active"><div class="mock-preset-thumb"></div><div class="mock-preset-label">editorial</div></div>
+                      <div class="mock-preset-card"><div class="mock-preset-thumb"></div><div class="mock-preset-label">soft</div></div>
+                      <div class="mock-preset-save"><div class="mock-preset-thumb"></div><div class="mock-preset-label">save</div></div>
+                    </div>
+                  </div>
+                </section>
+                <section class="mock-section">
+                  <div class="mock-section-heading"><span>LAYERS</span><span>compact</span></div>
+                  <div class="mock-section-card">
+                    <div class="mock-rows">
+                      <div class="mock-row selected">
+                        <div class="mock-row-leading"><span class="mock-row-icon"></span><span class="mock-row-title">Border</span></div>
+                        <div class="mock-row-trailing"><span class="mock-layer-badge">5%</span><span class="mock-row-state on"></span></div>
+                      </div>
+                      <div class="mock-row">
+                        <div class="mock-row-leading"><span class="mock-row-icon"></span><span class="mock-row-title">Caption</span></div>
+                        <div class="mock-row-trailing"><span class="mock-layer-badge">Template</span><span class="mock-row-state"></span></div>
+                      </div>
+                      <div class="mock-row">
+                        <div class="mock-row-leading"><span class="mock-row-icon"></span><span class="mock-row-title">Overlay</span></div>
+                        <div class="mock-row-trailing"><span class="mock-layer-badge">Dust</span><span class="mock-row-state on"></span></div>
+                      </div>
+                    </div>
+                  </div>
+                </section>
+                <section class="mock-section">
+                  <div class="mock-section-heading"><span>OUTPUT</span><span>utility</span></div>
+                  <div class="mock-section-card">
+                    <div class="mock-output-row"><span>Format</span><div class="mock-segmented"><span class="mock-pill active">JPEG</span><span class="mock-pill">PNG</span></div></div>
+                    <div class="mock-output-row"><span>Quality</span><span class="mock-slider"></span></div>
+                    <div class="mock-output-row"><span>Strip EXIF</span><span class="mock-toggle"></span></div>
+                  </div>
+                </section>
+              </div>
+              <div class="mock-footer">
+                <div class="mock-footer-actions"><span class="mock-button">Selected</span><span class="mock-button primary">All</span></div>
+                <span class="mock-queue"><span class="mock-queue-dot"></span>Queue</span>
+              </div>
+            </div>
+          </div>
+          <div class="metrics">
+            <div class="metric">
+              <span class="metric-label">clarity</span>
+              <span class="metric-value">7/10</span>
+            </div>
+            <div class="metric">
+              <span class="metric-label">distinctiveness</span>
+              <span class="metric-value">4/10</span>
+            </div>
+            <div class="metric">
+              <span class="metric-label">risk</span>
+              <span class="metric-value">2/10</span>
+            </div>
+          </div>
+          <div class="detail-grid">
+            <div>
+              <div class="mini-label">Strengths</div>
+              <ul>
+                <li>Fastest path to cleaner defaults.</li>
+                <li>Least likely to surprise current users.</li>
+                <li>Easy to explain as a polish pass.</li>
+              </ul>
+            </div>
+            <div>
+              <div class="mini-label">Weaknesses</div>
+              <ul>
+                <li>Leaves too many one-off control rhythms intact.</li>
+                <li>Doesn’t fully solve shell fragmentation.</li>
+                <li>Can read as “slightly improved current state.”</li>
+              </ul>
+            </div>
+            <div>
+              <div class="mini-label">Best for</div>
+              <ul>
+                <li>Emergency cleanup with minimal appetite for structural change.</li>
+              </ul>
+            </div>
+          </div>
+        </article>
+
+        <article class="card option-card recommended">
+          <div class="pill-row">
+            <span class="pill accent">Balanced</span>
+            <span class="pill accent">recommended</span>
+          </div>
+          <h3>Balanced</h3>
+          <p>
+            Balanced gives the sidebar one consistent shell, section rhythm, and
+            control grammar while keeping the current mental model intact. The
+            user still sees PRESETS, LAYERS, OUTPUT, active preset state, and the
+            pinned ExportBar — they just read as one designed system.
+          </p>
+          <div class="mock-stage">
+            <div class="mock-caption">
+              <span><strong>Visual mock</strong> · unified shell, rows, controls, and footer</span>
+              <span>recommended · clearest overall contract</span>
+            </div>
+            <div class="sidebar-mock balanced" aria-label="Balanced sidebar mock panel">
+              <div class="mock-topbar">
+                <strong>SidebarShell</strong>
+                <span class="mock-width-tag">320 pt target</span>
+              </div>
+              <div class="mock-banner">
+                <div class="mock-banner-title"><span class="mock-banner-dot"></span>Portra 800</div>
+                <span class="mock-status">Modified</span>
+              </div>
+              <div class="mock-sections">
+                <section class="mock-section">
+                  <div class="mock-section-heading"><span>PRESETS</span><span>visual grid</span></div>
+                  <div class="mock-section-card">
+                    <div class="mock-preset-grid">
+                      <div class="mock-preset-card active"><div class="mock-preset-thumb"></div><div class="mock-preset-label">editorial</div></div>
+                      <div class="mock-preset-card"><div class="mock-preset-thumb"></div><div class="mock-preset-label">neutral</div></div>
+                      <div class="mock-preset-card"><div class="mock-preset-thumb"></div><div class="mock-preset-label">silver</div></div>
+                    </div>
+                    <div class="mock-support-row"><span>Import</span><span>Show in Finder</span></div>
+                  </div>
+                </section>
+                <section class="mock-section">
+                  <div class="mock-section-heading"><span>LAYERS</span><span>one row chassis</span></div>
+                  <div class="mock-section-card">
+                    <div class="mock-rows">
+                      <div class="mock-row selected">
+                        <div class="mock-row-leading"><span class="mock-row-icon"></span><span class="mock-row-title">Border</span></div>
+                        <div class="mock-row-trailing"><span class="mock-layer-badge active">5%</span><span class="mock-row-state on"></span></div>
+                      </div>
+                      <div class="mock-row expanded">
+                        <div class="mock-row-main">
+                          <div class="mock-row-leading"><span class="mock-row-icon"></span><span class="mock-row-title">Caption</span></div>
+                          <div class="mock-row-trailing"><span class="mock-layer-badge">Template</span><span class="mock-row-state on"></span></div>
+                        </div>
+                        <div class="mock-control-block">
+                          <div class="mock-output-row"><span>Position</span><div class="mock-segmented"><span class="mock-pill active">Bottom</span><span class="mock-pill">Top</span></div></div>
+                          <div class="mock-output-row"><span>Offset</span><span class="mock-slider"></span></div>
+                        </div>
+                      </div>
+                      <div class="mock-row">
+                        <div class="mock-row-leading"><span class="mock-row-icon"></span><span class="mock-row-title">Overlay</span></div>
+                        <div class="mock-row-trailing"><span class="mock-layer-badge">Frame</span><span class="mock-row-state"></span></div>
+                      </div>
+                    </div>
+                  </div>
+                </section>
+                <section class="mock-section">
+                  <div class="mock-section-heading"><span>OUTPUT</span><span>shared controls</span></div>
+                  <div class="mock-section-card">
+                    <div class="mock-output-row"><span>Format</span><div class="mock-segmented"><span class="mock-pill active">JPEG</span><span class="mock-pill">PNG</span></div></div>
+                    <div class="mock-output-row"><span>Quality</span><span class="mock-slider"></span></div>
+                    <div class="mock-output-row"><span>Strip EXIF</span><span class="mock-toggle on"></span></div>
+                  </div>
+                </section>
+              </div>
+              <div class="mock-footer">
+                <div class="mock-footer-actions"><span class="mock-button">Selected</span><span class="mock-button primary">All</span></div>
+                <span class="mock-queue"><span class="mock-queue-dot"></span>EXPORT QUEUE</span>
+              </div>
+            </div>
+          </div>
+          <div class="metrics">
+            <div class="metric">
+              <span class="metric-label">clarity</span>
+              <span class="metric-value">9/10</span>
+            </div>
+            <div class="metric">
+              <span class="metric-label">distinctiveness</span>
+              <span class="metric-value">8/10</span>
+            </div>
+            <div class="metric">
+              <span class="metric-label">risk</span>
+              <span class="metric-value">4/10</span>
+            </div>
+          </div>
+          <div class="detail-grid">
+            <div>
+              <div class="mini-label">Strengths</div>
+              <ul>
+                <li>Strongest clarity-to-risk ratio.</li>
+                <li>Creates a reusable SidebarShell narrative for implementation.</li>
+                <li>Lets dense editors benefit from the same spatial contract as simple controls.</li>
+              </ul>
+            </div>
+            <div>
+              <div class="mini-label">Weaknesses</div>
+              <ul>
+                <li>Requires more discipline than a pure cleanup pass.</li>
+                <li>Needs explicit state rules to avoid halfway adoption.</li>
+              </ul>
+            </div>
+            <div>
+              <div class="mini-label">Best for</div>
+              <ul>
+                <li>The approved desktop sidebar modernization scope.</li>
+              </ul>
+            </div>
+          </div>
+        </article>
+
+        <article class="card option-card">
+          <div class="pill-row">
+            <span class="pill">Bold</span>
+            <span class="pill">highest contrast</span>
+          </div>
+          <h3>Bold</h3>
+          <p>
+            Bold pushes the inspector toward a more dramatic editorial panel with
+            stronger framing, heavier contrast jumps, and more visible hierarchy
+            between shell, rows, and action surfaces.
+          </p>
+          <div class="mock-stage">
+            <div class="mock-caption">
+              <span><strong>Visual mock</strong> · more theatrical edge treatment and spacing</span>
+              <span>wider shell · louder footer emphasis</span>
+            </div>
+            <div class="sidebar-mock bold" aria-label="Bold sidebar mock panel">
+              <div class="mock-topbar">
+                <strong>SidebarShell</strong>
+                <span class="mock-width-tag">352 pt feel</span>
+              </div>
+              <div class="mock-banner">
+                <div class="mock-banner-title"><span class="mock-banner-dot"></span>Darkroom Editorial</div>
+                <span class="mock-status">current</span>
+              </div>
+              <div class="mock-sections">
+                <section class="mock-section">
+                  <div class="mock-section-heading"><span>PRESETS</span><span>gallery-first</span></div>
+                  <div class="mock-section-card">
+                    <div class="mock-preset-grid">
+                      <div class="mock-preset-card active"><div class="mock-preset-thumb"></div><div class="mock-preset-label">editorial</div></div>
+                      <div class="mock-preset-card"><div class="mock-preset-thumb"></div><div class="mock-preset-label">chrome</div></div>
+                      <div class="mock-preset-card"><div class="mock-preset-thumb"></div><div class="mock-preset-label">archive</div></div>
+                    </div>
+                  </div>
+                </section>
+                <section class="mock-section">
+                  <div class="mock-section-heading"><span>LAYERS</span><span>high contrast</span></div>
+                  <div class="mock-section-card">
+                    <div class="mock-rows">
+                      <div class="mock-row selected">
+                        <div class="mock-row-leading"><span class="mock-row-icon"></span><span class="mock-row-title">Canvas</span></div>
+                        <div class="mock-row-trailing"><span class="mock-layer-badge active">A4</span><span class="mock-row-state on"></span></div>
+                      </div>
+                      <div class="mock-row expanded">
+                        <div class="mock-row-main">
+                          <div class="mock-row-leading"><span class="mock-row-icon"></span><span class="mock-row-title">Caption</span></div>
+                          <div class="mock-row-trailing"><span class="mock-layer-badge active">Selected</span><span class="mock-row-state on"></span></div>
+                        </div>
+                        <div class="mock-control-block">
+                          <div class="mock-output-row"><span>Token bar</span><span class="mock-chip active">Mon ’26</span></div>
+                          <div class="mock-output-row"><span>Color</span><span class="mock-control medium"></span></div>
+                          <div class="mock-output-row"><span>Intensity</span><span class="mock-slider"></span></div>
+                        </div>
+                      </div>
+                      <div class="mock-row">
+                        <div class="mock-row-leading"><span class="mock-row-icon"></span><span class="mock-row-title">Dither</span></div>
+                        <div class="mock-row-trailing"><span class="mock-layer-badge">Stucki</span><span class="mock-row-state"></span></div>
+                      </div>
+                    </div>
+                  </div>
+                </section>
+                <section class="mock-section">
+                  <div class="mock-section-heading"><span>OUTPUT</span><span>editorial emphasis</span></div>
+                  <div class="mock-section-card">
+                    <div class="mock-output-row"><span>Format</span><div class="mock-segmented"><span class="mock-pill active">JPEG</span><span class="mock-pill">PNG</span></div></div>
+                    <div class="mock-output-row"><span>Quality</span><span class="mock-slider"></span></div>
+                    <div class="mock-output-row"><span>Queue preview</span><span class="mock-chip active">running</span></div>
+                  </div>
+                </section>
+              </div>
+              <div class="mock-footer">
+                <div class="mock-footer-actions"><span class="mock-button">Selected</span><span class="mock-button primary">All</span></div>
+                <span class="mock-queue"><span class="mock-queue-dot"></span>EXPORT QUEUE</span>
+              </div>
+            </div>
+          </div>
+          <div class="metrics">
+            <div class="metric">
+              <span class="metric-label">clarity</span>
+              <span class="metric-value">8/10</span>
+            </div>
+            <div class="metric">
+              <span class="metric-label">distinctiveness</span>
+              <span class="metric-value">10/10</span>
+            </div>
+            <div class="metric">
+              <span class="metric-label">risk</span>
+              <span class="metric-value">7/10</span>
+            </div>
+          </div>
+          <div class="detail-grid">
+            <div>
+              <div class="mini-label">Strengths</div>
+              <ul>
+                <li>Most memorable visual identity.</li>
+                <li>Could make the inspector feel premium and unmistakable.</li>
+                <li>Offers the biggest contrast against today’s drift.</li>
+              </ul>
+            </div>
+            <div>
+              <div class="mini-label">Weaknesses</div>
+              <ul>
+                <li>Higher chance of overfitting the brief instead of the product.</li>
+                <li>More likely to pull adjacent surfaces into scope.</li>
+                <li>Higher implementation and review cost.</li>
+              </ul>
+            </div>
+            <div>
+              <div class="mini-label">Best for</div>
+              <ul>
+                <li>A later exploratory branch once the shared sidebar primitives exist.</li>
+              </ul>
+            </div>
+          </div>
+        </article>
+      </div>
+    </section>
+
+    <section id="analysis">
+      <div class="section-head">
+        <div class="section-label">Element-by-element analysis</div>
+        <h2>What changes where</h2>
+        <p>
+          This section stays anchored to the current desktop code map and the
+          sidebar primitives now present in the app. It focuses only on the
+          inspector stack and its related sidebar surfaces.
+        </p>
+      </div>
+
+      <div class="analysis-grid">
+        <article>
+          <div class="kicker">Shell</div>
+          <h3>SidebarShell</h3>
+          <p>
+            `InspectorView` now renders through `SidebarShell`, and
+            `SidebarLayoutPolicy` defines the approved 304 / 320 / 352 width
+            band. Balanced turned the inspector into one bounded adaptive panel
+            with explicit outer inset, row spacing, and footer anchoring instead
+            of a fixed-width column with local exceptions.
+          </p>
+          <p class="takeaway">Takeaway: make the shell explicit, not accidental.</p>
+        </article>
+
+        <article>
+          <div class="kicker">Sections</div>
+          <h3>PRESETS, LAYERS, OUTPUT</h3>
+          <p>
+            Conservative leaves section cadence mostly untouched. Balanced gives
+            all three sections the same header rhythm, spacing, and body framing,
+            while still preserving current product language. Bold would separate
+            them more aggressively and introduce heavier visual chapter breaks.
+          </p>
+          <p class="takeaway">Takeaway: shared section cadence is low drama, high value.</p>
+        </article>
+
+        <article>
+          <div class="kicker">Preset surfaces</div>
+          <h3>ActivePresetBanner + PresetPreviewGrid</h3>
+          <p>
+            The `Modified` state, preset apply/update actions, and visual card
+            language are now aligned through `PresetPreviewGrid`,
+            `PresetPreviewCard`, and `SidebarStateStyle`. Balanced keeps presets
+            leading the sidebar while making their banner, cards, and support
+            actions feel like part of the same state family as the rest of the
+            inspector.
+          </p>
+          <p class="takeaway">Takeaway: presets should lead the sidebar, not visually detach from it.</p>
+        </article>
+
+        <article>
+          <div class="kicker">Row grammar</div>
+          <h3>Layer rows and control rows</h3>
+          <p>
+            Layer rows, `FormatPicker`, `StyledSlider`, `StyledToggle`, and the
+            simpler control views now share the same grammar through
+            `LayerPanelRow`, `SidebarControlRow`, and
+            `SidebarCompoundControlBlock`. Balanced is the option that made one
+            row chassis real: one label/value rhythm, one disclosure rhythm, one
+            badge language, and one family of hover, expanded, focus, dragging,
+            and drop-target states.
+          </p>
+          <p class="takeaway">Takeaway: row consistency is the real heart of sidebar harmony.</p>
+        </article>
+
+        <article>
+          <div class="kicker">Dense editors</div>
+          <h3>Canvas, Overlay, Caption, Dither, LUT, Shader, GPU Effect</h3>
+          <p>
+            Dense editors are where a purely conservative pass starts to break
+            down. Balanced gives them a stronger compound-control block structure
+            without pretending they need the same density as a simple toggle row.
+            Bold risks styling density so strongly that it becomes visually louder
+            than the user’s actual photo work.
+          </p>
+          <p class="takeaway">Takeaway: dense blocks need structure, not spectacle.</p>
+        </article>
+
+        <article>
+          <div class="kicker">Footer actions</div>
+          <h3>ExportBar and queue states</h3>
+          <p>
+            Balanced preserves the existing `Selected`, `All`, and `EXPORT QUEUE`
+            vocabulary, and `ExportBar` now reads as part of the same sidebar
+            system: clearer button hierarchy, shared spacing, and queue states
+            that belong to the same state matrix instead of a detached status
+            strip.
+          </p>
+          <p class="takeaway">Takeaway: the footer should close the panel with confidence.</p>
+        </article>
+      </div>
+    </section>
+
+    <section id="recommendation">
+      <div class="section-head">
+        <div class="section-label">Recommendation</div>
+        <h2>Recommendation</h2>
+        <p>
+          Balanced remains the right recommendation because the shipped result
+          improved the experience in visible ways, delivered the shared sidebar
+          narrative the brief argued for, and still respected the sidebar-only
+          scope boundary.
+        </p>
+      </div>
+
+      <div class="recommendation-grid">
+        <article class="card">
+          <div class="kicker">Recommended direction</div>
+          <h3>Balanced</h3>
+          <p>
+            Balanced now defines the shipped sidebar system: one SidebarShell,
+            one section contract, one row grammar, and one state language shared
+            across preset cards, layer rows, dense editors, and ExportBar.
+          </p>
+        </article>
+
+        <article class="card">
+          <div class="kicker">Why this wins overall</div>
+          <h3>Clarity without drift</h3>
+          <ul>
+            <li>It keeps current labels and user outcomes intact.</li>
+              <li>It turned the brief into a concrete shipped sidebar system.</li>
+            <li>It improves coherence more meaningfully than Conservative.</li>
+            <li>It avoids the implementation appetite required by Bold.</li>
+          </ul>
+        </article>
+      </div>
+    </section>
+
+    <section id="borrowed">
+      <div class="section-head">
+        <div class="section-label">Borrowed ideas / trade-offs</div>
+        <h2>What to borrow, what to avoid</h2>
+        <p>
+          The recommendation still benefits from elements of the other two
+          directions. This keeps the winning option from reading like a total
+          rejection of the alternatives.
+        </p>
+      </div>
+
+      <div class="borrow-grid">
+        <article>
+          <div class="kicker">Borrow from Conservative</div>
+          <h3>Restraint</h3>
+          <ul>
+            <li>Keep button copy and current labels unchanged where they already work.</li>
+            <li>Preserve the current mental model of sections and pinned footer placement.</li>
+            <li>Favor subtle cleanup over decorative chrome when the photo workflow would not benefit.</li>
+          </ul>
+        </article>
+
+        <article>
+          <div class="kicker">Borrow from Bold</div>
+          <h3>Confidence</h3>
+          <ul>
+            <li>Use stronger hierarchy between shell, section headers, and active states.</li>
+            <li>Let warm analog accents do more than merely highlight active buttons.</li>
+            <li>Give the sidebar a memorable editorial point of view, but only within the approved desktop scope.</li>
+          </ul>
+        </article>
+
+        <article>
+          <div class="kicker">Trade-off to accept</div>
+          <h3>Balanced is not the cheapest pass</h3>
+          <p>
+            It asks the implementation to define shared sidebar primitives instead
+            of simply polishing local views. That is intentional: the extra effort
+            buys consistency and makes later migration work much more defensible.
+          </p>
+        </article>
+
+        <article>
+          <div class="kicker">Trade-off to avoid</div>
+          <h3>Do not oversell this document</h3>
+          <p>
+            This page is a comparison brief, not a claim that every future
+            sidebar refinement is settled forever. It should stay honest about
+            what shipped: Balanced is the implemented direction, while
+            Conservative and Bold remain useful reference points for restraint
+            and future exploration.
+          </p>
+        </article>
+      </div>
+    </section>
+  </main>
+
+  <footer class="shell">
+    <div class="footer-grid">
+      <article class="footer-note">
+        <div class="kicker">Scope guardrails</div>
+        <h3>Sidebar only</h3>
+        <p>
+          This brief intentionally stays out of the canvas, filmstrip, top bar,
+          and iOS redesign. It discusses only the desktop inspector shell and its
+          directly attached sidebar surfaces.
+        </p>
+      </article>
+
+      <article class="footer-note">
+        <div class="kicker">Implementation status</div>
+        <h3>Synced to shipped sidebar work</h3>
+        <p>
+          The comparison now reflects the shipped sidebar work: the 304 / 320 /
+          352 width band, shared sidebar primitives, aligned preset and export
+          surfaces, and the preserved product labels already visible in the app.
+        </p>
+        <p class="small-note">Balanced remains the implemented and recommended direction.</p>
+      </article>
+    </div>
+  </footer>
+</body>
+</html>
