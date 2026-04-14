@@ -109,13 +109,23 @@ public enum TextCellRenderer {
         }
 
         // Atlas textures are required by the shader. When the user supplies
-        // a custom character palette, generate atlases via Core Text at
-        // runtime (cached by Style); otherwise fall back to the baked PNGs
-        // in Bundle.module (FileManager + CGImageSourceCreate path).
+        // a custom character palette *or* a custom font, generate atlases via
+        // Core Text at runtime (cached by Style); otherwise fall back to the
+        // baked PNGs in Bundle.module (FileManager + CGImageSourceCreate path).
+        // Setting just a font keeps the classic palette but rasterises it in
+        // the chosen face — that's the entry point for the font picker UI.
         let edgesTexture: MTLTexture
         let fillTexture: MTLTexture
-        if let chars = asciiParams.characters, !chars.isEmpty {
-            let style = ASCIIAtlasGenerator.Style(fillCharacters: chars)
+        let hasCustomChars = (asciiParams.characters ?? "").isEmpty == false
+        let hasCustomFont  = (asciiParams.fontName   ?? "").isEmpty == false
+        let hiDetail       = asciiParams.highDetail
+        if hasCustomChars || hasCustomFont || hiDetail {
+            let charsForStyle = hasCustomChars ? asciiParams.characters! : " .:-=+*#%@"
+            let style = ASCIIAtlasGenerator.Style(
+                fillCharacters: charsForStyle,
+                fontName: hasCustomFont ? asciiParams.fontName : nil,
+                cellSize: hiDetail ? 16 : 8
+            )
             let atlases = try ASCIIAtlasGenerator.atlases(for: style, device: library.device)
             edgesTexture = atlases.edges
             fillTexture  = atlases.fill
@@ -286,7 +296,8 @@ public enum TextCellRenderer {
     private static func blockStyleRawValue(_ style: BlockStyle) -> Int {
         switch style {
         case .solid:    return 0
-        case .outlined: return 1
+        case .shaded:   return 1
+        case .outlined: return 2
         }
     }
 
@@ -337,7 +348,7 @@ public enum TextCellRenderer {
         u.gridType = UInt32(gridTypeRawValue(params.gridType))
         u.blockStyle = 0                                            // unused for dots
 
-        u.sizeMultiplier     = 1.0                                 // baseline; the shader multiplies by 0.4
+        u.sizeMultiplier     = Float(max(0.1, params.sizeMultiplier))
         u.intensity          = Float(clamp01(params.intensity))
         u.invert             = params.invert ? 1 : 0
         u.borderWidth        = Float(params.borderWidth)

@@ -253,18 +253,33 @@ static float4 blockifyVariant(
     }
     float3 bgColor = u.color.backgroundRGBA.rgb;
 
-    // Solid: cell filled with fg. Outlined: border rim in bg, inset rect in fg.
+    // blockStyle: 0 = solid (flat fill), 1 = shaded (radial falloff from the
+    // cell centre — grainrad reference formula), 2 = outlined (rim in bg,
+    // inset in fg). Shaded produces a subtle pill/bubble look at default
+    // params; intensity of the falloff tracks `borderWidth` so the slider
+    // still has a visible effect in that mode.
     float3 drawn;
-    if (u.blockStyle == 1u) {
-        // Inset proportional to borderWidth. `borderWidth` is 0..1-ish, scales
-        // similarly to the CPU path (`rect.width * borderWidth * 0.4`), with a
-        // 1-pixel floor so hairline borders always render visibly.
+    if (u.blockStyle == 2u) {
+        // Outlined. Inset proportional to borderWidth. `borderWidth` is
+        // 0..1-ish, scales similarly to the CPU path
+        // (`rect.width * borderWidth * 0.4`), with a 1-pixel floor so
+        // hairline borders always render visibly.
         float inset = max(1.0, baseSpacing * u.borderWidth * 0.4);
         bool  inInset = localPx.x >= inset
                      && localPx.x <= (baseSpacing - inset)
                      && localPx.y >= inset
                      && localPx.y <= (baseSpacing - inset);
         drawn = inInset ? fgColor : bgColor;
+    } else if (u.blockStyle == 1u) {
+        // Shaded. `localNorm` is the fragment's position inside the cell in
+        // [0,1]. The reference uses `0.9 + 0.1 * (1 - dist*1.4)` — we scale
+        // the darkening range by `borderWidth` so users can dial how strong
+        // the bubble effect is (0 = flat fg, 1 = full reference range).
+        float2 localNorm = localPx / baseSpacing;
+        float  dist      = length(localNorm - float2(0.5));
+        float  strength  = saturate(u.borderWidth);
+        float  shade     = 1.0 - strength * saturate(dist * 1.4);
+        drawn = fgColor * shade;
     } else {
         drawn = fgColor;
     }
@@ -417,33 +432,35 @@ static float4 asciiVariant(
         }
     }
 
-    // ---- LUT sample (atlases laid out in 8×8 glyph cells along x) ----------
-    // Atlases bind as `access::sample` (default), so we sample with a
-    // nearest-clamp sampler instead of using `.read()`. UV is computed from
-    // integer pixel coordinates plus a 0.5 centre offset, matching the
-    // `sample(x:y:)` lookup the CPU LUT uses.
+    // ---- LUT sample (atlases laid out in N×N glyph cells along x) ---------
+    // Atlas cell size is derived from the bound atlas height — baked PNGs are
+    // 80×8 (8 px per glyph), "High Detail" runtime-generated atlases are
+    // 160×16 (16 px per glyph, 4× glyph bytes). The shader reads whatever's
+    // bound; no uniform needed because the atlas layout contract is
+    // "height = cell size, width = cell size × 10 glyph columns".
     //
     // Uses the clipped cellW/cellH (not cellSize) so the glyph is stretched
     // across the actual cell extent on edge cells — matches CPU's
-    // `(localX * 8) / cellW` / `(localY * 8) / cellH` mapping
-    // (ShaderASCIIRenderer.swift:447-448).
-    int gx8 = clamp(int(floor(localPx.x * 8.0 / float(max(1, cellW)))), 0, 7);
-    int gy8 = clamp(int(floor(localPx.y * 8.0 / float(max(1, cellH)))), 0, 7);
+    // `(localX * atlasCell) / cellW` / `(localY * atlasCell) / cellH` mapping.
+    float2 fillAtlasSize  = float2(fillAtlas.get_width(),  fillAtlas.get_height());
+    float2 edgesAtlasSize = float2(edgesAtlas.get_width(), edgesAtlas.get_height());
+    int    atlasCell      = max(4, int(fillAtlasSize.y));
+
+    int gxN = clamp(int(floor(localPx.x * float(atlasCell) / float(max(1, cellW)))), 0, atlasCell - 1);
+    int gyN = clamp(int(floor(localPx.y * float(atlasCell) / float(max(1, cellH)))), 0, atlasCell - 1);
 
     float glyphValue;
     if (direction >= 0) {
-        // Edge glyph offset: (direction + 1) * 8
-        int xCoord = gx8 + (direction + 1) * 8;
-        float2 atlasSize = float2(edgesAtlas.get_width(), edgesAtlas.get_height());
-        float2 atlasUV   = (float2(float(xCoord), float(gy8)) + 0.5) / atlasSize;
-        glyphValue       = edgesAtlas.sample(texSampler, atlasUV).r;
+        // Edge glyph offset: (direction + 1) * atlasCell
+        int xCoord = gxN + (direction + 1) * atlasCell;
+        float2 atlasUV = (float2(float(xCoord), float(gyN)) + 0.5) / edgesAtlasSize;
+        glyphValue     = edgesAtlas.sample(texSampler, atlasUV).r;
     } else {
-        // Fill glyph: quantize luminance to 0..9, offset = level * 8
-        int level   = clamp(int(floor(adjustedLum * 9.999)), 0, 9);
-        int xCoord  = gx8 + level * 8;
-        float2 atlasSize = float2(fillAtlas.get_width(), fillAtlas.get_height());
-        float2 atlasUV   = (float2(float(xCoord), float(gy8)) + 0.5) / atlasSize;
-        glyphValue       = fillAtlas.sample(texSampler, atlasUV).r;
+        // Fill glyph: quantize luminance to 0..9, offset = level * atlasCell
+        int level  = clamp(int(floor(adjustedLum * 9.999)), 0, 9);
+        int xCoord = gxN + level * atlasCell;
+        float2 atlasUV = (float2(float(xCoord), float(gyN)) + 0.5) / fillAtlasSize;
+        glyphValue     = fillAtlas.sample(texSampler, atlasUV).r;
     }
 
     // ---- Foreground / background colour resolution -------------------------

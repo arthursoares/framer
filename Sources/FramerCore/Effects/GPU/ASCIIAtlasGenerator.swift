@@ -84,15 +84,23 @@ public enum ASCIIAtlasGenerator {
         public let edgeCharacters: String
         /// PostScript font name. `nil` picks the system monospaced font.
         public let fontName: String?
+        /// Atlas cell size in pixels. Baked PNGs are 8×8; custom fonts /
+        /// "High Detail" mode use 16×16 (4× more glyph detail, 4× atlas
+        /// bytes — still fits in any GPU's L1). The shader derives its
+        /// sampling math from `atlasSize.y` so both cell sizes render
+        /// correctly without a shader branch.
+        public let cellSize: Int
 
         public init(
             fillCharacters: String,
             edgeCharacters: String = "-|/\\",
-            fontName: String? = nil
+            fontName: String? = nil,
+            cellSize: Int = 8
         ) {
             self.fillCharacters = fillCharacters
             self.edgeCharacters = edgeCharacters
             self.fontName = fontName
+            self.cellSize = max(4, cellSize)
         }
     }
 
@@ -150,7 +158,8 @@ public enum ASCIIAtlasGenerator {
         let image = try renderAtlasCGImage(
             glyphs: glyphs,
             leadingBlankCells: leading,
-            fontName: style.fontName
+            fontName: style.fontName,
+            cellSize: style.cellSize
         )
         cacheLock.lock()
         cgImageCache[cacheKey] = image
@@ -176,10 +185,7 @@ public enum ASCIIAtlasGenerator {
 
     // MARK: - Rendering
 
-    private static let cellSize = 8
-    private static let totalCells = 10      // atlas width / cellSize
-    private static let atlasWidth = 80      // cellSize * totalCells
-    private static let atlasHeight = 8
+    private static let totalCells = 10      // atlas width (in cells)
 
     /// Distribute N user characters across the 10 luminance slots so any
     /// palette size produces a coherent ramp. Slot i (0..9, dim → bright)
@@ -226,9 +232,12 @@ public enum ASCIIAtlasGenerator {
     private static func renderAtlasCGImage(
         glyphs: [Character],
         leadingBlankCells: Int,
-        fontName: String?
+        fontName: String?,
+        cellSize: Int
     ) throws -> CGImage {
         let scale = superSampleScale
+        let atlasWidth  = cellSize * totalCells
+        let atlasHeight = cellSize
         let hiW = atlasWidth * scale
         let hiH = atlasHeight * scale
         let hiCellSize = cellSize * scale
@@ -270,10 +279,10 @@ public enum ASCIIAtlasGenerator {
             throw MetalEffectError.textureLoadFailed("ASCIIAtlasGenerator: hi-res CGImage conversion failed")
         }
 
-        // Downsample to the shader's expected 80×8 with high-quality
-        // interpolation. Each output pixel is the average of 16 hi-res
-        // pixels — produces clean anti-aliased glyphs at the small atlas
-        // size without the muddy blob you'd get from rendering 8pt directly.
+        // Downsample to the shader's expected cellSize×cellSize-per-cell
+        // atlas with high-quality interpolation. Each output pixel averages
+        // `scale²` hi-res pixels — produces clean anti-aliased glyphs
+        // without the muddy blob you'd get from rasterising 8pt directly.
         guard let loCtx = CGContext(
             data: nil,
             width: atlasWidth,

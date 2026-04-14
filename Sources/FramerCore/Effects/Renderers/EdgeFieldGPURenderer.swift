@@ -226,8 +226,13 @@ public enum EdgeFieldGPURenderer {
         uniforms.cellSize     = Float(max(2.0, params.cellSize))
         uniforms.edgeWidth    = Float(clamp01(params.edgeWidth))
         uniforms.randomize    = params.randomize ? 1 : 0
-        uniforms.fieldWeight  = Float(clamp01(params.fieldIntensity))
-        uniforms.edgeColor    = params.edgeColor.map { simdColor($0) } ?? SIMD4(1, 1, 1, 1)
+        uniforms.fieldWeight  = Float(max(0.1, params.fieldIntensity))
+        // Voronoi-specific default: unlike the other edgeField variants
+        // (which default to white because they draw bright-lines-on-dark),
+        // the mosaic look wants black walls on coloured cells. Users can
+        // still pick any colour in the UI — this is only the empty-state
+        // fallback.
+        uniforms.edgeColor    = params.edgeColor.map { simdColor($0) } ?? SIMD4(0, 0, 0, 1)
 
         let outputTexture = try MetalRenderPass.encode(
             pipeline: try library.pipeline(for: "edgeFieldFragment"),

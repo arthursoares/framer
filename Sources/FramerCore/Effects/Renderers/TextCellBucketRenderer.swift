@@ -97,7 +97,12 @@ public enum TextCellBucketRenderer {
                     }
                 case .blockify:
                     switch textCell.blockStyle {
-                    case .solid:
+                    case .solid, .shaded:
+                        // CPU fallback skips the radial falloff — that effect
+                        // only renders meaningfully at higher resolutions than
+                        // the per-cell CPU sampler produces. Users on CPU path
+                        // get a solid-fill block, which matches the legacy
+                        // behaviour for saved projects.
                         paintRect(rect, canvasWidth: width, pixels: &outputPixels, fill: fill)
                     case .outlined:
                         let borderFill = rgbComponents(from: textCell.borderColor?.cgColor ?? styled)

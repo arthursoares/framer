@@ -88,10 +88,11 @@ public enum DotGridType: String, Codable, Hashable, Sendable, CaseIterable {
 
 public enum BlockStyle: String, Codable, Hashable, Sendable, CaseIterable {
     case solid
+    case shaded
     case outlined
 }
 
-public struct TextCellParameters: Codable, Equatable, Sendable {
+public struct TextCellParameters: Equatable, Sendable {
     public var characterSet: GPUEffectCharacterSet
     public var variant: TextCellVariant
     public var speed: Double
@@ -110,6 +111,10 @@ public struct TextCellParameters: Codable, Equatable, Sendable {
     public var blockStyle: BlockStyle
     public var borderWidth: Double
     public var borderColor: CodableColor?
+    /// Dots: dot radius multiplier (shader formula
+    /// `radius = baseSpacing * 0.4 * sizeMultiplier * (0.2 + luma*0.8)`).
+    /// User-facing range [0.1, 2.0]; 1.0 matches the grainrad reference.
+    public var sizeMultiplier: Double
 
     public init(
         characterSet: GPUEffectCharacterSet = .classicASCII,
@@ -129,7 +134,8 @@ public struct TextCellParameters: Codable, Equatable, Sendable {
         invert: Bool = false,
         blockStyle: BlockStyle = .solid,
         borderWidth: Double = 0,
-        borderColor: CodableColor? = nil
+        borderColor: CodableColor? = nil,
+        sizeMultiplier: Double = 1
     ) {
         self.characterSet = characterSet
         self.variant = variant
@@ -149,6 +155,37 @@ public struct TextCellParameters: Codable, Equatable, Sendable {
         self.blockStyle = blockStyle
         self.borderWidth = borderWidth
         self.borderColor = borderColor
+        self.sizeMultiplier = sizeMultiplier
+    }
+}
+
+extension TextCellParameters: Codable {
+    // Every field decoded via `decodeIfPresent` with a default so saved
+    // projects from earlier builds (pre-sizeMultiplier, pre-blockStyle, etc.)
+    // round-trip cleanly instead of failing with `keyNotFound`.
+    public init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        self.init(
+            characterSet: try c.decodeIfPresent(GPUEffectCharacterSet.self, forKey: .characterSet) ?? .classicASCII,
+            variant: try c.decodeIfPresent(TextCellVariant.self, forKey: .variant) ?? .ascii,
+            speed: try c.decodeIfPresent(Double.self, forKey: .speed) ?? 0,
+            trailLength: try c.decodeIfPresent(Double.self, forKey: .trailLength) ?? 0,
+            direction: try c.decodeIfPresent(TextCellFlowDirection.self, forKey: .direction) ?? .down,
+            glow: try c.decodeIfPresent(Double.self, forKey: .glow) ?? 0,
+            backgroundOpacity: try c.decodeIfPresent(Double.self, forKey: .backgroundOpacity) ?? 0,
+            threshold: try c.decodeIfPresent(Double.self, forKey: .threshold) ?? 0.5,
+            rainColor: try c.decodeIfPresent(CodableColor.self, forKey: .rainColor),
+            intensity: try c.decodeIfPresent(Double.self, forKey: .intensity) ?? 1,
+            foreground: try c.decodeIfPresent(CodableColor.self, forKey: .foreground),
+            background: try c.decodeIfPresent(CodableColor.self, forKey: .background),
+            dotShape: try c.decodeIfPresent(DotShape.self, forKey: .dotShape) ?? .circle,
+            gridType: try c.decodeIfPresent(DotGridType.self, forKey: .gridType) ?? .square,
+            invert: try c.decodeIfPresent(Bool.self, forKey: .invert) ?? false,
+            blockStyle: try c.decodeIfPresent(BlockStyle.self, forKey: .blockStyle) ?? .solid,
+            borderWidth: try c.decodeIfPresent(Double.self, forKey: .borderWidth) ?? 0,
+            borderColor: try c.decodeIfPresent(CodableColor.self, forKey: .borderColor),
+            sizeMultiplier: try c.decodeIfPresent(Double.self, forKey: .sizeMultiplier) ?? 1
+        )
     }
 }
 

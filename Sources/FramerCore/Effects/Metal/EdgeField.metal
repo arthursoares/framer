@@ -130,25 +130,59 @@ static float4 contourVariant(
     float2 selfUV     = (float2(pixel) + 0.5) / resolution;
     float3 srcOrig    = applyCommonAdjustments(source.sample(texSampler, selfUV).rgb, u.common);
 
-    float lum       = saturate(luminance(srcOrig));
     int   levels    = max(2, int(u.contourLevels));
-    float quantized = floor(lum * float(levels)) / float(levels);
-    float band      = fract(quantized * max(0.01, u.fieldIntensity) * float(levels));
+    float fLevels   = float(levels);
+
+    // Per grainrad reference: sample quantized levels at ±lineThick pixels
+    // from the current fragment and emit a contour where the centre's
+    // quantized level differs from any neighbour. `thickness` now controls
+    // line width (was a dimensionless multiplier on lineStrength — that
+    // was the "weird parameter mapping" users were hitting: Thickness and
+    // Line Strength both ended up scaling the same luminance-band threshold,
+    // so moving either slider produced visually identical results until
+    // saturation). The `* 6.0` matches the UI slider range (0.05..1) to a
+    // useful pixel-offset spread (≈0.3..6 px); the 0.5 floor guarantees at
+    // least one texel of neighbour separation.
+    float lineThick  = max(0.5, u.thickness * 6.0);
+    float2 pixelStep = lineThick / resolution;
+
+    // `quant` must apply `invert` symmetrically to the centre *and* every
+    // neighbour; earlier code only inverted the centre, which broke detection
+    // because the centre's quantized level landed in a different space than
+    // its comparison neighbours. Helper closure-equivalent is inlined since
+    // MSL forbids capturing lambdas inside fragment functions.
+    float lumC = saturate(luminance(srcOrig));
+    if (u.invert == 1u) lumC = 1.0 - lumC;
+    float qC = floor(lumC * fLevels) / fLevels;
+
+    float3 sL = applyCommonAdjustments(source.sample(texSampler, selfUV - float2(pixelStep.x, 0)).rgb, u.common);
+    float3 sR = applyCommonAdjustments(source.sample(texSampler, selfUV + float2(pixelStep.x, 0)).rgb, u.common);
+    float3 sU = applyCommonAdjustments(source.sample(texSampler, selfUV - float2(0, pixelStep.y)).rgb, u.common);
+    float3 sD = applyCommonAdjustments(source.sample(texSampler, selfUV + float2(0, pixelStep.y)).rgb, u.common);
+
+    float lL = saturate(luminance(sL)); if (u.invert == 1u) lL = 1.0 - lL;
+    float lR = saturate(luminance(sR)); if (u.invert == 1u) lR = 1.0 - lR;
+    float lU = saturate(luminance(sU)); if (u.invert == 1u) lU = 1.0 - lU;
+    float lD = saturate(luminance(sD)); if (u.invert == 1u) lD = 1.0 - lD;
+
+    float qL = floor(lL * fLevels) / fLevels;
+    float qR = floor(lR * fLevels) / fLevels;
+    float qU = floor(lU * fLevels) / fLevels;
+    float qD = floor(lD * fLevels) / fLevels;
+
+    bool isContour = (qL != qC) || (qR != qC) || (qU != qC) || (qD != qC);
+    float strength = saturate(u.lineStrength);
 
     float value;
     if (u.contourFillMode == 1u) {
-        // filledBands
-        float lineWidth = max(0.04, u.lineStrength * u.thickness * 0.25);
-        bool  isLine    = band < lineWidth;
-        float bandValue = u.invert == 1u ? (1.0 - quantized) : quantized;
-        float lineValue = min(1.0, bandValue + u.lineStrength * 0.18);
-        value = isLine ? lineValue : bandValue;
+        // filledBands: each region at its quantized luminance, contour pixels
+        // boosted by `fieldIntensity * strength`.
+        float lineValue = saturate(qC + strength * max(0.01, u.fieldIntensity) * 0.3);
+        value = isContour ? lineValue : qC;
     } else {
-        // linesOnly
-        float lineWidth = max(0.04, u.lineStrength * u.thickness * 0.4);
-        bool  isLine    = band < lineWidth;
-        float dim       = (u.invert == 1u) ? (1.0 - lum) : lum * 0.15;
-        value = isLine ? 1.0 : dim;
+        // linesOnly: dim source, contour pixels at full `lineStrength`.
+        float dim = lumC * 0.15;
+        value = isContour ? strength : dim;
     }
     value = saturate(value);
 
@@ -230,57 +264,79 @@ static float4 voronoiVariant(
     float2 selfUV     = (float2(pixel) + 0.5) / resolution;
     float3 srcOrig    = applyCommonAdjustments(source.sample(texSampler, selfUV).rgb, u.common);
 
+    // This is a port of reference/shaders/voronoi__YS__L17259.wgsl, colorMode
+    // = 1 (sample-at-centre). The previous implementation produced only a
+    // grayscale wall/interior falloff and never sampled the source at the
+    // seed — which is why users saw "BLACK and white, not the actual image
+    // behind". Here `cellColor` is sampled at the seed pixel, so every
+    // fragment inside a cell takes on that seed's source colour (classic
+    // polygonal-mosaic look).
     float cellPitch = max(2.0, u.cellSize);
-    float2 p       = float2(pixel);
-    float2 cellId  = floor(p / cellPitch);
+    float2 p        = float2(pixel) / cellPitch;
+    float2 cellP    = floor(p);
+    float2 fractP   = p - cellP;
 
-    // Search the 3x3 neighbourhood of candidate seeds. Each cell's seed is at
-    // (cellId + 0.5 + jitter) * cellPitch. When `randomize` is on we add
-    // deterministic per-cell offsets to break the grid-aligned look.
-    float nearest       = 1.0e10;
-    float secondNearest = 1.0e10;
+    float2 closestCell = float2(0.0);
+    float  nearest     = 1.0e10;
+    float  secondNear  = 1.0e10;
+    float  randomness  = (u.randomize == 1u) ? 1.0 : 0.0;
+
     for (int j = -1; j <= 1; j++) {
         for (int i = -1; i <= 1; i++) {
-            float2 neighborId = cellId + float2(float(i), float(j));
-            float2 seedOffset = float2(0.5);
-            if (u.randomize == 1u) {
-                // Deterministic-per-cell jitter within 0..1 so seeds stay inside
-                // their own cell (avoids holes when a seed escapes outside).
-                float hx = fract(sin(dot(neighborId, float2(127.1, 311.7))) * 43758.5453);
-                float hy = fract(sin(dot(neighborId, float2(269.5,  183.3))) * 43758.5453);
-                seedOffset = float2(0.1 + hx * 0.8, 0.1 + hy * 0.8);
-            }
-            float2 seedPos = (neighborId + seedOffset) * cellPitch;
-            float  d       = length(p - seedPos);
+            float2 neighbor = float2(float(i), float(j));
+            float2 cellCtr  = cellP + neighbor;
+
+            // hash2 from the reference — deterministic vec2 in [-1, 1].
+            float2 k  = float2(0.3183099, 0.3678794);
+            float2 pp = cellCtr * k + k.yx;
+            float2 h  = fract(16.0 * k * fract(pp.x * pp.y * (pp.x + pp.y))) * 2.0 - 1.0;
+            float2 randOffset = h * randomness * 0.5;
+            float2 seed = neighbor + 0.5 + randOffset;
+
+            float  d = length(seed - fractP);
             if (d < nearest) {
-                secondNearest = nearest;
-                nearest       = d;
-            } else if (d < secondNearest) {
-                secondNearest = d;
+                secondNear  = nearest;
+                nearest     = d;
+                closestCell = cellCtr;
+            } else if (d < secondNear) {
+                secondNear  = d;
             }
         }
     }
 
-    // Cell-edge detection: where nearest and second-nearest are close, we're
-    // on a boundary between two cells. `edgeWidth` tunes the wall thickness
-    // relative to cell pitch.
-    float edgeGap   = (secondNearest - nearest) / cellPitch;
-    float edgeWidth = max(0.01, u.edgeWidth);
-    float wall      = 1.0 - smoothstep(0.0, edgeWidth, edgeGap);
+    // Sample source at the closest seed's pixel position. Clamping the UV
+    // matters — cells on the image boundary can resolve seeds outside [0,1].
+    float2 seedUV    = clamp((closestCell + 0.5) * cellPitch / resolution, 0.0, 1.0);
+    float3 cellColor = applyCommonAdjustments(source.sample(texSampler, seedUV).rgb, u.common);
+    // UI "Cell Fill" (fieldWeight) scales cell brightness. 1.0 = source,
+    // <1 = darkens, >1 = lifts. Floor at 0.1 so the slider never produces a
+    // fully black mosaic (that's what `invert` is for).
+    cellColor *= max(0.1, u.fieldWeight);
 
-    // Interior falloff: bright at the seed, fading to the wall.
-    float interior = 1.0 - saturate(nearest / (cellPitch * 0.6));
+    // Wall mask via reference's edgeDist formula: 1 in interior, 0 at the
+    // cell boundary. `edgeWidth * 0.3` matches the reference's falloff scale.
+    float edgeDist = secondNear - nearest;
+    float edgeW    = max(0.01, u.edgeWidth) * 0.3;
+    float edge     = smoothstep(0.0, edgeW, edgeDist);
 
-    float value = saturate(wall * u.lineStrength + interior * u.fieldWeight * 0.6);
-    if (u.invert == 1u) { value = 1.0 - value; }
+    // UI "Wall Strength" (lineStrength) hardens the transition: 0 keeps the
+    // reference's soft smoothstep, 1 snaps to binary walls. Mixing between
+    // the two rather than clamping preserves antialiasing at low strengths.
+    edge = mix(edge, step(0.5, edge), saturate(u.lineStrength));
 
-    float bg = u.color.backgroundIntensity;
-    float3 ink = float3(max(bg, value));
-    // edgeColor defaults to (1,1,1,1) identity on the Swift side, so
-    // multiplying unconditionally tints only when the user picked a colour.
-    ink *= u.edgeColor.rgb;
+    // Wall colour: user-picked `edgeColor`. Swift-side default for voronoi
+    // is black (set in EdgeFieldGPURenderer.renderVoronoi) so fresh layers
+    // render the classic black-walls mosaic without UI tweaks.
+    float3 wallColor = u.edgeColor.rgb;
 
-    float3 final = mix(srcOrig, saturate(ink), saturate(u.intensity));
+    float3 mosaic = mix(wallColor, cellColor, edge);
+    if (u.invert == 1u) { mosaic = 1.0 - mosaic; }
+
+    // Existing "Background Intensity" slider acts as a floor on the darkest
+    // pixels — unchanged behaviour from the old implementation.
+    mosaic = max(mosaic, float3(u.color.backgroundIntensity));
+
+    float3 final = mix(srcOrig, saturate(mosaic), saturate(u.intensity));
     return float4(final, 1.0);
 }
 
