@@ -126,11 +126,18 @@ final class PreviewViewModel {
         let scale = Double(maxDimension) / Double(max(w, h))
         let newW = Int(Double(w) * scale)
         let newH = Int(Double(h) * scale)
+        // Always downscale through a canonical premultipliedLast RGBA8
+        // context rather than copying the source's `bitmapInfo.rawValue`.
+        // Some ImageIO decoders hand back CGImages with combined flags
+        // (`kCGImageAlphaLast | kCGImagePixelFormatPacked` etc) that
+        // `CGBitmapContextCreate` rejects — leaving the whole preview
+        // path to silently skip the downscale and render the full-size
+        // image instead.
         guard let ctx = CGContext(data: nil, width: newW, height: newH,
-                                  bitsPerComponent: cgImage.bitsPerComponent,
-                                  bytesPerRow: 0,
-                                  space: cgImage.colorSpace ?? CGColorSpaceCreateDeviceRGB(),
-                                  bitmapInfo: cgImage.bitmapInfo.rawValue),
+                                  bitsPerComponent: 8,
+                                  bytesPerRow: newW * 4,
+                                  space: CGColorSpaceCreateDeviceRGB(),
+                                  bitmapInfo: CGImageAlphaInfo.premultipliedLast.rawValue),
               let scaled = (ctx.draw(cgImage, in: CGRect(x: 0, y: 0, width: newW, height: newH)), ctx.makeImage()).1 else {
             return NSImage(cgImage: cgImage, size: NSSize(
                 width: Double(w) / screenScale, height: Double(h) / screenScale

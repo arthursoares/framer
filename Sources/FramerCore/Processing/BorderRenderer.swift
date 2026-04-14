@@ -941,14 +941,20 @@ public enum BorderRenderer {
     // MARK: - Context Helper
 
     private static func createContext(width: Int, height: Int, template: CGImage) -> CGContext? {
-        CGContext(
+        // Ignore `template.bitmapInfo` — some ImageIO-decoded sources
+        // carry flag combinations (e.g. `kCGImageAlphaLast | kCGImage-
+        // PixelFormatPacked`) that `CGBitmapContextCreate` rejects.
+        // Always allocate a canonical premultipliedLast RGBA8 context;
+        // `ctx.draw(template, ...)` converts the source on the fly.
+        _ = template
+        return CGContext(
             data: nil,
             width: width,
             height: height,
-            bitsPerComponent: template.bitsPerComponent,
-            bytesPerRow: 0,
-            space: template.colorSpace ?? CGColorSpaceCreateDeviceRGB(),
-            bitmapInfo: template.bitmapInfo.rawValue
+            bitsPerComponent: 8,
+            bytesPerRow: width * 4,
+            space: CGColorSpaceCreateDeviceRGB(),
+            bitmapInfo: CGImageAlphaInfo.premultipliedLast.rawValue
         )
     }
 
