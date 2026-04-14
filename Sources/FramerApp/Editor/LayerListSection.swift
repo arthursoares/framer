@@ -20,7 +20,7 @@ struct LayerListSection: View {
                     }
 
                     LayerRow(
-                        layer: binding(for: index),
+                        layer: binding(for: layer),
                         onDelete: { removeLayer(at: index) },
                         onMoveUp: index > 0 ? { moveLayer(from: index, to: index - 1) } : nil,
                         onMoveDown: index < layers.count - 1 ? { moveLayer(from: index, to: index + 1) } : nil
@@ -234,10 +234,27 @@ struct LayerListSection: View {
         undoManager?.setActionName("Move Layer")
     }
 
-    private func binding(for index: Int) -> Binding<CompositionLayer> {
-        Binding(
-            get: { layers[index] },
-            set: { layers[index] = $0 }
+    /// ID-keyed binding. Previously this was indexed by `Int`, which captured
+    /// the index at creation time — SwiftUI reads a detail view's binding
+    /// once after its row is deleted or reordered (before the view is torn
+    /// down), and `layers[staleIdx]` went out of bounds. Looking up by
+    /// `layer.id` keeps the read valid across any structural mutation.
+    ///
+    /// The captured `fallback` is the layer value as of binding-creation
+    /// time. It's only used if the layer has been removed AND `layers` is
+    /// empty (deleting the last row) — SwiftUI's teardown tick would
+    /// otherwise read `layers[0]` on an empty array. Returning the
+    /// snapshot lets the dying view finish its render cycle cleanly.
+    private func binding(for layer: CompositionLayer) -> Binding<CompositionLayer> {
+        let id = layer.id
+        let fallback = layer
+        return Binding(
+            get: { layers.first(where: { $0.id == id }) ?? fallback },
+            set: { newValue in
+                if let idx = layers.firstIndex(where: { $0.id == id }) {
+                    layers[idx] = newValue
+                }
+            }
         )
     }
 }
@@ -515,11 +532,16 @@ struct GPUEffectLayerControls: View {
             }
 
             if params.kind.usesColorModeAndFgBg {
+                // Palette was dead on every variant that uses this picker
+                // (dots / blockify / matrixRain / threshold / crosshatch /
+                // edgeDetection): the bucket uniform struct has no palette
+                // array, so the shader had nothing to quantise against.
+                // Dropped from the menu until the bucket renderer grows a
+                // palette uniform the way DitherGPURenderer has.
                 Picker("Color Mode", selection: colorModeBinding) {
                     Text("Source").tag(GPUEffectColorMode.source)
                     Text("FG/BG").tag(GPUEffectColorMode.foregroundBackground)
                     Text("Mono").tag(GPUEffectColorMode.monochrome)
-                    Text("Palette").tag(GPUEffectColorMode.palette)
                 }
                 .pickerStyle(.menu)
             }
@@ -597,6 +619,7 @@ struct GPUEffectLayerControls: View {
                 }
                 .pickerStyle(.menu)
 
+                adjustmentSlider(label: "Dot Size", binding: textCellBinding(\.sizeMultiplier), range: 0.1...2.0)
                 adjustmentSlider(label: "Intensity", binding: textCellBinding(\.intensity), range: 0...1)
                 Toggle("Invert", isOn: textInvertBinding)
 
@@ -625,10 +648,14 @@ struct GPUEffectLayerControls: View {
                params.kind == .blockify {
                 Picker("Style", selection: blockStyleBinding) {
                     Text("Solid").tag(BlockStyle.solid)
+                    Text("Shaded").tag(BlockStyle.shaded)
                     Text("Outlined").tag(BlockStyle.outlined)
                 }
                 .pickerStyle(.menu)
 
+                // Shaded mode reuses `borderWidth` as the radial-falloff
+                // strength (0 = flat like solid, 1 = full bubble). Outlined
+                // mode still uses it as the inset thickness.
                 adjustmentSlider(label: "Border Width", binding: blockBorderWidthBinding, range: 0...1)
 
                 ColorPickerWithHex("Foreground", selection: Binding(
@@ -668,7 +695,14 @@ struct GPUEffectLayerControls: View {
                 adjustmentSlider(label: "Trail", binding: matrixBinding(\.trailLength), range: 0...1)
                 adjustmentSlider(label: "Glow", binding: matrixBinding(\.glow), range: 0...1)
                 adjustmentSlider(label: "BG Opacity", binding: matrixBinding(\.backgroundOpacity), range: 0...1)
-                adjustmentSlider(label: "Threshold", binding: matrixBinding(\.threshold), range: 0...1)
+                // `threshold` slider removed — it was a dead control. The GPU
+                // encoder (TextCellRenderer.renderMatrixRain) overwrites the
+                // shader's `threshold` uniform with `params.trailLength`, so
+                // nothing in the pipeline ever read `params.threshold` for
+                // matrixRain. Adding it back requires either a new shader
+                // uniform (e.g. headBrightness cutoff) or dropping the uniform
+                // repurposing scheme. Kept out of the UI until one of those
+                // lands so users stop chasing a slider that does nothing.
 
                 Picker("Direction", selection: matrixDirectionBinding) {
                     Text("Down").tag(TextCellFlowDirection.down)
@@ -3848,15 +3882,6 @@ struct ShaderLayerControls: View {
                 )
             )
 
-            Picker("Style", selection: Binding(
-                get: { params.style },
-                set: { onChange(params.withStyle($0)) }
-            )) {
-                ForEach(ShaderStyle.allCases, id: \.self) { style in
-                    Text(style.label).tag(style)
-                }
-            }
-
             sliderRow(
                 title: "Intensity",
                 value: params.intensity,
@@ -3939,6 +3964,14 @@ struct ShaderLayerControls: View {
         }
 
         asciiCharactersControl(asciiParams)
+        asciiFontControl(asciiParams)
+
+        // Resolution toggle. Independent of character set / font — see
+        // ASCIIShaderParams.highDetail for the axis split.
+        Toggle("High Detail (16×16 atlas)", isOn: Binding(
+            get: { asciiParams.highDetail },
+            set: { updateASCII(asciiParams, highDetail: $0) }
+        ))
 
         VStack(alignment: .leading, spacing: 4) {
             Text("Colors")
@@ -4157,6 +4190,42 @@ struct ShaderLayerControls: View {
         }
     }
 
+    /// Font override for runtime-rasterised ASCII atlases. "System Default"
+    /// (nil `fontName`) preserves the baked PNG path when `characters` is
+    /// also nil, or picks Menlo for custom palettes. Any other selection
+    /// routes through `ASCIIAtlasGenerator` with the chosen PostScript name,
+    /// rasterising the current palette in that face. The font list comes
+    /// from `NSFontManager.availableFontFamilies` unfiltered — proportional
+    /// faces render fine at the 8×8 cell size, they just don't look like a
+    /// terminal ramp, which is the user's judgement to make.
+    @ViewBuilder
+    private func asciiFontControl(_ asciiParams: ASCIIShaderParams) -> some View {
+        let families = Self.systemFontFamilies
+        VStack(alignment: .leading, spacing: 4) {
+            Text("Font")
+                .font(AppFont.controlLabel)
+                .foregroundStyle(Color.text2)
+            Picker("", selection: Binding<String>(
+                get: { asciiParams.fontName ?? "" },
+                set: { newValue in
+                    updateASCII(asciiParams, fontName: .some(newValue.isEmpty ? nil : newValue))
+                }
+            )) {
+                Text("System Default").tag("")
+                Divider()
+                ForEach(families, id: \.self) { family in
+                    Text(family).tag(family)
+                }
+            }
+            .pickerStyle(.menu)
+            .labelsHidden()
+        }
+    }
+
+    private static let systemFontFamilies: [String] = {
+        NSFontManager.shared.availableFontFamilies.sorted()
+    }()
+
     @ViewBuilder
     private func asciiRampPreview(for characters: String) -> some View {
         let glyphs = ASCIIAtlasGenerator.mappedFillGlyphs(characters)
@@ -4185,7 +4254,9 @@ struct ShaderLayerControls: View {
         exposure: Double? = nil,
         attenuation: Double? = nil,
         blackLevel: Double? = nil,
-        characters: String?? = nil
+        characters: String?? = nil,
+        fontName: String?? = nil,
+        highDetail: Bool? = nil
     ) {
         onChange(params.withParams(.ascii(ASCIIShaderParams(
             cellSize: cellSize ?? asciiParams.cellSize,
@@ -4195,7 +4266,9 @@ struct ShaderLayerControls: View {
             exposure: exposure ?? asciiParams.exposure,
             attenuation: attenuation ?? asciiParams.attenuation,
             blackLevel: blackLevel ?? asciiParams.blackLevel,
-            characters: characters ?? asciiParams.characters
+            characters: characters ?? asciiParams.characters,
+            fontName: fontName ?? asciiParams.fontName,
+            highDetail: highDetail ?? asciiParams.highDetail
         ))))
     }
 
