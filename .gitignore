@@ -26,3 +26,6 @@ framer
 
 # Legacy
 *.lrdevplugin/
+
+# Dev tooling (OMX tmux hook integration, not repo-level)
+.omx/
