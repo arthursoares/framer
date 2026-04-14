@@ -44,6 +44,41 @@ final class ASCIIAtlasGeneratorTests: XCTestCase {
         XCTAssertTrue(first === second, "Second atlas lookup for the same Style should be cached")
     }
 
+    // MARK: - N-across-10 mapping (no more space-padding)
+
+    func testSingleCharFillsEverySlotUniformly() {
+        let mapped = ASCIIAtlasGenerator.mappedFillGlyphs("@")
+        XCTAssertEqual(mapped.count, 10)
+        for c in mapped {
+            XCTAssertEqual(c, "@", "One-character palette should fill every luminance slot — got mixed chars")
+        }
+    }
+
+    func testThreeCharsDistributeAcrossRamp() {
+        // "0.@" — expected distribution: 0/0/0/1/1/1/2/2/2/2  (4/3/3 split via
+        // floor(slot * N / 10)). First and last characters must anchor the
+        // dim and bright ends.
+        let mapped = ASCIIAtlasGenerator.mappedFillGlyphs("0.@")
+        XCTAssertEqual(mapped.count, 10)
+        XCTAssertEqual(mapped.first, "0", "Dimmest slot should be the first user char")
+        XCTAssertEqual(mapped.last, "@",  "Brightest slot should be the last user char")
+        XCTAssertEqual(Set(mapped), Set(["0", ".", "@"]), "All three input characters should appear in the ramp")
+    }
+
+    func testEmptyStringProducesBlankRamp() {
+        let mapped = ASCIIAtlasGenerator.mappedFillGlyphs("")
+        XCTAssertEqual(mapped, Array(repeating: " ", count: 10),
+                       "Empty palette should render as 10 blank slots (fallback to all-space)")
+    }
+
+    func testPresetMatchingRoundtrip() {
+        XCTAssertEqual(ASCIIPreset.matching(nil), .default)
+        XCTAssertEqual(ASCIIPreset.matching(ASCIIPreset.classic.characters), .classic)
+        XCTAssertEqual(ASCIIPreset.matching(ASCIIPreset.blocks.characters),  .blocks)
+        XCTAssertEqual(ASCIIPreset.matching("!!@@##"), .custom,
+                       "An arbitrary string shouldn't match any preset")
+    }
+
     // MARK: - GPU round-trip (Mac-only; Metal assumed available in CI for this target)
 
     func testAtlasTextureUploadSucceeds() throws {

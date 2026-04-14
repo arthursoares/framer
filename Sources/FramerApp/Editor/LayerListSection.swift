@@ -3807,27 +3807,7 @@ struct ShaderLayerControls: View {
             updateASCII(asciiParams, blackLevel: value)
         }
 
-        // Custom character palette. Leave blank to use the baked
-        // fillASCII/edgesASCII atlases (ships with Framer). When populated,
-        // the 10-character string is rasterised at runtime dim→bright —
-        // shorter inputs pad the dim side with spaces, longer are truncated.
-        VStack(alignment: .leading, spacing: 4) {
-            Text("Characters")
-                .font(AppFont.controlLabel)
-                .foregroundStyle(Color.text2)
-            TextField(
-                " .:-=+*#%@",
-                text: Binding(
-                    get: { asciiParams.characters ?? "" },
-                    set: { newValue in
-                        let trimmed = String(newValue.prefix(10))
-                        updateASCII(asciiParams, characters: .some(trimmed.isEmpty ? nil : trimmed))
-                    }
-                )
-            )
-            .font(.system(.body, design: .monospaced))
-            .textFieldStyle(.roundedBorder)
-        }
+        asciiCharactersControl(asciiParams)
 
         VStack(alignment: .leading, spacing: 4) {
             Text("Colors")
@@ -3970,6 +3950,94 @@ struct ShaderLayerControls: View {
                 updateASCII(asciiParams, invert: value)
             }
         ))
+    }
+
+    /// Character-palette picker. Presets are derived from the stored string
+    /// each render, so switching between layers / undoing selection stays in
+    /// sync without a separate persisted preset field. Custom reveals a text
+    /// field + live length indicator + mini ramp preview showing how the
+    /// user's N characters spread across the atlas's 10 luminance slots.
+    @ViewBuilder
+    private func asciiCharactersControl(_ asciiParams: ASCIIShaderParams) -> some View {
+        let selectedPreset = ASCIIPreset.matching(asciiParams.characters)
+        let characterCount = (asciiParams.characters ?? "").count
+
+        VStack(alignment: .leading, spacing: 8) {
+            Text("Characters")
+                .font(AppFont.controlLabel)
+                .foregroundStyle(Color.text2)
+
+            Picker("", selection: Binding<ASCIIPreset>(
+                get: { selectedPreset },
+                set: { newValue in
+                    switch newValue {
+                    case .default:
+                        updateASCII(asciiParams, characters: .some(nil))
+                    case .custom:
+                        // Preserve whatever string the user currently has —
+                        // seed with the classic palette if they're picking
+                        // Custom for the first time.
+                        let seed = asciiParams.characters ?? ASCIIPreset.classic.characters ?? ""
+                        updateASCII(asciiParams, characters: .some(seed))
+                    default:
+                        updateASCII(asciiParams, characters: .some(newValue.characters))
+                    }
+                }
+            )) {
+                ForEach(ASCIIPreset.allCases, id: \.self) { preset in
+                    Text(preset.rawValue).tag(preset)
+                }
+            }
+            .pickerStyle(.menu)
+            .labelsHidden()
+
+            if selectedPreset == .custom {
+                TextField(
+                    " .:-=+*#%@",
+                    text: Binding(
+                        get: { asciiParams.characters ?? "" },
+                        set: { newValue in
+                            let trimmed = String(newValue.prefix(10))
+                            updateASCII(asciiParams, characters: .some(trimmed.isEmpty ? nil : trimmed))
+                        }
+                    )
+                )
+                .font(.system(.body, design: .monospaced))
+                .textFieldStyle(.roundedBorder)
+
+                HStack(spacing: 6) {
+                    Text("\(characterCount) / 10")
+                        .font(.caption)
+                        .foregroundStyle(Color.text2)
+                    Spacer()
+                }
+
+                // Mini ramp preview: 10 cells, each the character that would
+                // rasterise at that luminance slot over a gray background
+                // matching the relative luma. Makes the N-across-10 mapping
+                // explicit without the user having to apply + re-render.
+                asciiRampPreview(for: asciiParams.characters ?? "")
+            }
+        }
+    }
+
+    @ViewBuilder
+    private func asciiRampPreview(for characters: String) -> some View {
+        let glyphs = ASCIIAtlasGenerator.mappedFillGlyphs(characters)
+        HStack(spacing: 2) {
+            ForEach(0..<glyphs.count, id: \.self) { i in
+                let lum = Double(i) / Double(max(1, glyphs.count - 1))
+                ZStack {
+                    Rectangle()
+                        .fill(Color(white: lum))
+                    Text(String(glyphs[i]))
+                        .font(.system(size: 10, design: .monospaced))
+                        .foregroundStyle(lum < 0.5 ? Color.white : Color.black)
+                }
+                .frame(width: 20, height: 20)
+                .overlay(Rectangle().stroke(Color.text2.opacity(0.3), lineWidth: 0.5))
+            }
+        }
     }
 
     private func updateASCII(

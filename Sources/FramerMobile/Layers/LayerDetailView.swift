@@ -2348,23 +2348,7 @@ private struct ShaderControls: View {
             updateASCII(asciiParams, blackLevel: value)
         }
 
-        // Custom character palette — blank = use baked atlases. 10-char
-        // cap matches the atlas luminance-level count; see
-        // ASCIIAtlasGenerator.paddedFillGlyphs for padding/truncation rules.
-        ControlRow(label: "Characters") {
-            TextField(
-                " .:-=+*#%@",
-                text: Binding(
-                    get: { asciiParams.characters ?? "" },
-                    set: { newValue in
-                        let trimmed = String(newValue.prefix(10))
-                        updateASCII(asciiParams, characters: .some(trimmed.isEmpty ? nil : trimmed))
-                    }
-                )
-            )
-            .font(.system(.body, design: .monospaced))
-            .textFieldStyle(.roundedBorder)
-        }
+        asciiCharactersControl(asciiParams)
 
         ControlRow(label: "Colors") {
             Picker("", selection: Binding(
@@ -2522,6 +2506,82 @@ private struct ShaderControls: View {
             ))
             .labelsHidden()
             .accessibilityLabel("Invert ASCII")
+        }
+    }
+
+    /// Character palette picker + Custom text field + ramp preview. Mirrors
+    /// the desktop editor in LayerListSection so the two feel identical; see
+    /// that file for the rationale behind the preset-derived-from-string
+    /// approach (no separate persisted enum, picker always re-syncs with the
+    /// stored characters).
+    @ViewBuilder
+    private func asciiCharactersControl(_ asciiParams: ASCIIShaderParams) -> some View {
+        let selectedPreset = ASCIIPreset.matching(asciiParams.characters)
+        let characterCount = (asciiParams.characters ?? "").count
+
+        VStack(alignment: .leading, spacing: 8) {
+            ControlRow(label: "Characters") {
+                Picker("", selection: Binding<ASCIIPreset>(
+                    get: { selectedPreset },
+                    set: { newValue in
+                        switch newValue {
+                        case .default:
+                            updateASCII(asciiParams, characters: .some(nil))
+                        case .custom:
+                            let seed = asciiParams.characters ?? ASCIIPreset.classic.characters ?? ""
+                            updateASCII(asciiParams, characters: .some(seed))
+                        default:
+                            updateASCII(asciiParams, characters: .some(newValue.characters))
+                        }
+                    }
+                )) {
+                    ForEach(ASCIIPreset.allCases, id: \.self) { preset in
+                        Text(preset.rawValue).tag(preset)
+                    }
+                }
+                .pickerStyle(.menu)
+                .labelsHidden()
+            }
+
+            if selectedPreset == .custom {
+                TextField(
+                    " .:-=+*#%@",
+                    text: Binding(
+                        get: { asciiParams.characters ?? "" },
+                        set: { newValue in
+                            let trimmed = String(newValue.prefix(10))
+                            updateASCII(asciiParams, characters: .some(trimmed.isEmpty ? nil : trimmed))
+                        }
+                    )
+                )
+                .font(.system(.body, design: .monospaced))
+                .textFieldStyle(.roundedBorder)
+
+                Text("\(characterCount) / 10")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+
+                asciiRampPreview(for: asciiParams.characters ?? "")
+            }
+        }
+    }
+
+    @ViewBuilder
+    private func asciiRampPreview(for characters: String) -> some View {
+        let glyphs = ASCIIAtlasGenerator.mappedFillGlyphs(characters)
+        HStack(spacing: 2) {
+            ForEach(0..<glyphs.count, id: \.self) { i in
+                let lum = Double(i) / Double(max(1, glyphs.count - 1))
+                ZStack {
+                    Rectangle()
+                        .fill(Color(white: lum))
+                    Text(String(glyphs[i]))
+                        .font(.system(size: 10, design: .monospaced))
+                        .foregroundStyle(lum < 0.5 ? Color.white : Color.black)
+                }
+                .frame(width: 22, height: 22)
+                .overlay(Rectangle().stroke(Color.secondary.opacity(0.3), lineWidth: 0.5))
+            }
         }
     }
 
