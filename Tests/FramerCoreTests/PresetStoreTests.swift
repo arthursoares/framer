@@ -226,7 +226,7 @@ final class PresetStoreTests: XCTestCase {
         store.initializeDefaults()
 
         let all = try store.list()
-        XCTAssertEqual(all.count, 15)
+        XCTAssertEqual(all.count, 19)
         let names = Set(all.map(\.name))
         XCTAssertTrue(names.contains("film"))
         XCTAssertTrue(names.contains("instagram"))
@@ -239,6 +239,10 @@ final class PresetStoreTests: XCTestCase {
         XCTAssertTrue(names.contains("Shader Shiba"))
         XCTAssertTrue(names.contains("Shader Pixel Sort"))
         XCTAssertTrue(names.contains("Shader Distant Past"))
+        XCTAssertTrue(names.contains("GPU ASCII Matrix"))
+        XCTAssertTrue(names.contains("GPU Halftone Print"))
+        XCTAssertTrue(names.contains("GPU Wave Field"))
+        XCTAssertTrue(names.contains("GPU VHS Static"))
     }
 
     func test_listPresets_mixedJSONAndYAML() throws {
@@ -249,7 +253,7 @@ final class PresetStoreTests: XCTestCase {
         try store.save(jsonPreset)
 
         let all = try store.list()
-        XCTAssertEqual(all.count, 16)
+        XCTAssertEqual(all.count, 20)
     }
 
     func test_initializeDefaults_creates11Files() throws {
@@ -259,7 +263,7 @@ final class PresetStoreTests: XCTestCase {
         let files = try FileManager.default.contentsOfDirectory(at: tempDir,
                                                                  includingPropertiesForKeys: nil)
         let yamlFiles = files.filter { $0.pathExtension == "yaml" }
-        XCTAssertEqual(yamlFiles.count, 15)
+        XCTAssertEqual(yamlFiles.count, 19)
 
         let names = Set(yamlFiles.map { $0.deletingPathExtension().lastPathComponent })
         XCTAssertTrue(names.contains("film"))
@@ -273,6 +277,10 @@ final class PresetStoreTests: XCTestCase {
         XCTAssertTrue(names.contains("Shader Shiba"))
         XCTAssertTrue(names.contains("Shader Pixel Sort"))
         XCTAssertTrue(names.contains("Shader Distant Past"))
+        XCTAssertTrue(names.contains("GPU ASCII Matrix"))
+        XCTAssertTrue(names.contains("GPU Halftone Print"))
+        XCTAssertTrue(names.contains("GPU Wave Field"))
+        XCTAssertTrue(names.contains("GPU VHS Static"))
     }
 
     func test_initializeDefaults_includesShaderPresets() throws {
@@ -394,7 +402,7 @@ final class PresetStoreTests: XCTestCase {
         let files = try FileManager.default.contentsOfDirectory(at: tempDir, includingPropertiesForKeys: nil)
         let yamlFiles = files.filter { $0.pathExtension == "yaml" }
 
-        XCTAssertEqual(yamlFiles.count, 15)
+        XCTAssertEqual(yamlFiles.count, 19)
     }
 
     func test_initializeDefaults_doesNotOverwrite() throws {

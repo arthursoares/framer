@@ -520,6 +520,16 @@ public enum DitherAlgorithm: String, Codable, Sendable, CaseIterable {
     case stucki
     case whiteNoise
     case riemersma
+    // Added in the dither-extensions pass — see grainrad/notes/dithering.md.
+    // All Codable raw values match the `case` name so old YAML keeps loading
+    // and new YAML can opt in without a migration.
+    case sierra
+    case sierraTwoRow
+    case sierraLite
+    case jarvisJudiceNinke
+    case burkes
+    case interleavedGradientNoise
+    case cmykHalftone
 
     public var label: String {
         switch self {
@@ -532,14 +542,24 @@ public enum DitherAlgorithm: String, Codable, Sendable, CaseIterable {
         case .stucki: return "Stucki"
         case .whiteNoise: return "White Noise"
         case .riemersma: return "Riemersma"
+        case .sierra: return "Sierra"
+        case .sierraTwoRow: return "Sierra Two-Row"
+        case .sierraLite: return "Sierra Lite"
+        case .jarvisJudiceNinke: return "Jarvis-Judice-Ninke"
+        case .burkes: return "Burkes"
+        case .interleavedGradientNoise: return "Interleaved Gradient Noise"
+        case .cmykHalftone: return "CMYK Halftone"
         }
     }
 
     /// Whether this algorithm uses error diffusion (benefits from serpentine scanning).
     public var isErrorDiffusion: Bool {
         switch self {
-        case .floydSteinberg, .atkinson, .artisticDrip, .stucki, .riemersma: return true
-        default: return false
+        case .floydSteinberg, .atkinson, .artisticDrip, .stucki, .riemersma,
+             .sierra, .sierraTwoRow, .sierraLite, .jarvisJudiceNinke, .burkes:
+            return true
+        default:
+            return false
         }
     }
 }
@@ -550,9 +570,15 @@ public enum DitherColorMode: Codable, Equatable, Sendable {
     /// Two-tone using the two most dominant high-contrast colors from the image.
     case dominantTwoTone(flipped: Bool, saturationShift: Double = 0, lightnessShift: Double = 0)
     case color(levels: Int)
+    /// Quantize against an arbitrary palette (e.g. GameBoy / NES / C64 looks).
+    /// Capped at MAX_PALETTE_COLORS to fit in a single uniform upload.
+    case palette([CodableColor])
+
+    public static let MAX_PALETTE_COLORS = 16
 
     private enum CodingKeys: String, CodingKey {
         case type, foreground, background, levels, flipped, saturationShift, lightnessShift
+        case palette
     }
 
     public init(from decoder: Decoder) throws {
@@ -572,6 +598,17 @@ public enum DitherColorMode: Codable, Equatable, Sendable {
         case "color":
             let levels = try container.decode(Int.self, forKey: .levels)
             self = .color(levels: levels)
+        case "palette":
+            let raw = try container.decodeIfPresent([CodableColor].self, forKey: .palette) ?? []
+            // Drop empty palettes silently (back to bw) so a malformed YAML
+            // doesn't bring down the renderer; truncate too-long palettes to
+            // the uniform's hard cap.
+            if raw.isEmpty {
+                self = .bw
+            } else {
+                let capped = raw.prefix(DitherColorMode.MAX_PALETTE_COLORS).map { $0 }
+                self = .palette(capped)
+            }
         default: self = .bw
         }
     }
@@ -592,6 +629,92 @@ public enum DitherColorMode: Codable, Equatable, Sendable {
         case .color(let levels):
             try container.encode("color", forKey: .type)
             try container.encode(levels, forKey: .levels)
+        case .palette(let colors):
+            try container.encode("palette", forKey: .type)
+            try container.encode(colors, forKey: .palette)
+        }
+    }
+}
+
+/// Canonical retro / vintage palettes for `DitherColorMode.palette`. UI can
+/// surface these as named presets so users don't have to enter colours by hand.
+/// Sources cited inline.
+public enum VintagePalette {
+    /// Original Game Boy DMG-01 LCD greens, as documented in the Pan Docs.
+    /// Source: <https://gbdev.io/pandocs/Color.html>.
+    public static let gameBoy: [CodableColor] = [
+        CodableColor(unchecked: "#0F380F"),
+        CodableColor(unchecked: "#306230"),
+        CodableColor(unchecked: "#8BAC0F"),
+        CodableColor(unchecked: "#9BBC0F"),
+    ]
+
+    /// NES system palette — the 4 most-used colours from the standard NTSC
+    /// palette. Source: <https://www.nesdev.org/wiki/PPU_palettes>.
+    public static let nes: [CodableColor] = [
+        CodableColor(unchecked: "#000000"),
+        CodableColor(unchecked: "#7C7C7C"),
+        CodableColor(unchecked: "#FCFCFC"),
+        CodableColor(unchecked: "#A4E4FC"),
+    ]
+
+    /// Commodore 64 16-colour palette (Pepto's calibration).
+    /// Source: <https://www.pepto.de/projects/colorvic/>.
+    public static let c64: [CodableColor] = [
+        CodableColor(unchecked: "#000000"), CodableColor(unchecked: "#FFFFFF"),
+        CodableColor(unchecked: "#883932"), CodableColor(unchecked: "#67B6BD"),
+        CodableColor(unchecked: "#8B3F96"), CodableColor(unchecked: "#55A049"),
+        CodableColor(unchecked: "#40318D"), CodableColor(unchecked: "#BFCE72"),
+        CodableColor(unchecked: "#8B5429"), CodableColor(unchecked: "#574200"),
+        CodableColor(unchecked: "#B86962"), CodableColor(unchecked: "#505050"),
+        CodableColor(unchecked: "#787878"), CodableColor(unchecked: "#94E089"),
+        CodableColor(unchecked: "#7869C4"), CodableColor(unchecked: "#9F9F9F"),
+    ]
+
+    /// IBM CGA palette 1 high-intensity (the cyan/magenta/white colour set
+    /// every 1980s game seemed to use). Source: IBM 6322508 Color Graphics
+    /// Adapter manual.
+    public static let cga: [CodableColor] = [
+        CodableColor(unchecked: "#000000"),
+        CodableColor(unchecked: "#55FFFF"),
+        CodableColor(unchecked: "#FF55FF"),
+        CodableColor(unchecked: "#FFFFFF"),
+    ]
+
+    /// UI-facing preset selector. Not persisted directly — the UI translates
+    /// presets to / from `DitherColorMode.palette([CodableColor])` by
+    /// comparing colour arrays: if the stored palette matches one of the
+    /// presets exactly, the picker selects that preset; otherwise it falls
+    /// back to `.custom` and lets the user edit individual swatches.
+    public enum Preset: String, CaseIterable, Hashable, Sendable {
+        case gameBoy = "Game Boy"
+        case nes     = "NES"
+        case c64     = "C64"
+        case cga     = "CGA"
+        case custom  = "Custom"
+
+        /// Concrete palette for the preset. `.custom` returns an empty list
+        /// — callers preserve the user's current colours when switching TO
+        /// custom rather than overwriting them.
+        public var colors: [CodableColor] {
+            switch self {
+            case .gameBoy: return VintagePalette.gameBoy
+            case .nes:     return VintagePalette.nes
+            case .c64:     return VintagePalette.c64
+            case .cga:     return VintagePalette.cga
+            case .custom:  return []
+            }
+        }
+
+        /// Identify which preset (if any) a stored palette matches. Used to
+        /// drive the UI picker so loading a preset round-trips cleanly. Any
+        /// user edit that diverges from all presets flips the picker to
+        /// `.custom` automatically.
+        public static func matching(_ palette: [CodableColor]) -> Preset {
+            for preset in Preset.allCases where preset != .custom {
+                if preset.colors == palette { return preset }
+            }
+            return .custom
         }
     }
 }
@@ -612,6 +735,14 @@ public struct DitherLayerParams: Identifiable, Codable, Equatable, Sendable {
     /// Contrast boost before dithering (0–1, default 0 = no change).
     /// Applies an S-curve to expand tonal range before quantization.
     public var contrast: Double
+    /// Layer-stack opacity for the final compose. 0 = no layer contribution,
+    /// 1 = fully applied. Consumed by `LayerCompositor.compose`. Defaults
+    /// to 1 so existing presets without this field behave identically.
+    public var opacity: Double
+    /// Blend mode used by `LayerCompositor.compose` when layering the
+    /// dithered output onto the current pipeline buffer. `.normal`
+    /// preserves the pre-blend-modes behaviour.
+    public var blendMode: LayerBlendMode
 
     public init(
         id: UUID = UUID(),
@@ -622,7 +753,9 @@ public struct DitherLayerParams: Identifiable, Codable, Equatable, Sendable {
         pixelScale: Int = 1,
         threshold: Double = 0.5,
         sharpen: Double = 0,
-        contrast: Double = 0
+        contrast: Double = 0,
+        opacity: Double = 1.0,
+        blendMode: LayerBlendMode = .normal
     ) {
         self.id = id
         self.enabled = enabled
@@ -633,10 +766,13 @@ public struct DitherLayerParams: Identifiable, Codable, Equatable, Sendable {
         self.threshold = max(0.1, min(0.9, threshold))
         self.sharpen = max(0, min(1, sharpen))
         self.contrast = max(0, min(1, contrast))
+        self.opacity = max(0, min(1, opacity))
+        self.blendMode = blendMode
     }
 
     private enum CodingKeys: String, CodingKey {
         case id, enabled, algorithm, colorMode, bayerLevel, pixelScale, threshold, sharpen, contrast
+        case opacity, blendMode
     }
 
     public init(from decoder: Decoder) throws {
@@ -650,8 +786,26 @@ public struct DitherLayerParams: Identifiable, Codable, Equatable, Sendable {
             pixelScale: try container.decode(Int.self, forKey: .pixelScale),
             threshold: try container.decode(Double.self, forKey: .threshold),
             sharpen: try container.decode(Double.self, forKey: .sharpen),
-            contrast: try container.decode(Double.self, forKey: .contrast)
+            contrast: try container.decode(Double.self, forKey: .contrast),
+            opacity: try container.decodeIfPresent(Double.self, forKey: .opacity) ?? 1.0,
+            blendMode: try container.decodeIfPresent(LayerBlendMode.self, forKey: .blendMode) ?? .normal
         )
+    }
+
+    public func encode(to encoder: Encoder) throws {
+        var c = encoder.container(keyedBy: CodingKeys.self)
+        try c.encode(id, forKey: .id)
+        try c.encode(enabled, forKey: .enabled)
+        try c.encode(algorithm, forKey: .algorithm)
+        try c.encode(colorMode, forKey: .colorMode)
+        try c.encode(bayerLevel, forKey: .bayerLevel)
+        try c.encode(pixelScale, forKey: .pixelScale)
+        try c.encode(threshold, forKey: .threshold)
+        try c.encode(sharpen, forKey: .sharpen)
+        try c.encode(contrast, forKey: .contrast)
+        // Skip defaults so existing-style YAML stays clean.
+        if opacity != 1.0 { try c.encode(opacity, forKey: .opacity) }
+        if blendMode != .normal { try c.encode(blendMode, forKey: .blendMode) }
     }
 }
 
@@ -741,24 +895,39 @@ public struct LUTLayerParams: Identifiable, Codable, Equatable, Sendable {
     public var enabled: Bool
     public var lutName: String
     public var lutFileName: String
+    /// Per-effect "fill": how much of the LUT-transformed colour to keep
+    /// vs. the straight source. `LUTRenderer.apply` consumes this as a
+    /// lerp factor before the layer-level compose step.
     public var intensity: Double
+    /// Layer-stack opacity consumed by `LayerCompositor.compose` when
+    /// laying the LUT-applied image over the current pipeline buffer.
+    /// Orthogonal to `intensity` (which controls internal mix). Default
+    /// 1.0 preserves pre-blend-modes behaviour.
+    public var opacity: Double
+    /// Blend mode used by the final compose. `.normal` at opacity 1.0
+    /// matches the pre-blend-modes pipeline exactly.
+    public var blendMode: LayerBlendMode
 
     public init(
         id: UUID = UUID(),
         enabled: Bool = true,
         lutName: String = "",
         lutFileName: String = "",
-        intensity: Double = 1.0
+        intensity: Double = 1.0,
+        opacity: Double = 1.0,
+        blendMode: LayerBlendMode = .normal
     ) {
         self.id = id
         self.enabled = enabled
         self.lutName = lutName
         self.lutFileName = lutFileName
         self.intensity = max(0, min(1, intensity))
+        self.opacity = max(0, min(1, opacity))
+        self.blendMode = blendMode
     }
 
     private enum CodingKeys: String, CodingKey {
-        case id, enabled, lutName, lutFileName, intensity
+        case id, enabled, lutName, lutFileName, intensity, opacity, blendMode
     }
 
     public init(from decoder: Decoder) throws {
@@ -768,8 +937,21 @@ public struct LUTLayerParams: Identifiable, Codable, Equatable, Sendable {
             enabled: try container.decodeIfPresent(Bool.self, forKey: .enabled) ?? true,
             lutName: try container.decodeIfPresent(String.self, forKey: .lutName) ?? "",
             lutFileName: try container.decodeIfPresent(String.self, forKey: .lutFileName) ?? "",
-            intensity: try container.decodeIfPresent(Double.self, forKey: .intensity) ?? 1.0
+            intensity: try container.decodeIfPresent(Double.self, forKey: .intensity) ?? 1.0,
+            opacity: try container.decodeIfPresent(Double.self, forKey: .opacity) ?? 1.0,
+            blendMode: try container.decodeIfPresent(LayerBlendMode.self, forKey: .blendMode) ?? .normal
         )
+    }
+
+    public func encode(to encoder: Encoder) throws {
+        var c = encoder.container(keyedBy: CodingKeys.self)
+        try c.encode(id, forKey: .id)
+        try c.encode(enabled, forKey: .enabled)
+        try c.encode(lutName, forKey: .lutName)
+        try c.encode(lutFileName, forKey: .lutFileName)
+        try c.encode(intensity, forKey: .intensity)
+        if opacity != 1.0 { try c.encode(opacity, forKey: .opacity) }
+        if blendMode != .normal { try c.encode(blendMode, forKey: .blendMode) }
     }
 }
 
@@ -798,6 +980,31 @@ public enum ShaderStyle: String, Codable, CaseIterable, Sendable {
         case .halftone: return "Halftone"
         case .kuwahara: return "Kuwahara"
         }
+    }
+
+    /// SF Symbol name for the "+ Add Layer" menu entry. Mirrors the per-
+    /// variant `GPUEffectKind.menuIcon` pattern so each shader surfaces as
+    /// its own first-class filter in the add-layer picker rather than being
+    /// hidden under an umbrella "+ Shader" button.
+    public var menuIcon: String {
+        switch self {
+        case .ascii:       return "textformat"
+        case .crimewave:   return "flame"
+        case .narc:        return "moon.stars"
+        case .shiba:       return "pawprint"
+        case .pixelSort:   return "rectangle.split.3x1"
+        case .distantPast: return "hourglass"
+        case .crt:         return "tv"
+        case .halftone:    return "circle.dotted"
+        case .kuwahara:    return "paintbrush.pointed"
+        }
+    }
+
+    /// Constructs a `.shader` CompositionLayer pre-scoped to this style
+    /// with default parameters. Used by the add-layer menu so clicking
+    /// "+ ASCII" lands the user on a ready-to-tune ASCII layer.
+    public func makeDefaultLayer() -> CompositionLayer {
+        .shader(ShaderLayerParams(style: self))
     }
 }
 
@@ -874,6 +1081,27 @@ public struct ASCIIShaderParams: Codable, Equatable, Sendable {
     public var exposure: Double
     public var attenuation: Double
     public var blackLevel: Double
+    /// Custom character palette, ordered dim → bright. `nil` uses the baked
+    /// `fillASCII.png` / `edgesASCII.png` atlases. Non-nil triggers runtime
+    /// atlas generation via `ASCIIAtlasGenerator`.
+    public var characters: String?
+    /// PostScript font name for runtime glyph rasterisation. `nil` picks
+    /// Menlo. Any installed system font name is accepted.
+    public var fontName: String?
+    /// Orthogonal to `characters` / `fontName`. Controls the atlas cell
+    /// size independently:
+    ///   - false (default): 8×8 atlas. Pure-default case (no chars, no
+    ///     font, no hi-res) reads the baked `fillASCII.png` pixel-art PNG;
+    ///     anything customised rasterises through Core Text at 8×8.
+    ///   - true: 16×16 atlas, always Core Text. Sharper serif / antialias
+    ///     edge at 4× the atlas bytes.
+    ///
+    /// The toggle was previously coupled to "whether we rasterise at all",
+    /// which made flipping it also swap the glyph *source* (baked PNG →
+    /// Core Text). That was the UX trap the user flagged. Now the toggle
+    /// only controls resolution; glyph source changes only with
+    /// characters/font edits.
+    public var highDetail: Bool
 
     public init(
         cellSize: Int = 10,
@@ -884,7 +1112,10 @@ public struct ASCIIShaderParams: Codable, Equatable, Sendable {
         invert: Bool = false,
         exposure: Double = 1.0,
         attenuation: Double = 1.0,
-        blackLevel: Double = 0.0
+        blackLevel: Double = 0.0,
+        characters: String? = nil,
+        fontName: String? = nil,
+        highDetail: Bool = false
     ) {
         self.cellSize = cellSize
         self.edgeBias = edgeBias
@@ -893,11 +1124,14 @@ public struct ASCIIShaderParams: Codable, Equatable, Sendable {
         self.exposure = exposure
         self.attenuation = attenuation
         self.blackLevel = blackLevel
+        self.characters = characters
+        self.fontName = fontName
+        self.highDetail = highDetail
     }
 
     private enum CodingKeys: String, CodingKey {
         case cellSize, edgeBias, colorMode, foreground, background, invert
-        case exposure, attenuation, blackLevel
+        case exposure, attenuation, blackLevel, characters, fontName, highDetail
     }
 
     public init(from decoder: Decoder) throws {
@@ -919,7 +1153,10 @@ public struct ASCIIShaderParams: Codable, Equatable, Sendable {
             invert: try container.decodeIfPresent(Bool.self, forKey: .invert) ?? false,
             exposure: try container.decodeIfPresent(Double.self, forKey: .exposure) ?? 1.0,
             attenuation: try container.decodeIfPresent(Double.self, forKey: .attenuation) ?? 1.0,
-            blackLevel: try container.decodeIfPresent(Double.self, forKey: .blackLevel) ?? 0.0
+            blackLevel: try container.decodeIfPresent(Double.self, forKey: .blackLevel) ?? 0.0,
+            characters: try container.decodeIfPresent(String.self, forKey: .characters),
+            fontName: try container.decodeIfPresent(String.self, forKey: .fontName),
+            highDetail: try container.decodeIfPresent(Bool.self, forKey: .highDetail) ?? false
         )
     }
 
@@ -932,6 +1169,13 @@ public struct ASCIIShaderParams: Codable, Equatable, Sendable {
         if exposure != 1.0 { try container.encode(exposure, forKey: .exposure) }
         if attenuation != 1.0 { try container.encode(attenuation, forKey: .attenuation) }
         if blackLevel != 0.0 { try container.encode(blackLevel, forKey: .blackLevel) }
+        if let characters, !characters.isEmpty {
+            try container.encode(characters, forKey: .characters)
+        }
+        if let fontName, !fontName.isEmpty {
+            try container.encode(fontName, forKey: .fontName)
+        }
+        if highDetail { try container.encode(highDetail, forKey: .highDetail) }
     }
 }
 
@@ -995,24 +1239,115 @@ public struct ShibaShaderParams: Codable, Equatable, Sendable {
 public enum PixelSortDirection: String, Codable, Equatable, Sendable, CaseIterable {
     case horizontal
     case vertical
+    /// Anti-diagonal sweep — `dir = normalize(1, 1)` along lines of constant
+    /// `floor(pixel.x - pixel.y)`. Lifted directly from Kim Asendorf's
+    /// original 2010 Processing sketch.
+    case diagonal
 }
+
+/// Span-detection criterion. Determines which pixels belong to a single
+/// sort-able run. The classic Framer behaviour is `.luminance`, retained as
+/// the default. The other four options are Kim Asendorf's original modes
+/// (Black / White / Bright / Dark) — see grainrad/notes/pixel-sort.md.
+public enum PixelSortSpanMode: String, Codable, Equatable, Sendable, CaseIterable {
+    /// Default Framer behaviour: span continues while `luminance >= threshold`.
+    /// Existing presets that don't carry a `spanMode` field decode to this
+    /// case so legacy behaviour is preserved.
+    case luminance
+    /// Kim Asendorf "Black": span starts when `luminance > threshold * 0.25`,
+    /// ends when it drops below — sorts emerge from shadow regions.
+    case kimBlack
+    /// Kim Asendorf "White": span starts when `luminance < 1 - threshold * 0.25`,
+    /// ends when it rises above — sorts emerge from highlights.
+    case kimWhite
+    /// Kim Asendorf "Bright": span uses `max(r,g,b) > threshold`. Stays in
+    /// well-lit, saturated regions.
+    case kimBright
+    /// Kim Asendorf "Dark": span uses `max(r,g,b) < threshold`. Stays in
+    /// shadow / desaturated regions.
+    case kimDark
+}
+
+/// What value each pixel is ranked by when sorting inside a span. Orthogonal
+/// to `PixelSortSpanMode` (which decides what counts as a span): span mode
+/// picks the *region*, sort criterion picks the *ordering*. Reusing the
+/// existing `PixelSortMode` enum from the `.gpuEffect.glitch.pixelSort`
+/// bucket — same semantics (brightness = max(r,g,b), luminance = Rec.601,
+/// hue = HSV angle), just now reachable from the `.shader.pixelSort` path
+/// too.
+public typealias PixelSortCriterion = PixelSortMode
 
 public struct PixelSortShaderParams: Codable, Equatable, Sendable {
     public var threshold: Double
     public var direction: PixelSortDirection
     public var span: Int
     public var amount: Double
+    /// Span detection criterion. Defaults to `.luminance` so existing presets
+    /// behave identically to before this knob existed.
+    public var spanMode: PixelSortSpanMode
+    /// Sort criterion — what value each pixel contributes to the ordering
+    /// inside a span. Orthogonal to `spanMode`. Default `.luminance` keeps
+    /// the classic behaviour (sort streaks by perceived intensity).
+    public var sortBy: PixelSortCriterion
+    /// Per-line threshold jitter (0 = uniform, 1 = ±25% per row/column/diagonal).
+    /// Each line gets a deterministic hash of its `lineCoord` modulating the
+    /// effective threshold — adjacent lines get different span lengths,
+    /// breaking up the mechanical look. Stable frame-to-frame for stills.
+    public var randomness: Double
+    /// Sort descending by the chosen criterion instead of ascending.
+    public var reverse: Bool
 
     public init(
         threshold: Double = 0.65,
         direction: PixelSortDirection = .horizontal,
         span: Int = 24,
-        amount: Double = 1.0
+        amount: Double = 1.0,
+        spanMode: PixelSortSpanMode = .luminance,
+        sortBy: PixelSortCriterion = .luminance,
+        randomness: Double = 0.0,
+        reverse: Bool = false
     ) {
         self.threshold = threshold
         self.direction = direction
         self.span = span
         self.amount = amount
+        self.spanMode = spanMode
+        self.sortBy = sortBy
+        self.randomness = randomness
+        self.reverse = reverse
+    }
+
+    private enum CodingKeys: String, CodingKey {
+        case threshold, direction, span, amount, spanMode, sortBy, randomness, reverse
+    }
+
+    public init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        // All new fields decode optionally with sensible defaults so old YAML
+        // and presets continue to load and behave identically.
+        self.init(
+            threshold: try container.decodeIfPresent(Double.self, forKey: .threshold) ?? 0.65,
+            direction: try container.decodeIfPresent(PixelSortDirection.self, forKey: .direction) ?? .horizontal,
+            span: try container.decodeIfPresent(Int.self, forKey: .span) ?? 24,
+            amount: try container.decodeIfPresent(Double.self, forKey: .amount) ?? 1.0,
+            spanMode: try container.decodeIfPresent(PixelSortSpanMode.self, forKey: .spanMode) ?? .luminance,
+            sortBy: try container.decodeIfPresent(PixelSortCriterion.self, forKey: .sortBy) ?? .luminance,
+            randomness: try container.decodeIfPresent(Double.self, forKey: .randomness) ?? 0.0,
+            reverse: try container.decodeIfPresent(Bool.self, forKey: .reverse) ?? false
+        )
+    }
+
+    public func encode(to encoder: Encoder) throws {
+        var container = encoder.container(keyedBy: CodingKeys.self)
+        try container.encode(threshold, forKey: .threshold)
+        try container.encode(direction, forKey: .direction)
+        try container.encode(span, forKey: .span)
+        try container.encode(amount, forKey: .amount)
+        // Skip emitting defaults so existing-style YAML stays clean.
+        if spanMode != .luminance { try container.encode(spanMode, forKey: .spanMode) }
+        if sortBy != .luminance { try container.encode(sortBy, forKey: .sortBy) }
+        if randomness != 0 { try container.encode(randomness, forKey: .randomness) }
+        if reverse { try container.encode(reverse, forKey: .reverse) }
     }
 }
 
@@ -1075,14 +1410,47 @@ public struct HalftoneShaderParams: Codable, Equatable, Sendable {
 
 public struct KuwaharaShaderParams: Codable, Equatable, Sendable {
     public var kernelSize: Int
-    public var sharpness: Double
+    /// How much of the Kuwahara-filtered colour to keep. 1.0 = full effect
+    /// (default), 0.0 = pass-through to the source. Internally the shader
+    /// computes `mix(srcOrig, bestColor, softness)`.
+    ///
+    /// Replaces a legacy `sharpness` field that ran 0..8 with inverted
+    /// semantics (`bestColor + (srcOrig - bestColor) * (sharpness / 8.0)`,
+    /// where higher meant *less* effect). Decoding accepts either field —
+    /// legacy `sharpness` is mapped via `softness = 1 - sharpness/8`.
+    public var softness: Double
 
     public init(
         kernelSize: Int = 4,
-        sharpness: Double = 8.0
+        softness: Double = 1.0
     ) {
         self.kernelSize = kernelSize
-        self.sharpness = sharpness
+        self.softness = softness
+    }
+
+    private enum CodingKeys: String, CodingKey {
+        case kernelSize
+        case softness
+        case sharpness  // legacy — read-only
+    }
+
+    public init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        self.kernelSize = try c.decodeIfPresent(Int.self, forKey: .kernelSize) ?? 4
+        if let s = try c.decodeIfPresent(Double.self, forKey: .softness) {
+            self.softness = s
+        } else if let legacy = try c.decodeIfPresent(Double.self, forKey: .sharpness) {
+            // Legacy: sharpness 0..8 (0 = full effect, 8 = pass-through).
+            self.softness = max(0.0, min(1.0, 1.0 - legacy / 8.0))
+        } else {
+            self.softness = 1.0
+        }
+    }
+
+    public func encode(to encoder: Encoder) throws {
+        var c = encoder.container(keyedBy: CodingKeys.self)
+        try c.encode(kernelSize, forKey: .kernelSize)
+        try c.encode(softness, forKey: .softness)
     }
 }
 
@@ -1197,15 +1565,28 @@ public struct ShaderLayerParams: Identifiable, Codable, Equatable, Sendable {
     public let id: UUID
     public var enabled: Bool
     public var style: ShaderStyle
+    /// Per-effect "fill": how much the shader transformation bleeds through
+    /// vs. the pass-through source, consumed internally by each shader
+    /// (e.g. `ShaderRenderer.applyASCII` lerps with this). Orthogonal to
+    /// `opacity` which controls the final compose step onto the pipeline.
     public var intensity: Double
     public var params: ShaderStyleParams
+    /// Layer-stack opacity consumed by `LayerCompositor.compose` when
+    /// laying the shader's rendered output onto the current pipeline
+    /// buffer. Default 1.0 preserves pre-blend-modes behaviour.
+    public var opacity: Double
+    /// Blend mode used by the final compose. `.normal` at opacity 1.0
+    /// matches the pre-blend-modes pipeline exactly.
+    public var blendMode: LayerBlendMode
 
     public init(
         id: UUID = UUID(),
         enabled: Bool = true,
         style: ShaderStyle = .ascii,
         intensity: Double = 1.0,
-        params: ShaderStyleParams? = nil
+        params: ShaderStyleParams? = nil,
+        opacity: Double = 1.0,
+        blendMode: LayerBlendMode = .normal
     ) {
         self.id = id
         self.enabled = enabled
@@ -1221,10 +1602,12 @@ public struct ShaderLayerParams: Identifiable, Codable, Equatable, Sendable {
             self.params = ShaderStyleParams.default(for: style)
         }
         self.intensity = max(0, min(1, intensity))
+        self.opacity = max(0, min(1, opacity))
+        self.blendMode = blendMode
     }
 
     private enum CodingKeys: String, CodingKey {
-        case id, enabled, style, intensity, params
+        case id, enabled, style, intensity, params, opacity, blendMode
     }
 
     public init(from decoder: Decoder) throws {
@@ -1237,7 +1620,9 @@ public struct ShaderLayerParams: Identifiable, Codable, Equatable, Sendable {
             enabled: try container.decodeIfPresent(Bool.self, forKey: .enabled) ?? true,
             style: decodedStyle,
             intensity: try container.decodeIfPresent(Double.self, forKey: .intensity) ?? 1.0,
-            params: decodedParams
+            params: decodedParams,
+            opacity: try container.decodeIfPresent(Double.self, forKey: .opacity) ?? 1.0,
+            blendMode: try container.decodeIfPresent(LayerBlendMode.self, forKey: .blendMode) ?? .normal
         )
     }
 
@@ -1247,7 +1632,9 @@ public struct ShaderLayerParams: Identifiable, Codable, Equatable, Sendable {
             enabled: enabled,
             style: style,
             intensity: intensity,
-            params: style == self.style ? params : ShaderStyleParams.default(for: style)
+            params: style == self.style ? params : ShaderStyleParams.default(for: style),
+            opacity: opacity,
+            blendMode: blendMode
         )
     }
 
@@ -1257,7 +1644,9 @@ public struct ShaderLayerParams: Identifiable, Codable, Equatable, Sendable {
             enabled: enabled,
             style: params.style,
             intensity: intensity,
-            params: params
+            params: params,
+            opacity: opacity,
+            blendMode: blendMode
         )
     }
 }
@@ -1276,6 +1665,7 @@ public enum CompositionLayer: Identifiable, Codable, Equatable, Sendable {
     case aspectRatio(AspectRatioLayerParams)
     case lut(LUTLayerParams)
     case shader(ShaderLayerParams)
+    case gpuEffect(GPUEffectLayerParams)
 
     public var id: UUID {
         switch self {
@@ -1290,6 +1680,7 @@ public enum CompositionLayer: Identifiable, Codable, Equatable, Sendable {
         case .aspectRatio(let p): return p.id
         case .lut(let p): return p.id
         case .shader(let p): return p.id
+        case .gpuEffect(let p): return p.id
         }
     }
 
@@ -1306,6 +1697,7 @@ public enum CompositionLayer: Identifiable, Codable, Equatable, Sendable {
         case .aspectRatio: return "Aspect Ratio"
         case .lut: return "LUT"
         case .shader(let p): return p.style.label
+        case .gpuEffect(let p): return p.kind.label
         }
     }
 
@@ -1323,6 +1715,7 @@ public enum CompositionLayer: Identifiable, Codable, Equatable, Sendable {
             case .aspectRatio(let p): return p.enabled
             case .lut(let p): return p.enabled
             case .shader(let p): return p.enabled
+            case .gpuEffect(let p): return p.enabled
             }
         }
         set {
@@ -1360,6 +1753,9 @@ public enum CompositionLayer: Identifiable, Codable, Equatable, Sendable {
             case .shader(var p):
                 p.enabled = newValue
                 self = .shader(p)
+            case .gpuEffect(var p):
+                p.enabled = newValue
+                self = .gpuEffect(p)
             }
         }
     }
@@ -1377,6 +1773,7 @@ public enum CompositionLayer: Identifiable, Codable, Equatable, Sendable {
         case .aspectRatio: return "crop"
         case .lut: return "photo.artframe"
         case .shader: return "sparkles"
+        case .gpuEffect: return "sparkles.rectangle.stack"
         }
     }
 
@@ -1384,6 +1781,7 @@ public enum CompositionLayer: Identifiable, Codable, Equatable, Sendable {
         switch self {
         case .lut(let p): return p.lutName.isEmpty ? "None" : p.lutName
         case .shader(let p): return p.style.label
+        case .gpuEffect(let p): return p.kind.label
         default: return ""
         }
     }
@@ -1420,6 +1818,8 @@ public enum CompositionLayer: Identifiable, Codable, Equatable, Sendable {
             self = .lut(try container.decode(LUTLayerParams.self, forKey: .params))
         case "shader":
             self = .shader(try container.decode(ShaderLayerParams.self, forKey: .params))
+        case "gpuEffect":
+            self = .gpuEffect(try container.decode(GPUEffectLayerParams.self, forKey: .params))
         default:
             throw DecodingError.dataCorruptedError(
                 forKey: .type, in: container,
@@ -1463,6 +1863,9 @@ public enum CompositionLayer: Identifiable, Codable, Equatable, Sendable {
             try container.encode(p, forKey: .params)
         case .shader(let p):
             try container.encode("shader", forKey: .type)
+            try container.encode(p, forKey: .params)
+        case .gpuEffect(let p):
+            try container.encode("gpuEffect", forKey: .type)
             try container.encode(p, forKey: .params)
         }
     }

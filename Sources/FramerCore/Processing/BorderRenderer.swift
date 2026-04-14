@@ -177,7 +177,11 @@ public enum BorderRenderer {
                 current = try CaptionRenderer.renderCaption(on: current, params: params, exif: exif, sourceImage: sourceImage)
 
             case .dither(let params):
-                current = try DitherRenderer.apply(to: current, params: params, previewBaseDimension: previewBaseDimension, sourceImage: sourceImage)
+                let rendered = try DitherRenderer.apply(to: current, params: params, previewBaseDimension: previewBaseDimension, sourceImage: sourceImage)
+                current = try LayerCompositor.compose(
+                    base: current, over: rendered,
+                    mode: params.blendMode, opacity: params.opacity
+                )
 
             case .aspectRatio(let params):
                 let currentSize = CGSize(width: current.width, height: current.height)
@@ -193,20 +197,31 @@ public enum BorderRenderer {
                       let lut = LUTProvider.loadLUT(named: params.lutFileName) else {
                     i += 1; continue
                 }
-                current = try LUTRenderer.apply(
+                let rendered = try LUTRenderer.apply(
                     to: current,
                     lut: lut,
                     intensity: params.intensity,
                     previewBaseDimension: previewBaseDimension
                 )
+                current = try LayerCompositor.compose(
+                    base: current, over: rendered,
+                    mode: params.blendMode, opacity: params.opacity
+                )
 
             case .shader(let params):
-                current = try ShaderRenderer.apply(
+                let rendered = try ShaderRenderer.apply(
                     to: current,
                     params: params,
                     previewBaseDimension: previewBaseDimension,
                     sourceImage: sourceImage
                 )
+                current = try LayerCompositor.compose(
+                    base: current, over: rendered,
+                    mode: params.blendMode, opacity: params.opacity
+                )
+
+            case .gpuEffect:
+                break
             }
             i += 1
         }
@@ -726,6 +741,16 @@ public enum BorderRenderer {
         let oR    = UnsafeMutablePointer<Float>.allocate(capacity: pixelCount)
         let oG    = UnsafeMutablePointer<Float>.allocate(capacity: pixelCount)
         let oB    = UnsafeMutablePointer<Float>.allocate(capacity: pixelCount)
+        // Overlay alpha channel. Frame Overlay PNGs carry real transparency
+        // (alpha=0 in the centre window); without gating the strength mask
+        // by this, those "transparent" pixels still darken the base because
+        // CGBitmapContext rasterises them as premultiplied black (rgb=0,
+        // alpha=0) and the luminance-deviation mask reads lum=0 as full
+        // opacity. Multiplying `lum` by `oA` below zeroes out contributions
+        // from genuinely-transparent overlay pixels. Grayscale overlays
+        // (dust / light leak / wet plate) always ship with alpha=1 so the
+        // factor is a no-op for them.
+        let oA    = UnsafeMutablePointer<Float>.allocate(capacity: pixelCount)
         let lum   = UnsafeMutablePointer<Float>.allocate(capacity: pixelCount)
         let bR    = UnsafeMutablePointer<Float>.allocate(capacity: pixelCount)
         let bG    = UnsafeMutablePointer<Float>.allocate(capacity: pixelCount)
@@ -740,7 +765,7 @@ public enum BorderRenderer {
 
         defer {
             baseF.deallocate(); overF.deallocate()
-            oR.deallocate();    oG.deallocate();    oB.deallocate()
+            oR.deallocate();    oG.deallocate();    oB.deallocate(); oA.deallocate()
             lum.deallocate()
             bR.deallocate();    bG.deallocate();    bB.deallocate()
             rR.deallocate();    rG.deallocate();    rB.deallocate()
@@ -754,8 +779,9 @@ public enum BorderRenderer {
         vDSP_vsmul(baseF, 1, &scale, baseF, 1, vDSP_Length(totalBytes))
         vDSP_vsmul(overF, 1, &scale, overF, 1, vDSP_Length(totalBytes))
 
-        // ── De-interleave overlay into R, G, B (stride 4 → stride 1) ────────────
+        // ── De-interleave overlay into R, G, B, A (stride 4 → stride 1) ─────────
         deinterleaveRGB(overF, r: oR, g: oG, b: oB, pixelCount: pixelCount)
+        vDSP_mmov(overF + 3, oA, 1, n, 4, 1)   // alpha channel (stride 4 starting at offset 3)
 
         // ── Compute luminance: L = 0.299*R + 0.587*G + 0.114*B ──────────────────
         var wr: Float = 0.299, wg: Float = 0.587, wb: Float = 0.114
@@ -763,12 +789,22 @@ public enum BorderRenderer {
         vDSP_vsma(oG, 1, &wg, lum, 1, lum, 1, n)           // lum += 0.587 * oG
         vDSP_vsma(oB, 1, &wb, lum, 1, lum, 1, n)           // lum += 0.114 * oB
 
-        // ── Strength mask: alpha = clamp(|lum - 0.5| * 2 * opacity, 0, 1) ───────
+        // ── Strength mask: clamp(max(0, |lum - 0.5| - deadband) * 2 * opacity * overlay.alpha, 0, 1) ─
+        // Deadband addresses JPEG-authored frame overlays where the
+        // "transparent" centre is a mid-gray fill at byte 128 (lum ≈ 0.502)
+        // rather than exactly 0.5 — without the deadband the 1-byte
+        // deviation caused a visible darkening of every pixel in the frame's
+        // window. The chosen 0.005 covers ~1/255 of luminance range; real
+        // frame ink sits well outside this band so user-intended contributions
+        // pass through essentially unchanged.
         var negHalf: Float = -0.5
         vDSP_vsadd(lum, 1, &negHalf, lum, 1, n)            // lum -= 0.5
         vDSP_vabs(lum, 1, lum, 1, n)                       // lum  = |lum|
+        var negDeadband: Float = -0.005
+        vDSP_vsadd(lum, 1, &negDeadband, lum, 1, n)        // lum -= deadband (negatives clip below)
         var strengthScale: Float = 2.0 * Float(opacity)
         vDSP_vsmul(lum, 1, &strengthScale, lum, 1, n)      // lum *= 2*opacity
+        vDSP_vmul(lum, 1, oA, 1, lum, 1, n)                // lum *= overlay.alpha  ← Frame Overlay fix
         var lo: Float = 0, hi: Float = 1
         vDSP_vclip(lum, 1, &lo, &hi, lum, 1, n)            // lum  = clamp(lum, 0, 1)
 
@@ -905,14 +941,20 @@ public enum BorderRenderer {
     // MARK: - Context Helper
 
     private static func createContext(width: Int, height: Int, template: CGImage) -> CGContext? {
-        CGContext(
+        // Ignore `template.bitmapInfo` — some ImageIO-decoded sources
+        // carry flag combinations (e.g. `kCGImageAlphaLast | kCGImage-
+        // PixelFormatPacked`) that `CGBitmapContextCreate` rejects.
+        // Always allocate a canonical premultipliedLast RGBA8 context;
+        // `ctx.draw(template, ...)` converts the source on the fly.
+        _ = template
+        return CGContext(
             data: nil,
             width: width,
             height: height,
-            bitsPerComponent: template.bitsPerComponent,
-            bytesPerRow: 0,
-            space: template.colorSpace ?? CGColorSpaceCreateDeviceRGB(),
-            bitmapInfo: template.bitmapInfo.rawValue
+            bitsPerComponent: 8,
+            bytesPerRow: width * 4,
+            space: CGColorSpaceCreateDeviceRGB(),
+            bitmapInfo: CGImageAlphaInfo.premultipliedLast.rawValue
         )
     }
 

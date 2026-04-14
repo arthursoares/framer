@@ -29,15 +29,38 @@ public actor FrameProcessor {
         } else {
             previewMax = computedMax
         }
-        let cgImage = downscale(rotated, maxDimension: previewMax)
+        let containsGPUEffect = config.layers?.contains { layer in
+            if case .gpuEffect = layer { return true }
+            return false
+        } ?? false
+        let cgImage = containsGPUEffect ? rotated : downscale(rotated, maxDimension: previewMax)
         try Task.checkCancellation()
         let exif = exifData(for: url)
 
+        // When a `.gpuEffect` keeps preview at full resolution, scale-sensitive
+        // CPU layers (Dither, LUT, ShaderRenderer) must use `previewMax` as
+        // their `previewBaseDimension` so their pattern density matches export.
+        // Without this, dither/shader patterns sample at full-pixel rate during
+        // preview (fine grain, aliases on display downscale) but at coarse
+        // preview-equivalent rate during export — producing a WYSIWYG mismatch
+        // for any stack mixing `.gpuEffect` with a scale-sensitive layer.
+        let layerPreviewBase: Int? = containsGPUEffect ? previewMax : nil
+
         let borderResult: BorderResult
         if let layers = config.layers {
-            borderResult = try BorderRenderer.applyLayers(layers, to: cgImage, sourceImage: cgImage, exif: exif)
+            borderResult = try applyConfiguredLayers(
+                layers,
+                to: cgImage,
+                sourceImage: cgImage,
+                exif: exif,
+                previewBaseDimension: layerPreviewBase
+            )
         } else {
             borderResult = try BorderRenderer.applyBorder(to: cgImage, config: config, style: config.borderStyle)
+        }
+
+        if containsGPUEffect {
+            return downscale(borderResult.image, maxDimension: previewMax)
         }
 
         return borderResult.image
@@ -67,7 +90,13 @@ public actor FrameProcessor {
 
         let borderResult: BorderResult
         if let layers = config.layers {
-            borderResult = try BorderRenderer.applyLayers(layers, to: cgImage, sourceImage: cgImage, exif: exif, previewBaseDimension: previewBase)
+            borderResult = try applyConfiguredLayers(
+                layers,
+                to: cgImage,
+                sourceImage: cgImage,
+                exif: exif,
+                previewBaseDimension: previewBase
+            )
         } else {
             borderResult = try BorderRenderer.applyBorder(to: cgImage, config: config, style: config.borderStyle)
         }
@@ -105,6 +134,56 @@ public actor FrameProcessor {
             throw FramerError.invalidImage(url)
         }
         return image
+    }
+
+    private func applyConfiguredLayers(
+        _ layers: [CompositionLayer],
+        to image: CGImage,
+        sourceImage: CGImage,
+        exif: ExifData,
+        previewBaseDimension: Int?
+    ) throws -> BorderResult {
+        var result = BorderResult(image: image, imageOrigin: nil, imageSize: nil)
+
+        for layer in layers {
+            try Task.checkCancellation()
+
+            switch layer {
+            case .gpuEffect(let params):
+                // Stateless dispatch — no Metal device required upfront. Each
+                // bucket renderer attempts its GPU path and falls back to CPU
+                // on `MetalEffectError`, so headless / no-Metal hosts still
+                // get a valid image instead of a hard failure.
+                let rendered = try GPUEffectsPlatform.dispatchRenderPreview(
+                    input: result.image,
+                    effect: params.kind,
+                    parameters: params.params,
+                    outputSize: CGSize(width: result.image.width, height: result.image.height)
+                )
+                // Compose with layer-level blend mode + opacity. At defaults
+                // (.normal, 1.0) the compositor short-circuits to a direct
+                // return of `rendered`, so pre-blend-modes presets render
+                // identically to before this commit.
+                let composed = try LayerCompositor.compose(
+                    base: result.image,
+                    over: rendered,
+                    mode: params.blendMode,
+                    opacity: params.opacity
+                )
+                result = BorderResult(image: composed, imageOrigin: result.imageOrigin, imageSize: result.imageSize)
+
+            default:
+                result = try BorderRenderer.applyLayers(
+                    [layer],
+                    to: result.image,
+                    sourceImage: sourceImage,
+                    exif: exif,
+                    previewBaseDimension: previewBaseDimension
+                )
+            }
+        }
+
+        return result
     }
 
     /// Compute preview downscale target based on layer requirements.
@@ -152,6 +231,9 @@ public actor FrameProcessor {
                 }
 
             case .shader:
+                break
+
+            case .gpuEffect:
                 break
 
             default:

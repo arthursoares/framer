@@ -12,32 +12,84 @@ public enum ShaderRenderer {
 
         switch params.params {
         case .ascii:
-            return try ShaderASCIIRenderer.apply(
-                to: image,
-                params: params,
-                previewBaseDimension: previewBaseDimension,
-                sourceImage: sourceImage
-            )
+            // GPU path (Phase 1 of the Effects bucket migration — see
+            // docs/gpu-migration-plan.md). Falls back to the CPU renderer when
+            // Metal is unavailable (no GPU device, missing LUT atlases, etc.)
+            // so headless and pre-Metal hosts keep working.
+            return try gpuOrCPU(image: image,
+                                gpu: { try TextCellRenderer.renderASCII(
+                                    to: image,
+                                    params: params,
+                                    previewBaseDimension: previewBaseDimension,
+                                    sourceImage: sourceImage)
+                                },
+                                cpu: { try ShaderASCIIRenderer.apply(
+                                    to: image,
+                                    params: params,
+                                    previewBaseDimension: previewBaseDimension,
+                                    sourceImage: sourceImage)
+                                })
         case .pixelSort:
-            return try ShaderPixelSortRenderer.apply(to: image, params: params)
+            // GPU path uses the per-fragment 24-sample approximation from
+            // grainrad/notes/pixel-sort.md. Matches CPU output for spans ≤ 24
+            // (Framer's default); longer deliberate streaks fall back to the
+            // CPU sort which preserves every pixel's exact rank — see
+            // docs/gpu-migration-plan.md.
+            return try gpuOrCPU(image: image,
+                                gpu: { try PixelSortRenderer.render(to: image, params: params) },
+                                cpu: { try ShaderPixelSortRenderer.apply(to: image, params: params) })
         case .crimewave(let shaderParams):
-            return try applyCrimewave(to: image, params: shaderParams, intensity: params.intensity)
+            return try gpuOrCPU(image: image,
+                                gpu: { try ColorGradeRenderer.renderCrimewave(to: image, params: params) },
+                                cpu: { try applyCrimewave(to: image, params: shaderParams, intensity: params.intensity) })
         case .narc(let shaderParams):
-            return try applyNarc(to: image, params: shaderParams, intensity: params.intensity)
+            return try gpuOrCPU(image: image,
+                                gpu: { try ColorGradeRenderer.renderNarc(to: image, params: params) },
+                                cpu: { try applyNarc(to: image, params: shaderParams, intensity: params.intensity) })
         case .shiba(let shaderParams):
-            return try applyShiba(to: image, params: shaderParams, intensity: params.intensity)
+            return try gpuOrCPU(image: image,
+                                gpu: { try ColorGradeRenderer.renderShiba(to: image, params: params) },
+                                cpu: { try applyShiba(to: image, params: shaderParams, intensity: params.intensity) })
         case .distantPast(let shaderParams):
-            return try applyDistantPast(to: image, params: shaderParams, intensity: params.intensity)
+            return try gpuOrCPU(image: image,
+                                gpu: { try DistantPastRenderer.render(to: image, params: params) },
+                                cpu: { try applyDistantPast(to: image, params: shaderParams, intensity: params.intensity) })
         case .crt(let shaderParams):
-            return try applyCRT(to: image, params: shaderParams, intensity: params.intensity)
+            return try gpuOrCPU(image: image,
+                                gpu: { try CRTRenderer.render(to: image, params: params) },
+                                cpu: { try applyCRT(to: image, params: shaderParams, intensity: params.intensity) })
         case .halftone(let shaderParams):
-            return try applyHalftone(to: image, params: shaderParams, intensity: params.intensity)
+            return try gpuOrCPU(image: image,
+                                gpu: { try HalftoneRenderer.render(to: image, params: params) },
+                                cpu: { try applyHalftone(to: image, params: shaderParams, intensity: params.intensity) })
         case .kuwahara(let shaderParams):
-            return try applyKuwahara(to: image, params: shaderParams, intensity: params.intensity)
+            return try gpuOrCPU(image: image,
+                                gpu: { try KuwaharaRenderer.render(to: image, params: params) },
+                                cpu: { try applyKuwahara(to: image, params: shaderParams, intensity: params.intensity) })
         }
     }
 
-    private static func applyCrimewave(
+    /// Run the GPU path; on `MetalEffectError` (Metal unavailable, pipeline
+    /// build failure, missing atlas) fall back to the CPU implementation. Any
+    /// other error type bubbles up so genuine bugs aren't silently masked.
+    @inline(__always)
+    private static func gpuOrCPU(
+        image: CGImage,
+        gpu: () throws -> CGImage,
+        cpu: () throws -> CGImage,
+        label: String = #function
+    ) throws -> CGImage {
+        do {
+            let result = try gpu()
+            print("[ShaderRenderer] GPU path ✓  \(label)")
+            return result
+        } catch let error as MetalEffectError {
+            print("[ShaderRenderer] CPU fallback (Metal error: \(error)) — \(label)")
+            return try cpu()
+        }
+    }
+
+    static func applyCrimewave(
         to image: CGImage,
         params: CrimewaveShaderParams,
         intensity: Double
@@ -76,7 +128,7 @@ public enum ShaderRenderer {
         return try mixStylizedContext(ctx, with: image, intensity: intensity)
     }
 
-    private static func applyNarc(
+    static func applyNarc(
         to image: CGImage,
         params: NarcShaderParams,
         intensity: Double
@@ -107,7 +159,7 @@ public enum ShaderRenderer {
         return try mixStylizedContext(ctx, with: image, intensity: intensity)
     }
 
-    private static func applyShiba(
+    static func applyShiba(
         to image: CGImage,
         params: ShibaShaderParams,
         intensity: Double
@@ -152,7 +204,7 @@ public enum ShaderRenderer {
         (0.921569, 0.912534, 0.912534),  // pearl white
     ]
 
-    private static func applyDistantPast(
+    static func applyDistantPast(
         to image: CGImage,
         params: DistantPastShaderParams,
         intensity: Double
@@ -286,7 +338,7 @@ public enum ShaderRenderer {
 
     // MARK: - CRT
 
-    private static func applyCRT(
+    static func applyCRT(
         to image: CGImage,
         params: CRTShaderParams,
         intensity: Double
@@ -374,7 +426,7 @@ public enum ShaderRenderer {
 
     // MARK: - Halftone
 
-    private static func applyHalftone(
+    static func applyHalftone(
         to image: CGImage,
         params: HalftoneShaderParams,
         intensity: Double
@@ -466,7 +518,7 @@ public enum ShaderRenderer {
 
     // MARK: - Kuwahara
 
-    private static func applyKuwahara(
+    static func applyKuwahara(
         to image: CGImage,
         params: KuwaharaShaderParams,
         intensity: Double
@@ -482,7 +534,7 @@ public enum ShaderRenderer {
         let dst = outputData.bindMemory(to: UInt8.self, capacity: width * height * 4)
 
         let radius = max(1, min(15, params.kernelSize))
-        let sharpness = max(0, params.sharpness)
+        let softness = max(0.0, min(1.0, params.softness))
 
         // Basic Kuwahara: split neighborhood into 4 quadrants,
         // pick the quadrant with lowest variance, output its mean color.
@@ -534,16 +586,15 @@ public enum ShaderRenderer {
 
                 let idx = (y * width + x) * 4
 
-                // Unsharp mask: blend between Kuwahara (smooth) and sharpened
-                // sharpened = original + (original - smooth) * sharpness_factor
-                if sharpness > 0 {
-                    let factor = sharpness / 8.0
+                // `softness` blends from source toward the Kuwahara result:
+                // softness=1 → bestColor (full effect), softness=0 → srcOrig.
+                if softness < 1.0 {
                     let origR = Double(src[idx])
                     let origG = Double(src[idx + 1])
                     let origB = Double(src[idx + 2])
-                    bestR = bestR + (origR - bestR) * factor
-                    bestG = bestG + (origG - bestG) * factor
-                    bestB = bestB + (origB - bestB) * factor
+                    bestR = origR + (bestR - origR) * softness
+                    bestG = origG + (bestG - origG) * softness
+                    bestB = origB + (bestB - origB) * softness
                 }
 
                 dst[idx] = ShaderPrimitives.clampByte(bestR)

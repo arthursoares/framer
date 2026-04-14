@@ -108,11 +108,13 @@ final class PreviewViewModel {
         let scale = Double(maxDimension) / Double(max(w, h))
         let newW = Int(Double(w) * scale)
         let newH = Int(Double(h) * scale)
+        // Canonical premultipliedLast RGBA8 — see desktop PreviewViewModel
+        // for the context-compatibility rationale.
         guard let ctx = CGContext(data: nil, width: newW, height: newH,
-                                  bitsPerComponent: cgImage.bitsPerComponent,
-                                  bytesPerRow: 0,
-                                  space: cgImage.colorSpace ?? CGColorSpaceCreateDeviceRGB(),
-                                  bitmapInfo: cgImage.bitmapInfo.rawValue),
+                                  bitsPerComponent: 8,
+                                  bytesPerRow: newW * 4,
+                                  space: CGColorSpaceCreateDeviceRGB(),
+                                  bitmapInfo: CGImageAlphaInfo.premultipliedLast.rawValue),
               let scaled = (ctx.draw(cgImage, in: CGRect(x: 0, y: 0, width: newW, height: newH)), ctx.makeImage()).1 else {
             return UIImage(cgImage: cgImage)
         }

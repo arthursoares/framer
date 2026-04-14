@@ -5,6 +5,20 @@ import ImageIO
 import UniformTypeIdentifiers
 
 final class TextureFrameProviderTests: XCTestCase {
+    /// `edgesASCII.png` and `fillASCII.png` live under the same `textures/`
+    /// search path as user-facing overlay PNGs, but they're shader atlases
+    /// for the ASCII renderer — they must NOT surface in the Frame Overlay
+    /// picker. Regression test for the overlay scan's internal-atlas filter.
+    func test_scanOverlays_excludesInternalASCIIAtlases() {
+        TextureFrameProvider.invalidateCache()
+        let overlays = TextureFrameProvider.availableOverlays()
+        let ids = Set(overlays.map { $0.id })
+        XCTAssertFalse(ids.contains("fillASCII"),
+                       "fillASCII atlas must not appear in the overlay picker")
+        XCTAssertFalse(ids.contains("edgesASCII"),
+                       "edgesASCII atlas must not appear in the overlay picker")
+    }
+
     func test_cachedThumbnail_respectsRequestedMaxSize() throws {
         TextureFrameProvider.invalidateCache()
         let url = try makePNG(width: 400, height: 200)

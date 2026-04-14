@@ -42,6 +42,7 @@
 		BFD769720511AA5C17E887CB /* ZoomIndicator.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4DE56DAAC5828B812648B0F7 /* ZoomIndicator.swift */; };
 		C37E4F0ACEACE1B0C38A0A44 /* FramerCore in Frameworks */ = {isa = PBXBuildFile; productRef = 485E1F7CDB2606E54DEE58BD /* FramerCore */; };
 		D2E564203E647371EAED04D0 /* PreferencesView.swift in Sources */ = {isa = PBXBuildFile; fileRef = B7A795F9CA0BC01E3F2251A9 /* PreferencesView.swift */; };
+		D3E6A433B5ACC95890FD16F7 /* BlendModeControls.swift in Sources */ = {isa = PBXBuildFile; fileRef = 414976629E834E023AEDF80D /* BlendModeControls.swift */; };
 		D77B3DB5026ED217740A45EA /* PresetPreviewCache.swift in Sources */ = {isa = PBXBuildFile; fileRef = F9F6A74EB78E794612D18120 /* PresetPreviewCache.swift */; };
 		D7FE5C7F33D376CDFFC38EF1 /* DesignTokens.swift in Sources */ = {isa = PBXBuildFile; fileRef = 25B70C60CE00225EA953971F /* DesignTokens.swift */; };
 		DAF4447EF4E27C19DC3B3FF0 /* FramerApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = E4A8C555BBECD2011E74D76D /* FramerApp.swift */; };
@@ -56,6 +57,7 @@
 		0688E0FFDF5CFC624EEB29D3 /* ZoomState.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ZoomState.swift; sourceTree = "<group>"; };
 		07CE80E5C2C968E54B507CD5 /* LayerListSection.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LayerListSection.swift; sourceTree = "<group>"; };
 		124FCD0A6152E9E3838DD5A1 /* StyledSlider.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = StyledSlider.swift; sourceTree = "<group>"; };
+		18C84C71BA3FFBB30D8DED0E /* cloud-gpu-effects */ = {isa = PBXFileReference; lastKnownFileType = folder; name = "cloud-gpu-effects"; path = .; sourceTree = SOURCE_ROOT; };
 		1987EB46D78379EB25A7E6A5 /* PresetPreviewCard.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PresetPreviewCard.swift; sourceTree = "<group>"; };
 		1DEB778B387F70ED23D4EBEB /* LayerDetailView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LayerDetailView.swift; sourceTree = "<group>"; };
 		25B70C60CE00225EA953971F /* DesignTokens.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DesignTokens.swift; sourceTree = "<group>"; };
@@ -63,6 +65,7 @@
 		2CCD20EFA5AE852B42CBE53D /* AppState.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppState.swift; sourceTree = "<group>"; };
 		2ECE914F3685664254BD04DB /* ExportBar.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ExportBar.swift; sourceTree = "<group>"; };
 		388ADD8B50D095C06DE84470 /* InspectorView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = InspectorView.swift; sourceTree = "<group>"; };
+		414976629E834E023AEDF80D /* BlendModeControls.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BlendModeControls.swift; sourceTree = "<group>"; };
 		419FD91DCB79FF87568D1118 /* AsyncThumbnail.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AsyncThumbnail.swift; sourceTree = "<group>"; };
 		448D6F42AA7A9F492A2E3436 /* ColorPickerWithHex.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ColorPickerWithHex.swift; sourceTree = "<group>"; };
 		4DE56DAAC5828B812648B0F7 /* ZoomIndicator.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ZoomIndicator.swift; sourceTree = "<group>"; };
@@ -77,7 +80,6 @@
 		8A6E6F60B12048759BD1E60C /* PreviewViewModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PreviewViewModel.swift; sourceTree = "<group>"; };
 		99841491BD0A545FF7E469B5 /* FramerMobile.app */ = {isa = PBXFileReference; includeInIndex = 0; lastKnownFileType = wrapper.application; path = FramerMobile.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		9B9A4BC738FB9F539C9A7AFB /* Framer.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = Framer.app; sourceTree = BUILT_PRODUCTS_DIR; };
-		A9D4D6D84523CC9466E3CF9D /* framer */ = {isa = PBXFileReference; lastKnownFileType = folder; name = framer; path = .; sourceTree = SOURCE_ROOT; };
 		AF1AFA1E768D2A7B8991C8FA /* ZoomIndicator.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ZoomIndicator.swift; sourceTree = "<group>"; };
 		B1EC2164F8A3DF317311D2C8 /* textures */ = {isa = PBXFileReference; lastKnownFileType = folder; name = textures; path = assets/textures; sourceTree = SOURCE_ROOT; };
 		B2205885A0B72C7BB1800460 /* PreviewArea.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PreviewArea.swift; sourceTree = "<group>"; };
@@ -129,6 +131,7 @@
 		1435E1AB35705AD546EE83ED /* Editor */ = {
 			isa = PBXGroup;
 			children = (
+				414976629E834E023AEDF80D /* BlendModeControls.swift */,
 				07CE80E5C2C968E54B507CD5 /* LayerListSection.swift */,
 				8A6E6F60B12048759BD1E60C /* PreviewViewModel.swift */,
 			);
@@ -258,7 +261,7 @@
 		BF7EB4914AD9DF4212A2FFEA /* Packages */ = {
 			isa = PBXGroup;
 			children = (
-				A9D4D6D84523CC9466E3CF9D /* framer */,
+				18C84C71BA3FFBB30D8DED0E /* cloud-gpu-effects */,
 			);
 			name = Packages;
 			sourceTree = "<group>";
@@ -436,6 +439,7 @@
 			files = (
 				EF8F6E68028E690EFF0EA667 /* AppState.swift in Sources */,
 				561898C8DF6823EB3F4391AC /* AsyncThumbnail.swift in Sources */,
+				D3E6A433B5ACC95890FD16F7 /* BlendModeControls.swift in Sources */,
 				218BC28CA8616930DD60EB0B /* CanvasView.swift in Sources */,
 				28B7026CE98DD43E6D9501A9 /* ColorPickerWithHex.swift in Sources */,
 				FC5BB028D5897E5F76991EA5 /* ContentView.swift in Sources */,

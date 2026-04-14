@@ -44,12 +44,20 @@ public enum TextureFrameProvider {
     public static var searchPaths: [URL] {
         var paths: [URL] = []
 
-        // 1. Bundled textures in app resources
+        // 1. Bundled textures in the macOS / iOS app resources (project.yml
+        //    folder reference). Available when running as Framer.app.
         if let bundledDir = Bundle.main.resourceURL?.appendingPathComponent("textures") {
             paths.append(bundledDir)
         }
 
-        // 2. User overlays
+        // 2. Bundled textures in FramerCore's SPM resource bundle. Available
+        //    when running via swift run / swift test / FramerCLI — contexts
+        //    where Bundle.main is the test runner or CLI binary, not the app.
+        if let coreDir = Bundle.module.resourceURL?.appendingPathComponent("textures") {
+            paths.append(coreDir)
+        }
+
+        // 3. User overlays
         if let appSupport = FileManager.default.urls(
             for: .applicationSupportDirectory, in: .userDomainMask
         ).first {
@@ -182,6 +190,18 @@ public enum TextureFrameProvider {
 
     // MARK: - Internal Scanning
 
+    /// Texture files in the search paths that are shipped as internal
+    /// shader assets, NOT user-pickable overlays. The ASCII LUT atlases
+    /// (`fillASCII.png`, `edgesASCII.png`) live under `textures/` alongside
+    /// overlay PNGs because both consume the same search-path discovery
+    /// for GPU / CPU resource loading, so we filter them out here to keep
+    /// them from leaking into the Frame Overlay picker. Add new internal
+    /// atlas stems to this set if shader work grows the resource bundle.
+    private static let internalAtlasStems: Set<String> = [
+        "fillASCII",
+        "edgesASCII",
+    ]
+
     private static func scanOverlays() -> [OverlayInfo] {
         let imageExts: Set<String> = ["jpg", "jpeg", "png", "tif", "tiff"]
         var seen = Set<String>()
@@ -204,6 +224,11 @@ public enum TextureFrameProvider {
 
                 // Skip thumbnails directory
                 if url.path.contains("/thumbnails/") { continue }
+
+                // Skip internal shader atlases — they coexist with overlay
+                // PNGs in the textures folder but shouldn't surface in the
+                // Frame Overlay picker.
+                if internalAtlasStems.contains(stem) { continue }
 
                 // Deduplicate by stem (first-found wins — bundled has priority)
                 guard !seen.contains(stem) else { continue }
