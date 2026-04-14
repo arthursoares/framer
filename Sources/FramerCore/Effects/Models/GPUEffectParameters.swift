@@ -171,30 +171,15 @@ public enum HalftoneShape: String, Codable, Hashable, Sendable, CaseIterable {
     case diamond
 }
 
-public struct ChromaticAberrationParameters: Codable, Equatable, Sendable {
-    public var enabled: Bool
-    public var maxDisplace: Double
-    public var redShift: Double
-    public var greenShift: Double
-    public var blueShift: Double
-
-    public init(enabled: Bool = false, maxDisplace: Double = 0, redShift: Double = 0, greenShift: Double = 0, blueShift: Double = 0) {
-        self.enabled = enabled
-        self.maxDisplace = maxDisplace
-        self.redShift = redShift
-        self.greenShift = greenShift
-        self.blueShift = blueShift
-    }
-}
-
 public struct PrintSamplingParameters: Codable, Equatable, Sendable {
     public var variant: PrintSamplingVariant
+    /// Scales intensity of CPU fallback output for halftone/threshold/
+    /// crosshatch. Not consumed by any user-facing GPU shader; only
+    /// affects the CPU path when Metal is unavailable. Kept because it's
+    /// still meaningful there.
     public var sampleDensity: Double
     public var threshold: Double
     public var algorithm: GPUDitherAlgorithm
-    public var modulation: Double
-    public var sharpen: Double
-    public var chromaticAberration: ChromaticAberrationParameters
     public var foreground: CodableColor?
     public var background: CodableColor?
     public var halftoneShape: HalftoneShape
@@ -213,9 +198,6 @@ public struct PrintSamplingParameters: Codable, Equatable, Sendable {
         sampleDensity: Double = 0.5,
         threshold: Double = 0.5,
         algorithm: GPUDitherAlgorithm = .bayer8x8,
-        modulation: Double = 0,
-        sharpen: Double = 0,
-        chromaticAberration: ChromaticAberrationParameters = .init(),
         foreground: CodableColor? = nil,
         background: CodableColor? = nil,
         halftoneShape: HalftoneShape = .circle,
@@ -233,9 +215,6 @@ public struct PrintSamplingParameters: Codable, Equatable, Sendable {
         self.sampleDensity = sampleDensity
         self.threshold = threshold
         self.algorithm = algorithm
-        self.modulation = modulation
-        self.sharpen = sharpen
-        self.chromaticAberration = chromaticAberration
         self.foreground = foreground
         self.background = background
         self.halftoneShape = halftoneShape
