@@ -207,28 +207,39 @@ inline float whiteNoise(uint2 pos) {
 //  - Artistic Drip: heavier downward bias in CPU kernel → tighter still → 0.65
 // =============================================================================
 
+// `baseThreshold` is the user-facing "Threshold" slider (0..1) carrying
+// the documented contract "higher = brighter output". Consumers differ in
+// how they apply it:
+//   - `ditherMono` runs `step(threshold, lum)` — higher threshold → fewer
+//     whites, which is the opposite of the user contract. ditherMono
+//     inverts at its call site (`step(1.0 - threshold, lum)`).
+//   - `quantizeChannel` uses `(threshold - 0.5) / steps` as an additive
+//     offset — higher threshold → brighter, matches the contract as-is.
+// Keep this function identity-in-identity-out so each consumer can apply
+// its own inversion.
 inline float thresholdForAlgorithm(uint algorithm, uint2 pos, uint bayerLevel,
                                    float baseThreshold) {
+    float effectiveThreshold = baseThreshold;
     switch (algorithm) {
         case DITHER_BAYER: {
-            // Bayer just shifts the matrix value by (baseThreshold - 0.5) so
+            // Bayer just shifts the matrix value by (effectiveThreshold - 0.5) so
             // the threshold tracks the user's threshold knob.
             float m = bayerThreshold(pos, bayerLevel);
-            return clamp(m + (baseThreshold - 0.5), 0.0, 1.0);
+            return clamp(m + (effectiveThreshold - 0.5), 0.0, 1.0);
         }
         case DITHER_HALFTONE: {
             float m = halftoneThreshold(pos);
-            return clamp(m + (baseThreshold - 0.5), 0.0, 1.0);
+            return clamp(m + (effectiveThreshold - 0.5), 0.0, 1.0);
         }
         case DITHER_BLUE_NOISE: {
-            return clamp(ign(float2(pos)) + (baseThreshold - 0.5), 0.0, 1.0);
+            return clamp(ign(float2(pos)) + (effectiveThreshold - 0.5), 0.0, 1.0);
         }
         case DITHER_WHITE_NOISE: {
-            return clamp(whiteNoise(pos) + (baseThreshold - 0.5), 0.0, 1.0);
+            return clamp(whiteNoise(pos) + (effectiveThreshold - 0.5), 0.0, 1.0);
         }
         // Error-diffusion algorithms can't be implemented in a fragment
         // shader (they need serial cell-to-cell error propagation). Each is
-        // approximated as `baseThreshold + (ign-shifted - 0.5) * scale`,
+        // approximated as `effectiveThreshold + (ign-shifted - 0.5) * scale`,
         // mirroring Grainrad's blue-noise approximation. Two knobs make the
         // approximations actually look different: a per-algorithm spatial
         // phase offset on the noise sample (so neighbours pick differently
@@ -238,39 +249,39 @@ inline float thresholdForAlgorithm(uint algorithm, uint2 pos, uint bayerLevel,
         // output despite shipping under different names.
         case DITHER_FLOYD: {
             float n = ign(float2(pos) + float2( 7.31, 11.17));
-            return clamp(baseThreshold + (n - 0.5) * 0.85, 0.0, 1.0);
+            return clamp(effectiveThreshold + (n - 0.5) * 0.85, 0.0, 1.0);
         }
         case DITHER_STUCKI: {
             float n = ign(float2(pos) + float2(13.49, 17.83));
-            return clamp(baseThreshold + (n - 0.5) * 0.80, 0.0, 1.0);
+            return clamp(effectiveThreshold + (n - 0.5) * 0.80, 0.0, 1.0);
         }
         case DITHER_ATKINSON: {
             float n = ign(float2(pos) + float2(19.71, 23.59));
-            return clamp(baseThreshold + (n - 0.5) * 0.75, 0.0, 1.0);
+            return clamp(effectiveThreshold + (n - 0.5) * 0.75, 0.0, 1.0);
         }
         case DITHER_ARTISTIC_DRIP: {
             float n = ign(float2(pos) + float2(29.13, 31.07));
-            return clamp(baseThreshold + (n - 0.5) * 0.65, 0.0, 1.0);
+            return clamp(effectiveThreshold + (n - 0.5) * 0.65, 0.0, 1.0);
         }
         case DITHER_SIERRA: {
             float n = ign(float2(pos) + float2(37.41, 41.97));
-            return clamp(baseThreshold + (n - 0.5) * 0.84, 0.0, 1.0);
+            return clamp(effectiveThreshold + (n - 0.5) * 0.84, 0.0, 1.0);
         }
         case DITHER_SIERRA_TWO_ROW: {
             float n = ign(float2(pos) + float2(43.27, 47.51));
-            return clamp(baseThreshold + (n - 0.5) * 0.74, 0.0, 1.0);
+            return clamp(effectiveThreshold + (n - 0.5) * 0.74, 0.0, 1.0);
         }
         case DITHER_SIERRA_LITE: {
             float n = ign(float2(pos) + float2(53.69, 59.13));
-            return clamp(baseThreshold + (n - 0.5) * 0.64, 0.0, 1.0);
+            return clamp(effectiveThreshold + (n - 0.5) * 0.64, 0.0, 1.0);
         }
         case DITHER_JJN: {
             float n = ign(float2(pos) + float2(61.83, 67.29));
-            return clamp(baseThreshold + (n - 0.5) * 0.90, 0.0, 1.0);
+            return clamp(effectiveThreshold + (n - 0.5) * 0.90, 0.0, 1.0);
         }
         case DITHER_BURKES: {
             float n = ign(float2(pos) + float2(71.57, 73.93));
-            return clamp(baseThreshold + (n - 0.5) * 0.83, 0.0, 1.0);
+            return clamp(effectiveThreshold + (n - 0.5) * 0.83, 0.0, 1.0);
         }
         case DITHER_IGN: {
             // Distinct phase from DITHER_BLUE_NOISE so the two register
@@ -279,7 +290,7 @@ inline float thresholdForAlgorithm(uint algorithm, uint2 pos, uint bayerLevel,
             // noise mask is ever added, DITHER_BLUE_NOISE switches to it
             // and this offset can drop.
             float n = ign(float2(pos) + float2(83.11, 89.47));
-            return clamp(n + (baseThreshold - 0.5), 0.0, 1.0);
+            return clamp(n + (effectiveThreshold - 0.5), 0.0, 1.0);
         }
         case DITHER_CMYK_HALFTONE: {
             // Mono mode collapses to the halftone matrix. Slight axis
@@ -288,10 +299,10 @@ inline float thresholdForAlgorithm(uint algorithm, uint2 pos, uint bayerLevel,
             // colour separation is happening.
             float2 r = float2(pos.x, pos.y) + float2(2.0, 4.0);
             float m = halftoneThreshold(uint2(r));
-            return clamp(m + (baseThreshold - 0.5), 0.0, 1.0);
+            return clamp(m + (effectiveThreshold - 0.5), 0.0, 1.0);
         }
         default:
-            return baseThreshold;
+            return effectiveThreshold;
     }
 }
 
@@ -354,10 +365,35 @@ inline float3 ditherContrast(float3 c, float amount) {
 // Mono dither: returns 0 or 1 per pixel, mapped through fg/bg if requested.
 // =============================================================================
 
+// sRGB → linear per-channel. Matches the CPU path's `sRGBToLinearLUT`
+// semantics (piecewise linear/power curve from the sRGB standard) so the
+// threshold comparison happens in perceptually-uniform linear space and
+// the "sRGB 186 ≈ 0.5 linear" sanity test passes.
+inline float sRGBToLinearChannel(float c) {
+    return (c <= 0.04045) ? (c / 12.92) : pow((c + 0.055) / 1.055, 2.4);
+}
+inline float3 sRGBToLinear(float3 c) {
+    return float3(sRGBToLinearChannel(c.r),
+                  sRGBToLinearChannel(c.g),
+                  sRGBToLinearChannel(c.b));
+}
+// Rec.709 luma coefficients in linear space — these match the CPU path's
+// `0.2126 * lutR + 0.7152 * lutG + 0.0722 * lutB` lumBuf computation.
+inline float linearLuminance(float3 linearRGB) {
+    return dot(linearRGB, float3(0.2126, 0.7152, 0.0722));
+}
+
 inline float3 ditherMono(float3 c, float threshold, uint useTwoTone,
                          float3 fg, float3 bg) {
-    float lum = luminance(c);
-    float bit = step(threshold, lum);
+    // 1. Linear-light lum: sRGB 186 (the test's "mid-gray") dithers to
+    //    ~50% white only if the comparison is gamma-corrected. Raw sRGB
+    //    values non-linearly bias toward white at the same threshold.
+    // 2. Invert the threshold semantic: the user contract is "higher
+    //    threshold → brighter output", but `step(t, lum)` outputs 1 when
+    //    `lum >= t` — so a literally higher `t` gives fewer whites. Flip
+    //    `t → 1 - t` here to honour the slider.
+    float lum = linearLuminance(sRGBToLinear(c));
+    float bit = step(1.0 - threshold, lum);
     if (useTwoTone == 1u) {
         return mix(bg, fg, bit);
     }
