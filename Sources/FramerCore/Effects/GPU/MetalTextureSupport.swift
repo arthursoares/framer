@@ -70,21 +70,26 @@ public enum MetalTextureSupport {
         }
     }
 
-    /// If `image` already has a CGBitmapContext-compatible alpha layout,
-    /// returns it unchanged. Otherwise redraws into a `.premultipliedLast`
-    /// RGBA8 context. The compatible set is the one Core Graphics accepts
-    /// for 8-bit-per-component RGB contexts per Apple's supported-pixel-
-    /// formats documentation.
+    /// If `image` is already a plain 8-bits-per-component RGBA
+    /// premultiplied-last CGImage (the exact layout MTKTextureLoader
+    /// expects for a zero-conversion upload), returns it unchanged.
+    /// Otherwise redraws through a canonical context.
+    ///
+    /// An earlier version of this check only examined the alpha mask of
+    /// `bitmapInfo`. That missed images whose bitmapInfo carried extra
+    /// flags (byte-order, pixel-format, float-component). HEIC and some
+    /// sRGB PNGs arrive as
+    /// `kCGImageAlphaLast | kCGImageByteOrderDefault | kCGImagePixelFormatPacked`
+    /// — alpha mask == `.last` which my check caught, but users were
+    /// also hitting `.premultipliedLast | kCGImagePixelFormatPacked`
+    /// (alpha-mask supported, extra flag not). The strict exact-match
+    /// below closes both holes with a single fast-path check.
     private static func normalizedForTextureUpload(_ image: CGImage) -> CGImage {
-        let rawMasked = image.bitmapInfo.rawValue & CGBitmapInfo.alphaInfoMask.rawValue
-        let supported: Set<UInt32> = [
-            CGImageAlphaInfo.premultipliedLast.rawValue,
-            CGImageAlphaInfo.premultipliedFirst.rawValue,
-            CGImageAlphaInfo.noneSkipLast.rawValue,
-            CGImageAlphaInfo.noneSkipFirst.rawValue,
-            CGImageAlphaInfo.none.rawValue,
-        ]
-        if supported.contains(rawMasked) {
+        let expectedBitmapInfo = CGImageAlphaInfo.premultipliedLast.rawValue
+        if image.bitsPerComponent == 8,
+           image.bitsPerPixel == 32,
+           image.bitmapInfo.rawValue == expectedBitmapInfo,
+           image.colorSpace?.model == .rgb {
             return image
         }
 
@@ -97,7 +102,7 @@ public enum MetalTextureSupport {
             bitsPerComponent: 8,
             bytesPerRow: w * 4,
             space: CGColorSpaceCreateDeviceRGB(),
-            bitmapInfo: CGImageAlphaInfo.premultipliedLast.rawValue
+            bitmapInfo: expectedBitmapInfo
         ) else {
             return image  // Best effort: let MTKTextureLoader fail downstream.
         }

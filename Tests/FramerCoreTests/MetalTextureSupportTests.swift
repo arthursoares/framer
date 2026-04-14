@@ -25,6 +25,7 @@ final class MetalTextureSupportTests: XCTestCase {
         XCTAssertEqual(texture.height, 64)
     }
 
+
     // Build an RGBA CGImage tagged as `.alphaLast` (non-premultiplied) by
     // handing pre-filled pixel data to `CGImage` directly. CGBitmapContext
     // can't CREATE such a context, but CGImage accepts this layout for reads
