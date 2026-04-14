@@ -35,3 +35,7 @@
 - `BlendModeControls` can stay behavior-identical while matching the sidebar grammar by treating blend mode + opacity as a `SidebarCompoundControlBlock` pair, with opacity edited through a percent-scaled binding instead of the raw `0...1` slider.
 - Task 9’s support-surface alignment fits best when preset cards and the export footer reuse `SidebarStateStyle` directly: neutral actions read cleanly with `.hover`, while the primary export affordance can keep emphasis with `.selectedCurrent` instead of a separate accent-dim button dialect.
 - `PresetPreviewGrid` and `ExportBar` can adopt the sidebar shell rhythm without touching command flow by deriving grid/footer spacing from `SidebarMetrics().expandedBodyInset` and `outerInset`; existing preset context-menu actions, export notifications, and queue item actions remain unchanged.
+
+- Task 10 can stay test-only by rendering deterministic macOS SwiftUI surfaces into PNG data inside `FramerAppTests` and locking SHA-256 baselines for shell, output rows, representative simple/dense editors, and preset/export support surfaces.
+- `SidebarHarmonySnapshotTests` is stable when hosted in a dark `NSHostingView` with fixed sizes; pairing those render snapshots with a small pure-state matrix keeps row-state coverage explicit without needing a third-party view-inspection dependency.
+- Adding a new file under `Tests/FramerAppTests/` still requires `xcodegen generate` before the `Framer` scheme sees it, even though the XcodeGen target already points at the whole test directory.
