@@ -123,9 +123,11 @@ public enum PrintSamplingRenderer {
                 let shouldInk: Bool
                 switch variant {
                 case .dithering:
-                    let posX = Double(xx) + payload.modulation * 10.0
-                    let posY = Double(yy) + payload.modulation * 6.0
-                    let noise = ign(x: posX, y: posY)
+                    // `modulation` previously offset the IGN noise position for
+                    // a wandering look, but was never a user-adjustable knob —
+                    // removed along with the field. Default (offset = 0)
+                    // produces the same output the UI ever exposed.
+                    let noise = ign(x: Double(xx), y: Double(yy))
                     let algorithmScale: Double
                     switch payload.algorithm {
                     case .bayer4x4:

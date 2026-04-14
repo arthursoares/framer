@@ -146,13 +146,6 @@ public enum YAMLConfig {
         var gpu_sample_density: Double?
         var gpu_sampling_threshold: Double?
         var gpu_dither_algorithm: String?
-        var gpu_modulation: Double?
-        var gpu_sharpen: Double?
-        var gpu_chromatic_enabled: Bool?
-        var gpu_chromatic_max_displace: Double?
-        var gpu_chromatic_red_shift: Double?
-        var gpu_chromatic_green_shift: Double?
-        var gpu_chromatic_blue_shift: Double?
         var gpu_foreground_color: String?
         var gpu_background_color: String?
         var gpu_halftone_shape: String?
@@ -701,13 +694,6 @@ public enum YAMLConfig {
             schema.gpu_sample_density = payload.sampleDensity
             schema.gpu_sampling_threshold = payload.threshold
             schema.gpu_dither_algorithm = payload.algorithm.rawValue
-            schema.gpu_modulation = payload.modulation
-            schema.gpu_sharpen = payload.sharpen
-            schema.gpu_chromatic_enabled = payload.chromaticAberration.enabled
-            schema.gpu_chromatic_max_displace = payload.chromaticAberration.maxDisplace
-            schema.gpu_chromatic_red_shift = payload.chromaticAberration.redShift
-            schema.gpu_chromatic_green_shift = payload.chromaticAberration.greenShift
-            schema.gpu_chromatic_blue_shift = payload.chromaticAberration.blueShift
             schema.gpu_foreground_color = payload.foreground?.hex
             schema.gpu_background_color = payload.background?.hex
             schema.gpu_halftone_shape = payload.halftoneShape.rawValue
@@ -824,15 +810,6 @@ public enum YAMLConfig {
                     sampleDensity: schema.gpu_sample_density ?? 0.5,
                     threshold: schema.gpu_sampling_threshold ?? 0.5,
                     algorithm: schema.gpu_dither_algorithm.flatMap(GPUDitherAlgorithm.init(rawValue:)) ?? .bayer8x8,
-                    modulation: schema.gpu_modulation ?? 0,
-                    sharpen: schema.gpu_sharpen ?? 0,
-                    chromaticAberration: .init(
-                        enabled: schema.gpu_chromatic_enabled ?? false,
-                        maxDisplace: schema.gpu_chromatic_max_displace ?? 0,
-                        redShift: schema.gpu_chromatic_red_shift ?? 0,
-                        greenShift: schema.gpu_chromatic_green_shift ?? 0,
-                        blueShift: schema.gpu_chromatic_blue_shift ?? 0
-                    ),
                     foreground: schema.gpu_foreground_color.flatMap { try? CodableColor(hex: $0) },
                     background: schema.gpu_background_color.flatMap { try? CodableColor(hex: $0) },
                     halftoneShape: schema.gpu_halftone_shape.flatMap(HalftoneShape.init(rawValue:)) ?? .circle,
