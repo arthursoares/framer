@@ -82,7 +82,7 @@ static float4 vhsVariant(
     float scanMult  = 1.0 - scanDepth * 0.6 * (1.0 - scanMod);
     float3 scanned  = shifted * scanMult;
 
-    float3 srcOrig = source.sample(texSampler, selfUV).rgb;
+    float3 srcOrig = applyCommonAdjustments(source.sample(texSampler, selfUV).rgb, u.common);
     float3 final   = mix(srcOrig, saturate(scanned), saturate(u.intensity));
     return float4(final, 1.0);
 }

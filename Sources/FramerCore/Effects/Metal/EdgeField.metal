@@ -35,7 +35,7 @@ struct EdgeFieldUniforms {
     float amplitude;           // 0..1, waveLines source phase contribution
 
     float frequency;           // waveLines spatial-phase multiplier
-    float lineCount;           // reserved for waveLines density boost
+    float lineCount;           // waveLines density boost: countFactor = lineCount/spacing
     float spacing;             // pixel spacing for waveLines (pre-computed)
     float cellSize;            // voronoi cell pitch (pixels)
 
@@ -45,6 +45,11 @@ struct EdgeFieldUniforms {
     uint  octaves;             // noiseField octaves (1..6)
 
     float4 edgeColor;          // colour for ink pixels (rgba, a unused)
+
+    uint  noiseType;           // 0 value/IGN, 1 simplex, 2 cellular
+    float _pad0;
+    float _pad1;
+    float _pad2;
 };
 
 // =============================================================================
@@ -68,7 +73,7 @@ static float4 edgeDetectionVariant(
 
     // 4-tap edge magnitude. Clamp-to-edge sampler handles out-of-bounds reads
     // so we don't need explicit neighbour clamping in the shader.
-    float3 srcOrig = source.sample(texSampler, selfUV).rgb;
+    float3 srcOrig = applyCommonAdjustments(source.sample(texSampler, selfUV).rgb, u.common);
     float lC = luminance(srcOrig);
     float lL = luminance(source.sample(texSampler, selfUV + float2(-1, 0) * invRes).rgb);
     float lR = luminance(source.sample(texSampler, selfUV + float2( 1, 0) * invRes).rgb);
@@ -123,7 +128,7 @@ static float4 contourVariant(
     int2   pixel      = clamp(int2(floor(in.uv * resolution)),
                               int2(0), int2(resolution) - 1);
     float2 selfUV     = (float2(pixel) + 0.5) / resolution;
-    float3 srcOrig    = source.sample(texSampler, selfUV).rgb;
+    float3 srcOrig    = applyCommonAdjustments(source.sample(texSampler, selfUV).rgb, u.common);
 
     float lum       = saturate(luminance(srcOrig));
     int   levels    = max(2, int(u.contourLevels));
@@ -175,12 +180,16 @@ static float4 waveLinesVariant(
     int2   pixel      = clamp(int2(floor(in.uv * resolution)),
                               int2(0), int2(resolution) - 1);
     float2 selfUV     = (float2(pixel) + 0.5) / resolution;
-    float3 srcOrig    = source.sample(texSampler, selfUV).rgb;
+    float3 srcOrig    = applyCommonAdjustments(source.sample(texSampler, selfUV).rgb, u.common);
 
     float lum     = saturate(luminance(srcOrig));
     float axis    = (u.direction == 1u) ? float(pixel.x) : float(pixel.y);
     float spacing = max(1.0, u.spacing);
-    float freq    = max(0.1, u.frequency);
+    // CPU parity (`EdgeFieldRenderer.payloadFrequencyBoost`): lineCount above
+    // the cell spacing multiplies frequency proportionally, so a higher
+    // Line Count slider produces visibly more wave bands per axis.
+    float countFactor = max(1.0, u.lineCount / spacing);
+    float freq    = max(0.1, u.frequency * countFactor);
     float amp     = max(0.1, u.amplitude);
 
     float phase     = (axis / spacing) * freq;
@@ -219,7 +228,7 @@ static float4 voronoiVariant(
     int2   pixel      = clamp(int2(floor(in.uv * resolution)),
                               int2(0), int2(resolution) - 1);
     float2 selfUV     = (float2(pixel) + 0.5) / resolution;
-    float3 srcOrig    = source.sample(texSampler, selfUV).rgb;
+    float3 srcOrig    = applyCommonAdjustments(source.sample(texSampler, selfUV).rgb, u.common);
 
     float cellPitch = max(2.0, u.cellSize);
     float2 p       = float2(pixel);
@@ -276,10 +285,74 @@ static float4 voronoiVariant(
 }
 
 // =============================================================================
-// NOISE FIELD — multi-octave procedural noise. Sum N octaves of IGN (see
-// ShaderCommon.h) at doubling frequencies with halving weights to produce
-// FBM-style output. `octaves` (1..6) drives the detail depth; `amplitude`
-// tunes the base spatial frequency; `fieldWeight` biases the output level.
+// Noise primitives for `noiseFieldVariant`. Three flavours selected by
+// `u.noiseType`:
+//   0 — IGN (Jimenez 2014, defined in ShaderCommon.h)
+//   1 — simplex 2D (Stefan Gustavson's webgl-noise, public domain port)
+//   2 — cellular / Worley (minimum-distance to jittered grid seeds)
+// All return [0,1]; FBM accumulator handles octave weighting.
+// =============================================================================
+
+static float3 mod289_3(float3 x) { return x - floor(x / 289.0) * 289.0; }
+static float3 permute289(float3 x) { return mod289_3(((x * 34.0) + 1.0) * x); }
+
+// Simplex 2D, remapped from native [-1,1] to [0,1].
+static float simplex2D(float2 v) {
+    const float4 C = float4( 0.211324865405187,
+                             0.366025403784439,
+                            -0.577350269189626,
+                             0.024390243902439);
+    float2 i  = floor(v + dot(v, C.yy));
+    float2 x0 = v - i + dot(i, C.xx);
+    float2 i1 = (x0.x > x0.y) ? float2(1.0, 0.0) : float2(0.0, 1.0);
+    float4 x12 = x0.xyxy + C.xxzz;
+    x12.xy -= i1;
+    i = i - floor(i / 289.0) * 289.0;
+    float3 p = permute289(permute289(i.y + float3(0.0, i1.y, 1.0))
+                          + i.x + float3(0.0, i1.x, 1.0));
+    float3 m = max(0.5 - float3(dot(x0,  x0),
+                                dot(x12.xy, x12.xy),
+                                dot(x12.zw, x12.zw)), 0.0);
+    m = m * m; m = m * m;
+    float3 x  = 2.0 * fract(p * C.www) - 1.0;
+    float3 h  = abs(x) - 0.5;
+    float3 ox = floor(x + 0.5);
+    float3 a0 = x - ox;
+    m *= 1.79284291400159 - 0.85373472095314 * (a0 * a0 + h * h);
+    float3 g;
+    g.x  = a0.x  * x0.x  + h.x  * x0.y;
+    g.yz = a0.yz * x12.xz + h.yz * x12.yw;
+    return saturate(0.5 + 0.5 * 130.0 * dot(m, g));
+}
+
+// Cellular (Worley) F1 — minimum distance to any of nine jittered seeds in a
+// 3x3 grid neighbourhood. Returns 0 at a seed, growing toward 1 as the point
+// moves toward a cell boundary. Same hash as the voronoi variant for visual
+// consistency.
+static float cellular2D(float2 p) {
+    float2 ip = floor(p);
+    float2 fp = fract(p);
+    float minDist = 1.0e10;
+    for (int j = -1; j <= 1; j++) {
+        for (int i = -1; i <= 1; i++) {
+            float2 neighbor = float2(float(i), float(j));
+            float2 cellId   = ip + neighbor;
+            float hx = fract(sin(dot(cellId, float2(127.1, 311.7))) * 43758.5453);
+            float hy = fract(sin(dot(cellId, float2(269.5, 183.3))) * 43758.5453);
+            float2 seedPos  = neighbor + float2(hx, hy);
+            float  d        = length(fp - seedPos);
+            minDist = min(minDist, d);
+        }
+    }
+    return saturate(minDist);
+}
+
+// =============================================================================
+// NOISE FIELD — multi-octave procedural noise. Sum N octaves at doubling
+// frequencies with halving weights to produce FBM-style output. `octaves`
+// (1..6) drives the detail depth; `amplitude` tunes the base spatial
+// frequency; `fieldWeight` biases the output level. `noiseType` chooses
+// between IGN (default), simplex, and cellular.
 // =============================================================================
 
 static float4 noiseFieldVariant(
@@ -292,7 +365,7 @@ static float4 noiseFieldVariant(
     int2   pixel      = clamp(int2(floor(in.uv * resolution)),
                               int2(0), int2(resolution) - 1);
     float2 selfUV     = (float2(pixel) + 0.5) / resolution;
-    float3 srcOrig    = source.sample(texSampler, selfUV).rgb;
+    float3 srcOrig    = applyCommonAdjustments(source.sample(texSampler, selfUV).rgb, u.common);
 
     // `amplitude` (0..1 from the UI) → base spatial period in pixels. Smaller
     // amplitude = tighter noise grain. `120.0` keeps the default (amp=0.5) at
@@ -307,7 +380,13 @@ static float4 noiseFieldVariant(
         if (o >= octaves) { break; }
         float oct    = exp2(float(o));
         float weight = 1.0 / oct;
-        accumulated += ign(p * oct) * weight;
+        float n;
+        switch (u.noiseType) {
+            case 1u: n = simplex2D(p * oct); break;
+            case 2u: n = cellular2D(p * oct); break;
+            default: n = ign(p * oct);       break;
+        }
+        accumulated += n * weight;
         weightSum   += weight;
     }
     float noise = accumulated / max(weightSum, 0.0001);

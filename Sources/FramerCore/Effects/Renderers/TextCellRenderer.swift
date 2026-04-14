@@ -108,14 +108,27 @@ public enum TextCellRenderer {
             throw MetalEffectError.metalUnavailable
         }
 
-        // Atlas textures are required by the shader. Fall back to CPU if
-        // either is missing on disk — matches CPU's `hasLUTs` short-circuit.
-        guard let edgesTexture = try MetalTextureSupport.loadLUTTexture(
-                named: "edgesASCII.png", device: library.device),
-              let fillTexture = try MetalTextureSupport.loadLUTTexture(
-                named: "fillASCII.png", device: library.device)
-        else {
-            throw MetalEffectError.textureLoadFailed("edgesASCII.png / fillASCII.png")
+        // Atlas textures are required by the shader. When the user supplies
+        // a custom character palette, generate atlases via Core Text at
+        // runtime (cached by Style); otherwise fall back to the baked PNGs
+        // in Bundle.module (FileManager + CGImageSourceCreate path).
+        let edgesTexture: MTLTexture
+        let fillTexture: MTLTexture
+        if let chars = asciiParams.characters, !chars.isEmpty {
+            let style = ASCIIAtlasGenerator.Style(fillCharacters: chars)
+            let atlases = try ASCIIAtlasGenerator.atlases(for: style, device: library.device)
+            edgesTexture = atlases.edges
+            fillTexture  = atlases.fill
+        } else {
+            guard let edges = try MetalTextureSupport.loadLUTTexture(
+                    named: "edgesASCII.png", device: library.device),
+                  let fill  = try MetalTextureSupport.loadLUTTexture(
+                    named: "fillASCII.png", device: library.device)
+            else {
+                throw MetalEffectError.textureLoadFailed("edgesASCII.png / fillASCII.png")
+            }
+            edgesTexture = edges
+            fillTexture  = fill
         }
 
         // Compute the work-size the same way the CPU path does so the cell

@@ -83,6 +83,7 @@ public enum YAMLConfig {
         var shader_invert: Bool?
         var shader_exposure: Double?
         var shader_attenuation: Double?
+        var shader_ascii_characters: String?
         var shader_black_level: Double?
         var shader_color1: String?
         var shader_color2: String?
@@ -108,6 +109,8 @@ public enum YAMLConfig {
         var shader_dot_size: Double?
         var shader_monochrome: Bool?
         var shader_kernel_size: Int?
+        // Kuwahara legacy: 0..8 (0 = full effect). Replaced by shader_softness
+        // (already declared above; shared with Crimewave/Narc/Shiba/DistantPast).
         var shader_sharpness: Double?
         var gpu_effect_kind: String?
         var gpu_common_brightness: Double?
@@ -962,6 +965,7 @@ public enum YAMLConfig {
             if p.exposure != 1.0 { schema.shader_exposure = p.exposure }
             if p.attenuation != 1.0 { schema.shader_attenuation = p.attenuation }
             if p.blackLevel != 0.0 { schema.shader_black_level = p.blackLevel }
+            if let chars = p.characters, !chars.isEmpty { schema.shader_ascii_characters = chars }
         case .crimewave(let p):
             schema.shader_neon = p.neon
             schema.shader_softness = p.softness
@@ -999,7 +1003,7 @@ public enum YAMLConfig {
             if p.monochrome { schema.shader_monochrome = true }
         case .kuwahara(let p):
             schema.shader_kernel_size = p.kernelSize
-            schema.shader_sharpness = p.sharpness
+            schema.shader_softness = p.softness
         }
     }
 
@@ -1037,7 +1041,8 @@ public enum YAMLConfig {
                 invert: schema.shader_invert ?? false,
                 exposure: schema.shader_exposure ?? 1.0,
                 attenuation: schema.shader_attenuation ?? 1.0,
-                blackLevel: schema.shader_black_level ?? 0.0
+                blackLevel: schema.shader_black_level ?? 0.0,
+                characters: schema.shader_ascii_characters
             ))
         case .crimewave:
             return .crimewave(CrimewaveShaderParams(
@@ -1089,9 +1094,21 @@ public enum YAMLConfig {
                 monochrome: schema.shader_monochrome ?? false
             ))
         case .kuwahara:
+            // Prefer the new field; fall back to legacy `shader_sharpness`
+            // mapped via softness = 1 - sharpness/8 (legacy default of 8.0
+            // → 0.0, i.e. pass-through, preserving prior load behaviour for
+            // existing YAML presets that don't carry the field at all).
+            let softness: Double
+            if let s = schema.shader_softness {
+                softness = s
+            } else if let legacy = schema.shader_sharpness {
+                softness = max(0.0, min(1.0, 1.0 - legacy / 8.0))
+            } else {
+                softness = 1.0
+            }
             return .kuwahara(KuwaharaShaderParams(
                 kernelSize: schema.shader_kernel_size ?? 4,
-                sharpness: schema.shader_sharpness ?? 8.0
+                softness: softness
             ))
         }
     }

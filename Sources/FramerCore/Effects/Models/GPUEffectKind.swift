@@ -100,10 +100,12 @@ public enum GPUEffectKind: String, Codable, Hashable, Sendable, CaseIterable {
     }
 
     /// Common adjustments (brightness / contrast / saturation / hueRotation /
-    /// sharpness / gamma). Currently no bucket shader consumes these — they
-    /// were carried through for uniform layout symmetry but never wired into
-    /// any fragment. Hide globally.
-    public var usesCommonAdjustments: Bool { false }
+    /// gamma). All bucket fragments now wrap their source sample in
+    /// `applyCommonAdjustments` (see ShaderCommon.h), so flipping this true
+    /// surfaces the standard adjustment controls in the sidebar. Sharpness is
+    /// not consumed (would require neighbour samples per-shader); leave the
+    /// uniform field for future use.
+    public var usesCommonAdjustments: Bool { true }
 
     /// SF Symbol name for the layer-add menu entry.
     public var menuIcon: String {
