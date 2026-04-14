@@ -233,22 +233,29 @@ enum ShaderASCIIRenderer {
                     edgeBias: edgeBias
                 )
 
-                // Apply exposure, attenuation, and black level to luminance for fill lookup
+                // Apply exposure, attenuation, and black level to luminance for fill lookup.
+                // Invert is applied below as a fg/bg swap — flipping adjustedLum
+                // here only affected fill-cell level selection, leaving edge
+                // cells (the majority of edge-heavy images) unchanged.
                 var adjustedLum = ShaderPrimitives.clamp01(
                     pow(avgLum * exposure, attenuation)
                 )
                 // Lift blacks: remap [0,1] → [blackLevel,1]
                 let bl = asciiParams.blackLevel
                 if bl > 0 { adjustedLum = bl + adjustedLum * (1.0 - bl) }
-                if asciiParams.invert { adjustedLum = 1.0 - adjustedLum }
 
                 // Determine foreground color for this cell
-                let (fgR, fgG, fgB) = cellForegroundColor(
+                let (rawFgR, rawFgG, rawFgB) = cellForegroundColor(
                     colorState: colorState,
                     avgR: avgR, avgG: avgG, avgB: avgB,
                     luminance: adjustedLum
                 )
-                let (bgR, bgG, bgB) = colorState.background
+                let (rawBgR, rawBgG, rawBgB) = colorState.background
+                // Invert = negative-image: swap ink and paper colours.
+                let (fgR, fgG, fgB) = asciiParams.invert
+                    ? (rawBgR, rawBgG, rawBgB) : (rawFgR, rawFgG, rawFgB)
+                let (bgR, bgG, bgB) = asciiParams.invert
+                    ? (rawFgR, rawFgG, rawFgB) : (rawBgR, rawBgG, rawBgB)
 
                 // Render each pixel in the cell
                 for y in cellY..<yEnd {
@@ -308,7 +315,11 @@ enum ShaderASCIIRenderer {
         ) else {
             throw FramerError.invalidImage(URL(fileURLWithPath: ""))
         }
-        finalCtx.interpolationQuality = .high
+        // Nearest-neighbour upscale preserves the crisp pixel-art glyph
+        // edges. `.high` bilinear smoothing blurred the binary atlas output
+        // and made preview (rendered at work size, no upscale) diverge
+        // from export (rendered at work size, then interpolated back up).
+        finalCtx.interpolationQuality = .none
         finalCtx.draw(workResult, in: CGRect(x: 0, y: 0, width: width, height: height))
 
         guard let result = finalCtx.makeImage() else {
