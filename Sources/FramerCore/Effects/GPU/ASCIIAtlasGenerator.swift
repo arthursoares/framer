@@ -215,60 +215,89 @@ public enum ASCIIAtlasGenerator {
         return chars
     }
 
+    /// Render at `superSampleScale × atlasSize`, then downsample to the
+    /// shader-required 80×8. Core Text at 8pt produces unreadable blobs;
+    /// at 32pt (4× scale) glyphs are crisp, and high-quality interpolation
+    /// during the downsample averages 16 source pixels per output pixel
+    /// for clean anti-aliasing. Atlas size + format stay byte-identical to
+    /// the baked PNGs so the shader math is unchanged.
+    private static let superSampleScale = 4
+
     private static func renderAtlasCGImage(
         glyphs: [Character],
         leadingBlankCells: Int,
         fontName: String?
     ) throws -> CGImage {
-        let w = atlasWidth
-        let h = atlasHeight
-        let bytesPerRow = w * 4
+        let scale = superSampleScale
+        let hiW = atlasWidth * scale
+        let hiH = atlasHeight * scale
+        let hiCellSize = cellSize * scale
         let colorSpace = CGColorSpaceCreateDeviceRGB()
-        guard let ctx = CGContext(
+
+        guard let hiCtx = CGContext(
             data: nil,
-            width: w,
-            height: h,
+            width: hiW,
+            height: hiH,
             bitsPerComponent: 8,
-            bytesPerRow: bytesPerRow,
+            bytesPerRow: hiW * 4,
             space: colorSpace,
             bitmapInfo: CGImageAlphaInfo.premultipliedLast.rawValue
         ) else {
-            throw MetalEffectError.textureLoadFailed("ASCIIAtlasGenerator: CGContext allocation failed")
+            throw MetalEffectError.textureLoadFailed("ASCIIAtlasGenerator: hi-res CGContext allocation failed")
         }
 
         // Black background; glyphs drawn in white. Shader reads `.r` and
-        // treats it as 0..1 intensity, which matches the baked atlas PNGs.
-        ctx.setFillColor(CGColor(red: 0, green: 0, blue: 0, alpha: 1))
-        ctx.fill(CGRect(x: 0, y: 0, width: w, height: h))
+        // treats it as 0..1 intensity, matching the baked atlas PNGs.
+        hiCtx.setFillColor(CGColor(red: 0, green: 0, blue: 0, alpha: 1))
+        hiCtx.fill(CGRect(x: 0, y: 0, width: hiW, height: hiH))
 
-        // Anti-aliasing off would give crispest pixel-art glyphs, but Core
-        // Text at this size produces near-illegible output without AA. Keep
-        // AA on; nearest sampling at consumer time preserves the "ASCII"
-        // look when the atlas is stretched across larger cells.
-        ctx.setShouldAntialias(true)
-        ctx.setAllowsAntialiasing(true)
-        ctx.setFillColor(CGColor(red: 1, green: 1, blue: 1, alpha: 1))
+        hiCtx.setShouldAntialias(true)
+        hiCtx.setAllowsAntialiasing(true)
+        hiCtx.setShouldSubpixelQuantizeFonts(false)  // smooth edges over snapping
+        hiCtx.setShouldSmoothFonts(true)
+        hiCtx.setFillColor(CGColor(red: 1, green: 1, blue: 1, alpha: 1))
 
-        let font = resolvedFont(named: fontName)
+        let font = resolvedFont(named: fontName, size: CGFloat(hiCellSize))
 
         for (i, glyph) in glyphs.enumerated() {
             let cellIndex = leadingBlankCells + i
             if cellIndex >= totalCells { break }
             if glyph == " " { continue }
-            drawGlyph(glyph, into: ctx, cellIndex: cellIndex, font: font)
+            drawGlyph(glyph, into: hiCtx, cellIndex: cellIndex, cellSizePx: hiCellSize, font: font)
         }
 
-        guard let cgImage = ctx.makeImage() else {
+        guard let hiImage = hiCtx.makeImage() else {
+            throw MetalEffectError.textureLoadFailed("ASCIIAtlasGenerator: hi-res CGImage conversion failed")
+        }
+
+        // Downsample to the shader's expected 80×8 with high-quality
+        // interpolation. Each output pixel is the average of 16 hi-res
+        // pixels — produces clean anti-aliased glyphs at the small atlas
+        // size without the muddy blob you'd get from rendering 8pt directly.
+        guard let loCtx = CGContext(
+            data: nil,
+            width: atlasWidth,
+            height: atlasHeight,
+            bitsPerComponent: 8,
+            bytesPerRow: atlasWidth * 4,
+            space: colorSpace,
+            bitmapInfo: CGImageAlphaInfo.premultipliedLast.rawValue
+        ) else {
+            throw MetalEffectError.textureLoadFailed("ASCIIAtlasGenerator: downsample CGContext allocation failed")
+        }
+        loCtx.interpolationQuality = .high
+        loCtx.draw(hiImage, in: CGRect(x: 0, y: 0, width: atlasWidth, height: atlasHeight))
+
+        guard let cgImage = loCtx.makeImage() else {
             throw MetalEffectError.textureLoadFailed("ASCIIAtlasGenerator: CGImage conversion failed")
         }
         return cgImage
     }
 
-    /// Prefer the system monospaced font (macOS `.monospacedSystemFont`
-    /// analogue) since it's always available and kerns predictably at tiny
-    /// sizes. Fall back to Menlo, then any CoreText default.
-    private static func resolvedFont(named name: String?) -> CTFont {
-        let size: CGFloat = 8
+    /// Prefer Menlo (always available, predictable monospace metrics).
+    /// `size` is in points but we drive it from the cell-pixel size at
+    /// hi-res render time.
+    private static func resolvedFont(named name: String?, size: CGFloat) -> CTFont {
         if let name {
             return CTFontCreateWithName(name as CFString, size, nil)
         }
@@ -278,11 +307,11 @@ public enum ASCIIAtlasGenerator {
         return CTFontCreateWithFontDescriptor(sysDesc, size, nil)
     }
 
-    /// Draw a single character centred inside its 8×8 cell. CTLine gives us
-    /// the correct baseline and advance without us having to measure glyphs
-    /// manually — important for proportional-width characters that sneak
-    /// into user strings.
-    private static func drawGlyph(_ char: Character, into ctx: CGContext, cellIndex: Int, font: CTFont) {
+    /// Draw a single character centred inside `cellSizePx × cellSizePx`.
+    /// CTLine gives us the correct baseline and advance without manual
+    /// glyph measurement — matters for proportional-width characters that
+    /// sneak into user strings (e.g. unicode block elements).
+    private static func drawGlyph(_ char: Character, into ctx: CGContext, cellIndex: Int, cellSizePx: Int, font: CTFont) {
         let string = String(char) as NSString
         let attr: [NSAttributedString.Key: Any] = [
             .font: font,
@@ -296,11 +325,11 @@ public enum ASCIIAtlasGenerator {
         var leading: CGFloat = 0
         let width = CTLineGetTypographicBounds(line, &ascent, &descent, &leading)
 
-        let cellOriginX = CGFloat(cellIndex * cellSize)
-        let drawX = cellOriginX + (CGFloat(cellSize) - CGFloat(width)) / 2
+        let cellOriginX = CGFloat(cellIndex * cellSizePx)
+        let drawX = cellOriginX + (CGFloat(cellSizePx) - CGFloat(width)) / 2
         // Baseline: descent from bottom, centred within cell vertically.
         let totalGlyphHeight = ascent + descent
-        let verticalPadding = (CGFloat(cellSize) - totalGlyphHeight) / 2
+        let verticalPadding = (CGFloat(cellSizePx) - totalGlyphHeight) / 2
         let drawY = verticalPadding + descent
 
         ctx.textPosition = CGPoint(x: drawX, y: drawY)
