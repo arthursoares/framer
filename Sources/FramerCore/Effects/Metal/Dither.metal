@@ -83,7 +83,8 @@ constant uint DITHER_CMYK_HALFTONE     = 15u;
 //   1 color (per-channel quantization with dithered offset)
 //   2 palette (nearest-colour match against an arbitrary palette)
 
-constant uint DITHER_COLOR_MONO    = 0u;
+// Mode 0 is mono (bw / twoTone / dominantTwoTone) — handled in the
+// else-branch of ditherFragment without an explicit constant.
 constant uint DITHER_COLOR_LEVELS  = 1u;
 constant uint DITHER_COLOR_PALETTE = 2u;
 

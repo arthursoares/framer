@@ -672,7 +672,7 @@ struct GPUEffectLayerControls: View {
                 ))
             }
 
-            if case .glitch(let common, let geometry, let color, let payload) = params.params,
+            if case .glitch = params.params,
                params.kind == .pixelSort {
                 Picker("Direction", selection: glitchDirectionBinding) {
                     Text("Horizontal").tag(GlitchDirection.horizontal)
@@ -700,7 +700,7 @@ struct GPUEffectLayerControls: View {
                 adjustmentSlider(label: "Tracking", binding: glitchBinding(\.trackingError), range: 0...1)
             }
 
-            if case .edgeField(let common, let geometry, let color, let payload) = params.params,
+            if case .edgeField = params.params,
                params.kind == .waveLines {
                 // Line Strength drives the shader's threshold shaping — primary
                 // brightness knob, was missing from UI before.
@@ -722,7 +722,7 @@ struct GPUEffectLayerControls: View {
                 // Animate stays hidden — no time uniform yet.
             }
 
-            if case .edgeField(let common, let geometry, let color, let payload) = params.params,
+            if case .edgeField = params.params,
                params.kind == .noiseField {
                 // Line Strength gates the noise contribution (shader:
                 // `noise * u.lineStrength + fieldWeight * 0.3`). Field Intensity
