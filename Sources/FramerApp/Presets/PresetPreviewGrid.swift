@@ -3,6 +3,7 @@ import FramerCore
 
 struct PresetPreviewRenderKey: Equatable {
     let photoID: UUID?
+    let photoRotation: Int?
     let presets: [Preset]
 }
 
@@ -30,7 +31,11 @@ struct PresetPreviewGrid: View {
     }
 
     private var renderKey: PresetPreviewRenderKey {
-        PresetPreviewRenderKey(photoID: appState.selectedPhoto?.id, presets: appState.presets)
+        PresetPreviewRenderKey(
+            photoID: appState.selectedPhoto?.id,
+            photoRotation: appState.selectedPhoto?.rotation,
+            presets: appState.presets
+        )
     }
 
     var body: some View {
