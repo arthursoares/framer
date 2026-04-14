@@ -190,6 +190,18 @@ public enum TextureFrameProvider {
 
     // MARK: - Internal Scanning
 
+    /// Texture files in the search paths that are shipped as internal
+    /// shader assets, NOT user-pickable overlays. The ASCII LUT atlases
+    /// (`fillASCII.png`, `edgesASCII.png`) live under `textures/` alongside
+    /// overlay PNGs because both consume the same search-path discovery
+    /// for GPU / CPU resource loading, so we filter them out here to keep
+    /// them from leaking into the Frame Overlay picker. Add new internal
+    /// atlas stems to this set if shader work grows the resource bundle.
+    private static let internalAtlasStems: Set<String> = [
+        "fillASCII",
+        "edgesASCII",
+    ]
+
     private static func scanOverlays() -> [OverlayInfo] {
         let imageExts: Set<String> = ["jpg", "jpeg", "png", "tif", "tiff"]
         var seen = Set<String>()
@@ -212,6 +224,11 @@ public enum TextureFrameProvider {
 
                 // Skip thumbnails directory
                 if url.path.contains("/thumbnails/") { continue }
+
+                // Skip internal shader atlases — they coexist with overlay
+                // PNGs in the textures folder but shouldn't surface in the
+                // Frame Overlay picker.
+                if internalAtlasStems.contains(stem) { continue }
 
                 // Deduplicate by stem (first-found wins — bundled has priority)
                 guard !seen.contains(stem) else { continue }
