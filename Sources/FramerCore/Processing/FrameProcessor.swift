@@ -10,7 +10,6 @@ public actor FrameProcessor {
     public init() {}
     private var exifCache: [URL: ExifData] = [:]
     private let maxExifCacheEntries = 256
-    private var gpuEffectsPlatform: GPUEffectsPlatform?
 
     // MARK: - Preview (downscaled, no disk I/O)
 
@@ -38,6 +37,15 @@ public actor FrameProcessor {
         try Task.checkCancellation()
         let exif = exifData(for: url)
 
+        // When a `.gpuEffect` keeps preview at full resolution, scale-sensitive
+        // CPU layers (Dither, LUT, ShaderRenderer) must use `previewMax` as
+        // their `previewBaseDimension` so their pattern density matches export.
+        // Without this, dither/shader patterns sample at full-pixel rate during
+        // preview (fine grain, aliases on display downscale) but at coarse
+        // preview-equivalent rate during export — producing a WYSIWYG mismatch
+        // for any stack mixing `.gpuEffect` with a scale-sensitive layer.
+        let layerPreviewBase: Int? = containsGPUEffect ? previewMax : nil
+
         let borderResult: BorderResult
         if let layers = config.layers {
             borderResult = try applyConfiguredLayers(
@@ -45,7 +53,7 @@ public actor FrameProcessor {
                 to: cgImage,
                 sourceImage: cgImage,
                 exif: exif,
-                previewBaseDimension: nil
+                previewBaseDimension: layerPreviewBase
             )
         } else {
             borderResult = try BorderRenderer.applyBorder(to: cgImage, config: config, style: config.borderStyle)
@@ -128,16 +136,6 @@ public actor FrameProcessor {
         return image
     }
 
-    private func platform() throws -> GPUEffectsPlatform {
-        if let gpuEffectsPlatform {
-            return gpuEffectsPlatform
-        }
-
-        let created = try GPUEffectsPlatform.makeForTests()
-        gpuEffectsPlatform = created
-        return created
-    }
-
     private func applyConfiguredLayers(
         _ layers: [CompositionLayer],
         to image: CGImage,
@@ -152,7 +150,11 @@ public actor FrameProcessor {
 
             switch layer {
             case .gpuEffect(let params):
-                let rendered = try platform().renderPreview(
+                // Stateless dispatch — no Metal device required upfront. Each
+                // bucket renderer attempts its GPU path and falls back to CPU
+                // on `MetalEffectError`, so headless / no-Metal hosts still
+                // get a valid image instead of a hard failure.
+                let rendered = try GPUEffectsPlatform.dispatchRenderPreview(
                     input: result.image,
                     effect: params.kind,
                     parameters: params.params,
