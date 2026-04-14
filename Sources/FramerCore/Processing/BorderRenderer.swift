@@ -729,6 +729,16 @@ public enum BorderRenderer {
         let oR    = UnsafeMutablePointer<Float>.allocate(capacity: pixelCount)
         let oG    = UnsafeMutablePointer<Float>.allocate(capacity: pixelCount)
         let oB    = UnsafeMutablePointer<Float>.allocate(capacity: pixelCount)
+        // Overlay alpha channel. Frame Overlay PNGs carry real transparency
+        // (alpha=0 in the centre window); without gating the strength mask
+        // by this, those "transparent" pixels still darken the base because
+        // CGBitmapContext rasterises them as premultiplied black (rgb=0,
+        // alpha=0) and the luminance-deviation mask reads lum=0 as full
+        // opacity. Multiplying `lum` by `oA` below zeroes out contributions
+        // from genuinely-transparent overlay pixels. Grayscale overlays
+        // (dust / light leak / wet plate) always ship with alpha=1 so the
+        // factor is a no-op for them.
+        let oA    = UnsafeMutablePointer<Float>.allocate(capacity: pixelCount)
         let lum   = UnsafeMutablePointer<Float>.allocate(capacity: pixelCount)
         let bR    = UnsafeMutablePointer<Float>.allocate(capacity: pixelCount)
         let bG    = UnsafeMutablePointer<Float>.allocate(capacity: pixelCount)
@@ -743,7 +753,7 @@ public enum BorderRenderer {
 
         defer {
             baseF.deallocate(); overF.deallocate()
-            oR.deallocate();    oG.deallocate();    oB.deallocate()
+            oR.deallocate();    oG.deallocate();    oB.deallocate(); oA.deallocate()
             lum.deallocate()
             bR.deallocate();    bG.deallocate();    bB.deallocate()
             rR.deallocate();    rG.deallocate();    rB.deallocate()
@@ -757,8 +767,9 @@ public enum BorderRenderer {
         vDSP_vsmul(baseF, 1, &scale, baseF, 1, vDSP_Length(totalBytes))
         vDSP_vsmul(overF, 1, &scale, overF, 1, vDSP_Length(totalBytes))
 
-        // ── De-interleave overlay into R, G, B (stride 4 → stride 1) ────────────
+        // ── De-interleave overlay into R, G, B, A (stride 4 → stride 1) ─────────
         deinterleaveRGB(overF, r: oR, g: oG, b: oB, pixelCount: pixelCount)
+        vDSP_mmov(overF + 3, oA, 1, n, 4, 1)   // alpha channel (stride 4 starting at offset 3)
 
         // ── Compute luminance: L = 0.299*R + 0.587*G + 0.114*B ──────────────────
         var wr: Float = 0.299, wg: Float = 0.587, wb: Float = 0.114
@@ -766,12 +777,13 @@ public enum BorderRenderer {
         vDSP_vsma(oG, 1, &wg, lum, 1, lum, 1, n)           // lum += 0.587 * oG
         vDSP_vsma(oB, 1, &wb, lum, 1, lum, 1, n)           // lum += 0.114 * oB
 
-        // ── Strength mask: alpha = clamp(|lum - 0.5| * 2 * opacity, 0, 1) ───────
+        // ── Strength mask: alpha = clamp(|lum - 0.5| * 2 * opacity * overlay.alpha, 0, 1) ───
         var negHalf: Float = -0.5
         vDSP_vsadd(lum, 1, &negHalf, lum, 1, n)            // lum -= 0.5
         vDSP_vabs(lum, 1, lum, 1, n)                       // lum  = |lum|
         var strengthScale: Float = 2.0 * Float(opacity)
         vDSP_vsmul(lum, 1, &strengthScale, lum, 1, n)      // lum *= 2*opacity
+        vDSP_vmul(lum, 1, oA, 1, lum, 1, n)                // lum *= overlay.alpha  ← Frame Overlay fix
         var lo: Float = 0, hi: Float = 1
         vDSP_vclip(lum, 1, &lo, &hi, lum, 1, n)            // lum  = clamp(lum, 0, 1)
 
