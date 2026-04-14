@@ -960,6 +960,10 @@ public struct ASCIIShaderParams: Codable, Equatable, Sendable {
     public var exposure: Double
     public var attenuation: Double
     public var blackLevel: Double
+    /// Custom character palette, ordered dim → bright. `nil` uses the baked
+    /// `fillASCII.png` / `edgesASCII.png` atlases. Non-nil triggers runtime
+    /// atlas generation via `ASCIIAtlasGenerator`.
+    public var characters: String?
 
     public init(
         cellSize: Int = 10,
@@ -970,7 +974,8 @@ public struct ASCIIShaderParams: Codable, Equatable, Sendable {
         invert: Bool = false,
         exposure: Double = 1.0,
         attenuation: Double = 1.0,
-        blackLevel: Double = 0.0
+        blackLevel: Double = 0.0,
+        characters: String? = nil
     ) {
         self.cellSize = cellSize
         self.edgeBias = edgeBias
@@ -979,11 +984,12 @@ public struct ASCIIShaderParams: Codable, Equatable, Sendable {
         self.exposure = exposure
         self.attenuation = attenuation
         self.blackLevel = blackLevel
+        self.characters = characters
     }
 
     private enum CodingKeys: String, CodingKey {
         case cellSize, edgeBias, colorMode, foreground, background, invert
-        case exposure, attenuation, blackLevel
+        case exposure, attenuation, blackLevel, characters
     }
 
     public init(from decoder: Decoder) throws {
@@ -1005,7 +1011,8 @@ public struct ASCIIShaderParams: Codable, Equatable, Sendable {
             invert: try container.decodeIfPresent(Bool.self, forKey: .invert) ?? false,
             exposure: try container.decodeIfPresent(Double.self, forKey: .exposure) ?? 1.0,
             attenuation: try container.decodeIfPresent(Double.self, forKey: .attenuation) ?? 1.0,
-            blackLevel: try container.decodeIfPresent(Double.self, forKey: .blackLevel) ?? 0.0
+            blackLevel: try container.decodeIfPresent(Double.self, forKey: .blackLevel) ?? 0.0,
+            characters: try container.decodeIfPresent(String.self, forKey: .characters)
         )
     }
 
@@ -1018,6 +1025,9 @@ public struct ASCIIShaderParams: Codable, Equatable, Sendable {
         if exposure != 1.0 { try container.encode(exposure, forKey: .exposure) }
         if attenuation != 1.0 { try container.encode(attenuation, forKey: .attenuation) }
         if blackLevel != 0.0 { try container.encode(blackLevel, forKey: .blackLevel) }
+        if let characters, !characters.isEmpty {
+            try container.encode(characters, forKey: .characters)
+        }
     }
 }
 
@@ -1235,20 +1245,47 @@ public struct HalftoneShaderParams: Codable, Equatable, Sendable {
 
 public struct KuwaharaShaderParams: Codable, Equatable, Sendable {
     public var kernelSize: Int
-    /// Unsharp-mask blend factor toward the original sample. The CPU + GPU
-    /// implementations both compute `bestColor + (srcOrig - bestColor) *
-    /// (sharpness / 8.0)`, so `sharpness = 8.0` collapses the entire effect
-    /// back to the input image (factor = 1.0 → full override with srcOrig).
-    /// Default is 0.0 so the user sees the full edge-preserving smoothing
-    /// out of the box; the slider can pull toward the original as needed.
-    public var sharpness: Double
+    /// How much of the Kuwahara-filtered colour to keep. 1.0 = full effect
+    /// (default), 0.0 = pass-through to the source. Internally the shader
+    /// computes `mix(srcOrig, bestColor, softness)`.
+    ///
+    /// Replaces a legacy `sharpness` field that ran 0..8 with inverted
+    /// semantics (`bestColor + (srcOrig - bestColor) * (sharpness / 8.0)`,
+    /// where higher meant *less* effect). Decoding accepts either field —
+    /// legacy `sharpness` is mapped via `softness = 1 - sharpness/8`.
+    public var softness: Double
 
     public init(
         kernelSize: Int = 4,
-        sharpness: Double = 0.0
+        softness: Double = 1.0
     ) {
         self.kernelSize = kernelSize
-        self.sharpness = sharpness
+        self.softness = softness
+    }
+
+    private enum CodingKeys: String, CodingKey {
+        case kernelSize
+        case softness
+        case sharpness  // legacy — read-only
+    }
+
+    public init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        self.kernelSize = try c.decodeIfPresent(Int.self, forKey: .kernelSize) ?? 4
+        if let s = try c.decodeIfPresent(Double.self, forKey: .softness) {
+            self.softness = s
+        } else if let legacy = try c.decodeIfPresent(Double.self, forKey: .sharpness) {
+            // Legacy: sharpness 0..8 (0 = full effect, 8 = pass-through).
+            self.softness = max(0.0, min(1.0, 1.0 - legacy / 8.0))
+        } else {
+            self.softness = 1.0
+        }
+    }
+
+    public func encode(to encoder: Encoder) throws {
+        var c = encoder.container(keyedBy: CodingKeys.self)
+        try c.encode(kernelSize, forKey: .kernelSize)
+        try c.encode(softness, forKey: .softness)
     }
 }
 

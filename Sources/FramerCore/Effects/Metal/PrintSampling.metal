@@ -52,7 +52,7 @@ static float4 thresholdVariant(
     int2   pixel      = clamp(int2(floor(in.uv * resolution)),
                               int2(0), int2(resolution) - 1);
     float2 selfUV     = (float2(pixel) + 0.5) / resolution;
-    float3 src        = source.sample(texSampler, selfUV).rgb;
+    float3 src        = applyCommonAdjustments(source.sample(texSampler, selfUV).rgb, u.common);
 
     float lum = luminance(src);
     int   levels    = max(2, int(u.thresholdLevels));
@@ -91,7 +91,7 @@ static float4 crosshatchVariant(
     int2   pixel      = clamp(int2(floor(in.uv * resolution)),
                               int2(0), int2(resolution) - 1);
     float2 selfUV     = (float2(pixel) + 0.5) / resolution;
-    float3 src        = source.sample(texSampler, selfUV).rgb;
+    float3 src        = applyCommonAdjustments(source.sample(texSampler, selfUV).rgb, u.common);
 
     float lum  = luminance(src);
     bool  dark = lum < u.threshold;

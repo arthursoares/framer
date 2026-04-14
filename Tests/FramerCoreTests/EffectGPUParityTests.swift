@@ -371,7 +371,7 @@ final class EffectGPUParityTests: XCTestCase {
     func testKuwaharaParity() throws {
         try requireMetal()
         let img = makeTestImage(width: 128, height: 128)  // smaller — Kuwahara is slow
-        let k = KuwaharaShaderParams(kernelSize: 3, sharpness: 0)
+        let k = KuwaharaShaderParams(kernelSize: 3, softness: 1.0)
         let params = ShaderLayerParams(style: .kuwahara, intensity: 1.0, params: .kuwahara(k))
         let cpu = try ShaderRenderer.applyKuwahara(to: img, params: k, intensity: 1.0)
         let gpu = try KuwaharaRenderer.render(to: img, params: params)

@@ -714,9 +714,12 @@ struct GPUEffectLayerControls: View {
                     Text("Vertical").tag(EdgeFieldDirection.vertical)
                 }
                 .pickerStyle(.menu)
-                // Line Count + Animate were orphaned — shader doesn't read
-                // `lineCount` in the phase math, and there's no time uniform
-                // so Animate had no effect. Wire them or hide. Hidden for now.
+                // Line Count multiplies the wave-band frequency: the shader
+                // computes countFactor = max(1, lineCount/spacing) and
+                // multiplies `frequency` by it. Range 1..40 covers from "no
+                // boost" to "very dense bands" at typical spacing values.
+                adjustmentSlider(label: "Line Count", binding: edgeFieldBinding(\.lineCount), range: 1...40)
+                // Animate stays hidden — no time uniform yet.
             }
 
             if case .edgeField(let common, let geometry, let color, let payload) = params.params,
@@ -728,11 +731,16 @@ struct GPUEffectLayerControls: View {
                 adjustmentSlider(label: "Field Intensity", binding: edgeFieldBinding(\.fieldIntensity), range: 0...1)
                 adjustmentSlider(label: "Octaves", binding: noiseOctavesBinding, range: 1...6)
                 adjustmentSlider(label: "Scale", binding: edgeFieldBinding(\.amplitude), range: 0.1...1)
+                Picker("Noise Type", selection: noiseTypeBinding) {
+                    Text("Value (IGN)").tag(NoiseFieldType.value)
+                    Text("Simplex").tag(NoiseFieldType.simplex)
+                    Text("Cellular").tag(NoiseFieldType.cellular)
+                }
+                .pickerStyle(.menu)
                 Toggle("Invert", isOn: edgeInvertBinding)
-                // Removed: Noise Type picker (shader hardcodes IGN — simplex/
-                // cellular not implemented), Speed + Animate (no time uniform),
-                // Distort Only (shader generates standalone, doesn't distort
-                // source UVs). Re-enable when those paths are implemented.
+                // Speed + Animate stay hidden (no time uniform yet).
+                // Distort Only stays hidden (shader generates standalone,
+                // doesn't distort source UVs).
             }
 
             if case .edgeField(let common, let geometry, let color, let payload) = params.params,
@@ -3799,6 +3807,28 @@ struct ShaderLayerControls: View {
             updateASCII(asciiParams, blackLevel: value)
         }
 
+        // Custom character palette. Leave blank to use the baked
+        // fillASCII/edgesASCII atlases (ships with Framer). When populated,
+        // the 10-character string is rasterised at runtime dim→bright —
+        // shorter inputs pad the dim side with spaces, longer are truncated.
+        VStack(alignment: .leading, spacing: 4) {
+            Text("Characters")
+                .font(AppFont.controlLabel)
+                .foregroundStyle(Color.text2)
+            TextField(
+                " .:-=+*#%@",
+                text: Binding(
+                    get: { asciiParams.characters ?? "" },
+                    set: { newValue in
+                        let trimmed = String(newValue.prefix(10))
+                        updateASCII(asciiParams, characters: .some(trimmed.isEmpty ? nil : trimmed))
+                    }
+                )
+            )
+            .font(.system(.body, design: .monospaced))
+            .textFieldStyle(.roundedBorder)
+        }
+
         VStack(alignment: .leading, spacing: 4) {
             Text("Colors")
                 .font(AppFont.controlLabel)
@@ -3950,7 +3980,8 @@ struct ShaderLayerControls: View {
         invert: Bool? = nil,
         exposure: Double? = nil,
         attenuation: Double? = nil,
-        blackLevel: Double? = nil
+        blackLevel: Double? = nil,
+        characters: String?? = nil
     ) {
         onChange(params.withParams(.ascii(ASCIIShaderParams(
             cellSize: cellSize ?? asciiParams.cellSize,
@@ -3959,7 +3990,8 @@ struct ShaderLayerControls: View {
             invert: invert ?? asciiParams.invert,
             exposure: exposure ?? asciiParams.exposure,
             attenuation: attenuation ?? asciiParams.attenuation,
-            blackLevel: blackLevel ?? asciiParams.blackLevel
+            blackLevel: blackLevel ?? asciiParams.blackLevel,
+            characters: characters ?? asciiParams.characters
         ))))
     }
 
@@ -4157,12 +4189,12 @@ struct ShaderLayerControls: View {
             onChange(params.withParams(.kuwahara(updated)))
         }
         sliderRow(
-            title: "Sharpness",
-            value: kuwaharaParams.sharpness,
-            range: expandedRange(1...16, including: kuwaharaParams.sharpness),
-            step: 0.5
+            title: "Softness",
+            value: kuwaharaParams.softness,
+            range: expandedRange(0...1, including: kuwaharaParams.softness),
+            step: 0.05
         ) { value in
-            var updated = kuwaharaParams; updated.sharpness = value
+            var updated = kuwaharaParams; updated.softness = value
             onChange(params.withParams(.kuwahara(updated)))
         }
     }

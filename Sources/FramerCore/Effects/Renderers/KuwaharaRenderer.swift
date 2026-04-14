@@ -15,7 +15,7 @@ public enum KuwaharaRenderer {
 
         var intensity: Float = 1
         var kernelSize: Int32 = 1
-        var sharpness: Float = 0
+        var softness: Float = 1
         var _pad0: Float = 0
     }
 
@@ -31,7 +31,7 @@ public enum KuwaharaRenderer {
         var uniforms = Uniforms()
         uniforms.intensity = Float(params.intensity)
         uniforms.kernelSize = Int32(max(1, min(15, k.kernelSize)))
-        uniforms.sharpness = Float(max(0.0, k.sharpness))
+        uniforms.softness   = Float(max(0.0, min(1.0, k.softness)))
 
         let pipeline = try library.pipeline(for: "kuwaharaFragment")
         let sampler = try library.linearClamp()

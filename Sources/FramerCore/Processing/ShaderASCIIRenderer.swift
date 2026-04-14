@@ -156,9 +156,25 @@ enum ShaderASCIIRenderer {
             asciiParams: asciiParams, paletteSource: paletteSource
         )
 
-        // Load LUTs (fall back to procedural if textures unavailable)
-        let edges = edgesLUT()
-        let fill = fillLUT()
+        // Load LUTs. When the user supplies a custom character palette, build
+        // the atlases via Core Text (same cache the GPU path uses — CGImage
+        // side) rather than reading the baked PNGs.
+        let edges: LUT?
+        let fill: LUT?
+        if let chars = asciiParams.characters, !chars.isEmpty {
+            let style = ASCIIAtlasGenerator.Style(fillCharacters: chars)
+            if let edgesImg = try? ASCIIAtlasGenerator.atlasCGImage(for: style, kind: .edges),
+               let fillImg  = try? ASCIIAtlasGenerator.atlasCGImage(for: style, kind: .fill) {
+                edges = extractGrayscale(from: edgesImg)
+                fill  = extractGrayscale(from: fillImg)
+            } else {
+                edges = nil
+                fill  = nil
+            }
+        } else {
+            edges = edgesLUT()
+            fill  = fillLUT()
+        }
         let hasLUTs = edges != nil && fill != nil
 
         // Pre-compute luminance buffer

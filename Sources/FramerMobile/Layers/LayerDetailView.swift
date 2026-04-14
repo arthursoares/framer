@@ -2348,6 +2348,24 @@ private struct ShaderControls: View {
             updateASCII(asciiParams, blackLevel: value)
         }
 
+        // Custom character palette — blank = use baked atlases. 10-char
+        // cap matches the atlas luminance-level count; see
+        // ASCIIAtlasGenerator.paddedFillGlyphs for padding/truncation rules.
+        ControlRow(label: "Characters") {
+            TextField(
+                " .:-=+*#%@",
+                text: Binding(
+                    get: { asciiParams.characters ?? "" },
+                    set: { newValue in
+                        let trimmed = String(newValue.prefix(10))
+                        updateASCII(asciiParams, characters: .some(trimmed.isEmpty ? nil : trimmed))
+                    }
+                )
+            )
+            .font(.system(.body, design: .monospaced))
+            .textFieldStyle(.roundedBorder)
+        }
+
         ControlRow(label: "Colors") {
             Picker("", selection: Binding(
                 get: {
@@ -2515,7 +2533,8 @@ private struct ShaderControls: View {
         invert: Bool? = nil,
         exposure: Double? = nil,
         attenuation: Double? = nil,
-        blackLevel: Double? = nil
+        blackLevel: Double? = nil,
+        characters: String?? = nil
     ) {
         onChange(params.withParams(.ascii(ASCIIShaderParams(
             cellSize: cellSize ?? asciiParams.cellSize,
@@ -2524,7 +2543,8 @@ private struct ShaderControls: View {
             invert: invert ?? asciiParams.invert,
             exposure: exposure ?? asciiParams.exposure,
             attenuation: attenuation ?? asciiParams.attenuation,
-            blackLevel: blackLevel ?? asciiParams.blackLevel
+            blackLevel: blackLevel ?? asciiParams.blackLevel,
+            characters: characters ?? asciiParams.characters
         ))))
     }
 
@@ -2728,12 +2748,12 @@ private struct ShaderControls: View {
             onChange(params.withParams(.kuwahara(updated)))
         }
         sliderRow(
-            label: "Sharpness",
-            value: kuwaharaParams.sharpness,
-            range: expandedRange(1...16, including: kuwaharaParams.sharpness),
-            step: 0.5
+            label: "Softness",
+            value: kuwaharaParams.softness,
+            range: expandedRange(0...1, including: kuwaharaParams.softness),
+            step: 0.05
         ) { value in
-            var updated = kuwaharaParams; updated.sharpness = value
+            var updated = kuwaharaParams; updated.softness = value
             onChange(params.withParams(.kuwahara(updated)))
         }
     }

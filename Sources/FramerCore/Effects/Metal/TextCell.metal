@@ -158,9 +158,7 @@ static float4 dotsVariant(
 
     // Sample source at cell center and compute luminance.
     float2 cellUV = cellCenter * invRes;
-    float3 srcColor = source.sample(texSampler, cellUV).rgb;
-    srcColor = applyBrightnessContrast(srcColor, u.common.brightness, u.common.contrast);
-    srcColor = applyGamma(srcColor, u.common.gamma);
+    float3 srcColor = applyCommonAdjustments(source.sample(texSampler, cellUV).rgb, u.common);
 
     float luma = luminance(srcColor);
     luma = (u.invert == 1) ? (1.0 - luma) : luma;
@@ -272,7 +270,7 @@ static float4 blockifyVariant(
     }
 
     // Final mix with original by intensity — matches dots and ascii.
-    float3 srcOrig = source.sample(texSampler, in.uv).rgb;
+    float3 srcOrig = applyCommonAdjustments(source.sample(texSampler, in.uv).rgb, u.common);
     float3 final   = mix(srcOrig, drawn, saturate(u.intensity));
     return float4(final, 1.0);
 }
@@ -465,7 +463,7 @@ static float4 asciiVariant(
     float3 glyphColor = mix(bg, fg, glyphValue);
 
     // ---- Blend with original by intensity ----------------------------------
-    float3 srcOrig = source.sample(texSampler, in.uv).rgb;
+    float3 srcOrig = applyCommonAdjustments(source.sample(texSampler, in.uv).rgb, u.common);
     float3 final   = mix(srcOrig, glyphColor, saturate(u.intensity));
     return float4(final, 1.0);
 }
@@ -517,7 +515,7 @@ static float4 matrixRainVariant(
     int2   pixel      = clamp(int2(floor(in.uv * resolution)),
                               int2(0), int2(resolution) - 1);
     float2 selfUV     = (float2(pixel) + 0.5) / resolution;
-    float3 srcOrig    = source.sample(texSampler, selfUV).rgb;
+    float3 srcOrig    = applyCommonAdjustments(source.sample(texSampler, selfUV).rgb, u.common);
 
     // Cell size and column index (cells run vertically, stacked horizontally).
     float cellSizeF    = max(2.0, 8.0 * u.geometry.spacing * max(0.1, u.geometry.scale));

@@ -23,7 +23,7 @@ struct KuwaharaUniforms {
 
     float intensity;
     int   kernelSize;       // CPU clamps 1..15
-    float sharpness;        // ≥ 0
+    float softness;         // 0..1: 1 = full Kuwahara, 0 = pass-through source
     float _pad0;
 };
 
@@ -34,7 +34,7 @@ fragment float4 kuwaharaFragment(
     constant KuwaharaUniforms& uniforms     [[buffer(0)]]
 ) {
     int radius = clamp(uniforms.kernelSize, 1, KUWAHARA_MAX_RADIUS);
-    float sharpness = max(0.0, uniforms.sharpness);
+    float softness = clamp(uniforms.softness, 0.0, 1.0);
 
     float2 resolution = float2(source.get_width(), source.get_height());
     float2 invRes     = 1.0 / resolution;
@@ -83,13 +83,12 @@ fragment float4 kuwaharaFragment(
         }
     }
 
-    // Unsharp mask: blend toward the original sample by sharpness/8 (same
-    // factor as the CPU version).
+    // `softness` blends from the source sample toward the filtered colour:
+    // softness=1 → bestColor (full Kuwahara), softness=0 → srcOrig (no effect).
+    // Equivalent to the legacy `sharpness` formula under the migration
+    // softness = 1 - sharpness/8.
     float3 srcOrig = source.sample(texSampler, in.uv).rgb;
-    if (sharpness > 0.0) {
-        float factor = sharpness / 8.0;
-        bestColor = bestColor + (srcOrig - bestColor) * factor;
-    }
+    bestColor = mix(srcOrig, bestColor, softness);
 
     float3 final = mix(srcOrig, saturate(bestColor), saturate(uniforms.intensity));
     return float4(final, 1.0);

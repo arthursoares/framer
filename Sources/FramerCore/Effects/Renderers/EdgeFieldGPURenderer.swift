@@ -44,6 +44,14 @@ public enum EdgeFieldGPURenderer {
         var octaves:     UInt32 = 1
 
         var edgeColor: SIMD4<Float> = SIMD4(0, 0, 0, 0)
+
+        // 0 value/IGN, 1 simplex, 2 cellular. Followed by 12 bytes of explicit
+        // padding so the MSL struct stays a multiple of 16 bytes — avoids
+        // surprises if a future float4 is appended.
+        var noiseType: UInt32 = 0
+        var _pad0: Float = 0
+        var _pad1: Float = 0
+        var _pad2: Float = 0
     }
 
     // MARK: - Edge Detection
@@ -259,6 +267,13 @@ public enum EdgeFieldGPURenderer {
         uniforms.fieldWeight  = Float(clamp01(params.fieldIntensity))
         uniforms.octaves      = UInt32(max(1, min(6, params.octaves)))
         uniforms.edgeColor    = params.edgeColor.map { simdColor($0) } ?? SIMD4(1, 1, 1, 1)
+        uniforms.noiseType    = {
+            switch params.noiseType {
+            case .value:    return 0
+            case .simplex:  return 1
+            case .cellular: return 2
+            }
+        }()
 
         let outputTexture = try MetalRenderPass.encode(
             pipeline: try library.pipeline(for: "edgeFieldFragment"),

@@ -46,10 +46,13 @@ inline float maxRGB(float3 c) {
     return max(max(c.r, c.g), c.b);
 }
 
+// `contrast = 1.0` is identity (matches GPUEffectCommonParameters' Swift
+// default and the ColorGrade.metal convention). `brightness` shifts every
+// channel additively. Output is saturated to 0..1 so adjustments don't
+// produce out-of-gamut values for downstream luminance/colour math.
 inline float3 applyBrightnessContrast(float3 color, float brightness, float contrast) {
-    float contrastFactor = (1.0 + contrast) / (1.0 - contrast * 0.99);
     float3 result = color + brightness;
-    result = (result - 0.5) * contrastFactor + 0.5;
+    result = (result - 0.5) * contrast + 0.5;
     return saturate(result);
 }
 
@@ -57,6 +60,40 @@ inline float3 applyGamma(float3 color, float gamma) {
     if (gamma == 1.0) return color;
     return pow(max(color, float3(0.001)), float3(1.0 / max(gamma, 0.01)));
 }
+
+// Saturation 0..2 (1.0 = identity). Linear blend between Rec.601 luma and
+// the original colour. Out-of-range values clip via saturate at the call site.
+inline float3 applySaturation(float3 color, float saturation) {
+    if (saturation == 1.0) return color;
+    float gray = luminance(color);
+    return mix(float3(gray), color, saturation);
+}
+
+// Hue rotation (degrees, 0 = identity). Rotates around the luma axis in YIQ-
+// like chroma space. Cheap (a 2x2 trig rotation on the I/Q components).
+//
+// MSL `float3x3(col0, col1, col2)` builds a column-major matrix, so each
+// column below holds the per-input-channel coefficients of one output
+// component (e.g. col0 of rgbToYiq holds Y/I/Q coefficients for input R).
+inline float3 applyHueRotation(float3 color, float degrees) {
+    if (degrees == 0.0) return color;
+    const float3x3 rgbToYiq = float3x3(
+        float3(0.299,     0.595716,  0.211456),  // R-channel contributions
+        float3(0.587,    -0.274453, -0.522591),  // G-channel contributions
+        float3(0.114,    -0.321263,  0.311135)); // B-channel contributions
+    const float3x3 yiqToRgb = float3x3(
+        float3(1.0,       1.0,       1.0),       // Y-channel contributions
+        float3(0.9563,   -0.2721,   -1.1070),    // I-channel contributions
+        float3(0.6210,   -0.6474,    1.7046));   // Q-channel contributions
+    float3 yiq = rgbToYiq * color;
+    float radians = degrees * (M_PI_F / 180.0);
+    float c = cos(radians);
+    float s = sin(radians);
+    float i =  yiq.y * c - yiq.z * s;
+    float q =  yiq.y * s + yiq.z * c;
+    return saturate(yiqToRgb * float3(yiq.x, i, q));
+}
+
 
 // =============================================================================
 // Interleaved Gradient Noise (IGN) — procedural blue-noise approximation.
@@ -118,13 +155,25 @@ inline float bayerThreshold8(uint2 pos) {
 // =============================================================================
 
 struct FramerCommonUniforms {
-    float brightness;   // -1 .. 1  (normalized; Framer UI shows -100..100 and divides by 100)
-    float contrast;     // -1 .. 1
-    float saturation;   //  0 .. 2
-    float hueRotation;  //  0 .. 360 (degrees)
-    float sharpness;    //  0 .. 1
-    float gamma;        //  0.1 .. 3
+    float brightness;   // -1 .. 1  (0 = identity; UI shows -100..100, divides by 100)
+    float contrast;     //  0 .. 2  (1 = identity)
+    float saturation;   //  0 .. 2  (1 = identity)
+    float hueRotation;  //  0 .. 360 (degrees; 0 = identity)
+    float sharpness;    //  0 .. 1  (0 = identity; not consumed by helpers)
+    float gamma;        //  0.1 .. 3 (1 = identity)
 };
+
+// Convenience: brightness/contrast → saturation → hue → gamma, in that order
+// (matches the order applied by Framer's CPU FrameProcessor adjustment chain).
+// Sharpness is intentionally NOT applied here — proper sharpening needs
+// neighbour samples, which is up to each effect to do in its own kernel.
+inline float3 applyCommonAdjustments(float3 color, FramerCommonUniforms common) {
+    color = applyBrightnessContrast(color, common.brightness, common.contrast);
+    color = applySaturation(color, common.saturation);
+    color = applyHueRotation(color, common.hueRotation);
+    color = applyGamma(color, common.gamma);
+    return color;
+}
 
 struct FramerGeometryUniforms {
     float scale;
