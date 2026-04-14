@@ -735,6 +735,14 @@ public struct DitherLayerParams: Identifiable, Codable, Equatable, Sendable {
     /// Contrast boost before dithering (0–1, default 0 = no change).
     /// Applies an S-curve to expand tonal range before quantization.
     public var contrast: Double
+    /// Layer-stack opacity for the final compose. 0 = no layer contribution,
+    /// 1 = fully applied. Consumed by `LayerCompositor.compose`. Defaults
+    /// to 1 so existing presets without this field behave identically.
+    public var opacity: Double
+    /// Blend mode used by `LayerCompositor.compose` when layering the
+    /// dithered output onto the current pipeline buffer. `.normal`
+    /// preserves the pre-blend-modes behaviour.
+    public var blendMode: LayerBlendMode
 
     public init(
         id: UUID = UUID(),
@@ -745,7 +753,9 @@ public struct DitherLayerParams: Identifiable, Codable, Equatable, Sendable {
         pixelScale: Int = 1,
         threshold: Double = 0.5,
         sharpen: Double = 0,
-        contrast: Double = 0
+        contrast: Double = 0,
+        opacity: Double = 1.0,
+        blendMode: LayerBlendMode = .normal
     ) {
         self.id = id
         self.enabled = enabled
@@ -756,10 +766,13 @@ public struct DitherLayerParams: Identifiable, Codable, Equatable, Sendable {
         self.threshold = max(0.1, min(0.9, threshold))
         self.sharpen = max(0, min(1, sharpen))
         self.contrast = max(0, min(1, contrast))
+        self.opacity = max(0, min(1, opacity))
+        self.blendMode = blendMode
     }
 
     private enum CodingKeys: String, CodingKey {
         case id, enabled, algorithm, colorMode, bayerLevel, pixelScale, threshold, sharpen, contrast
+        case opacity, blendMode
     }
 
     public init(from decoder: Decoder) throws {
@@ -773,8 +786,26 @@ public struct DitherLayerParams: Identifiable, Codable, Equatable, Sendable {
             pixelScale: try container.decode(Int.self, forKey: .pixelScale),
             threshold: try container.decode(Double.self, forKey: .threshold),
             sharpen: try container.decode(Double.self, forKey: .sharpen),
-            contrast: try container.decode(Double.self, forKey: .contrast)
+            contrast: try container.decode(Double.self, forKey: .contrast),
+            opacity: try container.decodeIfPresent(Double.self, forKey: .opacity) ?? 1.0,
+            blendMode: try container.decodeIfPresent(LayerBlendMode.self, forKey: .blendMode) ?? .normal
         )
+    }
+
+    public func encode(to encoder: Encoder) throws {
+        var c = encoder.container(keyedBy: CodingKeys.self)
+        try c.encode(id, forKey: .id)
+        try c.encode(enabled, forKey: .enabled)
+        try c.encode(algorithm, forKey: .algorithm)
+        try c.encode(colorMode, forKey: .colorMode)
+        try c.encode(bayerLevel, forKey: .bayerLevel)
+        try c.encode(pixelScale, forKey: .pixelScale)
+        try c.encode(threshold, forKey: .threshold)
+        try c.encode(sharpen, forKey: .sharpen)
+        try c.encode(contrast, forKey: .contrast)
+        // Skip defaults so existing-style YAML stays clean.
+        if opacity != 1.0 { try c.encode(opacity, forKey: .opacity) }
+        if blendMode != .normal { try c.encode(blendMode, forKey: .blendMode) }
     }
 }
 
@@ -864,24 +895,39 @@ public struct LUTLayerParams: Identifiable, Codable, Equatable, Sendable {
     public var enabled: Bool
     public var lutName: String
     public var lutFileName: String
+    /// Per-effect "fill": how much of the LUT-transformed colour to keep
+    /// vs. the straight source. `LUTRenderer.apply` consumes this as a
+    /// lerp factor before the layer-level compose step.
     public var intensity: Double
+    /// Layer-stack opacity consumed by `LayerCompositor.compose` when
+    /// laying the LUT-applied image over the current pipeline buffer.
+    /// Orthogonal to `intensity` (which controls internal mix). Default
+    /// 1.0 preserves pre-blend-modes behaviour.
+    public var opacity: Double
+    /// Blend mode used by the final compose. `.normal` at opacity 1.0
+    /// matches the pre-blend-modes pipeline exactly.
+    public var blendMode: LayerBlendMode
 
     public init(
         id: UUID = UUID(),
         enabled: Bool = true,
         lutName: String = "",
         lutFileName: String = "",
-        intensity: Double = 1.0
+        intensity: Double = 1.0,
+        opacity: Double = 1.0,
+        blendMode: LayerBlendMode = .normal
     ) {
         self.id = id
         self.enabled = enabled
         self.lutName = lutName
         self.lutFileName = lutFileName
         self.intensity = max(0, min(1, intensity))
+        self.opacity = max(0, min(1, opacity))
+        self.blendMode = blendMode
     }
 
     private enum CodingKeys: String, CodingKey {
-        case id, enabled, lutName, lutFileName, intensity
+        case id, enabled, lutName, lutFileName, intensity, opacity, blendMode
     }
 
     public init(from decoder: Decoder) throws {
@@ -891,8 +937,21 @@ public struct LUTLayerParams: Identifiable, Codable, Equatable, Sendable {
             enabled: try container.decodeIfPresent(Bool.self, forKey: .enabled) ?? true,
             lutName: try container.decodeIfPresent(String.self, forKey: .lutName) ?? "",
             lutFileName: try container.decodeIfPresent(String.self, forKey: .lutFileName) ?? "",
-            intensity: try container.decodeIfPresent(Double.self, forKey: .intensity) ?? 1.0
+            intensity: try container.decodeIfPresent(Double.self, forKey: .intensity) ?? 1.0,
+            opacity: try container.decodeIfPresent(Double.self, forKey: .opacity) ?? 1.0,
+            blendMode: try container.decodeIfPresent(LayerBlendMode.self, forKey: .blendMode) ?? .normal
         )
+    }
+
+    public func encode(to encoder: Encoder) throws {
+        var c = encoder.container(keyedBy: CodingKeys.self)
+        try c.encode(id, forKey: .id)
+        try c.encode(enabled, forKey: .enabled)
+        try c.encode(lutName, forKey: .lutName)
+        try c.encode(lutFileName, forKey: .lutFileName)
+        try c.encode(intensity, forKey: .intensity)
+        if opacity != 1.0 { try c.encode(opacity, forKey: .opacity) }
+        if blendMode != .normal { try c.encode(blendMode, forKey: .blendMode) }
     }
 }
 
@@ -1479,15 +1538,28 @@ public struct ShaderLayerParams: Identifiable, Codable, Equatable, Sendable {
     public let id: UUID
     public var enabled: Bool
     public var style: ShaderStyle
+    /// Per-effect "fill": how much the shader transformation bleeds through
+    /// vs. the pass-through source, consumed internally by each shader
+    /// (e.g. `ShaderRenderer.applyASCII` lerps with this). Orthogonal to
+    /// `opacity` which controls the final compose step onto the pipeline.
     public var intensity: Double
     public var params: ShaderStyleParams
+    /// Layer-stack opacity consumed by `LayerCompositor.compose` when
+    /// laying the shader's rendered output onto the current pipeline
+    /// buffer. Default 1.0 preserves pre-blend-modes behaviour.
+    public var opacity: Double
+    /// Blend mode used by the final compose. `.normal` at opacity 1.0
+    /// matches the pre-blend-modes pipeline exactly.
+    public var blendMode: LayerBlendMode
 
     public init(
         id: UUID = UUID(),
         enabled: Bool = true,
         style: ShaderStyle = .ascii,
         intensity: Double = 1.0,
-        params: ShaderStyleParams? = nil
+        params: ShaderStyleParams? = nil,
+        opacity: Double = 1.0,
+        blendMode: LayerBlendMode = .normal
     ) {
         self.id = id
         self.enabled = enabled
@@ -1503,10 +1575,12 @@ public struct ShaderLayerParams: Identifiable, Codable, Equatable, Sendable {
             self.params = ShaderStyleParams.default(for: style)
         }
         self.intensity = max(0, min(1, intensity))
+        self.opacity = max(0, min(1, opacity))
+        self.blendMode = blendMode
     }
 
     private enum CodingKeys: String, CodingKey {
-        case id, enabled, style, intensity, params
+        case id, enabled, style, intensity, params, opacity, blendMode
     }
 
     public init(from decoder: Decoder) throws {
@@ -1519,7 +1593,9 @@ public struct ShaderLayerParams: Identifiable, Codable, Equatable, Sendable {
             enabled: try container.decodeIfPresent(Bool.self, forKey: .enabled) ?? true,
             style: decodedStyle,
             intensity: try container.decodeIfPresent(Double.self, forKey: .intensity) ?? 1.0,
-            params: decodedParams
+            params: decodedParams,
+            opacity: try container.decodeIfPresent(Double.self, forKey: .opacity) ?? 1.0,
+            blendMode: try container.decodeIfPresent(LayerBlendMode.self, forKey: .blendMode) ?? .normal
         )
     }
 
@@ -1529,7 +1605,9 @@ public struct ShaderLayerParams: Identifiable, Codable, Equatable, Sendable {
             enabled: enabled,
             style: style,
             intensity: intensity,
-            params: style == self.style ? params : ShaderStyleParams.default(for: style)
+            params: style == self.style ? params : ShaderStyleParams.default(for: style),
+            opacity: opacity,
+            blendMode: blendMode
         )
     }
 
@@ -1539,7 +1617,9 @@ public struct ShaderLayerParams: Identifiable, Codable, Equatable, Sendable {
             enabled: enabled,
             style: params.style,
             intensity: intensity,
-            params: params
+            params: params,
+            opacity: opacity,
+            blendMode: blendMode
         )
     }
 }
