@@ -124,8 +124,15 @@ struct LayerStrip: View {
             Button { addLayer(.lut(LUTLayerParams())) } label: {
                 Label("LUT", systemImage: "photo.artframe")
             }
-            Button { addLayer(.shader(ShaderLayerParams())) } label: {
-                Label("Shader", systemImage: "sparkles.rectangle.stack")
+            // Per-style shader entries — mirrors the GPU-effect pattern
+            // below so each shader (ASCII, Kuwahara, CRT, …) reads as its
+            // own first-class filter. Under the hood every entry still
+            // builds a `.shader` layer; the style chooses which renderer
+            // runs and which parameter panel shows in the inspector.
+            ForEach(ShaderStyle.allCases, id: \.self) { style in
+                Button { addLayer(style.makeDefaultLayer()) } label: {
+                    Label(style.label, systemImage: style.menuIcon)
+                }
             }
             Divider()
             // Per-variant GPU-effect entries. Each is a first-class layer
