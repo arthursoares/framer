@@ -5,7 +5,7 @@ struct InspectorView: View {
     @Environment(AppState.self) var appState
 
     var body: some View {
-        ScrollView {
+        SidebarShell {
             VStack(alignment: .leading, spacing: 16) {
                 // Active preset banner
                 if let presetName = appState.activePresetName {
@@ -21,14 +21,8 @@ struct InspectorView: View {
                 // Output section
                 outputSection
             }
-            .padding(12)
-        }
-        .safeAreaInset(edge: .bottom, spacing: 0) {
+        } footer: {
             ExportBar()
-        }
-        .background(Color.surface1)
-        .overlay(alignment: .leading) {
-            Rectangle().fill(Color.borderDefault).frame(width: 1)
         }
         .onAppear { ensureLayersInitialized() }
         .onChange(of: appState.currentConfig.layers == nil) { _, layersAreNil in
@@ -77,12 +71,7 @@ struct InspectorView: View {
     // MARK: - Presets Section
 
     private var presetsSection: some View {
-        VStack(alignment: .leading, spacing: 8) {
-            Text("PRESETS")
-                .font(AppFont.sectionHeader)
-                .tracking(1.5)
-                .foregroundStyle(Color.text3)
-
+        SidebarSection("PRESETS") {
             PresetPreviewGrid()
         }
     }
@@ -90,7 +79,13 @@ struct InspectorView: View {
     // MARK: - Layers Section
 
     private var layersSection: some View {
-        LayerListSection(layers: layersBinding)
+        SidebarSection(metrics: SidebarMetrics(expandedBodyInset: 0)) {
+            EmptyView()
+        } content: {
+            // `LayerListSection` keeps owning its visible header until Task 5
+            // migrates the row-level grammar and state styling.
+            LayerListSection(layers: layersBinding)
+        }
     }
 
     private var layersBinding: Binding<[CompositionLayer]> {
@@ -109,12 +104,7 @@ struct InspectorView: View {
     // MARK: - Output Section
 
     private var outputSection: some View {
-        VStack(alignment: .leading, spacing: 8) {
-            Text("OUTPUT")
-                .font(AppFont.sectionHeader)
-                .tracking(1.5)
-                .foregroundStyle(Color.text3)
-
+        SidebarSection("OUTPUT") {
             // Format picker
             HStack {
                 Text("Format")
@@ -164,6 +154,4 @@ struct InspectorView: View {
             set: { appState.currentConfig.outputFormat = $0 == "png" ? .png : .jpeg(quality: 100) }
         )
     }
-
-
 }
