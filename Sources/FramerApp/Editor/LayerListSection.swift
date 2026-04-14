@@ -11,68 +11,83 @@ struct LayerListSection: View {
     @State private var dropTargetIndex: Int?
 
     var body: some View {
-        Section {
-            ForEach(Array(layers.enumerated()), id: \.element.id) { index, layer in
-                VStack(spacing: 0) {
-                    // Drop indicator line above this row
-                    if dropTargetIndex == index {
-                        dropIndicator
-                    }
-
-                    LayerRow(
-                        layer: binding(for: layer),
-                        onDelete: { removeLayer(at: index) },
-                        onMoveUp: index > 0 ? { moveLayer(from: index, to: index - 1) } : nil,
-                        onMoveDown: index < layers.count - 1 ? { moveLayer(from: index, to: index + 1) } : nil
-                    )
-                    .opacity(draggingLayerID == layer.id ? 0.3 : 1.0)
-                    .draggable(layer.id.uuidString) {
-                        Label(layer.label, systemImage: layer.iconName)
-                            .padding(.horizontal, 10)
-                            .padding(.vertical, 6)
-                            .background(Color.surface2, in: RoundedRectangle(cornerRadius: 6))
-                            .overlay(RoundedRectangle(cornerRadius: 6).stroke(Color.accent.opacity(0.3), lineWidth: 1))
-                            .onAppear { draggingLayerID = layer.id }
-                    }
-                    .dropDestination(for: String.self) { items, _ in
-                        dropTargetIndex = nil
-                        draggingLayerID = nil
-                        guard let droppedIDString = items.first,
-                              let droppedID = UUID(uuidString: droppedIDString),
-                              let fromIndex = layers.firstIndex(where: { $0.id == droppedID }),
-                              fromIndex != index else { return false }
-                        let toOffset = index > fromIndex ? index + 1 : index
-                        let snapshot = layers
-                        let layersBinding = $layers
-                        withAnimation(.easeInOut(duration: 0.2)) {
-                            layers.move(fromOffsets: IndexSet(integer: fromIndex), toOffset: toOffset)
-                        }
-                        undoManager?.registerUndo(withTarget: UndoProxy.shared) { @MainActor _ in
-                            withAnimation(.easeInOut(duration: 0.2)) {
-                                layersBinding.wrappedValue = snapshot
-                            }
-                        }
-                        undoManager?.setActionName("Move Layer")
-                        return true
-                    } isTargeted: { targeted in
-                        withAnimation(.easeInOut(duration: 0.15)) {
-                            dropTargetIndex = targeted ? index : (dropTargetIndex == index ? nil : dropTargetIndex)
-                        }
-                    }
-
-                    // Drop indicator after last row
-                    if index == layers.count - 1 && dropTargetIndex == layers.count {
-                        dropIndicator
-                    }
-                }
-            }
-
-            addLayerMenu
-        } header: {
+        SidebarSection(metrics: SidebarMetrics(expandedBodyInset: 0)) {
             Text("LAYERS (\(layers.count))")
                 .font(AppFont.sectionHeader)
                 .tracking(1.5)
                 .foregroundStyle(Color.text3)
+        } content: {
+            VStack(alignment: .leading, spacing: Spacing.xs) {
+                ForEach(Array(layers.enumerated()), id: \.element.id) { index, layer in
+                    VStack(spacing: 0) {
+                        if dropTargetIndex == index {
+                            dropIndicator
+                        }
+
+                        LayerPanelRow(
+                            layer: binding(for: layer),
+                            isDragging: draggingLayerID == layer.id,
+                            isDropTarget: dropTargetIndex == index,
+                            onDelete: { removeLayer(at: index) },
+                            onMoveUp: index > 0 ? { moveLayer(from: index, to: index - 1) } : nil,
+                            onMoveDown: index < layers.count - 1 ? { moveLayer(from: index, to: index + 1) } : nil
+                        )
+                        .draggable(layer.id.uuidString) {
+                            let draggingStyle = SidebarStateStyle.dragging
+
+                            return Label(layer.label, systemImage: layer.iconName)
+                                .foregroundStyle(draggingStyle.foregroundColor)
+                                .padding(.horizontal, Spacing.md)
+                                .padding(.vertical, Spacing.sm)
+                                .background(
+                                    draggingStyle.backgroundColor,
+                                    in: RoundedRectangle(cornerRadius: CornerRadius.md)
+                                )
+                                .overlay(
+                                    RoundedRectangle(cornerRadius: CornerRadius.md)
+                                        .stroke(draggingStyle.borderColor, lineWidth: 1)
+                                )
+                                .onAppear { draggingLayerID = layer.id }
+                        }
+                        .dropDestination(for: String.self) { items, _ in
+                            dropTargetIndex = nil
+                            draggingLayerID = nil
+                            guard let droppedIDString = items.first,
+                                  let droppedID = UUID(uuidString: droppedIDString),
+                                  let fromIndex = layers.firstIndex(where: { $0.id == droppedID }),
+                                  fromIndex != index else { return false }
+
+                            let toOffset = index > fromIndex ? index + 1 : index
+                            let snapshot = layers
+                            let layersBinding = $layers
+
+                            withAnimation(.easeInOut(duration: 0.2)) {
+                                layers.move(fromOffsets: IndexSet(integer: fromIndex), toOffset: toOffset)
+                            }
+
+                            undoManager?.registerUndo(withTarget: UndoProxy.shared) { @MainActor _ in
+                                withAnimation(.easeInOut(duration: 0.2)) {
+                                    layersBinding.wrappedValue = snapshot
+                                }
+                            }
+
+                            undoManager?.setActionName("Move Layer")
+                            return true
+                        } isTargeted: { targeted in
+                            withAnimation(.easeInOut(duration: 0.15)) {
+                                dropTargetIndex = targeted ? index : (dropTargetIndex == index ? nil : dropTargetIndex)
+                            }
+                        }
+
+                        if index == layers.count - 1 && dropTargetIndex == layers.count {
+                            dropIndicator
+                        }
+                    }
+                }
+
+                addLayerMenu
+                    .padding(.top, Spacing.xs)
+            }
         }
     }
 
@@ -263,213 +278,6 @@ struct LayerListSection: View {
 @MainActor
 private final class UndoProxy: NSObject, Sendable {
     static let shared = UndoProxy()
-}
-
-// MARK: - LayerRow
-
-struct LayerRow: View {
-    @Binding var layer: CompositionLayer
-    let onDelete: () -> Void
-    var onMoveUp: (() -> Void)?
-    var onMoveDown: (() -> Void)?
-
-    @State private var isHovering = false
-    @State private var isExpanded = false
-    @State private var isHoveringVisibilityToggle = false
-    @State private var isHoveringDelete = false
-
-    var body: some View {
-        VStack(spacing: 0) {
-            // Tappable header row
-            HStack(spacing: 6) {
-                // Disclosure chevron
-                Image(systemName: "chevron.right")
-                    .font(.system(size: 9, weight: .bold))
-                    .foregroundStyle(Color.text3)
-                    .rotationEffect(.degrees(isExpanded ? 90 : 0))
-                    .frame(width: 16, height: 16)
-
-                // Drag handle
-                Image(systemName: "line.3.horizontal")
-                    .font(.system(size: 11))
-                    .foregroundStyle(Color.text3)
-                    .frame(width: 20)
-                    .opacity(0.6)
-
-                Image(systemName: layer.iconName)
-                    .foregroundStyle(Color.text2)
-                    .frame(width: 20)
-
-                Text(layer.label)
-                    .font(AppFont.layerName)
-                    .foregroundStyle(layer.isEnabled ? Color.text0 : Color.text2)
-
-                Spacer()
-
-                Text(layerSummary)
-                    .font(AppFont.badgeSummary)
-                    .foregroundStyle(Color.text2)
-                    .padding(.horizontal, 6)
-                    .padding(.vertical, 2)
-                    .background(Color.surface4, in: Capsule())
-
-                Button {
-                    layer.isEnabled.toggle()
-                } label: {
-                    Image(systemName: layer.isEnabled ? "eye" : "eye.slash")
-                        .font(.caption)
-                        .foregroundStyle(isHoveringVisibilityToggle ? Color.text1 : (layer.isEnabled ? Color.text2 : Color.text3))
-                        .frame(width: 24, height: 20)
-                        .contentShape(Rectangle())
-                }
-                .buttonStyle(.plain)
-                .onHover { isHoveringVisibilityToggle = $0 }
-                .accessibilityLabel(layer.isEnabled ? "Disable layer" : "Enable layer")
-
-                Button {
-                    onDelete()
-                } label: {
-                    Image(systemName: "xmark")
-                        .font(.caption2)
-                        .foregroundStyle(isHoveringDelete ? Color.error : Color.text3)
-                        .frame(width: 20, height: 20)
-                        .contentShape(Rectangle())
-                }
-                .buttonStyle(.plain)
-                .onHover { isHoveringDelete = $0 }
-                .opacity(isHovering ? 1 : 0.4)
-                .animation(.easeInOut(duration: 0.15), value: isHovering)
-                .accessibilityLabel("Delete layer")
-            }
-            .padding(.horizontal, 8)
-            .padding(.vertical, 8)
-            .contentShape(Rectangle())
-            .onTapGesture {
-                withAnimation(.easeInOut(duration: 0.15)) {
-                    isExpanded.toggle()
-                }
-            }
-            .onHover { isHovering = $0 }
-
-            // Lazy controls — only built when expanded
-            if isExpanded {
-                VStack(alignment: .leading, spacing: 10) {
-                    layerControls
-                }
-                .padding(.top, 8)
-                .padding(.bottom, 12)
-                .padding(.leading, 20)
-                .padding(.trailing, 4)
-                .foregroundStyle(Color.text1)
-                .tint(Color.accent)
-                .transition(.opacity.combined(with: .move(edge: .top)))
-            }
-        }
-        .background(
-            RoundedRectangle(cornerRadius: CornerRadius.md)
-                .fill(isExpanded ? Color.surface2 : (isHovering ? Color.surface2.opacity(0.5) : .clear))
-        )
-        .opacity(layer.isEnabled ? 1.0 : 0.65)
-        .overlay(
-            RoundedRectangle(cornerRadius: CornerRadius.md)
-                .stroke(isExpanded ? Color.borderDefault : (isHovering ? Color.borderDefault : .clear), lineWidth: 1)
-        )
-        .contextMenu {
-            if let onMoveUp {
-                Button { onMoveUp() } label: {
-                    Label("Move Up", systemImage: "chevron.up")
-                }
-            }
-            if let onMoveDown {
-                Button { onMoveDown() } label: {
-                    Label("Move Down", systemImage: "chevron.down")
-                }
-            }
-            Divider()
-            Button {
-                layer.isEnabled.toggle()
-            } label: {
-                Label(layer.isEnabled ? "Disable Layer" : "Enable Layer",
-                      systemImage: layer.isEnabled ? "eye.slash" : "eye")
-            }
-            Divider()
-            Button(role: .destructive) {
-                onDelete()
-            } label: {
-                Label("Delete Layer", systemImage: "trash")
-            }
-        }
-    }
-
-    @ViewBuilder
-    private var layerControls: some View {
-        switch layer {
-        case .border(let params):
-            BorderLayerControls(params: params) { layer = .border($0) }
-        case .padding(let params):
-            PaddingLayerControls(params: params) { layer = .padding($0) }
-        case .canvas(let params):
-            CanvasLayerControls(params: params) { layer = .canvas($0) }
-        case .resize(let params):
-            ResizeLayerControls(params: params) { layer = .resize($0) }
-        case .overlay(let params):
-            OverlayLayerControls(params: params) { layer = .overlay($0) }
-        case .orientation(let params):
-            OrientationLayerControls(params: params) { layer = .orientation($0) }
-        case .caption(let params):
-            CaptionLayerControls(params: params) { layer = .caption($0) }
-        case .dither(let params):
-            DitherLayerControls(params: params) { layer = .dither($0) }
-        case .aspectRatio(let params):
-            AspectRatioLayerControls(params: params) { layer = .aspectRatio($0) }
-        case .lut(let params):
-            LUTLayerControls(params: params) { layer = .lut($0) }
-        case .shader(let params):
-            ShaderLayerControls(params: params) { layer = .shader($0) }
-        case .gpuEffect(let params):
-            GPUEffectLayerControls(params: params) { layer = .gpuEffect($0) }
-        }
-    }
-
-    private var layerSummary: String {
-        if !layer.isEnabled {
-            return "Disabled"
-        }
-        switch layer {
-        case .border(let p):
-            switch p.thickness {
-            case .pixels(let px): return "\(px)px"
-            case .percent(let pct): return "\(Int(pct))%"
-            }
-        case .padding(let p):
-            return "\(p.thickness)px"
-        case .canvas(let p):
-            return "\(p.width)x\(p.height)"
-        case .resize(let p):
-            return "max \(p.maxWidth)x\(p.maxHeight)"
-        case .overlay(let p):
-            if p.overlayName.isEmpty { return "None" }
-            return "\(p.kind.label) \(Int(p.opacity))%"
-        case .orientation(let p):
-            return p.target.rawValue.capitalized
-        case .caption(let p):
-            switch p.mode {
-            case .template: return "Template"
-            case .custom: return "Custom"
-            case .none: return "Off"
-            }
-        case .dither(let p):
-            return p.algorithm.label
-        case .aspectRatio(let p):
-            return "\(p.ratioWidth):\(p.ratioHeight)"
-        case .lut(let p):
-            return p.lutName.isEmpty ? "None" : p.lutName
-        case .shader(let p):
-            return p.style.label
-        case .gpuEffect(let p):
-            return p.kind.label
-        }
-    }
 }
 
 struct GPUEffectLayerControls: View {

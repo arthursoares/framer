@@ -31,6 +31,7 @@
 		6008AC967F78C371F1DE8F51 /* PreviewArea.swift in Sources */ = {isa = PBXBuildFile; fileRef = B2205885A0B72C7BB1800460 /* PreviewArea.swift */; };
 		62B6DBD3B476520075DE5BB6 /* BottomPanel.swift in Sources */ = {isa = PBXBuildFile; fileRef = FC61E7BD757670C3FC26800E /* BottomPanel.swift */; };
 		66B12BD55EAE11AE1657CBAE /* SidebarLayoutPolicyTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = A8E704CEA7DD5812C7E8E102 /* SidebarLayoutPolicyTests.swift */; };
+		676D99BB05EACD4F6C22E4E9 /* LayerPanelRow.swift in Sources */ = {isa = PBXBuildFile; fileRef = D6C97FA89C679CAAAC4C845E /* LayerPanelRow.swift */; };
 		6D03D0240A8EA39304652EE3 /* StyledToggle.swift in Sources */ = {isa = PBXBuildFile; fileRef = FC4884C31EB565ED16A086DE /* StyledToggle.swift */; };
 		6DB96B62D16D31C822C1E0FD /* ZoomIndicator.swift in Sources */ = {isa = PBXBuildFile; fileRef = AF1AFA1E768D2A7B8991C8FA /* ZoomIndicator.swift */; };
 		71288A7B65CF0F1353EED346 /* AppState.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2CCD20EFA5AE852B42CBE53D /* AppState.swift */; };
@@ -39,6 +40,7 @@
 		7BC8833066C978A17F077361 /* SidebarStateMatrixTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 216619F8FEAA17F4D627219B /* SidebarStateMatrixTests.swift */; };
 		7E26ACB4EBE5DD197F9C9E0C /* ExifInfoBar.swift in Sources */ = {isa = PBXBuildFile; fileRef = 69843CE860C9D64774BF6A76 /* ExifInfoBar.swift */; };
 		83C339C5F6907392A7F11225 /* ImageThumbnailLoader.swift in Sources */ = {isa = PBXBuildFile; fileRef = D5BE1B7F799CD269EE2C1411 /* ImageThumbnailLoader.swift */; };
+		8B0B4CEE3882DC2ED4FBA8B3 /* LayerPanelRowStateResolverTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8F4005057620F710FB3C5103 /* LayerPanelRowStateResolverTests.swift */; };
 		8B4266040896BBED84762794 /* textures in Resources */ = {isa = PBXBuildFile; fileRef = B1EC2164F8A3DF317311D2C8 /* textures */; };
 		978253B97253BE5ACF13ABA0 /* SidebarStateStyle.swift in Sources */ = {isa = PBXBuildFile; fileRef = 31D2CC0ACDC965EF2817C67B /* SidebarStateStyle.swift */; };
 		9F2D984FABBFC95FBD860A67 /* fonts in Resources */ = {isa = PBXBuildFile; fileRef = F74958A269010D4B0BF9A7DE /* fonts */; };
@@ -104,6 +106,7 @@
 		81F13602BA30AF5F90605B6C /* PreviewViewModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PreviewViewModel.swift; sourceTree = "<group>"; };
 		88CEC286BDB1ADC6E0637ACA /* PresetPreviewGrid.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PresetPreviewGrid.swift; sourceTree = "<group>"; };
 		8A6E6F60B12048759BD1E60C /* PreviewViewModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PreviewViewModel.swift; sourceTree = "<group>"; };
+		8F4005057620F710FB3C5103 /* LayerPanelRowStateResolverTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LayerPanelRowStateResolverTests.swift; sourceTree = "<group>"; };
 		99841491BD0A545FF7E469B5 /* FramerMobile.app */ = {isa = PBXFileReference; includeInIndex = 0; lastKnownFileType = wrapper.application; path = FramerMobile.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		9B9A4BC738FB9F539C9A7AFB /* Framer.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = Framer.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		9FCDE64F375DC8E762C4EF08 /* SidebarCompoundControlBlock.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SidebarCompoundControlBlock.swift; sourceTree = "<group>"; };
@@ -117,6 +120,7 @@
 		C20010735E58CE243ED6744A /* FramerCommands.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FramerCommands.swift; sourceTree = "<group>"; };
 		CE5B96A143FA192F9CB0A8C1 /* LayerStrip.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LayerStrip.swift; sourceTree = "<group>"; };
 		D5BE1B7F799CD269EE2C1411 /* ImageThumbnailLoader.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ImageThumbnailLoader.swift; sourceTree = "<group>"; };
+		D6C97FA89C679CAAAC4C845E /* LayerPanelRow.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LayerPanelRow.swift; sourceTree = "<group>"; };
 		E4A8C555BBECD2011E74D76D /* FramerApp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FramerApp.swift; sourceTree = "<group>"; };
 		EBB5F2F1E2A0DE99DC5BC5C5 /* FilmstripView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FilmstripView.swift; sourceTree = "<group>"; };
 		F0494695FD5895F111514FF4 /* CanvasView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CanvasView.swift; sourceTree = "<group>"; };
@@ -189,6 +193,7 @@
 		3D112084E55AB440513006CA /* FramerAppTests */ = {
 			isa = PBXGroup;
 			children = (
+				8F4005057620F710FB3C5103 /* LayerPanelRowStateResolverTests.swift */,
 				A8E704CEA7DD5812C7E8E102 /* SidebarLayoutPolicyTests.swift */,
 				C09A4DE3276B25184A9769BF /* SidebarMetricsTests.swift */,
 				216619F8FEAA17F4D627219B /* SidebarStateMatrixTests.swift */,
@@ -277,6 +282,7 @@
 		92DD413C9F3B3F8B7CAF2ACF /* Sidebar */ = {
 			isa = PBXGroup;
 			children = (
+				D6C97FA89C679CAAAC4C845E /* LayerPanelRow.swift */,
 				9FCDE64F375DC8E762C4EF08 /* SidebarCompoundControlBlock.swift */,
 				47D49D16C308457CF2ABD0E6 /* SidebarControlRow.swift */,
 				5185171443CC5F670066735A /* SidebarLayoutPolicy.swift */,
@@ -536,6 +542,7 @@
 				83C339C5F6907392A7F11225 /* ImageThumbnailLoader.swift in Sources */,
 				5A2B972194FE5D29D42336D4 /* InspectorView.swift in Sources */,
 				469EBA583F3674764B8E843A /* LayerListSection.swift in Sources */,
+				676D99BB05EACD4F6C22E4E9 /* LayerPanelRow.swift in Sources */,
 				D2E564203E647371EAED04D0 /* PreferencesView.swift in Sources */,
 				520BFA062991397A6556B18B /* PresetPreviewCard.swift in Sources */,
 				189C0C29CB6FD5F19617D667 /* PresetPreviewGrid.swift in Sources */,
@@ -558,6 +565,7 @@
 			isa = PBXSourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				8B0B4CEE3882DC2ED4FBA8B3 /* LayerPanelRowStateResolverTests.swift in Sources */,
 				66B12BD55EAE11AE1657CBAE /* SidebarLayoutPolicyTests.swift in Sources */,
 				CDA49784CCB36DE7E9608702 /* SidebarMetricsTests.swift in Sources */,
 				7BC8833066C978A17F077361 /* SidebarStateMatrixTests.swift in Sources */,
