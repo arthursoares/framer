@@ -18,5 +18,6 @@ struct StyledToggle: View {
                 }
         }
         .buttonStyle(.plain)
+        .contentShape(Capsule())
     }
 }

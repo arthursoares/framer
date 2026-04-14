@@ -8,9 +8,10 @@ struct StyledSlider: View {
     var inputWidth: CGFloat = 55
 
     var body: some View {
-        HStack(spacing: 8) {
+        HStack(spacing: Spacing.sm) {
             Slider(value: snappedBinding, in: range)
                 .tint(Color.accentDim)
+                .frame(maxWidth: .infinity)
 
             TextField("", value: $value, format: .number)
                 .textFieldStyle(.plain)
