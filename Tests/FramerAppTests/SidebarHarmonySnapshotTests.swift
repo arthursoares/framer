@@ -15,6 +15,14 @@ final class SidebarHarmonySnapshotTests: XCTestCase {
         )
     }
 
+    func test_styledTogglePreservesHiddenTextLabelForAccessibility() {
+        let bodyTypeName = String(reflecting: type(of: StyledToggle("Strip EXIF metadata", isOn: .constant(true)).body))
+        XCTAssertTrue(
+            bodyTypeName.contains("Text"),
+            "StyledToggle should keep a hidden text label for accessibility. Body type: \(bodyTypeName)"
+        )
+    }
+
     func test_shellAndPolicyWiring() {
         let metrics = SidebarMetrics()
 

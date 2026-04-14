@@ -2,9 +2,19 @@ import SwiftUI
 
 struct StyledToggle: View {
     @Binding var isOn: Bool
+    private let label: LocalizedStringKey?
+
+    init(_ label: LocalizedStringKey? = nil, isOn: Binding<Bool>) {
+        self._isOn = isOn
+        self.label = label
+    }
 
     var body: some View {
-        Toggle("", isOn: $isOn)
+        Toggle(isOn: $isOn) {
+            if let label {
+                Text(label)
+            }
+        }
             .labelsHidden()
             .toggleStyle(StyledToggleControlStyle())
             .accessibilityValue(isOn ? "On" : "Off")

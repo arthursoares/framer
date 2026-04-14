@@ -1,5 +1,17 @@
 import SwiftUI
 
+enum StyledSliderValueResolver {
+    static func constrain(_ rawValue: Double, range: ClosedRange<Double>, step: Double) -> Double {
+        let clampedValue = rawValue.clamped(to: range)
+
+        guard step > 0 else {
+            return clampedValue
+        }
+
+        return ((clampedValue / step).rounded() * step).clamped(to: range)
+    }
+}
+
 struct StyledSlider: View {
     @Binding var value: Double
     let range: ClosedRange<Double>
@@ -13,7 +25,7 @@ struct StyledSlider: View {
                 .tint(Color.accentDim)
                 .frame(maxWidth: .infinity)
 
-            TextField("", value: $value, format: .number)
+            TextField("", value: constrainedTextFieldBinding, format: .number)
                 .textFieldStyle(.plain)
                 .font(AppFont.numericInput)
                 .foregroundStyle(Color.text1)
@@ -39,7 +51,14 @@ struct StyledSlider: View {
     private var snappedBinding: Binding<Double> {
         Binding(
             get: { value },
-            set: { value = (($0 / step).rounded() * step).clamped(to: range) }
+            set: { value = StyledSliderValueResolver.constrain($0, range: range, step: step) }
+        )
+    }
+
+    private var constrainedTextFieldBinding: Binding<Double> {
+        Binding(
+            get: { value },
+            set: { value = StyledSliderValueResolver.constrain($0, range: range, step: step) }
         )
     }
 }
