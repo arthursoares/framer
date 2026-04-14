@@ -5,6 +5,32 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased] — GPU effects migration (PR #7)
+
+Work on `claude/gpu-effects-migration-MbMMo` refining the GPU-effects bucket system against Grainrad WGSL references.
+
+### Added
+
+- **ASCII font picker**: full `NSFontManager.availableFontFamilies` / `UIFont.familyNames` list bound to `ASCIIShaderParams.fontName`. "System Default" keeps the baked pixel-art atlas; any other font routes through `ASCIIAtlasGenerator` with Core Text rasterisation.
+- **ASCII High Detail toggle** (`ASCIIShaderParams.highDetail`): 16×16 atlas cell (up from 8×8) for sharper glyph edges. Orthogonal to the font/characters axes — the toggle only changes resolution when you've already customised chars or font. Shader + CPU `sampleLUT` derive cell size from the atlas height, so both paths coexist without a shader branch.
+- **Blockify `.shaded` style**: per-cell radial falloff (matches Grainrad reference), picker option alongside Solid / Outlined. Reuses Border Width slider as the falloff strength.
+- **Dots `sizeMultiplier` slider** (0.1 – 2.0): the shader uniform existed but was hard-coded to 1.0 on the encoder side. Now wired through.
+- **Mobile parity for Voronoi + Contour**: added `Wall Strength` / `Cell Fill` to Voronoi, `Line Strength` / `Field Intensity` to Contour.
+
+### Fixed
+
+- **Voronoi rewrite (`voronoiVariant` in EdgeField.metal)**: full port of the Grainrad `colorMode=1` path. Samples source at each seed's pixel position, so the classic polygonal mosaic renders with image colour instead of the earlier grayscale wall/interior falloff. Default edge colour flipped to black for voronoi specifically.
+- **Contour neighbour-sampling**: rewrote detection to sample 4 neighbours at `thickness`-pixel offsets and compare quantised levels. Invert now applies symmetrically to centre + neighbours.
+- **Threshold shader color modes**: `u.color.mode` was ignored — Source / Mono / FG-BG now behave distinctly. Palette option removed from the bucket-level color picker (no palette uniform is encoded into the bucket structs yet — Dither's path is separate).
+- **matrixRain "Threshold" dead slider**: UI bound to `params.threshold` but the encoder wrote `params.trailLength` to the shader's `threshold` uniform. Removed the slider; Trail remains.
+- **Shader style picker inside detail panel**: a legacy dropdown that silently rewrote layer params without changing the kind label. Removed from desktop + mobile.
+- **Stale-index crash in layer bindings**: `binding(for index: Int)` captured the index by value and crashed when a layer was deleted while its detail view was still in the view tree. Rewritten to look up by `layer.id` with a captured fallback.
+- **`CGBitmapContextCreate` failures on alpha-last CGImages**: `MetalTextureSupport.normalizedForTextureUpload` now uses a strict exact-match fast-path check (all of `bitsPerComponent`, `bitsPerPixel`, `bitmapInfo.rawValue`, colour-space model) before redrawing; previews no longer fall back to the incorrect colour path for HEIC / some sRGB PNGs.
+
+### Changed
+
+- Atlas-cell addressing in TextCell.metal + ShaderASCIIRenderer now derives cell size from the bound atlas's height, not a hard-coded `8`. Lets 8×8 baked PNGs and 16×16 runtime atlases share the same code path.
+
 ## [2.0.0] - 2026-02-24
 
 Complete rewrite from Go CLI to Swift macOS app + CLI.

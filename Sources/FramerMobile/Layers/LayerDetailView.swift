@@ -226,10 +226,11 @@ private struct GPUEffectControls: View {
 
             ControlRow(label: "Color Mode") {
                 Picker("Color Mode", selection: colorModeBinding) {
+                    // Palette dropped — see LayerListSection.swift; none of
+                    // the GPU-effect bucket shaders read a palette uniform.
                     Text("Source").tag(GPUEffectColorMode.source)
                     Text("FG/BG").tag(GPUEffectColorMode.foregroundBackground)
                     Text("Mono").tag(GPUEffectColorMode.monochrome)
-                    Text("Palette").tag(GPUEffectColorMode.palette)
                 }
                 .pickerStyle(.menu)
             }
@@ -302,6 +303,7 @@ private struct GPUEffectControls: View {
                     .pickerStyle(.menu)
                 }
 
+                SliderRow(label: "Dot Size", value: textCellBinding(\.sizeMultiplier), range: 0.1...2.0)
                 SliderRow(label: "Intensity", value: textCellBinding(\.intensity), range: 0...1)
 
                 ControlRow(label: "Invert") {
@@ -341,6 +343,7 @@ private struct GPUEffectControls: View {
                 ControlRow(label: "Style") {
                     Picker("Style", selection: blockStyleBinding) {
                         Text("Solid").tag(BlockStyle.solid)
+                        Text("Shaded").tag(BlockStyle.shaded)
                         Text("Outlined").tag(BlockStyle.outlined)
                     }
                     .pickerStyle(.menu)
@@ -394,7 +397,9 @@ private struct GPUEffectControls: View {
                 SliderRow(label: "Trail", value: matrixBinding(\.trailLength), range: 0...1)
                 SliderRow(label: "Glow", value: matrixBinding(\.glow), range: 0...1)
                 SliderRow(label: "BG Opacity", value: matrixBinding(\.backgroundOpacity), range: 0...1)
-                SliderRow(label: "Threshold", value: matrixBinding(\.threshold), range: 0...1)
+                // Threshold slider dropped — see LayerListSection.swift for
+                // rationale (dead control: GPU encoder writes trailLength to
+                // the shader's `threshold` uniform, never params.threshold).
 
                 ControlRow(label: "Direction") {
                     Picker("Direction", selection: matrixDirectionBinding) {
@@ -545,6 +550,8 @@ private struct GPUEffectControls: View {
                     .pickerStyle(.menu)
                 }
 
+                SliderRow(label: "Line Strength", value: edgeFieldBinding(\.lineStrength), range: 0...1)
+                SliderRow(label: "Field Intensity", value: edgeFieldBinding(\.fieldIntensity), range: 0.01...1)
                 SliderRow(label: "Levels", value: contourLevelsBinding, range: 2...24)
                 SliderRow(label: "Line Width", value: edgeFieldBinding(\.thickness), range: 0.05...1)
 
@@ -570,6 +577,8 @@ private struct GPUEffectControls: View {
             if case .edgeField(let common, let geometry, let color, let payload) = params.params,
                params.kind == .voronoi {
                 SliderRow(label: "Cell Size", value: voronoiCellSizeBinding, range: 2...64)
+                SliderRow(label: "Wall Strength", value: edgeFieldBinding(\.lineStrength), range: 0...1)
+                SliderRow(label: "Cell Fill", value: edgeFieldBinding(\.fieldIntensity), range: 0...1)
                 SliderRow(label: "Edge Width", value: voronoiEdgeWidthBinding, range: 0.05...1)
 
                 ControlRow(label: "Randomize") {
@@ -2381,18 +2390,6 @@ private struct ShaderControls: View {
                     set: { var p = params; p.opacity = $0; onChange(p) }
                 )
             )
-            ControlRow(label: "Style") {
-                Picker("", selection: Binding(
-                    get: { params.style },
-                    set: { onChange(params.withStyle($0)) }
-                )) {
-                    ForEach(ShaderStyle.allCases, id: \.self) { style in
-                        Text(style.label).tag(style)
-                    }
-                }
-                .pickerStyle(.menu)
-            }
-
             sliderRow(
                 label: "Intensity",
                 value: params.intensity,
@@ -2475,6 +2472,15 @@ private struct ShaderControls: View {
         }
 
         asciiCharactersControl(asciiParams)
+        asciiFontControl(asciiParams)
+
+        ControlRow(label: "High Detail") {
+            Toggle("16×16 atlas", isOn: Binding(
+                get: { asciiParams.highDetail },
+                set: { updateASCII(asciiParams, highDetail: $0) }
+            ))
+            .labelsHidden()
+        }
 
         ControlRow(label: "Colors") {
             Picker("", selection: Binding(
@@ -2727,7 +2733,9 @@ private struct ShaderControls: View {
         exposure: Double? = nil,
         attenuation: Double? = nil,
         blackLevel: Double? = nil,
-        characters: String?? = nil
+        characters: String?? = nil,
+        fontName: String?? = nil,
+        highDetail: Bool? = nil
     ) {
         onChange(params.withParams(.ascii(ASCIIShaderParams(
             cellSize: cellSize ?? asciiParams.cellSize,
@@ -2737,9 +2745,36 @@ private struct ShaderControls: View {
             exposure: exposure ?? asciiParams.exposure,
             attenuation: attenuation ?? asciiParams.attenuation,
             blackLevel: blackLevel ?? asciiParams.blackLevel,
-            characters: characters ?? asciiParams.characters
+            characters: characters ?? asciiParams.characters,
+            fontName: fontName ?? asciiParams.fontName,
+            highDetail: highDetail ?? asciiParams.highDetail
         ))))
     }
+
+    /// Mobile font picker. `UIFont.familyNames` is the system-installed list;
+    /// nil `fontName` → "System Default" sentinel.
+    @ViewBuilder
+    private func asciiFontControl(_ asciiParams: ASCIIShaderParams) -> some View {
+        let families = Self.systemFontFamilies
+        ControlRow(label: "Font") {
+            Picker("", selection: Binding<String>(
+                get: { asciiParams.fontName ?? "" },
+                set: { newValue in
+                    updateASCII(asciiParams, fontName: .some(newValue.isEmpty ? nil : newValue))
+                }
+            )) {
+                Text("System Default").tag("")
+                ForEach(families, id: \.self) { family in
+                    Text(family).tag(family)
+                }
+            }
+            .pickerStyle(.menu)
+        }
+    }
+
+    private static let systemFontFamilies: [String] = {
+        UIFont.familyNames.sorted()
+    }()
 
     @ViewBuilder
     private func crimewaveControls(_ crimewaveParams: CrimewaveShaderParams) -> some View {
