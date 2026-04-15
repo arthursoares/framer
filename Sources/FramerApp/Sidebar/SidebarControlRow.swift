@@ -69,6 +69,7 @@ enum SidebarControlRowTrailingValueContentBuilder {
 }
 
 struct SidebarControlRow<Content: View>: View {
+    @Namespace private var accessibilityLabelNamespace
     private let label: LocalizedStringKey
     private let metrics: SidebarMetrics
     private let style: SidebarControlRowStyle
@@ -96,6 +97,7 @@ struct SidebarControlRow<Content: View>: View {
                 .foregroundStyle(Color.text2)
                 .frame(width: metrics.controlLabelWidth, alignment: .leading)
                 .fixedSize(horizontal: false, vertical: true)
+                .accessibilityLabeledPair(role: .label, id: "SidebarControlRowLabel", in: accessibilityLabelNamespace)
 
             HStack(alignment: .center, spacing: metrics.controlColumnSpacing) {
                 content
@@ -108,6 +110,7 @@ struct SidebarControlRow<Content: View>: View {
             }
             .frame(maxWidth: .infinity, alignment: .leading)
             .foregroundStyle(style.foregroundColor)
+            .accessibilityLabeledPair(role: .content, id: "SidebarControlRowLabel", in: accessibilityLabelNamespace)
         }
         .padding(.horizontal, metrics.outerInset)
         .frame(maxWidth: .infinity, minHeight: metrics.controlRowMinHeight, alignment: .leading)

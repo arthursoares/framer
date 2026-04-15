@@ -1654,6 +1654,12 @@ struct BorderLayerControls: View {
         case percent = "%"
     }
 
+    init(params: BorderLayerParams, onChange: @escaping (BorderLayerParams) -> Void) {
+        self.params = params
+        self.onChange = onChange
+        _thicknessMode = State(initialValue: Self.thicknessMode(for: params.thickness))
+    }
+
     var body: some View {
         VStack(alignment: .leading, spacing: SimpleLayerEditorLayout.groupSpacing) {
             SidebarCompoundControlBlock {
@@ -1686,6 +1692,18 @@ struct BorderLayerControls: View {
             }
 
             ColorPickerWithHex("Color", selection: colorBinding)
+        }
+        .onChange(of: params.thickness) { _, newThickness in
+            thicknessMode = Self.thicknessMode(for: newThickness)
+        }
+    }
+
+    private static func thicknessMode(for thickness: BorderSize) -> ThicknessMode {
+        switch thickness {
+        case .pixels:
+            .pixels
+        case .percent:
+            .percent
         }
     }
 
@@ -2270,6 +2288,12 @@ struct OverlayLayerControls: View {
     @State private var availableOverlays: [TextureFrameProvider.OverlayInfo] = []
     @State private var selectedKind: OverlayKind = .frame
 
+    init(params: OverlayLayerParams, onChange: @escaping (OverlayLayerParams) -> Void) {
+        self.params = params
+        self.onChange = onChange
+        _selectedKind = State(initialValue: params.kind)
+    }
+
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
             kindPicker
@@ -2296,6 +2320,10 @@ struct OverlayLayerControls: View {
 
             openFolderButton
         }
+        .onAppear(perform: loadOverlays)
+        .onChange(of: params.kind) { _, newKind in
+            selectedKind = newKind
+        }
     }
 
     // MARK: - Subviews
@@ -2310,10 +2338,6 @@ struct OverlayLayerControls: View {
             }
             .pickerStyle(.segmented)
             .labelsHidden()
-            .onAppear {
-                selectedKind = params.kind
-                loadOverlays()
-            }
             .onChange(of: selectedKind) { _, newKind in
                 var p = params
                 p.kind = newKind
@@ -2638,6 +2662,12 @@ struct CaptionLayerControls: View {
         case custom = "Custom"
     }
 
+    init(params: CaptionLayerParams, onChange: @escaping (CaptionLayerParams) -> Void) {
+        self.params = params
+        self.onChange = onChange
+        _fontSizeMode = State(initialValue: Self.fontSizeMode(for: params.fontSize))
+    }
+
     private static let signedIntFormatter: NumberFormatter = {
         let f = NumberFormatter()
         f.numberStyle = .decimal
@@ -2774,12 +2804,6 @@ struct CaptionLayerControls: View {
                     .pickerStyle(.menu)
                     .labelsHidden()
                     .denseControlRow("Size")
-                    .onAppear {
-                        switch params.fontSize {
-                        case .auto: fontSizeMode = .auto
-                        case .fixed: fontSizeMode = .custom
-                        }
-                    }
                     .onChange(of: fontSizeMode) { _, newValue in
                         var p = params
                         switch newValue {
@@ -2841,6 +2865,18 @@ struct CaptionLayerControls: View {
                     }
                 }
             }
+        }
+        .onChange(of: params.fontSize) { _, newFontSize in
+            fontSizeMode = Self.fontSizeMode(for: newFontSize)
+        }
+    }
+
+    private static func fontSizeMode(for fontSize: FontSize) -> FontSizeMode {
+        switch fontSize {
+        case .auto:
+            .auto
+        case .fixed:
+            .custom
         }
     }
 
