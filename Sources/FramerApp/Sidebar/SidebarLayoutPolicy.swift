@@ -15,6 +15,34 @@ struct SidebarLayoutPolicy: Sendable, Equatable {
     func clampedWidth(for proposedWidth: CGFloat) -> CGFloat {
         min(max(proposedWidth, minimumWidth), maximumWidth)
     }
+
+    func clampedSidebarWidth(forTotalWidth totalWidth: CGFloat, dividerThickness: CGFloat, proposedWidth: CGFloat) -> CGFloat {
+        let availableWidth = max(totalWidth - dividerThickness, 0)
+        return min(clampedWidth(for: proposedWidth), availableWidth)
+    }
+
+    func dividerPosition(forTotalWidth totalWidth: CGFloat, dividerThickness: CGFloat, proposedSidebarWidth: CGFloat) -> CGFloat {
+        let sidebarWidth = clampedSidebarWidth(
+            forTotalWidth: totalWidth,
+            dividerThickness: dividerThickness,
+            proposedWidth: proposedSidebarWidth
+        )
+        return max(0, totalWidth - sidebarWidth - dividerThickness)
+    }
+
+    func adjustedDividerPosition(forTotalWidth totalWidth: CGFloat, dividerThickness: CGFloat, currentSidebarWidth: CGFloat) -> CGFloat? {
+        let clampedSidebarWidth = clampedSidebarWidth(
+            forTotalWidth: totalWidth,
+            dividerThickness: dividerThickness,
+            proposedWidth: currentSidebarWidth
+        )
+
+        guard abs(clampedSidebarWidth - currentSidebarWidth) > 0.5 else {
+            return nil
+        }
+
+        return max(0, totalWidth - clampedSidebarWidth - dividerThickness)
+    }
 }
 
 enum SidebarState: String, CaseIterable, Sendable {

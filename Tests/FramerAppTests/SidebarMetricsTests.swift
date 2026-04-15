@@ -21,6 +21,21 @@ final class SidebarMetricsTests: XCTestCase {
         XCTAssertEqual(metrics.controlStackSpacing, 0)
     }
 
+    func test_defaultMetrics_defineNumericTrailingCluster() {
+        let metrics = SidebarMetrics()
+
+        XCTAssertEqual(metrics.controlTrailingClusterSpacing, 6)
+        XCTAssertEqual(metrics.controlUnitSuffixWidth, 24)
+        XCTAssertEqual(metrics.controlValueFieldWidth, 55)
+    }
+
+    func test_defaultMetrics_definePreviewContainmentInsets() {
+        let metrics = SidebarMetrics()
+
+        XCTAssertEqual(metrics.fullWidthRowHorizontalInset, metrics.outerInset)
+        XCTAssertEqual(metrics.containedPreviewMaxWidth, 350 - (metrics.outerInset * 2))
+    }
+
     func test_defaultMetrics_useApprovedSidebarWidthPolicy() {
         let metrics = SidebarMetrics()
 

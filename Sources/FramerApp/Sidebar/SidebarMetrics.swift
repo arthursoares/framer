@@ -9,7 +9,11 @@ struct SidebarMetrics: Sendable, Equatable {
     let controlLabelWidth: CGFloat
     let controlColumnSpacing: CGFloat
     let controlTrailingValueWidth: CGFloat
+    let controlTrailingClusterSpacing: CGFloat
+    let controlUnitSuffixWidth: CGFloat
+    let controlValueFieldWidth: CGFloat
     let controlStackSpacing: CGFloat
+    let fullWidthRowHorizontalInset: CGFloat
     let widthPolicy: SidebarLayoutPolicy
 
     init(
@@ -22,7 +26,11 @@ struct SidebarMetrics: Sendable, Equatable {
         controlLabelWidth: CGFloat = 104,
         controlColumnSpacing: CGFloat = 10,
         controlTrailingValueWidth: CGFloat = 48,
-        controlStackSpacing: CGFloat = 0
+        controlTrailingClusterSpacing: CGFloat = 6,
+        controlUnitSuffixWidth: CGFloat = 24,
+        controlValueFieldWidth: CGFloat = 55,
+        controlStackSpacing: CGFloat = 0,
+        fullWidthRowHorizontalInset: CGFloat = 12
     ) {
         self.widthPolicy = widthPolicy
         self.outerInset = outerInset
@@ -33,12 +41,17 @@ struct SidebarMetrics: Sendable, Equatable {
         self.controlLabelWidth = controlLabelWidth
         self.controlColumnSpacing = controlColumnSpacing
         self.controlTrailingValueWidth = controlTrailingValueWidth
+        self.controlTrailingClusterSpacing = controlTrailingClusterSpacing
+        self.controlUnitSuffixWidth = controlUnitSuffixWidth
+        self.controlValueFieldWidth = controlValueFieldWidth
         self.controlStackSpacing = controlStackSpacing
+        self.fullWidthRowHorizontalInset = fullWidthRowHorizontalInset
     }
 
     var minimumWidth: CGFloat { widthPolicy.minimumWidth }
     var idealWidth: CGFloat { widthPolicy.idealWidth }
     var maximumWidth: CGFloat { widthPolicy.maximumWidth }
+    var containedPreviewMaxWidth: CGFloat { idealWidth - (fullWidthRowHorizontalInset * 2) }
     var controlStackDividerInset: CGFloat { outerInset }
     var controlStackDividerThickness: CGFloat { 1 }
 
@@ -57,7 +70,11 @@ struct SidebarMetrics: Sendable, Equatable {
             controlLabelWidth: controlLabelWidth,
             controlColumnSpacing: controlColumnSpacing,
             controlTrailingValueWidth: controlTrailingValueWidth,
-            controlStackSpacing: controlStackSpacing
+            controlTrailingClusterSpacing: controlTrailingClusterSpacing,
+            controlUnitSuffixWidth: controlUnitSuffixWidth,
+            controlValueFieldWidth: controlValueFieldWidth,
+            controlStackSpacing: controlStackSpacing,
+            fullWidthRowHorizontalInset: fullWidthRowHorizontalInset
         )
     }
 }

@@ -101,14 +101,14 @@ struct SidebarControlRow<Content: View>: View {
 
             HStack(alignment: .center, spacing: metrics.controlColumnSpacing) {
                 content
-                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .frame(maxWidth: .infinity, alignment: trailingValue.hasContent ? .trailing : .leading)
 
                 if trailingValue.hasContent {
                     trailingValue.body
                         .frame(minWidth: metrics.controlTrailingValueWidth, alignment: .trailing)
                 }
             }
-            .frame(maxWidth: .infinity, alignment: .leading)
+            .frame(maxWidth: .infinity, alignment: .trailing)
             .foregroundStyle(style.foregroundColor)
             .accessibilityLabeledPair(role: .content, id: "SidebarControlRowLabel", in: accessibilityLabelNamespace)
         }
