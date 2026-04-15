@@ -20,19 +20,67 @@ struct SidebarControlRowStyle: Sendable, Equatable {
     }
 }
 
-struct SidebarControlRow<Content: View, TrailingValue: View>: View {
+@MainActor
+struct SidebarControlRowTrailingValueContent {
+    private let content: AnyView
+    private let isPresent: Bool
+
+    static let absent = SidebarControlRowTrailingValueContent(content: AnyView(EmptyView()), isPresent: false)
+
+    static func present<Content: View>(_ content: Content) -> SidebarControlRowTrailingValueContent {
+        SidebarControlRowTrailingValueContent(content: AnyView(content), isPresent: true)
+    }
+
+    fileprivate var body: some View {
+        content
+    }
+
+    fileprivate var hasContent: Bool {
+        isPresent
+    }
+}
+
+@MainActor
+@resultBuilder
+enum SidebarControlRowTrailingValueContentBuilder {
+    static func buildExpression<Content: View>(_ expression: Content) -> SidebarControlRowTrailingValueContent {
+        SidebarControlRowTrailingValueContent.present(expression)
+    }
+
+    static func buildExpression(_ expression: EmptyView) -> SidebarControlRowTrailingValueContent {
+        .absent
+    }
+
+    static func buildOptional(_ component: SidebarControlRowTrailingValueContent?) -> SidebarControlRowTrailingValueContent {
+        component ?? .absent
+    }
+
+    static func buildEither(first component: SidebarControlRowTrailingValueContent) -> SidebarControlRowTrailingValueContent {
+        component
+    }
+
+    static func buildEither(second component: SidebarControlRowTrailingValueContent) -> SidebarControlRowTrailingValueContent {
+        component
+    }
+
+    static func buildBlock(_ component: SidebarControlRowTrailingValueContent) -> SidebarControlRowTrailingValueContent {
+        component
+    }
+}
+
+struct SidebarControlRow<Content: View>: View {
     private let label: LocalizedStringKey
     private let metrics: SidebarMetrics
     private let style: SidebarControlRowStyle
     private let content: Content
-    private let trailingValue: TrailingValue
+    private let trailingValue: SidebarControlRowTrailingValueContent
 
     init(
         _ label: LocalizedStringKey,
         metrics: SidebarMetrics = SidebarMetrics(),
         style: SidebarControlRowStyle = .default,
         @ViewBuilder content: () -> Content,
-        @ViewBuilder trailingValue: () -> TrailingValue
+        @SidebarControlRowTrailingValueContentBuilder trailingValue: () -> SidebarControlRowTrailingValueContent
     ) {
         self.label = label
         self.metrics = metrics
@@ -53,8 +101,8 @@ struct SidebarControlRow<Content: View, TrailingValue: View>: View {
                 content
                     .frame(maxWidth: .infinity, alignment: .leading)
 
-                if showsTrailingValue {
-                    trailingValue
+                if trailingValue.hasContent {
+                    trailingValue.body
                         .frame(minWidth: metrics.controlTrailingValueWidth, alignment: .trailing)
                 }
             }
@@ -65,13 +113,9 @@ struct SidebarControlRow<Content: View, TrailingValue: View>: View {
         .frame(maxWidth: .infinity, minHeight: metrics.controlRowMinHeight, alignment: .leading)
         .opacity(style.opacity)
     }
-
-    private var showsTrailingValue: Bool {
-        TrailingValue.self != EmptyView.self
-    }
 }
 
-extension SidebarControlRow where TrailingValue == EmptyView {
+extension SidebarControlRow {
     init(
         _ label: LocalizedStringKey,
         metrics: SidebarMetrics = SidebarMetrics(),
