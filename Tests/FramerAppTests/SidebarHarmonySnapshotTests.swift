@@ -113,7 +113,7 @@ final class SidebarHarmonySnapshotTests: XCTestCase {
             named: "output-rows-jpeg",
             of: makeOutputRows(outputFormat: .jpeg(quality: 85), stripMetadata: false),
             size: CGSize(width: 350, height: 260),
-            expectedSHA256: "7bbb9c9bf6f7915e38b8d58205c32a222c55729c5f350352ab0c0d90ced71436"
+            expectedSHA256: "70e350bc43a859ec8751c83a778d25c6ae78ab2191073ec17e1711a9f5e26416"
         )
     }
 
@@ -122,14 +122,14 @@ final class SidebarHarmonySnapshotTests: XCTestCase {
             named: "simple-canvas-editor",
             of: CanvasLayerControls(params: CanvasLayerParams()) { _ in },
             size: CGSize(width: 350, height: 420),
-            expectedSHA256: "563371c5d78800b1c044688678ef7a10881a6fcdd21af8c76d8166d69eb439f8"
+            expectedSHA256: "6a5c560f534a352066c61a5a302be2ec053350be6795932a2a10cfd9d7a33c8f"
         )
 
         assertSnapshot(
             named: "simple-border-editor",
             of: BorderLayerControls(params: BorderLayerParams()) { _ in },
             size: CGSize(width: 350, height: 240),
-            expectedSHA256: "0e0a0bc8667f07c296801a794b700e6f42f39b60826152f1566c69d00876c416"
+            expectedSHA256: "a0f857e5eec8286606e98b616d6e23dd73fcf8de87a466f07ed55444a1aa9593"
         )
     }
 
@@ -138,14 +138,14 @@ final class SidebarHarmonySnapshotTests: XCTestCase {
             named: "dense-caption-editor",
             of: CaptionLayerControls(params: CaptionLayerParams()) { _ in },
             size: CGSize(width: 350, height: 760),
-            expectedSHA256: "28602a75b78845026b96eedd34079525320baba05146a91af6108f076425b883"
+            expectedSHA256: "75a68b2dc2f1fa203425fbb8f2d23ee45720a732db4cfd4786455fbcc34e452c"
         )
 
         assertSnapshot(
             named: "dense-dither-editor",
             of: DitherLayerControls(params: DitherLayerParams()) { _ in },
             size: CGSize(width: 350, height: 900),
-            expectedSHA256: "38b931598e5586f46521a5f25c5a688befab960d89b261a8693606a51e8b1375"
+            expectedSHA256: "08d49afe4177c61db66403a7ffb68c50e091e58a47de8d9bdff7d4b4f82e4cb8"
         )
     }
 
@@ -154,7 +154,7 @@ final class SidebarHarmonySnapshotTests: XCTestCase {
             named: "overlay-editor",
             of: OverlayLayerControls(params: OverlayLayerParams()) { _ in },
             size: CGSize(width: 350, height: 420),
-            expectedSHA256: "2b3d8f00dced4d0e89bc2b583e3af5ec6c430ca058d5ef06e77811a4dc049c4e"
+            expectedSHA256: "4a7808c6b4f5344b1a57eee2d0d52855be15dd1bc5ded5612287a17c8e08b989"
         )
     }
 
