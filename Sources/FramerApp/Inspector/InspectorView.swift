@@ -137,6 +137,7 @@ struct InspectorView: View {
                         StyledSlider(
                             value: jpegQualityBinding,
                             range: 60...100,
+                            accessibilityLabel: "Quality",
                             step: 5,
                             suffix: "%"
                         )
@@ -147,7 +148,7 @@ struct InspectorView: View {
             SidebarControlRow("Strip EXIF metadata") {
                 EmptyView()
             } trailingValue: {
-                StyledToggle("Strip EXIF metadata", isOn: noMetadataBinding)
+                StyledToggle(isOn: noMetadataBinding)
                     .padding(.trailing, 1)
             }
         }

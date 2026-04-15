@@ -15,6 +15,7 @@ enum StyledSliderValueResolver {
 struct StyledSlider: View {
     @Binding var value: Double
     let range: ClosedRange<Double>
+    var accessibilityLabel: LocalizedStringKey? = nil
     var step: Double = 1
     var suffix: String = ""
     var inputWidth: CGFloat = 55
@@ -24,6 +25,7 @@ struct StyledSlider: View {
             Slider(value: snappedBinding, in: range)
                 .tint(Color.accentDim)
                 .frame(maxWidth: .infinity)
+                .modifier(StyledSliderAccessibilityLabel(label: accessibilityLabel))
 
             TextField("", value: constrainedTextFieldBinding, format: .number)
                 .textFieldStyle(.plain)
@@ -38,6 +40,7 @@ struct StyledSlider: View {
                     RoundedRectangle(cornerRadius: CornerRadius.sm)
                         .stroke(Color.borderDefault, lineWidth: 1)
                 )
+                .modifier(StyledSliderAccessibilityLabel(label: accessibilityLabel))
 
             if !suffix.isEmpty {
                 Text(suffix)
@@ -60,6 +63,19 @@ struct StyledSlider: View {
             get: { value },
             set: { value = StyledSliderValueResolver.constrain($0, range: range, step: step) }
         )
+    }
+}
+
+private struct StyledSliderAccessibilityLabel: ViewModifier {
+    let label: LocalizedStringKey?
+
+    @ViewBuilder
+    func body(content: Content) -> some View {
+        if let label {
+            content.accessibilityLabel(Text(label))
+        } else {
+            content
+        }
     }
 }
 
