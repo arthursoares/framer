@@ -16,12 +16,17 @@ struct SidebarCompoundControlBlock<Primary: View, Secondary: View>: View {
     }
 
     var body: some View {
-        VStack(alignment: .leading, spacing: metrics.expandedBodyInset) {
+        VStack(alignment: .leading, spacing: metrics.controlStackSpacing) {
             primary
                 .frame(maxWidth: .infinity, alignment: .leading)
 
             secondary
-                .frame(maxWidth: .infinity, alignment: .leading)
+                .overlay(alignment: .top) {
+                    Rectangle()
+                        .fill(Color.borderDefault)
+                        .frame(height: 1)
+                        .padding(.horizontal, metrics.outerInset)
+                }
         }
         .frame(maxWidth: .infinity, alignment: .leading)
     }
