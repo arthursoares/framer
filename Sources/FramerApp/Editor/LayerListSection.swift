@@ -1622,6 +1622,7 @@ private struct OverlayFullWidthControlRow<Content: View>: View {
     let content: Content
 
     private let metrics = SidebarMetrics()
+    @Namespace private var accessibilityLabelNamespace
 
     init(_ title: LocalizedStringKey, @ViewBuilder content: () -> Content) {
         self.title = title
@@ -1633,9 +1634,11 @@ private struct OverlayFullWidthControlRow<Content: View>: View {
             Text(title)
                 .font(AppFont.controlLabel)
                 .foregroundStyle(Color.text2)
+                .accessibilityLabeledPair(role: .label, id: "OverlayFullWidthControlRowLabel", in: accessibilityLabelNamespace)
 
             content
                 .frame(maxWidth: .infinity, alignment: .leading)
+                .accessibilityLabeledPair(role: .content, id: "OverlayFullWidthControlRowLabel", in: accessibilityLabelNamespace)
         }
         .padding(.horizontal, metrics.outerInset)
         .padding(.vertical, Spacing.xs / 2)
@@ -2392,6 +2395,7 @@ struct OverlayLayerControls: View {
             StyledSlider(
                 value: opacityBinding,
                 range: 0...100,
+                accessibilityLabel: "Opacity",
                 step: 1,
                 suffix: "%"
             )
