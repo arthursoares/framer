@@ -1594,6 +1594,11 @@ private extension View {
                     .stroke(Color.borderDefault, lineWidth: 1)
             )
     }
+
+    func simpleLayerEditorInputStyle(width: CGFloat? = SimpleLayerEditorLayout.fieldWidth, accessibilityLabel: String) -> some View {
+        simpleLayerEditorInputStyle(width: width)
+            .accessibilityLabel(Text(accessibilityLabel))
+    }
 }
 
 private struct SimpleLayerEditorDivider: View {
@@ -1639,7 +1644,7 @@ struct BorderLayerControls: View {
                 } trailingValue: {
                     HStack(spacing: Spacing.xs) {
                         TextField("", value: thicknessValue, format: .number)
-                            .simpleLayerEditorInputStyle()
+                            .simpleLayerEditorInputStyle(accessibilityLabel: "Thickness")
                             .monospacedDigit()
 
                         Text(thicknessMode.rawValue)
@@ -1705,7 +1710,7 @@ struct PaddingLayerControls: View {
             } trailingValue: {
                 HStack(spacing: Spacing.xs) {
                     TextField("", value: thicknessBinding, format: .number)
-                        .simpleLayerEditorInputStyle()
+                        .simpleLayerEditorInputStyle(accessibilityLabel: "Thickness")
                         .monospacedDigit()
 
                     Text("px")
@@ -1806,6 +1811,10 @@ struct CanvasLayerControls: View {
                 onChange(p)
             }
         }
+        .onAppear(perform: syncEditorStateFromParams)
+        .onChange(of: params) { _, _ in
+            syncEditorStateFromParams()
+        }
     }
 
     // MARK: - Subviews
@@ -1827,7 +1836,7 @@ struct CanvasLayerControls: View {
         SidebarCompoundControlBlock {
             SidebarControlRow("Width") {
                 TextField("", value: widthBinding, format: .number)
-                    .simpleLayerEditorInputStyle(width: nil)
+                    .simpleLayerEditorInputStyle(width: nil, accessibilityLabel: "Width")
                     .monospacedDigit()
             } trailingValue: {
                 Text("px")
@@ -1837,7 +1846,7 @@ struct CanvasLayerControls: View {
         } secondary: {
             SidebarControlRow("Height") {
                 TextField("", value: heightBinding, format: .number)
-                    .simpleLayerEditorInputStyle(width: nil)
+                    .simpleLayerEditorInputStyle(width: nil, accessibilityLabel: "Height")
                     .monospacedDigit()
             } trailingValue: {
                 Text("px")
@@ -1866,7 +1875,7 @@ struct CanvasLayerControls: View {
             } secondary: {
                 SidebarControlRow("DPI") {
                     TextField("", value: $dpi, format: .number)
-                        .simpleLayerEditorInputStyle(width: nil)
+                        .simpleLayerEditorInputStyle(width: nil, accessibilityLabel: "DPI")
                         .monospacedDigit()
                         .onChange(of: dpi) { _, _ in syncPhysicalToPixels() }
                 } trailingValue: {
@@ -1881,7 +1890,7 @@ struct CanvasLayerControls: View {
             SidebarCompoundControlBlock {
                 SidebarControlRow("Width") {
                     TextField("", value: $widthPhysical, format: .number.precision(.fractionLength(1)))
-                        .simpleLayerEditorInputStyle(width: nil)
+                        .simpleLayerEditorInputStyle(width: nil, accessibilityLabel: "Width")
                         .monospacedDigit()
                         .onChange(of: widthPhysical) { _, _ in syncPhysicalToPixels() }
                 } trailingValue: {
@@ -1892,7 +1901,7 @@ struct CanvasLayerControls: View {
             } secondary: {
                 SidebarControlRow("Height") {
                     TextField("", value: $heightPhysical, format: .number.precision(.fractionLength(1)))
-                        .simpleLayerEditorInputStyle(width: nil)
+                        .simpleLayerEditorInputStyle(width: nil, accessibilityLabel: "Height")
                         .monospacedDigit()
                         .onChange(of: heightPhysical) { _, _ in syncPhysicalToPixels() }
                 } trailingValue: {
@@ -1964,6 +1973,29 @@ struct CanvasLayerControls: View {
         heightPhysical = hMM / newUnit.toMM
     }
 
+    private func syncEditorStateFromParams() {
+        presetIndex = matchingPresetIndex(for: params)
+        syncPhysicalStateFromParams()
+    }
+
+    private func syncPhysicalStateFromParams() {
+        let safeDPI = max(dpi, 1)
+        let widthMM = Double(params.width) / Double(safeDPI) * 25.4
+        let heightMM = Double(params.height) / Double(safeDPI) * 25.4
+        widthPhysical = widthMM / physicalUnit.toMM
+        heightPhysical = heightMM / physicalUnit.toMM
+    }
+
+    private func matchingPresetIndex(for params: CanvasLayerParams) -> Int {
+        switch (params.width, params.height) {
+        case (1080, 1350): return 0
+        case (1771, 1181): return 1
+        case (2125, 1535): return 2
+        case (3507, 2480): return 3
+        default: return 99
+        }
+    }
+
     // MARK: - Presets
 
     private func applyPreset(_ preset: Int) {
@@ -2020,13 +2052,13 @@ struct ResizeLayerControls: View {
         SidebarCompoundControlBlock {
             SidebarControlRow("Max Width") {
                 TextField("", value: maxWidthBinding, format: .number)
-                    .simpleLayerEditorInputStyle(width: nil)
+                    .simpleLayerEditorInputStyle(width: nil, accessibilityLabel: "Max Width")
                     .monospacedDigit()
             }
         } secondary: {
             SidebarControlRow("Max Height") {
                 TextField("", value: maxHeightBinding, format: .number)
-                    .simpleLayerEditorInputStyle(width: nil)
+                    .simpleLayerEditorInputStyle(width: nil, accessibilityLabel: "Max Height")
                     .monospacedDigit()
             }
         }
@@ -2096,7 +2128,7 @@ struct AspectRatioLayerControls: View {
                             get: { params.ratioWidth },
                             set: { onChange(AspectRatioLayerParams(id: params.id, ratioWidth: max(1, $0), ratioHeight: params.ratioHeight, offsetX: params.offsetX, offsetY: params.offsetY)) }
                         ), format: .number)
-                        .simpleLayerEditorInputStyle(width: nil)
+                        .simpleLayerEditorInputStyle(width: nil, accessibilityLabel: "Width")
                         .monospacedDigit()
                     }
                 } secondary: {
@@ -2105,7 +2137,7 @@ struct AspectRatioLayerControls: View {
                             get: { params.ratioHeight },
                             set: { onChange(AspectRatioLayerParams(id: params.id, ratioWidth: params.ratioWidth, ratioHeight: max(1, $0), offsetX: params.offsetX, offsetY: params.offsetY)) }
                         ), format: .number)
-                        .simpleLayerEditorInputStyle(width: nil)
+                        .simpleLayerEditorInputStyle(width: nil, accessibilityLabel: "Height")
                         .monospacedDigit()
                     }
                 }
@@ -2489,7 +2521,7 @@ struct LayerFillPicker: View {
                             .tint(Color.accentDim)
                     } trailingValue: {
                         TextField("", value: saturationBinding(params), formatter: Self.signedFormatter)
-                            .simpleLayerEditorInputStyle(width: SimpleLayerEditorLayout.compactFieldWidth)
+                            .simpleLayerEditorInputStyle(width: SimpleLayerEditorLayout.compactFieldWidth, accessibilityLabel: "Saturation")
                             .monospacedDigit()
                     }
                 } secondary: {
@@ -2498,7 +2530,7 @@ struct LayerFillPicker: View {
                             .tint(Color.accentDim)
                     } trailingValue: {
                         TextField("", value: lightnessBinding(params), formatter: Self.signedFormatter)
-                            .simpleLayerEditorInputStyle(width: SimpleLayerEditorLayout.compactFieldWidth)
+                            .simpleLayerEditorInputStyle(width: SimpleLayerEditorLayout.compactFieldWidth, accessibilityLabel: "Brightness")
                             .monospacedDigit()
                     }
                 }
