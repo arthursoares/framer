@@ -1617,6 +1617,32 @@ private struct SimpleLayerEditorDivider: View {
     }
 }
 
+private struct OverlayFullWidthControlRow<Content: View>: View {
+    let title: LocalizedStringKey
+    let content: Content
+
+    private let metrics = SidebarMetrics()
+
+    init(_ title: LocalizedStringKey, @ViewBuilder content: () -> Content) {
+        self.title = title
+        self.content = content()
+    }
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: Spacing.xs / 2) {
+            Text(title)
+                .font(AppFont.controlLabel)
+                .foregroundStyle(Color.text2)
+
+            content
+                .frame(maxWidth: .infinity, alignment: .leading)
+        }
+        .padding(.horizontal, metrics.outerInset)
+        .padding(.vertical, Spacing.xs / 2)
+        .frame(maxWidth: .infinity, alignment: .leading)
+    }
+}
+
 struct BorderLayerControls: View {
     var params: BorderLayerParams
     var onChange: (BorderLayerParams) -> Void
@@ -2245,22 +2271,28 @@ struct OverlayLayerControls: View {
     @State private var selectedKind: OverlayKind = .frame
 
     var body: some View {
-        VStack(alignment: .leading, spacing: SimpleLayerEditorLayout.groupSpacing) {
-            SidebarCompoundControlBlock {
-                kindPicker
-            } secondary: {
-                overlayPicker
-            }
+        VStack(alignment: .leading, spacing: 0) {
+            kindPicker
+
+            SimpleLayerEditorDivider()
+
+            overlayPicker
 
             if !filteredOverlays.isEmpty {
+                SimpleLayerEditorDivider()
+
                 overlayThumbnailStrip
             }
+
+            SimpleLayerEditorDivider()
 
             SidebarCompoundControlBlock {
                 blendModePicker
             } secondary: {
                 opacityControl
             }
+
+            SimpleLayerEditorDivider()
 
             openFolderButton
         }
@@ -2269,7 +2301,7 @@ struct OverlayLayerControls: View {
     // MARK: - Subviews
 
     private var kindPicker: some View {
-        SidebarControlRow("Category") {
+        OverlayFullWidthControlRow("Category") {
             Picker("", selection: $selectedKind) {
                 Text("Frames").tag(OverlayKind.frame)
                 Text("Dust").tag(OverlayKind.dust)
@@ -2295,30 +2327,26 @@ struct OverlayLayerControls: View {
     }
 
     private var overlayPicker: some View {
-        SidebarControlRow("Overlay") {
-            Picker("", selection: overlayNameBinding) {
-                Text("None").tag("")
-                ForEach(filteredOverlays) { overlay in
-                    Text(overlay.displayName).tag(overlay.id)
-                }
+        Picker("", selection: overlayNameBinding) {
+            Text("None").tag("")
+            ForEach(filteredOverlays) { overlay in
+                Text(overlay.displayName).tag(overlay.id)
             }
-            .pickerStyle(.menu)
-            .labelsHidden()
         }
+        .pickerStyle(.menu)
+        .labelsHidden()
+        .denseControlRow("Overlay")
     }
 
-    @ViewBuilder
     private var overlayThumbnailStrip: some View {
-        if !filteredOverlays.isEmpty {
-            SidebarControlRow("Preview") {
-                ScrollView(.horizontal, showsIndicators: false) {
-                    HStack(spacing: 6) {
-                        ForEach(filteredOverlays) { overlay in
-                            overlayThumb(overlay)
-                        }
+        OverlayFullWidthControlRow("Preview") {
+            ScrollView(.horizontal, showsIndicators: false) {
+                HStack(spacing: 6) {
+                    ForEach(filteredOverlays) { overlay in
+                        overlayThumb(overlay)
                     }
-                    .padding(.vertical, 4)
                 }
+                .padding(.vertical, 4)
             }
         }
     }
@@ -2347,7 +2375,7 @@ struct OverlayLayerControls: View {
     }
 
     private var openFolderButton: some View {
-        SidebarControlRow("Library") {
+        OverlayFullWidthControlRow("Library") {
             Button {
                 if let dir = TextureFrameProvider.ensureUserOverlayDirectory() {
                     NSWorkspace.shared.open(dir)
