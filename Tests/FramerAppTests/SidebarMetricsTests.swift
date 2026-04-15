@@ -7,7 +7,7 @@ final class SidebarMetricsTests: XCTestCase {
 
         XCTAssertEqual(metrics.outerInset, 12)
         XCTAssertEqual(metrics.rowGap, 16)
-        XCTAssertEqual(metrics.expandedBodyInset, 8)
+        XCTAssertEqual(metrics.expandedBodyInset, 6)
         XCTAssertEqual(metrics.footerSpacing, 0)
     }
 

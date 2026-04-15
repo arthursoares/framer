@@ -7,9 +7,9 @@ struct SidebarLayoutPolicy: Sendable, Equatable {
     let maximumWidth: CGFloat
 
     static let `default` = SidebarLayoutPolicy(
-        minimumWidth: 304,
-        idealWidth: 320,
-        maximumWidth: 352
+        minimumWidth: 300,
+        idealWidth: 350,
+        maximumWidth: 520
     )
 
     func clampedWidth(for proposedWidth: CGFloat) -> CGFloat {

@@ -2,9 +2,9 @@ import SwiftUI
 
 private enum SidebarControlRowLayout {
     static let cornerRadius = CornerRadius.lg
-    static let labelSpacing = Spacing.sm
+    static let labelSpacing = Spacing.xs
     static let contentSpacing = 8.0
-    static let verticalPadding = 10.0
+    static let verticalPadding = 8.0
     static let trailingValueWidth = 56.0
 }
 
