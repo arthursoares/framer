@@ -58,14 +58,13 @@ struct BlendModeControls: View {
                 .labelsHidden()
             }
         } secondary: {
-            SidebarControlRow("Opacity") {
-                StyledSlider(
-                    value: opacityPercentBinding,
-                    range: 0...100,
-                    step: 1,
-                    suffix: "%"
-                )
-            }
+            DenseSliderControlRow(
+                title: "Opacity",
+                value: opacityPercentBinding,
+                range: 0...100,
+                step: 1,
+                suffix: "%"
+            )
         }
     }
 

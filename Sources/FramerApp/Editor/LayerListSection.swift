@@ -285,7 +285,7 @@ struct GPUEffectLayerControls: View {
     var onChange: (GPUEffectLayerParams) -> Void
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 8) {
+        VStack(alignment: .leading, spacing: 0) {
             // Per-variant layers (Option B of the bucket-UI refactor): each
             // GPU-effect variant is a first-class entry in the layer-add
             // menu, so the kind is fixed at creation. Show it here as a
@@ -297,6 +297,8 @@ struct GPUEffectLayerControls: View {
                 .foregroundStyle(Color.text1)
                 .denseControlRow("Effect")
 
+            SimpleLayerEditorDivider()
+
             BlendModeControls(
                 blendMode: Binding(
                     get: { params.blendMode },
@@ -307,6 +309,8 @@ struct GPUEffectLayerControls: View {
                     set: { var p = params; p.opacity = $0; onChange(p) }
                 )
             )
+
+            SimpleLayerEditorDivider()
 
             // Global control blocks are gated by GPUEffectKind capability flags.
             // Each variant's shader only reads a subset of the shared
@@ -2632,152 +2636,181 @@ struct CaptionLayerControls: View {
     }
 
     var body: some View {
-        Picker("", selection: captionModeIndex) {
-            Text("Template").tag(0)
-            Text("Custom").tag(1)
-            Text("None").tag(2)
-        }
-        .pickerStyle(.menu)
-        .labelsHidden()
-        .denseControlRow("Mode")
-
-        switch params.mode {
-        case .template:
-            SidebarCompoundControlBlock {
-                TextField("Template", text: captionTemplateText)
-                    .font(.system(.body, design: .monospaced))
-                    .denseControlRow("Template")
-            } secondary: {
-                TemplateTokenBar(text: captionTemplateText)
-                    .denseControlRow("Tokens")
-            }
-        case .custom:
-            TextField("Caption text", text: captionCustomText)
-                .denseControlRow("Caption")
-        case .none:
-            EmptyView()
-        }
-
-        if captionEnabled {
-            SidebarCompoundControlBlock {
-                Picker("", selection: positionBinding) {
-                    Text("Bottom").tag(CaptionPosition.bottom)
-                    Text("Top").tag(CaptionPosition.top)
-                }
-                .pickerStyle(.menu)
-                .labelsHidden()
-                .denseControlRow("Position")
-            } secondary: {
-                Picker("", selection: alignmentBinding) {
-                    Text("Left").tag(CaptionAlignment.left)
-                    Text("Center").tag(CaptionAlignment.center)
-                    Text("Right").tag(CaptionAlignment.right)
-                }
-                .pickerStyle(.menu)
-                .labelsHidden()
-                .denseControlRow("Alignment")
-            }
-
-            SidebarCompoundControlBlock {
-                DenseSliderControlRow(
-                    title: "Offset X",
-                    value: offsetXBinding,
-                    range: -200...200,
-                    step: 1,
-                    suffix: "px"
-                )
-            } secondary: {
-                DenseSliderControlRow(
-                    title: "Offset Y",
-                    value: offsetYBinding,
-                    range: -200...200,
-                    step: 1,
-                    suffix: "px"
-                )
-            }
-
-            Picker("", selection: fontNameBinding) {
-                ForEach(monospacedFontList, id: \.self) { name in
-                    Text(name).tag(name)
-                }
+        VStack(alignment: .leading, spacing: 0) {
+            Picker("", selection: captionModeIndex) {
+                Text("Template").tag(0)
+                Text("Custom").tag(1)
+                Text("None").tag(2)
             }
             .pickerStyle(.menu)
             .labelsHidden()
-            .denseControlRow("Font")
+            .denseControlRow("Mode")
 
-            HStack(spacing: 8) {
-                Toggle(isOn: fontStyleBinding(.bold)) {
-                    Text("B").bold()
-                }
-                .toggleStyle(.button)
+            switch params.mode {
+            case .template:
+                SimpleLayerEditorDivider()
 
-                Toggle(isOn: fontStyleBinding(.italic)) {
-                    Text("I").italic()
+                SidebarCompoundControlBlock {
+                    TextField("Template", text: captionTemplateText)
+                        .font(.system(.body, design: .monospaced))
+                        .denseControlRow("Template")
+                } secondary: {
+                    TemplateTokenBar(text: captionTemplateText)
+                        .denseSupportingRow("Tokens")
                 }
-                .toggleStyle(.button)
+            case .custom:
+                SimpleLayerEditorDivider()
+
+                TextField("Caption text", text: captionCustomText)
+                    .denseControlRow("Caption")
+            case .none:
+                EmptyView()
             }
-            .denseControlRow("Style")
 
-            SidebarCompoundControlBlock {
-                Picker("", selection: $fontSizeMode) {
-                    ForEach(FontSizeMode.allCases, id: \.self) { mode in
-                        Text(mode.rawValue).tag(mode)
+            if captionEnabled {
+                SimpleLayerEditorDivider()
+
+                SidebarCompoundControlBlock {
+                    Picker("", selection: positionBinding) {
+                        Text("Bottom").tag(CaptionPosition.bottom)
+                        Text("Top").tag(CaptionPosition.top)
+                    }
+                    .pickerStyle(.menu)
+                    .labelsHidden()
+                    .denseControlRow("Position")
+                } secondary: {
+                    Picker("", selection: alignmentBinding) {
+                        Text("Left").tag(CaptionAlignment.left)
+                        Text("Center").tag(CaptionAlignment.center)
+                        Text("Right").tag(CaptionAlignment.right)
+                    }
+                    .pickerStyle(.menu)
+                    .labelsHidden()
+                    .denseControlRow("Alignment")
+                }
+
+                SimpleLayerEditorDivider()
+
+                SidebarCompoundControlBlock {
+                    DenseSliderControlRow(
+                        title: "Offset X",
+                        value: offsetXBinding,
+                        range: -200...200,
+                        step: 1,
+                        suffix: "px"
+                    )
+                } secondary: {
+                    DenseSliderControlRow(
+                        title: "Offset Y",
+                        value: offsetYBinding,
+                        range: -200...200,
+                        step: 1,
+                        suffix: "px"
+                    )
+                }
+
+                SimpleLayerEditorDivider()
+
+                Picker("", selection: fontNameBinding) {
+                    ForEach(monospacedFontList, id: \.self) { name in
+                        Text(name).tag(name)
                     }
                 }
                 .pickerStyle(.menu)
                 .labelsHidden()
-                .denseControlRow("Size")
-                .onAppear {
-                    switch params.fontSize {
-                    case .auto: fontSizeMode = .auto
-                    case .fixed: fontSizeMode = .custom
+                .denseControlRow("Font")
+
+                SimpleLayerEditorDivider()
+
+                HStack(spacing: 8) {
+                    Toggle(isOn: fontStyleBinding(.bold)) {
+                        Text("B").bold()
                     }
+                    .toggleStyle(.button)
+
+                    Toggle(isOn: fontStyleBinding(.italic)) {
+                        Text("I").italic()
+                    }
+                    .toggleStyle(.button)
                 }
-                .onChange(of: fontSizeMode) { _, newValue in
-                    var p = params
-                    switch newValue {
-                    case .auto:
-                        p.fontSize = .auto
-                    case .custom:
-                        if case .auto = params.fontSize {
-                            p.fontSize = .fixed(24)
+                .denseControlRow("Style")
+
+                SimpleLayerEditorDivider()
+
+                SidebarCompoundControlBlock {
+                    Picker("", selection: $fontSizeMode) {
+                        ForEach(FontSizeMode.allCases, id: \.self) { mode in
+                            Text(mode.rawValue).tag(mode)
                         }
                     }
-                    onChange(p)
+                    .pickerStyle(.menu)
+                    .labelsHidden()
+                    .denseControlRow("Size")
+                    .onAppear {
+                        switch params.fontSize {
+                        case .auto: fontSizeMode = .auto
+                        case .fixed: fontSizeMode = .custom
+                        }
+                    }
+                    .onChange(of: fontSizeMode) { _, newValue in
+                        var p = params
+                        switch newValue {
+                        case .auto:
+                            p.fontSize = .auto
+                        case .custom:
+                            if case .auto = params.fontSize {
+                                p.fontSize = .fixed(24)
+                            }
+                        }
+                        onChange(p)
+                    }
+                } secondary: {
+                    if case .fixed(let pts) = params.fontSize {
+                        DenseSliderControlRow(
+                            title: "Font Size",
+                            value: fontSizeBinding(pts),
+                            range: 8...120,
+                            step: 1,
+                            suffix: "pt"
+                        )
+                    }
                 }
-            } secondary: {
-                if case .fixed(let pts) = params.fontSize {
-                    DenseSliderControlRow(
-                        title: "Font Size",
-                        value: fontSizeBinding(pts),
-                        range: 8...120,
-                        step: 1,
-                        suffix: "pt"
-                    )
-                }
-            }
 
-            Picker("", selection: fontColorModeIndex) {
+                SimpleLayerEditorDivider()
+
+                Picker("", selection: fontColorModeIndex) {
                     Text("Custom").tag(0)
                     Text("Dominant").tag(1)
                     Text("Invert").tag(2)
                 }
-            .pickerStyle(.menu)
-            .labelsHidden()
-            .denseControlRow("Font Color")
+                .pickerStyle(.menu)
+                .labelsHidden()
+                .denseControlRow("Font Color")
 
-            if case .fixed = params.fontColorMode {
-                ColorPickerWithHex("Color", selection: fontColorBinding)
-            }
+                if case .fixed = params.fontColorMode {
+                    SimpleLayerEditorDivider()
 
-            if case .dominant(let sat, let light) = params.fontColorMode {
-                captionColorAdjustmentSliders(saturation: sat, lightness: light) { s, l in
-                    var p = params; p.fontColorMode = .dominant(saturationShift: s, lightnessShift: l); onChange(p)
+                    ColorPickerWithHex("Color", selection: fontColorBinding)
                 }
-            }
-            if case .dominantInverted(let sat, let light) = params.fontColorMode {
-                captionColorAdjustmentSliders(saturation: sat, lightness: light) { s, l in
-                    var p = params; p.fontColorMode = .dominantInverted(saturationShift: s, lightnessShift: l); onChange(p)
+
+                if case .dominant(let sat, let light) = params.fontColorMode {
+                    SimpleLayerEditorDivider()
+
+                    captionColorAdjustmentSliders(saturation: sat, lightness: light) { s, l in
+                        var p = params
+                        p.fontColorMode = .dominant(saturationShift: s, lightnessShift: l)
+                        onChange(p)
+                    }
+                }
+
+                if case .dominantInverted(let sat, let light) = params.fontColorMode {
+                    SimpleLayerEditorDivider()
+
+                    captionColorAdjustmentSliders(saturation: sat, lightness: light) { s, l in
+                        var p = params
+                        p.fontColorMode = .dominantInverted(saturationShift: s, lightnessShift: l)
+                        onChange(p)
+                    }
                 }
             }
         }
@@ -3093,7 +3126,7 @@ struct FlowLayout: Layout {
     }
 }
 
-private struct DenseSliderControlRow: View {
+struct DenseSliderControlRow: View {
     let title: LocalizedStringKey
     @Binding var value: Double
     let range: ClosedRange<Double>
@@ -3114,11 +3147,45 @@ private struct DenseSliderControlRow: View {
     }
 }
 
+private struct DenseSupplementaryControlRow<Content: View>: View {
+    let title: LocalizedStringKey
+    let content: Content
+
+    private let metrics = SidebarMetrics()
+
+    init(_ title: LocalizedStringKey, @ViewBuilder content: () -> Content) {
+        self.title = title
+        self.content = content()
+    }
+
+    var body: some View {
+        HStack(alignment: .top, spacing: metrics.controlColumnSpacing) {
+            Text(title)
+                .font(AppFont.body(10))
+                .foregroundStyle(Color.text3)
+                .frame(width: metrics.controlLabelWidth, alignment: .leading)
+
+            content
+                .frame(maxWidth: .infinity, alignment: .leading)
+        }
+        .padding(.horizontal, metrics.outerInset)
+        .padding(.top, 3)
+        .padding(.bottom, 6)
+        .accessibilityElement(children: .combine)
+    }
+}
+
 private extension View {
     func denseControlRow(_ title: LocalizedStringKey) -> some View {
         SidebarControlRow(title) {
             self
                 .frame(maxWidth: .infinity, alignment: .leading)
+        }
+    }
+
+    func denseSupportingRow(_ title: LocalizedStringKey) -> some View {
+        DenseSupplementaryControlRow(title) {
+            self
         }
     }
 }
@@ -3130,175 +3197,201 @@ struct DitherLayerControls: View {
     var onChange: (DitherLayerParams) -> Void
 
     var body: some View {
-        BlendModeControls(
-            blendMode: Binding(
-                get: { params.blendMode },
-                set: { var p = params; p.blendMode = $0; onChange(p) }
-            ),
-            opacity: Binding(
-                get: { params.opacity },
-                set: { var p = params; p.opacity = $0; onChange(p) }
+        VStack(alignment: .leading, spacing: 0) {
+            BlendModeControls(
+                blendMode: Binding(
+                    get: { params.blendMode },
+                    set: { var p = params; p.blendMode = $0; onChange(p) }
+                ),
+                opacity: Binding(
+                    get: { params.opacity },
+                    set: { var p = params; p.opacity = $0; onChange(p) }
+                )
             )
-        )
 
-        Picker("", selection: algorithmBinding) {
-            ForEach(DitherAlgorithm.allCases, id: \.self) { algo in
-                Text(algo.label).tag(algo)
+            SimpleLayerEditorDivider()
+
+            Picker("", selection: algorithmBinding) {
+                ForEach(DitherAlgorithm.allCases, id: \.self) { algo in
+                    Text(algo.label).tag(algo)
+                }
             }
-        }
-        .pickerStyle(.menu)
-        .labelsHidden()
-        .denseControlRow("Algorithm")
+            .pickerStyle(.menu)
+            .labelsHidden()
+            .denseControlRow("Algorithm")
 
-        Picker("", selection: colorModeTag) {
-            Text("B&W").tag(0)
-            Text("Two-Tone").tag(1)
-            Text("Dominant").tag(3)
-            Text("Color").tag(2)
-            Text("Palette").tag(4)
-        }
-        .pickerStyle(.menu)
-        .labelsHidden()
-        .denseControlRow("Color Mode")
+            SimpleLayerEditorDivider()
 
-        if params.algorithm == .bayer {
-            SidebarCompoundControlBlock {
-                Picker("", selection: bayerLevelBinding) {
-                    ForEach(1...4, id: \.self) { level in
-                        Text("Level \(level)").tag(level)
+            Picker("", selection: colorModeTag) {
+                Text("B&W").tag(0)
+                Text("Two-Tone").tag(1)
+                Text("Dominant").tag(3)
+                Text("Color").tag(2)
+                Text("Palette").tag(4)
+            }
+            .pickerStyle(.menu)
+            .labelsHidden()
+            .denseControlRow("Color Mode")
+
+            if params.algorithm == .bayer {
+                SimpleLayerEditorDivider()
+
+                SidebarCompoundControlBlock {
+                    Picker("", selection: bayerLevelBinding) {
+                        ForEach(1...4, id: \.self) { level in
+                            Text("Level \(level)").tag(level)
+                        }
                     }
+                    .pickerStyle(.menu)
+                    .labelsHidden()
+                    .denseControlRow("Bayer Level")
+                } secondary: {
+                    Text("\(1 << (params.bayerLevel + 1))×\(1 << (params.bayerLevel + 1)) matrix")
+                        .font(AppFont.numericInput)
+                        .foregroundStyle(Color.text2)
+                        .denseSupportingRow("Pattern")
                 }
-                .pickerStyle(.menu)
-                .labelsHidden()
-                .denseControlRow("Bayer Level")
-            } secondary: {
-                Text("\(1 << (params.bayerLevel + 1))×\(1 << (params.bayerLevel + 1)) matrix")
-                    .font(AppFont.numericInput)
-                    .foregroundStyle(Color.text1)
-                    .denseControlRow("Pattern")
             }
-        }
 
-        DenseSliderControlRow(
-            title: "Pixel Scale",
-            value: Binding(
-                get: { Double(params.pixelScale) },
-                set: { pixelScaleBinding.wrappedValue = Int($0.rounded()) }
-            ),
-            range: 1...8,
-            step: 1,
-            suffix: "×"
-        )
+            SimpleLayerEditorDivider()
 
-        if case .twoTone(let fg, let bg) = params.colorMode {
-            ColorPickerWithHex("Foreground", selection: foregroundBinding(fg: fg, bg: bg))
-            ColorPickerWithHex("Background", selection: backgroundBinding(fg: fg, bg: bg))
-        }
+            DenseSliderControlRow(
+                title: "Pixel Scale",
+                value: Binding(
+                    get: { Double(params.pixelScale) },
+                    set: { pixelScaleBinding.wrappedValue = Int($0.rounded()) }
+                ),
+                range: 1...8,
+                step: 1,
+                suffix: "×"
+            )
 
-        if case .dominantTwoTone(let flipped, let sat, let light) = params.colorMode {
-            SidebarCompoundControlBlock {
-                SidebarControlRow("Flip Colors") {
-                    EmptyView()
-                } trailingValue: {
-                    StyledToggle("Flip Colors", isOn: Binding(
-                        get: { flipped },
-                        set: { var p = params; p.colorMode = .dominantTwoTone(flipped: $0, saturationShift: sat, lightnessShift: light); onChange(p) }
-                    ))
+            if case .twoTone(let fg, let bg) = params.colorMode {
+                SimpleLayerEditorDivider()
+                ColorPickerWithHex("Foreground", selection: foregroundBinding(fg: fg, bg: bg))
+
+                SimpleLayerEditorDivider()
+                ColorPickerWithHex("Background", selection: backgroundBinding(fg: fg, bg: bg))
+            }
+
+            if case .dominantTwoTone(let flipped, let sat, let light) = params.colorMode {
+                SimpleLayerEditorDivider()
+
+                SidebarCompoundControlBlock {
+                    SidebarControlRow("Flip Colors") {
+                        EmptyView()
+                    } trailingValue: {
+                        StyledToggle("Flip Colors", isOn: Binding(
+                            get: { flipped },
+                            set: { var p = params; p.colorMode = .dominantTwoTone(flipped: $0, saturationShift: sat, lightnessShift: light); onChange(p) }
+                        ))
+                    }
+                } secondary: {
+                    Text("Swap foreground and background")
+                        .font(AppFont.body(10))
+                        .foregroundStyle(Color.text2)
+                        .denseSupportingRow("Details")
                 }
+
+                SimpleLayerEditorDivider()
+
+                SidebarCompoundControlBlock {
+                    DenseSliderControlRow(
+                        title: "Saturation",
+                        value: Binding(
+                            get: { sat },
+                            set: { var p = params; p.colorMode = .dominantTwoTone(flipped: flipped, saturationShift: $0, lightnessShift: light); onChange(p) }
+                        ),
+                        range: -50...50,
+                        step: 1
+                    )
+                } secondary: {
+                    DenseSliderControlRow(
+                        title: "Brightness",
+                        value: Binding(
+                            get: { light },
+                            set: { var p = params; p.colorMode = .dominantTwoTone(flipped: flipped, saturationShift: sat, lightnessShift: $0); onChange(p) }
+                        ),
+                        range: -50...50,
+                        step: 1
+                    )
+                }
+            }
+
+            if case .color(let levels) = params.colorMode {
+                SimpleLayerEditorDivider()
+
+                DenseSliderControlRow(
+                    title: "Levels",
+                    value: Binding(
+                        get: { Double(levels) },
+                        set: { levelsBinding(levels).wrappedValue = Int($0.rounded()) }
+                    ),
+                    range: 2...8,
+                    step: 1
+                )
+            }
+
+            if case .palette(let colors) = params.colorMode {
+                SimpleLayerEditorDivider()
+                paletteEditor(colors: colors)
+            }
+
+            SimpleLayerEditorDivider()
+
+            SidebarCompoundControlBlock {
+                DenseSliderControlRow(
+                    title: "Threshold",
+                    value: thresholdBinding,
+                    range: 0.1...0.9,
+                    step: 0.05
+                )
             } secondary: {
-                Text("Swap foreground and background")
-                    .font(AppFont.controlLabel)
+                Text("Lower = darker, higher = brighter")
+                    .font(AppFont.body(10))
                     .foregroundStyle(Color.text2)
-                    .denseControlRow("Details")
+                    .denseSupportingRow("Details")
             }
+
+            SimpleLayerEditorDivider()
 
             SidebarCompoundControlBlock {
                 DenseSliderControlRow(
-                    title: "Saturation",
+                    title: "Sharpen",
                     value: Binding(
-                        get: { sat },
-                        set: { var p = params; p.colorMode = .dominantTwoTone(flipped: flipped, saturationShift: $0, lightnessShift: light); onChange(p) }
+                        get: { params.sharpen * 100 },
+                        set: { sharpenBinding.wrappedValue = $0 / 100 }
                     ),
-                    range: -50...50,
-                    step: 1
+                    range: 0...100,
+                    step: 10,
+                    suffix: "%"
                 )
             } secondary: {
-                DenseSliderControlRow(
-                    title: "Brightness",
-                    value: Binding(
-                        get: { light },
-                        set: { var p = params; p.colorMode = .dominantTwoTone(flipped: flipped, saturationShift: sat, lightnessShift: $0); onChange(p) }
-                    ),
-                    range: -50...50,
-                    step: 1
-                )
+                Text("Pre-sharpen to preserve edge detail")
+                    .font(AppFont.body(10))
+                    .foregroundStyle(Color.text2)
+                    .denseSupportingRow("Details")
             }
-        }
 
-        if case .color(let levels) = params.colorMode {
-            DenseSliderControlRow(
-                title: "Levels",
-                value: Binding(
-                    get: { Double(levels) },
-                    set: { levelsBinding(levels).wrappedValue = Int($0.rounded()) }
-                ),
-                range: 2...8,
-                step: 1
-            )
-        }
+            SimpleLayerEditorDivider()
 
-        if case .palette(let colors) = params.colorMode {
-            paletteEditor(colors: colors)
-        }
-
-        SidebarCompoundControlBlock {
-            DenseSliderControlRow(
-                title: "Threshold",
-                value: thresholdBinding,
-                range: 0.1...0.9,
-                step: 0.05
-            )
-        } secondary: {
-            Text("Lower = darker, higher = brighter")
-                .font(AppFont.controlLabel)
-                .foregroundStyle(Color.text2)
-                .denseControlRow("Details")
-        }
-
-        SidebarCompoundControlBlock {
-            DenseSliderControlRow(
-                title: "Sharpen",
-                value: Binding(
-                    get: { params.sharpen * 100 },
-                    set: { sharpenBinding.wrappedValue = $0 / 100 }
-                ),
-                range: 0...100,
-                step: 10,
-                suffix: "%"
-            )
-        } secondary: {
-            Text("Pre-sharpen to preserve edge detail")
-                .font(AppFont.controlLabel)
-                .foregroundStyle(Color.text2)
-                .denseControlRow("Details")
-        }
-
-        SidebarCompoundControlBlock {
-            DenseSliderControlRow(
-                title: "Contrast",
-                value: Binding(
-                    get: { params.contrast * 100 },
-                    set: { contrastBinding.wrappedValue = $0 / 100 }
-                ),
-                range: 0...100,
-                step: 10,
-                suffix: "%"
-            )
-        } secondary: {
-            Text("Boost contrast before dithering")
-                .font(AppFont.controlLabel)
-                .foregroundStyle(Color.text2)
-                .denseControlRow("Details")
+            SidebarCompoundControlBlock {
+                DenseSliderControlRow(
+                    title: "Contrast",
+                    value: Binding(
+                        get: { params.contrast * 100 },
+                        set: { contrastBinding.wrappedValue = $0 / 100 }
+                    ),
+                    range: 0...100,
+                    step: 10,
+                    suffix: "%"
+                )
+            } secondary: {
+                Text("Boost contrast before dithering")
+                    .font(AppFont.body(10))
+                    .foregroundStyle(Color.text2)
+                    .denseSupportingRow("Details")
+            }
         }
     }
 
@@ -3522,17 +3615,6 @@ struct DitherLayerControls: View {
     }
 }
 
-private extension View {
-    func caption(_ text: String) -> some View {
-        VStack(alignment: .leading, spacing: 2) {
-            self
-            Text(text)
-                .font(AppFont.controlLabel)
-                .foregroundStyle(Color.text2)
-        }
-    }
-}
-
 // MARK: - LUTLayerControls
 
 struct LUTLayerControls: View {
@@ -3546,7 +3628,7 @@ struct LUTLayerControls: View {
     @State private var renameText = ""
 
     var body: some View {
-        VStack(spacing: 12) {
+        VStack(alignment: .leading, spacing: 0) {
             BlendModeControls(
                 blendMode: Binding(
                     get: { params.blendMode },
@@ -3557,9 +3639,17 @@ struct LUTLayerControls: View {
                     set: { var p = params; p.opacity = $0; onChange(p) }
                 )
             )
+
+            SimpleLayerEditorDivider()
             lutPicker
+
+            SimpleLayerEditorDivider()
             lutThumbnailStrip
+
+            SimpleLayerEditorDivider()
             intensityControl
+
+            SimpleLayerEditorDivider()
             importButtons
         }
         .task {
@@ -3903,7 +3993,7 @@ struct ShaderLayerControls: View {
     var onChange: (ShaderLayerParams) -> Void
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 8) {
+        VStack(alignment: .leading, spacing: 0) {
             BlendModeControls(
                 blendMode: Binding(
                     get: { params.blendMode },
@@ -3915,6 +4005,8 @@ struct ShaderLayerControls: View {
                 )
             )
 
+            SimpleLayerEditorDivider()
+
             sliderRow(
                 title: "Intensity",
                 value: params.intensity,
@@ -3925,6 +4017,8 @@ struct ShaderLayerControls: View {
                 updated.intensity = value
                 onChange(updated)
             }
+
+            SimpleLayerEditorDivider()
 
             switch params.params {
             case .ascii(let asciiParams):
@@ -4211,10 +4305,10 @@ struct ShaderLayerControls: View {
             Text("\(characterCount) / 10")
                 .font(.caption)
                 .foregroundStyle(Color.text2)
-                .denseControlRow("Length")
+                .denseSupportingRow("Length")
 
             asciiRampPreview(for: asciiParams.characters ?? "")
-                .denseControlRow("Preview")
+                .denseSupportingRow("Preview")
         }
     }
 
