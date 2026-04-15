@@ -20,14 +20,26 @@ struct SidebarCompoundControlBlock<Primary: View, Secondary: View>: View {
             primary
                 .frame(maxWidth: .infinity, alignment: .leading)
 
-            secondary
-                .overlay(alignment: .top) {
-                    Rectangle()
-                        .fill(Color.borderDefault)
-                        .frame(height: 1)
-                        .padding(.horizontal, metrics.outerInset)
+            if showsSecondary {
+                VStack(alignment: .leading, spacing: metrics.controlStackSpacing) {
+                    controlDivider
+                    secondary
+                        .frame(maxWidth: .infinity, alignment: .leading)
                 }
+            }
         }
         .frame(maxWidth: .infinity, alignment: .leading)
+    }
+
+    private var showsSecondary: Bool {
+        Secondary.self != EmptyView.self
+    }
+
+    private var controlDivider: some View {
+        Rectangle()
+            .fill(Color.borderDefault)
+            .frame(height: metrics.controlStackDividerThickness)
+            .padding(.horizontal, metrics.controlStackDividerInset)
+            .accessibilityHidden(true)
     }
 }
