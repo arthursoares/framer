@@ -1,22 +1,42 @@
 import SwiftUI
 
+struct SidebarControlRowStyle: Sendable, Equatable {
+    let foreground: SidebarStateStyle.Foreground
+    let opacity: Double
+
+    static let `default` = SidebarControlRowStyle(foreground: .primary, opacity: 1)
+    static let disabled = SidebarControlRowStyle(foreground: .secondary, opacity: SidebarStateStyle.disabled.opacity)
+    static let accent = SidebarControlRowStyle(foreground: .accent, opacity: 1)
+
+    var foregroundColor: Color {
+        switch foreground {
+        case .primary:
+            .text0
+        case .secondary:
+            .text2
+        case .accent:
+            .accent
+        }
+    }
+}
+
 struct SidebarControlRow<Content: View, TrailingValue: View>: View {
     private let label: LocalizedStringKey
     private let metrics: SidebarMetrics
-    private let stateStyle: SidebarStateStyle
+    private let style: SidebarControlRowStyle
     private let content: Content
     private let trailingValue: TrailingValue
 
     init(
         _ label: LocalizedStringKey,
         metrics: SidebarMetrics = SidebarMetrics(),
-        stateStyle: SidebarStateStyle = .default,
+        style: SidebarControlRowStyle = .default,
         @ViewBuilder content: () -> Content,
         @ViewBuilder trailingValue: () -> TrailingValue
     ) {
         self.label = label
         self.metrics = metrics
-        self.stateStyle = stateStyle
+        self.style = style
         self.content = content()
         self.trailingValue = trailingValue()
     }
@@ -39,11 +59,11 @@ struct SidebarControlRow<Content: View, TrailingValue: View>: View {
                 }
             }
             .frame(maxWidth: .infinity, alignment: .leading)
-            .foregroundStyle(stateStyle.foregroundColor)
+            .foregroundStyle(style.foregroundColor)
         }
         .padding(.horizontal, metrics.outerInset)
         .frame(maxWidth: .infinity, minHeight: metrics.controlRowMinHeight, alignment: .leading)
-        .opacity(stateStyle.opacity)
+        .opacity(style.opacity)
     }
 
     private var showsTrailingValue: Bool {
@@ -55,10 +75,10 @@ extension SidebarControlRow where TrailingValue == EmptyView {
     init(
         _ label: LocalizedStringKey,
         metrics: SidebarMetrics = SidebarMetrics(),
-        stateStyle: SidebarStateStyle = .default,
+        style: SidebarControlRowStyle = .default,
         @ViewBuilder content: () -> Content
     ) {
-        self.init(label, metrics: metrics, stateStyle: stateStyle, content: content) {
+        self.init(label, metrics: metrics, style: style, content: content) {
             EmptyView()
         }
     }

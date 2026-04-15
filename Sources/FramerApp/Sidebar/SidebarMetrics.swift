@@ -39,6 +39,8 @@ struct SidebarMetrics: Sendable, Equatable {
     var minimumWidth: CGFloat { widthPolicy.minimumWidth }
     var idealWidth: CGFloat { widthPolicy.idealWidth }
     var maximumWidth: CGFloat { widthPolicy.maximumWidth }
+    var controlStackDividerInset: CGFloat { outerInset }
+    var controlStackDividerThickness: CGFloat { 1 }
 
     func clampedWidth(for proposedWidth: CGFloat) -> CGFloat {
         widthPolicy.clampedWidth(for: proposedWidth)
