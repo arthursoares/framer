@@ -11,6 +11,16 @@ final class SidebarMetricsTests: XCTestCase {
         XCTAssertEqual(metrics.footerSpacing, 0)
     }
 
+    func test_defaultMetrics_matchDenseInspectorRowRhythm() {
+        let metrics = SidebarMetrics()
+
+        XCTAssertEqual(metrics.controlRowMinHeight, 30)
+        XCTAssertEqual(metrics.controlLabelWidth, 104)
+        XCTAssertEqual(metrics.controlColumnSpacing, 10)
+        XCTAssertEqual(metrics.controlTrailingValueWidth, 48)
+        XCTAssertEqual(metrics.controlStackSpacing, 0)
+    }
+
     func test_defaultMetrics_useApprovedSidebarWidthPolicy() {
         let metrics = SidebarMetrics()
 

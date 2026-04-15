@@ -1,13 +1,5 @@
 import SwiftUI
 
-private enum SidebarControlRowLayout {
-    static let cornerRadius = CornerRadius.lg
-    static let labelSpacing = Spacing.xs
-    static let contentSpacing = 8.0
-    static let verticalPadding = 8.0
-    static let trailingValueWidth = 56.0
-}
-
 struct SidebarControlRow<Content: View, TrailingValue: View>: View {
     private let label: LocalizedStringKey
     private let metrics: SidebarMetrics
@@ -30,29 +22,32 @@ struct SidebarControlRow<Content: View, TrailingValue: View>: View {
     }
 
     var body: some View {
-        VStack(alignment: .leading, spacing: SidebarControlRowLayout.labelSpacing) {
+        HStack(alignment: .center, spacing: metrics.controlColumnSpacing) {
             Text(label)
                 .font(AppFont.controlLabel)
                 .foregroundStyle(Color.text2)
+                .frame(width: metrics.controlLabelWidth, alignment: .leading)
+                .fixedSize(horizontal: false, vertical: true)
 
-            HStack(alignment: .center, spacing: SidebarControlRowLayout.contentSpacing) {
+            HStack(alignment: .center, spacing: metrics.controlColumnSpacing) {
                 content
                     .frame(maxWidth: .infinity, alignment: .leading)
 
-                trailingValue
-                    .frame(minWidth: SidebarControlRowLayout.trailingValueWidth, alignment: .trailing)
+                if showsTrailingValue {
+                    trailingValue
+                        .frame(minWidth: metrics.controlTrailingValueWidth, alignment: .trailing)
+                }
             }
+            .frame(maxWidth: .infinity, alignment: .leading)
             .foregroundStyle(stateStyle.foregroundColor)
         }
         .padding(.horizontal, metrics.outerInset)
-        .padding(.vertical, SidebarControlRowLayout.verticalPadding)
-        .frame(maxWidth: .infinity, alignment: .leading)
-        .background(stateStyle.backgroundColor, in: RoundedRectangle(cornerRadius: SidebarControlRowLayout.cornerRadius))
-        .overlay {
-            RoundedRectangle(cornerRadius: SidebarControlRowLayout.cornerRadius)
-                .stroke(stateStyle.borderColor, lineWidth: 1)
-        }
+        .frame(maxWidth: .infinity, minHeight: metrics.controlRowMinHeight, alignment: .leading)
         .opacity(stateStyle.opacity)
+    }
+
+    private var showsTrailingValue: Bool {
+        TrailingValue.self != EmptyView.self
     }
 }
 
