@@ -11,7 +11,7 @@ struct SidebarMetrics: Sendable, Equatable {
         widthPolicy: SidebarLayoutPolicy = .default,
         outerInset: CGFloat = 12,
         rowGap: CGFloat = 16,
-        expandedBodyInset: CGFloat = 8,
+        expandedBodyInset: CGFloat = 6,
         footerSpacing: CGFloat = 0
     ) {
         self.widthPolicy = widthPolicy

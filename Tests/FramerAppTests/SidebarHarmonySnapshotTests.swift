@@ -50,8 +50,8 @@ final class SidebarHarmonySnapshotTests: XCTestCase {
                 ExportBar()
                     .environment(makeExportState())
             },
-            size: CGSize(width: 352, height: 320),
-            expectedSHA256: "f8e60d36c6341b104069d6dc105b3f61d9069886edfb5c8717c1ef4a5aa113de"
+            size: CGSize(width: 350, height: 320),
+            expectedSHA256: "c30728978b5201eca44eb80de3a18e8514dc97036a87a6614c861ddce3e0970c"
         )
     }
 
@@ -105,15 +105,15 @@ final class SidebarHarmonySnapshotTests: XCTestCase {
         assertSnapshot(
             named: "output-rows-png",
             of: makeOutputRows(outputFormat: .png, stripMetadata: true),
-            size: CGSize(width: 320, height: 200),
-            expectedSHA256: "ed1934c3073e88d00d9c73eda8719bc1ed2fef3c833d6542665a861f009d5b88"
+            size: CGSize(width: 350, height: 200),
+            expectedSHA256: "10d170ac97962dc25072edb4db65e1e436a6fb2419af24981f35ca6b1662c29b"
         )
 
         assertSnapshot(
             named: "output-rows-jpeg",
             of: makeOutputRows(outputFormat: .jpeg(quality: 85), stripMetadata: false),
-            size: CGSize(width: 320, height: 260),
-            expectedSHA256: "099830b4a04d89b8a31a48e4196ecd7e089009559ef4ea151cc27270ca26ea11"
+            size: CGSize(width: 350, height: 260),
+            expectedSHA256: "bdf9109c6228314f70d62354793eb379424e506f2bb2a8563831131bc5ba7396"
         )
     }
 
@@ -121,15 +121,15 @@ final class SidebarHarmonySnapshotTests: XCTestCase {
         assertSnapshot(
             named: "simple-canvas-editor",
             of: CanvasLayerControls(params: CanvasLayerParams()) { _ in },
-            size: CGSize(width: 320, height: 420),
-            expectedSHA256: "5f9aa79f0665244659dc03a542b148ce452f5360c21250c580a804d9bb114f63"
+            size: CGSize(width: 350, height: 420),
+            expectedSHA256: "9d4347b2cd8fe4d8caab1fda7f2aa026ee0757020fc192b1c92823cbb726899f"
         )
 
         assertSnapshot(
             named: "simple-border-editor",
             of: BorderLayerControls(params: BorderLayerParams()) { _ in },
-            size: CGSize(width: 320, height: 240),
-            expectedSHA256: "ab7f2988ec778a1ee5f9f79e98069ec5efffaa16bb29829d000e69771938db9d"
+            size: CGSize(width: 350, height: 240),
+            expectedSHA256: "fb4f6557f7a06bf0c86c0f03646692bd0cd5f06337b361b6059b2d93d941d81b"
         )
     }
 
@@ -137,15 +137,15 @@ final class SidebarHarmonySnapshotTests: XCTestCase {
         assertSnapshot(
             named: "dense-caption-editor",
             of: CaptionLayerControls(params: CaptionLayerParams()) { _ in },
-            size: CGSize(width: 320, height: 760),
-            expectedSHA256: "bdf65dd94a7954463e8099fc87ba16c337410e22c315dcaf037f80f3298aeafe"
+            size: CGSize(width: 350, height: 760),
+            expectedSHA256: "f0f096a9f29d77255dd3dc06d81704b0e14e83adfb1868dfad1c11c324c1c0b7"
         )
 
         assertSnapshot(
             named: "dense-dither-editor",
             of: DitherLayerControls(params: DitherLayerParams()) { _ in },
-            size: CGSize(width: 320, height: 900),
-            expectedSHA256: "bc8380c207a59d77d3c2ee05cf5034795c2d106bb1877ad087a213f6566c2292"
+            size: CGSize(width: 350, height: 900),
+            expectedSHA256: "5a9f33ebc3abd5a18e2d84f8e0c8b66e4b715f2daa61d03388f1eaaf216bd364"
         )
     }
 
@@ -153,8 +153,8 @@ final class SidebarHarmonySnapshotTests: XCTestCase {
         assertSnapshot(
             named: "overlay-editor",
             of: OverlayLayerControls(params: OverlayLayerParams()) { _ in },
-            size: CGSize(width: 320, height: 420),
-            expectedSHA256: "484cbf91109c9f3510ce610ffc22fcf6dd48582fb5682706c82ad9918bcf891d"
+            size: CGSize(width: 350, height: 420),
+            expectedSHA256: "5c20ac975e2f08119145bd59fc43ed60d338cbf2e4c48796b983a1741dd48ed3"
         )
     }
 
@@ -163,8 +163,8 @@ final class SidebarHarmonySnapshotTests: XCTestCase {
             named: "preset-grid-support-surfaces",
             of: PresetPreviewGrid()
                 .environment(makePresetState()),
-            size: CGSize(width: 320, height: 300),
-            expectedSHA256: "b77fe54e409d918ec86ef1be58d5ed3fa5b8989ec422183bdbbda3bd5445ad7d"
+            size: CGSize(width: 350, height: 300),
+            expectedSHA256: "7fa78863980d7d1884ff69a1c0f43c6815fe24e2d2e36dd20f521c7c41c2ded7"
         )
 
         assertSnapshot(
@@ -175,8 +175,8 @@ final class SidebarHarmonySnapshotTests: XCTestCase {
             }
             .environment(makeExportState())
             .background(Color.surface1),
-            size: CGSize(width: 320, height: 320),
-            expectedSHA256: "9df57737cf5950568ba52fcaa189ce02763062082b88cc9fbea296d0e511f883"
+            size: CGSize(width: 350, height: 320),
+            expectedSHA256: "846a578704cc9e59d7b9bc1d72cc1ecb4fa151c429e345037a9fb426ee54307e"
         )
     }
 
