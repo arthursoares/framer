@@ -51,7 +51,7 @@ final class SidebarHarmonySnapshotTests: XCTestCase {
                     .environment(makeExportState())
             },
             size: CGSize(width: 350, height: 320),
-            expectedSHA256: "b20c44206984f99bf20b60e96161de8a98cfa4c71c19c1991cd9bbb5de616d2a"
+            expectedSHA256: "917f9465082cd27a27055ec813b85a218fa78932807d205133f83de8426414a6"
         )
     }
 
@@ -106,14 +106,14 @@ final class SidebarHarmonySnapshotTests: XCTestCase {
             named: "output-rows-png",
             of: makeOutputRows(outputFormat: .png, stripMetadata: true),
             size: CGSize(width: 350, height: 200),
-            expectedSHA256: "b850498e264cc7d19c75a119bbdffe1f358769fa6f41ef10f7577c54cd0f51f3"
+            expectedSHA256: "a353c3b59600b7ee1588e7333f281c54af4b24dfd60cfa162dd7507f92786ab9"
         )
 
         assertSnapshot(
             named: "output-rows-jpeg",
             of: makeOutputRows(outputFormat: .jpeg(quality: 85), stripMetadata: false),
             size: CGSize(width: 350, height: 260),
-            expectedSHA256: "70e350bc43a859ec8751c83a778d25c6ae78ab2191073ec17e1711a9f5e26416"
+            expectedSHA256: "fa188c40cf015bb514b7a6f81ccb396a9baba20453de65d5ed2a0bf5ee43ee91"
         )
     }
 
@@ -122,14 +122,14 @@ final class SidebarHarmonySnapshotTests: XCTestCase {
             named: "simple-canvas-editor",
             of: CanvasLayerControls(params: CanvasLayerParams()) { _ in },
             size: CGSize(width: 350, height: 420),
-            expectedSHA256: "6a5c560f534a352066c61a5a302be2ec053350be6795932a2a10cfd9d7a33c8f"
+            expectedSHA256: "052374cdc1e3c6438f6c0a584bdcaa4886e5a2baa26fe320b456169c6b8c5bad"
         )
 
         assertSnapshot(
             named: "simple-border-editor",
             of: BorderLayerControls(params: BorderLayerParams()) { _ in },
             size: CGSize(width: 350, height: 240),
-            expectedSHA256: "a0f857e5eec8286606e98b616d6e23dd73fcf8de87a466f07ed55444a1aa9593"
+            expectedSHA256: "45fad6caed71969b0e4260b985a7531563fde76f6e3f5033ec9023c649b52d36"
         )
     }
 

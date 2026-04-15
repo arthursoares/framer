@@ -45,20 +45,48 @@ private struct InspectorSplitView: NSViewRepresentable {
         var hasAppliedInitialSidebarWidth = false
 
         func splitView(_ splitView: NSSplitView, constrainSplitPosition proposedPosition: CGFloat, ofSubviewAt dividerIndex: Int) -> CGFloat {
-            let minPosition = splitView.bounds.width - widthPolicy.maximumWidth - splitView.dividerThickness
-            let maxPosition = splitView.bounds.width - widthPolicy.minimumWidth - splitView.dividerThickness
-            return min(max(proposedPosition, minPosition), maxPosition)
+            let proposedSidebarWidth = splitView.bounds.width - proposedPosition - splitView.dividerThickness
+            return widthPolicy.dividerPosition(
+                forTotalWidth: splitView.bounds.width,
+                dividerThickness: splitView.dividerThickness,
+                proposedSidebarWidth: proposedSidebarWidth
+            )
         }
 
         func applyInitialSidebarWidthIfNeeded(to splitView: NSSplitView) {
-            guard !hasAppliedInitialSidebarWidth, splitView.window != nil, splitView.arrangedSubviews.count == 2, splitView.bounds.width > 0 else {
+            guard !hasAppliedInitialSidebarWidth, splitView.arrangedSubviews.count == 2, splitView.bounds.width > 0 else {
                 return
             }
 
-            let desiredPosition = splitView.bounds.width - widthPolicy.idealWidth - splitView.dividerThickness
-            let clampedPosition = self.splitView(splitView, constrainSplitPosition: desiredPosition, ofSubviewAt: 0)
-            splitView.setPosition(clampedPosition, ofDividerAt: 0)
+            let desiredPosition = widthPolicy.dividerPosition(
+                forTotalWidth: splitView.bounds.width,
+                dividerThickness: splitView.dividerThickness,
+                proposedSidebarWidth: widthPolicy.idealWidth
+            )
+            splitView.setPosition(desiredPosition, ofDividerAt: 0)
             hasAppliedInitialSidebarWidth = true
+        }
+
+        func enforceSidebarWidthBoundsIfNeeded(to splitView: NSSplitView) {
+            guard hasAppliedInitialSidebarWidth, splitView.arrangedSubviews.count == 2, splitView.bounds.width > 0 else {
+                return
+            }
+
+            let currentSidebarWidth = splitView.arrangedSubviews[1].frame.width
+            guard let adjustedPosition = widthPolicy.adjustedDividerPosition(
+                forTotalWidth: splitView.bounds.width,
+                dividerThickness: splitView.dividerThickness,
+                currentSidebarWidth: currentSidebarWidth
+            ) else {
+                return
+            }
+
+            splitView.setPosition(adjustedPosition, ofDividerAt: 0)
+        }
+
+        func synchronizeSidebarWidthIfNeeded(to splitView: NSSplitView) {
+            applyInitialSidebarWidthIfNeeded(to: splitView)
+            enforceSidebarWidthBoundsIfNeeded(to: splitView)
         }
     }
 
@@ -73,7 +101,9 @@ private struct InspectorSplitView: NSViewRepresentable {
         splitView.dividerStyle = .thin
         splitView.delegate = context.coordinator
         splitView.onLayout = { [weak coordinator = context.coordinator] splitView in
-            coordinator?.applyInitialSidebarWidthIfNeeded(to: splitView)
+            DispatchQueue.main.async {
+                coordinator?.synchronizeSidebarWidthIfNeeded(to: splitView)
+            }
         }
 
         let canvasController = context.coordinator.canvasController
@@ -90,9 +120,7 @@ private struct InspectorSplitView: NSViewRepresentable {
 
         splitView.addArrangedSubview(canvasController.view)
         splitView.addArrangedSubview(inspectorController.view)
-
-        let widthPolicy = SidebarLayoutPolicy.default
-        inspectorController.view.setFrameSize(NSSize(width: widthPolicy.idealWidth, height: 0))
+        inspectorController.view.setFrameSize(NSSize(width: context.coordinator.widthPolicy.idealWidth, height: 0))
 
         splitView.setHoldingPriority(.defaultLow, forSubviewAt: 0)
         splitView.setHoldingPriority(.defaultHigh, forSubviewAt: 1)
@@ -108,7 +136,7 @@ private struct InspectorSplitView: NSViewRepresentable {
         inspectorController.rootView = AnyView(InspectorView().environment(appState))
 
         context.coordinator.widthPolicy = .default
-        context.coordinator.applyInitialSidebarWidthIfNeeded(to: splitView)
+        context.coordinator.synchronizeSidebarWidthIfNeeded(to: splitView)
     }
 }
 

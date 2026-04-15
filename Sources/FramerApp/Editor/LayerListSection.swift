@@ -1681,20 +1681,16 @@ struct BorderLayerControls: View {
                     Slider(value: thicknessValue, in: thicknessRange)
                         .tint(Color.accentDim)
                 } trailingValue: {
-                    HStack(spacing: Spacing.xs) {
+                    SidebarTrailingUnitCluster(unit: LocalizedStringKey(thicknessMode.rawValue)) {
                         TextField("", value: thicknessValue, format: .number)
                             .simpleLayerEditorInputStyle(accessibilityLabel: "Thickness")
                             .monospacedDigit()
-
-                        Text(thicknessMode.rawValue)
-                            .font(AppFont.mono(9))
-                            .foregroundStyle(Color.text3)
-                            .frame(width: SimpleLayerEditorLayout.suffixWidth, alignment: .leading)
                     }
                 }
             }
 
-            ColorPickerWithHex("Color", selection: colorBinding)
+            ColorPickerWithHex("", selection: colorBinding)
+                .denseControlRow("Color")
         }
         .onChange(of: params.thickness) { _, newThickness in
             thicknessMode = Self.thicknessMode(for: newThickness)
@@ -1759,15 +1755,10 @@ struct PaddingLayerControls: View {
                 Slider(value: thicknessBinding, in: 0...400)
                     .tint(Color.accentDim)
             } trailingValue: {
-                HStack(spacing: Spacing.xs) {
+                SidebarTrailingUnitCluster(unit: "px") {
                     TextField("", value: thicknessBinding, format: .number)
                         .simpleLayerEditorInputStyle(accessibilityLabel: "Thickness")
                         .monospacedDigit()
-
-                    Text("px")
-                        .font(AppFont.mono(9))
-                        .foregroundStyle(Color.text3)
-                        .frame(width: SimpleLayerEditorLayout.suffixWidth, alignment: .leading)
                 }
             }
 
@@ -1886,23 +1877,23 @@ struct CanvasLayerControls: View {
     private var pixelFields: some View {
         SidebarCompoundControlBlock {
             SidebarControlRow("Width") {
-                TextField("", value: widthBinding, format: .number)
-                    .simpleLayerEditorInputStyle(width: nil, accessibilityLabel: "Width")
-                    .monospacedDigit()
+                EmptyView()
             } trailingValue: {
-                Text("px")
-                    .font(AppFont.mono(9))
-                    .foregroundStyle(Color.text3)
+                SidebarTrailingUnitCluster(unit: "px") {
+                    TextField("", value: widthBinding, format: .number)
+                        .simpleLayerEditorInputStyle(accessibilityLabel: "Width")
+                        .monospacedDigit()
+                }
             }
         } secondary: {
             SidebarControlRow("Height") {
-                TextField("", value: heightBinding, format: .number)
-                    .simpleLayerEditorInputStyle(width: nil, accessibilityLabel: "Height")
-                    .monospacedDigit()
+                EmptyView()
             } trailingValue: {
-                Text("px")
-                    .font(AppFont.mono(9))
-                    .foregroundStyle(Color.text3)
+                SidebarTrailingUnitCluster(unit: "px") {
+                    TextField("", value: heightBinding, format: .number)
+                        .simpleLayerEditorInputStyle(accessibilityLabel: "Height")
+                        .monospacedDigit()
+                }
             }
         }
     }
@@ -1925,14 +1916,14 @@ struct CanvasLayerControls: View {
                 }
             } secondary: {
                 SidebarControlRow("DPI") {
-                    TextField("", value: $dpi, format: .number)
-                        .simpleLayerEditorInputStyle(width: nil, accessibilityLabel: "DPI")
-                        .monospacedDigit()
-                        .onChange(of: dpi) { _, _ in syncPhysicalToPixels() }
+                    EmptyView()
                 } trailingValue: {
-                    Text("dpi")
-                        .font(AppFont.mono(9))
-                        .foregroundStyle(Color.text3)
+                    SidebarTrailingUnitCluster(unit: "dpi") {
+                        TextField("", value: $dpi, format: .number)
+                            .simpleLayerEditorInputStyle(accessibilityLabel: "DPI")
+                            .monospacedDigit()
+                            .onChange(of: dpi) { _, _ in syncPhysicalToPixels() }
+                    }
                 }
             }
 
@@ -1940,25 +1931,25 @@ struct CanvasLayerControls: View {
 
             SidebarCompoundControlBlock {
                 SidebarControlRow("Width") {
-                    TextField("", value: $widthPhysical, format: .number.precision(.fractionLength(1)))
-                        .simpleLayerEditorInputStyle(width: nil, accessibilityLabel: "Width")
-                        .monospacedDigit()
-                        .onChange(of: widthPhysical) { _, _ in syncPhysicalToPixels() }
+                    EmptyView()
                 } trailingValue: {
-                    Text(physicalUnit.rawValue)
-                        .font(AppFont.mono(9))
-                        .foregroundStyle(Color.text3)
+                    SidebarTrailingUnitCluster(unit: LocalizedStringKey(physicalUnit.rawValue)) {
+                        TextField("", value: $widthPhysical, format: .number.precision(.fractionLength(1)))
+                            .simpleLayerEditorInputStyle(accessibilityLabel: "Width")
+                            .monospacedDigit()
+                            .onChange(of: widthPhysical) { _, _ in syncPhysicalToPixels() }
+                    }
                 }
             } secondary: {
                 SidebarControlRow("Height") {
-                    TextField("", value: $heightPhysical, format: .number.precision(.fractionLength(1)))
-                        .simpleLayerEditorInputStyle(width: nil, accessibilityLabel: "Height")
-                        .monospacedDigit()
-                        .onChange(of: heightPhysical) { _, _ in syncPhysicalToPixels() }
+                    EmptyView()
                 } trailingValue: {
-                    Text(physicalUnit.rawValue)
-                        .font(AppFont.mono(9))
-                        .foregroundStyle(Color.text3)
+                    SidebarTrailingUnitCluster(unit: LocalizedStringKey(physicalUnit.rawValue)) {
+                        TextField("", value: $heightPhysical, format: .number.precision(.fractionLength(1)))
+                            .simpleLayerEditorInputStyle(accessibilityLabel: "Height")
+                            .monospacedDigit()
+                            .onChange(of: heightPhysical) { _, _ in syncPhysicalToPixels() }
+                    }
                 }
             }
         }
@@ -2102,15 +2093,23 @@ struct ResizeLayerControls: View {
     var body: some View {
         SidebarCompoundControlBlock {
             SidebarControlRow("Max Width") {
-                TextField("", value: maxWidthBinding, format: .number)
-                    .simpleLayerEditorInputStyle(width: nil, accessibilityLabel: "Max Width")
-                    .monospacedDigit()
+                EmptyView()
+            } trailingValue: {
+                SidebarTrailingUnitCluster(unit: "px") {
+                    TextField("", value: maxWidthBinding, format: .number)
+                        .simpleLayerEditorInputStyle(accessibilityLabel: "Max Width")
+                        .monospacedDigit()
+                }
             }
         } secondary: {
             SidebarControlRow("Max Height") {
-                TextField("", value: maxHeightBinding, format: .number)
-                    .simpleLayerEditorInputStyle(width: nil, accessibilityLabel: "Max Height")
-                    .monospacedDigit()
+                EmptyView()
+            } trailingValue: {
+                SidebarTrailingUnitCluster(unit: "px") {
+                    TextField("", value: maxHeightBinding, format: .number)
+                        .simpleLayerEditorInputStyle(accessibilityLabel: "Max Height")
+                        .monospacedDigit()
+                }
             }
         }
     }
@@ -2288,6 +2287,8 @@ struct OverlayLayerControls: View {
     var params: OverlayLayerParams
     var onChange: (OverlayLayerParams) -> Void
 
+    private let metrics = SidebarMetrics()
+
     @State private var availableOverlays: [TextureFrameProvider.OverlayInfo] = []
     @State private var selectedKind: OverlayKind = .frame
 
@@ -2375,6 +2376,7 @@ struct OverlayLayerControls: View {
                 }
                 .padding(.vertical, 4)
             }
+            .frame(maxWidth: metrics.containedPreviewMaxWidth, alignment: .leading)
         }
     }
 
@@ -2414,6 +2416,7 @@ struct OverlayLayerControls: View {
             }
             .buttonStyle(.plain)
             .foregroundStyle(Color.text2)
+            .frame(maxWidth: metrics.containedPreviewMaxWidth, alignment: .leading)
         }
     }
 
@@ -3692,6 +3695,8 @@ struct LUTLayerControls: View {
     var params: LUTLayerParams
     var onChange: (LUTLayerParams) -> Void
 
+    private let metrics = SidebarMetrics()
+
     @State private var availableLUTs: [LUTInfo] = []
     @State private var thumbnailCache: [String: CGImage] = [:]
     @State private var renamingLUT: LUTInfo?
@@ -3804,7 +3809,7 @@ struct LUTLayerControls: View {
                     .font(.caption)
                     .foregroundStyle(Color.text3)
             }
-            .frame(maxWidth: .infinity)
+            .frame(maxWidth: denseContainedContentWidth, alignment: .leading)
             .padding(.vertical, 16)
             .denseControlRow("Preview")
         } else {
@@ -3816,6 +3821,7 @@ struct LUTLayerControls: View {
                 }
                 .padding(.vertical, 4)
             }
+            .frame(maxWidth: denseContainedContentWidth, alignment: .leading)
             .denseControlRow("Preview")
         }
     }
@@ -3853,7 +3859,12 @@ struct LUTLayerControls: View {
             .buttonStyle(.plain)
             .foregroundStyle(Color.text2)
         }
+        .frame(maxWidth: denseContainedContentWidth, alignment: .leading)
         .denseControlRow("Library")
+    }
+
+    private var denseContainedContentWidth: CGFloat {
+        metrics.containedPreviewMaxWidth - metrics.controlLabelWidth - metrics.controlColumnSpacing
     }
 
     private func lutThumb(_ lut: LUTInfo) -> some View {
