@@ -3194,6 +3194,7 @@ struct DenseSliderControlRow: View {
     let title: LocalizedStringKey
     @Binding var value: Double
     let range: ClosedRange<Double>
+    var accessibilityLabel: LocalizedStringKey? = nil
     let step: Double
     var suffix: String = ""
     var inputWidth: CGFloat = 55
@@ -3203,6 +3204,7 @@ struct DenseSliderControlRow: View {
             StyledSlider(
                 value: $value,
                 range: range,
+                accessibilityLabel: accessibilityLabel ?? title,
                 step: step,
                 suffix: suffix,
                 inputWidth: inputWidth
