@@ -1596,6 +1596,18 @@ private extension View {
     }
 }
 
+private struct SimpleLayerEditorDivider: View {
+    private let metrics = SidebarMetrics()
+
+    var body: some View {
+        Rectangle()
+            .fill(Color.borderDefault)
+            .frame(height: metrics.controlStackDividerThickness)
+            .padding(.horizontal, metrics.controlStackDividerInset)
+            .accessibilityHidden(true)
+    }
+}
+
 struct BorderLayerControls: View {
     var params: BorderLayerParams
     var onChange: (BorderLayerParams) -> Void
@@ -1686,7 +1698,7 @@ struct PaddingLayerControls: View {
     var onChange: (PaddingLayerParams) -> Void
 
     var body: some View {
-        VStack(alignment: .leading, spacing: SimpleLayerEditorLayout.groupSpacing) {
+        VStack(alignment: .leading, spacing: 0) {
             SidebarControlRow("Thickness") {
                 Slider(value: thicknessBinding, in: 0...400)
                     .tint(Color.accentDim)
@@ -1702,6 +1714,8 @@ struct PaddingLayerControls: View {
                         .frame(width: SimpleLayerEditorLayout.suffixWidth, alignment: .leading)
                 }
             }
+
+            SimpleLayerEditorDivider()
 
             LayerFillPicker(fill: params.fill) { newFill in
                 var p = params
@@ -1754,7 +1768,7 @@ struct CanvasLayerControls: View {
     }
 
     var body: some View {
-        VStack(alignment: .leading, spacing: SimpleLayerEditorLayout.groupSpacing) {
+        VStack(alignment: .leading, spacing: 0) {
             SidebarCompoundControlBlock {
                 SidebarControlRow("Preset") {
                     presetPicker
@@ -1772,12 +1786,19 @@ struct CanvasLayerControls: View {
                 }
             }
 
+            SimpleLayerEditorDivider()
+
             if sizeMode == .pixels {
                 pixelFields
             } else {
                 physicalFields
+
+                SimpleLayerEditorDivider()
+
                 pixelSummary
             }
+
+            SimpleLayerEditorDivider()
 
             LayerFillPicker(fill: params.fill) { newFill in
                 var p = params
@@ -1827,7 +1848,7 @@ struct CanvasLayerControls: View {
     }
 
     private var physicalFields: some View {
-        VStack(alignment: .leading, spacing: SimpleLayerEditorLayout.groupSpacing) {
+        VStack(alignment: .leading, spacing: 0) {
             SidebarCompoundControlBlock {
                 SidebarControlRow("Unit") {
                     Picker("Unit", selection: $physicalUnit) {
@@ -1854,6 +1875,8 @@ struct CanvasLayerControls: View {
                         .foregroundStyle(Color.text3)
                 }
             }
+
+            SimpleLayerEditorDivider()
 
             SidebarCompoundControlBlock {
                 SidebarControlRow("Width") {
@@ -2053,7 +2076,7 @@ struct AspectRatioLayerControls: View {
     }
 
     var body: some View {
-        VStack(alignment: .leading, spacing: SimpleLayerEditorLayout.groupSpacing) {
+        VStack(alignment: .leading, spacing: 0) {
             SidebarControlRow("Ratio") {
                 Picker("Ratio", selection: ratioBinding) {
                     ForEach(presets, id: \.label) { preset in
@@ -2065,6 +2088,8 @@ struct AspectRatioLayerControls: View {
             }
 
             if isCustom {
+                SimpleLayerEditorDivider()
+
                 SidebarCompoundControlBlock {
                     SidebarControlRow("Width") {
                         TextField("W", value: Binding(
@@ -2085,6 +2110,8 @@ struct AspectRatioLayerControls: View {
                     }
                 }
             }
+
+            SimpleLayerEditorDivider()
 
             SidebarCompoundControlBlock {
                 SidebarControlRow("Offset X") {
@@ -2429,7 +2456,7 @@ struct LayerFillPicker: View {
     }()
 
     var body: some View {
-        VStack(alignment: .leading, spacing: SimpleLayerEditorLayout.groupSpacing) {
+        VStack(alignment: .leading, spacing: 0) {
             SidebarControlRow("Fill") {
                 Picker("Fill", selection: fillModeBinding) {
                     Text("Solid Color").tag(0)
@@ -2441,6 +2468,8 @@ struct LayerFillPicker: View {
             }
 
             if case .color(let c) = fill {
+                SimpleLayerEditorDivider()
+
                 ColorPickerWithHex("Fill Color", selection: Binding(
                     get: { Color(nsColor: NSColor(cgColor: c.cgColor) ?? .white) },
                     set: { newColor in
@@ -2452,6 +2481,8 @@ struct LayerFillPicker: View {
             }
 
             if let params = fill.gradientParams {
+                SimpleLayerEditorDivider()
+
                 SidebarCompoundControlBlock {
                     SidebarControlRow("Saturation") {
                         Slider(value: saturationBinding(params), in: -50...50)
