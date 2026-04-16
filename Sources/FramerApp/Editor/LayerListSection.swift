@@ -3570,49 +3570,29 @@ struct DitherLayerControls: View {
                 }
                 .pickerStyle(.menu)
 
-                ForEach(Array(colors.enumerated()), id: \.offset) { idx, color in
-                    HStack(spacing: metrics.controlColumnSpacing) {
-                        ColorPickerWithHex("Colour \(idx + 1)", selection: Binding(
-                            get: { Color(nsColor: NSColor(cgColor: color.cgColor) ?? .white) },
-                            set: { newColor in
-                                guard let hex = newColor.hexString,
-                                      let codable = try? CodableColor(hex: hex) else { return }
-                                var p = params
-                                var next = colors
-                                next[idx] = codable
-                                p.colorMode = .palette(next)
-                                onChange(p)
-                            }
-                        ))
-                        Button {
-                            guard colors.count > 2 else { return }
-                            var p = params
-                            var next = colors
-                            next.remove(at: idx)
-                            p.colorMode = .palette(next)
-                            onChange(p)
-                        } label: {
-                            Image(systemName: "minus.circle")
-                        }
-                        .buttonStyle(.borderless)
-                        .disabled(colors.count <= 2)
-                    }
-                }
-
-                if colors.count < DitherColorMode.MAX_PALETTE_COLORS {
-                    Button {
-                        var p = params
-                        var next = colors
-                        next.append(colors.last ?? CodableColor(unchecked: "#000000"))
-                        p.colorMode = .palette(next)
-                        onChange(p)
-                    } label: {
-                        Label("Add Colour", systemImage: "plus.circle")
-                    }
-                    .buttonStyle(.borderless)
-                }
+                SidebarPaletteEditor(
+                    colors: paletteBinding(currentColors: colors),
+                    maxColors: DitherColorMode.MAX_PALETTE_COLORS,
+                    minColors: 2,
+                    defaultNewColor: colors.last ?? CodableColor(unchecked: "#000000")
+                )
             }
         }
+    }
+
+    /// Adapter that turns `params.colorMode = .palette([...])` into a
+    /// `Binding<[CodableColor]>` for `SidebarPaletteEditor`. The captured
+    /// `colors` snapshot is the getter's source of truth each render pass;
+    /// the setter routes updates back through `onChange`.
+    private func paletteBinding(currentColors colors: [CodableColor]) -> Binding<[CodableColor]> {
+        Binding(
+            get: { colors },
+            set: { newColors in
+                var p = params
+                p.colorMode = .palette(newColors)
+                onChange(p)
+            }
+        )
     }
 }
 
