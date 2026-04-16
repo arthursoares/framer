@@ -6,6 +6,22 @@ import FramerCore
 
 @MainActor
 final class SidebarLayoutContainmentTests: XCTestCase {
+    func test_readoutAndEditableRows_shareTrailingBlockWidth() {
+        let metrics = SidebarMetrics()
+        let editableBlockWidth = metrics.controlValueFieldWidth
+            + metrics.controlTrailingClusterSpacing
+            + metrics.controlUnitSuffixWidth
+        let readoutBlockWidth = metrics.controlReadoutWidth
+            + metrics.controlTrailingClusterSpacing
+            + metrics.controlUnitSuffixWidth
+
+        XCTAssertEqual(
+            editableBlockWidth,
+            readoutBlockWidth,
+            "Editable and read-only trailing clusters must occupy identical width so labels align across adjacent rows"
+        )
+    }
+
     func test_overlayLayerControls_fitWithinSidebarShellWidth() {
         assertFitsSidebarWidth(
             OverlayLayerControls(params: OverlayLayerParams()) { _ in },
