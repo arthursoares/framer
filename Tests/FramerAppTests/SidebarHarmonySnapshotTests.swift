@@ -113,7 +113,7 @@ final class SidebarHarmonySnapshotTests: XCTestCase {
             named: "output-rows-jpeg",
             of: makeOutputRows(outputFormat: .jpeg(quality: 85), stripMetadata: false),
             size: CGSize(width: 350, height: 260),
-            expectedSHA256: "8245b324274aed1f1b3e036097315f75e851313dfb75cb964b30010b42157ad5"
+            expectedSHA256: "cdc0fb9707e9347fe90d47d7fd7a89879cdb5b52304507c672710eedc66b3ef6"
         )
     }
 
@@ -138,14 +138,14 @@ final class SidebarHarmonySnapshotTests: XCTestCase {
             named: "dense-caption-editor",
             of: CaptionLayerControls(params: CaptionLayerParams()) { _ in },
             size: CGSize(width: 350, height: 760),
-            expectedSHA256: "ea1e552d1c1aca1557bc3a46b75b20c4d2c8f985f9311132e61e49568f64cb0b"
+            expectedSHA256: "9398aac1ff4bbe2fc688799ce4f826ec80c5cdc2b252ba9e8593fc89f7175364"
         )
 
         assertSnapshot(
             named: "dense-dither-editor",
             of: DitherLayerControls(params: DitherLayerParams()) { _ in },
             size: CGSize(width: 350, height: 900),
-            expectedSHA256: "83ec8c2965f4dfb08374f3f79af95cc150717f04103203a2bbfb2cb3cc7318b6"
+            expectedSHA256: "e919551cdd4077a459c6ae57b07de1c65801f35cfb9b16b45b8c260ce3f9796e"
         )
     }
 
@@ -154,7 +154,7 @@ final class SidebarHarmonySnapshotTests: XCTestCase {
             named: "overlay-editor",
             of: OverlayLayerControls(params: OverlayLayerParams()) { _ in },
             size: CGSize(width: 350, height: 420),
-            expectedSHA256: "75be109bde96abb57450d0f4890bb455f646cc22d5926dba0b92b5bb2ef22d6d"
+            expectedSHA256: "a24f82d5839c970ef26f25605c23cea6da0ae04b484d0f247068c1b6b62f5dc5"
         )
     }
 
@@ -189,12 +189,24 @@ final class SidebarHarmonySnapshotTests: XCTestCase {
             } secondary: {
                 if let jpegQuality = InspectorOutputControlState.jpegQuality(for: outputFormat) {
                     SidebarControlRow("Quality") {
-                        StyledUnitSlider(
-                            value: .constant(jpegQuality),
-                            range: 60...100,
-                            step: 5,
-                            unit: "%"
-                        )
+                        Slider(value: .constant(jpegQuality), in: 60...100, step: 5)
+                            .tint(Color.accentDim)
+                    } trailingValue: {
+                        SidebarTrailingUnitCluster(unit: "%") {
+                            TextField("", value: .constant(jpegQuality), format: .number)
+                                .textFieldStyle(.plain)
+                                .font(AppFont.numericInput)
+                                .foregroundStyle(Color.text1)
+                                .multilineTextAlignment(.trailing)
+                                .padding(.horizontal, 6)
+                                .padding(.vertical, 3)
+                                .background(Color.surface3, in: RoundedRectangle(cornerRadius: CornerRadius.sm))
+                                .overlay(
+                                    RoundedRectangle(cornerRadius: CornerRadius.sm)
+                                        .stroke(Color.borderDefault, lineWidth: 1)
+                                )
+                                .monospacedDigit()
+                        }
                     }
                 }
             }

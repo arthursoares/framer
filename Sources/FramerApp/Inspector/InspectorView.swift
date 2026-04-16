@@ -140,13 +140,26 @@ struct InspectorView: View {
             } secondary: {
                 if jpegQuality != nil {
                     SidebarControlRow("Quality") {
-                        StyledUnitSlider(
-                            value: jpegQualityBinding,
-                            range: 60...100,
-                            accessibilityLabel: "Quality",
-                            step: 5,
-                            unit: "%"
-                        )
+                        Slider(value: jpegQualityBinding, in: 60...100, step: 5)
+                            .tint(Color.accentDim)
+                            .accessibilityLabel(Text("Quality"))
+                    } trailingValue: {
+                        SidebarTrailingUnitCluster(unit: "%") {
+                            TextField("", value: jpegQualityBinding, format: .number)
+                                .textFieldStyle(.plain)
+                                .font(AppFont.numericInput)
+                                .foregroundStyle(Color.text1)
+                                .multilineTextAlignment(.trailing)
+                                .padding(.horizontal, 6)
+                                .padding(.vertical, 3)
+                                .background(Color.surface3, in: RoundedRectangle(cornerRadius: CornerRadius.sm))
+                                .overlay(
+                                    RoundedRectangle(cornerRadius: CornerRadius.sm)
+                                        .stroke(Color.borderDefault, lineWidth: 1)
+                                )
+                                .monospacedDigit()
+                                .accessibilityLabel(Text("Quality"))
+                        }
                     }
                 }
             }
