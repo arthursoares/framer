@@ -2258,7 +2258,7 @@ struct OrientationLayerControls: View {
                     Text(target.rawValue.capitalized).tag(target)
                 }
             }
-            .pickerStyle(.segmented)
+            .pickerStyle(.menu)
             .labelsHidden()
         }
     }
@@ -2334,7 +2334,7 @@ struct OverlayLayerControls: View {
                 Text("Light Leaks").tag(OverlayKind.lightLeak)
                 Text("Wet Plate").tag(OverlayKind.wetPlate)
             }
-            .pickerStyle(.segmented)
+            .pickerStyle(.menu)
             .labelsHidden()
             .onChange(of: selectedKind) { _, newKind in
                 var p = params
