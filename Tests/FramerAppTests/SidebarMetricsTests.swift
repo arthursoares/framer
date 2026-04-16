@@ -29,6 +29,24 @@ final class SidebarMetricsTests: XCTestCase {
         XCTAssertEqual(metrics.controlValueFieldWidth, 55)
     }
 
+    func test_defaultMetrics_exposeReadoutTokens() {
+        let metrics = SidebarMetrics()
+
+        XCTAssertEqual(metrics.controlReadoutWidth, 55)
+        XCTAssertEqual(
+            metrics.controlReadoutWidth,
+            metrics.controlValueFieldWidth,
+            "Read-only readouts must share editable field width so rows align"
+        )
+    }
+
+    func test_defaultMetrics_exposeSegmentedAndUnitPickerWidths() {
+        let metrics = SidebarMetrics()
+
+        XCTAssertEqual(metrics.controlSegmentedModeWidth, 80)
+        XCTAssertEqual(metrics.controlUnitPickerWidth, 100)
+    }
+
     func test_defaultMetrics_definePreviewContainmentInsets() {
         let metrics = SidebarMetrics()
 
