@@ -2381,15 +2381,14 @@ struct OverlayLayerControls: View {
     }
 
     private var opacityControl: some View {
-        SidebarControlRow("Opacity") {
-            StyledUnitSlider(
-                value: opacityBinding,
-                range: 0...100,
-                accessibilityLabel: "Opacity",
-                step: 1,
-                unit: "%"
-            )
-        }
+        DenseSliderControlRow(
+            title: "Opacity",
+            value: opacityBinding,
+            range: 0...100,
+            accessibilityLabel: "Opacity",
+            step: 1,
+            unit: "%"
+        )
     }
 
     private var openFolderButton: some View {
@@ -3172,23 +3171,27 @@ struct DenseSliderControlRow: View {
 
     var body: some View {
         SidebarControlRow(title) {
-            if let unit {
-                StyledUnitSlider(
-                    value: $value,
-                    range: range,
-                    accessibilityLabel: accessibilityLabel ?? title,
-                    step: step,
-                    unit: unit
-                )
-            } else {
-                StyledSlider(
-                    value: $value,
-                    range: range,
-                    accessibilityLabel: accessibilityLabel ?? title,
-                    step: step
-                )
+            Slider(value: snappedBinding, in: range)
+                .tint(Color.accentDim)
+                .accessibilityLabel(Text(accessibilityLabel ?? title))
+        } trailingValue: {
+            SidebarTrailingUnitCluster(unit: unit ?? "") {
+                TextField("", value: snappedBinding, format: .number)
+                    .simpleLayerEditorInputStyle()
+                    .monospacedDigit()
+                    .accessibilityLabel(Text(accessibilityLabel ?? title))
             }
         }
+    }
+
+    /// Shared snap-to-step binding — both the slider (drag) and the text
+    /// field (typed entry) route through it so their values stay locked to
+    /// `step` and within `range`.
+    private var snappedBinding: Binding<Double> {
+        Binding(
+            get: { value },
+            set: { value = StyledSliderValueResolver.constrain($0, range: range, step: step) }
+        )
     }
 }
 
