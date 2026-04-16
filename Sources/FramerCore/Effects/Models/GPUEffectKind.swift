@@ -104,12 +104,24 @@ public enum GPUEffectKind: String, Codable, Hashable, Sendable, CaseIterable {
     }
 
     /// Common adjustments (brightness / contrast / saturation / hueRotation /
-    /// gamma). All bucket fragments now wrap their source sample in
-    /// `applyCommonAdjustments` (see ShaderCommon.h), so flipping this true
-    /// surfaces the standard adjustment controls in the sidebar. Sharpness is
-    /// not consumed (would require neighbour samples per-shader); leave the
-    /// uniform field for future use.
-    public var usesCommonAdjustments: Bool { true }
+    /// gamma). All bucket fragments EXCEPT pixelSort wrap their source sample
+    /// in `applyCommonAdjustments` (see ShaderCommon.h); flipping this true
+    /// surfaces the standard adjustment controls in the sidebar. Sharpness
+    /// is not consumed (would require neighbour samples per-shader); the
+    /// uniform field stays for future use.
+    ///
+    /// PixelSort returns false — Effects/Metal/PixelSort.metal marks its
+    /// `colorBlock` uniform as unused and never calls
+    /// `applyCommonAdjustments(u.common, …)`, so the common-adjustment sliders
+    /// would show as inert controls (the same pattern as the Sharpness slider
+    /// we removed in pass 3). Wire a colour pre-pass into both GPU and CPU
+    /// pixel-sort paths before flipping this to true.
+    public var usesCommonAdjustments: Bool {
+        switch self {
+        case .pixelSort: return false
+        default: return true
+        }
+    }
 
     /// SF Symbol name for the layer-add menu entry.
     public var menuIcon: String {
