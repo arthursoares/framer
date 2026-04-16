@@ -12,6 +12,9 @@ struct SidebarMetrics: Sendable, Equatable {
     let controlTrailingClusterSpacing: CGFloat
     let controlUnitSuffixWidth: CGFloat
     let controlValueFieldWidth: CGFloat
+    let controlReadoutWidth: CGFloat
+    let controlSegmentedModeWidth: CGFloat
+    let controlUnitPickerWidth: CGFloat
     let controlStackSpacing: CGFloat
     let fullWidthRowHorizontalInset: CGFloat
     let widthPolicy: SidebarLayoutPolicy
@@ -29,6 +32,9 @@ struct SidebarMetrics: Sendable, Equatable {
         controlTrailingClusterSpacing: CGFloat = 6,
         controlUnitSuffixWidth: CGFloat = 24,
         controlValueFieldWidth: CGFloat = 55,
+        controlReadoutWidth: CGFloat = 55,
+        controlSegmentedModeWidth: CGFloat = 80,
+        controlUnitPickerWidth: CGFloat = 100,
         controlStackSpacing: CGFloat = 0,
         fullWidthRowHorizontalInset: CGFloat = 12
     ) {
@@ -44,6 +50,9 @@ struct SidebarMetrics: Sendable, Equatable {
         self.controlTrailingClusterSpacing = controlTrailingClusterSpacing
         self.controlUnitSuffixWidth = controlUnitSuffixWidth
         self.controlValueFieldWidth = controlValueFieldWidth
+        self.controlReadoutWidth = controlReadoutWidth
+        self.controlSegmentedModeWidth = controlSegmentedModeWidth
+        self.controlUnitPickerWidth = controlUnitPickerWidth
         self.controlStackSpacing = controlStackSpacing
         self.fullWidthRowHorizontalInset = fullWidthRowHorizontalInset
     }
@@ -73,6 +82,9 @@ struct SidebarMetrics: Sendable, Equatable {
             controlTrailingClusterSpacing: controlTrailingClusterSpacing,
             controlUnitSuffixWidth: controlUnitSuffixWidth,
             controlValueFieldWidth: controlValueFieldWidth,
+            controlReadoutWidth: controlReadoutWidth,
+            controlSegmentedModeWidth: controlSegmentedModeWidth,
+            controlUnitPickerWidth: controlUnitPickerWidth,
             controlStackSpacing: controlStackSpacing,
             fullWidthRowHorizontalInset: fullWidthRowHorizontalInset
         )

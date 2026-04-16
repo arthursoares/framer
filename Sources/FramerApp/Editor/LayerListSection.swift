@@ -1572,18 +1572,8 @@ struct GPUEffectLayerControls: View {
 
 // MARK: - BorderLayerControls
 
-private enum SimpleLayerEditorLayout {
-    static let groupSpacing = SidebarMetrics().expandedBodyInset
-    static let fieldWidth = 55.0
-    static let compactFieldWidth = 50.0
-    static let suffixWidth = 24.0
-    static let valueTextWidth = 36.0
-    static let thicknessModeWidth = 80.0
-    static let unitPickerWidth = 100.0
-}
-
 private extension View {
-    func simpleLayerEditorInputStyle(width: CGFloat? = SimpleLayerEditorLayout.fieldWidth) -> some View {
+    func simpleLayerEditorInputStyle(width: CGFloat? = SidebarMetrics().controlValueFieldWidth) -> some View {
         self
             .textFieldStyle(.plain)
             .font(AppFont.numericInput)
@@ -1599,7 +1589,7 @@ private extension View {
             )
     }
 
-    func simpleLayerEditorInputStyle(width: CGFloat? = SimpleLayerEditorLayout.fieldWidth, accessibilityLabel: String) -> some View {
+    func simpleLayerEditorInputStyle(width: CGFloat? = SidebarMetrics().controlValueFieldWidth, accessibilityLabel: String) -> some View {
         simpleLayerEditorInputStyle(width: width)
             .accessibilityLabel(Text(accessibilityLabel))
     }
@@ -1664,7 +1654,7 @@ struct BorderLayerControls: View {
     }
 
     var body: some View {
-        VStack(alignment: .leading, spacing: SimpleLayerEditorLayout.groupSpacing) {
+        VStack(alignment: .leading, spacing: SidebarMetrics().expandedBodyInset) {
             SidebarCompoundControlBlock {
                 SidebarControlRow("Mode") {
                     Picker("Thickness Mode", selection: $thicknessMode) {
@@ -1673,7 +1663,7 @@ struct BorderLayerControls: View {
                         }
                     }
                     .pickerStyle(.segmented)
-                    .frame(width: SimpleLayerEditorLayout.thicknessModeWidth)
+                    .frame(width: SidebarMetrics().controlSegmentedModeWidth)
                     .labelsHidden()
                 }
             } secondary: {
@@ -1908,7 +1898,7 @@ struct CanvasLayerControls: View {
                         }
                     }
                     .pickerStyle(.segmented)
-                    .frame(width: SimpleLayerEditorLayout.unitPickerWidth)
+                    .frame(width: SidebarMetrics().controlUnitPickerWidth)
                     .labelsHidden()
                     .onChange(of: physicalUnit) { oldUnit, newUnit in
                         convertUnit(from: oldUnit, to: newUnit)
@@ -2204,7 +2194,7 @@ struct AspectRatioLayerControls: View {
                         .font(AppFont.mono(10))
                         .foregroundStyle(Color.text3)
                         .monospacedDigit()
-                        .frame(width: SimpleLayerEditorLayout.valueTextWidth, alignment: .trailing)
+                        .frame(width: SidebarMetrics().controlReadoutWidth, alignment: .trailing)
                 }
             } secondary: {
                 SidebarControlRow("Offset Y") {
@@ -2215,7 +2205,7 @@ struct AspectRatioLayerControls: View {
                         .font(AppFont.mono(10))
                         .foregroundStyle(Color.text3)
                         .monospacedDigit()
-                        .frame(width: SimpleLayerEditorLayout.valueTextWidth, alignment: .trailing)
+                        .frame(width: SidebarMetrics().controlReadoutWidth, alignment: .trailing)
                 }
             }
         }
@@ -2584,7 +2574,7 @@ struct LayerFillPicker: View {
                             .tint(Color.accentDim)
                     } trailingValue: {
                         TextField("", value: saturationBinding(params), formatter: Self.signedFormatter)
-                            .simpleLayerEditorInputStyle(width: SimpleLayerEditorLayout.compactFieldWidth, accessibilityLabel: "Saturation")
+                            .simpleLayerEditorInputStyle(width: SidebarMetrics().controlValueFieldWidth, accessibilityLabel: "Saturation")
                             .monospacedDigit()
                     }
                 } secondary: {
@@ -2593,7 +2583,7 @@ struct LayerFillPicker: View {
                             .tint(Color.accentDim)
                     } trailingValue: {
                         TextField("", value: lightnessBinding(params), formatter: Self.signedFormatter)
-                            .simpleLayerEditorInputStyle(width: SimpleLayerEditorLayout.compactFieldWidth, accessibilityLabel: "Brightness")
+                            .simpleLayerEditorInputStyle(width: SidebarMetrics().controlValueFieldWidth, accessibilityLabel: "Brightness")
                             .monospacedDigit()
                     }
                 }
