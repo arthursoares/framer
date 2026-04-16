@@ -2,13 +2,13 @@ import SwiftUI
 import FramerCore
 
 struct ColorPickerWithHex: View {
-    let label: String
+    let label: LocalizedStringKey
     @Binding var selection: Color
     var onHexCommit: ((CodableColor) -> Void)?
     @State private var hexText: String = ""
     @State private var suppressSync = false
 
-    init(_ label: String, selection: Binding<Color>, onHexCommit: ((CodableColor) -> Void)? = nil) {
+    init(_ label: LocalizedStringKey, selection: Binding<Color>, onHexCommit: ((CodableColor) -> Void)? = nil) {
         self.label = label
         self._selection = selection
         self.onHexCommit = onHexCommit
@@ -32,7 +32,7 @@ struct ColorPickerWithHex: View {
                         .stroke(Color.borderDefault, lineWidth: 1)
                 )
                 .onSubmit { applyHex() }
-                .accessibilityLabel(Text("\(label) hex value"))
+                .accessibilityLabel(Text(label) + Text(" hex value"))
         }
         .onAppear { syncHexFromColor() }
         .onChange(of: selection) { _, _ in

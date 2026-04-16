@@ -205,21 +205,40 @@ public enum GlitchRenderer {
         }
     }
 
+    /// CPU counterpart of `psSortValue` in `Effects/Metal/PixelSort.metal`.
+    /// All three modes return a value in `[0, 1]` so the sort comparator
+    /// stays well-ordered and the threshold dial (also `[0, 1]`) has the
+    /// intended effect on every sort criterion.
+    ///
+    /// Pre-pass-3 this function had two bugs that made the CPU fallback
+    /// diverge from the GPU shader:
+    ///   - `.brightness` returned the Rec.709 luminance formula (same as
+    ///     `.luminance`). The GPU shader returns `max(r, g, b)`, so sorting
+    ///     preserved saturated colours on GPU but desaturated them on CPU.
+    ///   - `.hue` returned the raw HSV sector value in `[-1, 6)` instead of
+    ///     a normalised hue in `[0, 1]`. Negative scores (blue-dominant
+    ///     pixels) always fell below any positive threshold, leaving whole
+    ///     hue ranges unsorted.
     private static func pixelScore(at index: Int, in pixels: [UInt8], mode: PixelSortMode) -> Double {
         let r = Double(pixels[index]) / 255.0
         let g = Double(pixels[index + 1]) / 255.0
         let b = Double(pixels[index + 2]) / 255.0
         switch mode {
-        case .brightness, .luminance:
+        case .luminance:
             return (0.2126 * r) + (0.7152 * g) + (0.0722 * b)
+        case .brightness:
+            return max(r, max(g, b))
         case .hue:
             let maxValue = max(r, g, b)
             let minValue = min(r, g, b)
             let delta = maxValue - minValue
-            guard delta > 0 else { return 0 }
-            if maxValue == r { return ((g - b) / delta).truncatingRemainder(dividingBy: 6) }
-            if maxValue == g { return ((b - r) / delta) + 2 }
-            return ((r - g) / delta) + 4
+            guard delta > 1e-5 else { return 0 }
+            var h: Double
+            if      maxValue == r { h = (g - b) / delta }
+            else if maxValue == g { h = 2.0 + (b - r) / delta }
+            else                  { h = 4.0 + (r - g) / delta }
+            h /= 6.0
+            return h < 0 ? h + 1.0 : h
         }
     }
 
