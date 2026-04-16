@@ -51,7 +51,7 @@ struct PresetPreviewGrid: View {
                     PresetPreviewCard(
                         preset: preset,
                         isActive: appState.activePresetName == preset.name,
-                        thumbnail: appState.selectedPhoto != nil ? appState.presetThumbnails[preset.id] : nil,
+                        thumbnail: appState.selectedPhoto != nil ? appState.presetThumbnailCache.thumbnail(for: preset.id) : nil,
                         onTap: {
                             appState.currentConfig = preset.config
                             appState.activePresetName = preset.name
@@ -94,7 +94,7 @@ struct PresetPreviewGrid: View {
                             // surface the dead entry before the renderKey
                             // change fires `schedulePreviewRenders` and
                             // invalidates the whole cache.
-                            appState.presetThumbnails.removeValue(forKey: preset.id)
+                            appState.presetThumbnailCache.remove(presetID: preset.id)
                             appState.loadPresets()
                         } label: {
                             Label("Delete", systemImage: "trash")
@@ -124,7 +124,7 @@ struct PresetPreviewGrid: View {
             // Cancel in-flight work if the grid is torn down (section
             // collapse, window close, navigation). The @State Task would
             // otherwise keep running and write stale previews into
-            // appState.presetThumbnails from the background actor context.
+            // appState.presetThumbnailCache.thumbnails from the background actor context.
             renderTask?.cancel()
             renderTask = nil
         }
@@ -225,7 +225,7 @@ struct PresetPreviewGrid: View {
 
     // MARK: - Preview Rendering
 
-    /// Refreshes `appState.presetThumbnails` against the current render key.
+    /// Refreshes `appState.presetThumbnailCache.thumbnails` against the current render key.
     /// - If the key changed since the cache was last populated, all stale
     ///   thumbnails are dropped and every preset is re-rendered.
     /// - If the key matches (common case: user expanded/collapsed the Presets
@@ -243,17 +243,16 @@ struct PresetPreviewGrid: View {
         let presets = appState.presets
         let currentKey = renderKey
 
-        if appState.presetThumbnailsKey != currentKey {
+        if appState.presetThumbnailCache.key != currentKey {
             // Input changed (new photo, rotation, or preset list) — cache is
-            // stale. Drop everything and rebuild.
-            appState.presetThumbnails.removeAll()
-            appState.presetThumbnailsKey = currentKey
+            // stale. Drop everything and rebuild under the new key.
+            appState.presetThumbnailCache.resetKey(currentKey)
         }
 
         // Only render presets that don't already have a thumbnail cached.
         // This is what makes the section collapse/expand cheap: when the view
         // remounts with the same key, `missingPresets` is empty.
-        let missingPresets = presets.filter { appState.presetThumbnails[$0.id] == nil }
+        let missingPresets = presets.filter { appState.presetThumbnailCache.thumbnail(for: $0.id) == nil }
         guard !missingPresets.isEmpty else { return }
 
         let url = photo.url
@@ -292,7 +291,7 @@ struct PresetPreviewGrid: View {
                                 height: CGFloat(cgImage.height) / scale
                             ))
                             await MainActor.run {
-                                appState.presetThumbnails[preset.id] = preview
+                                appState.presetThumbnailCache.store(preview, for: preset.id)
                             }
                         } catch {
                             // Silently fail — card shows placeholder
