@@ -25,12 +25,7 @@ struct LayerListSection: View {
     @State private var dropTargetIndex: Int?
 
     var body: some View {
-        SidebarSection(metrics: SidebarMetrics(expandedBodyInset: 0)) {
-            Text("LAYERS (\(layers.count))")
-                .font(AppFont.sectionHeader)
-                .tracking(1.5)
-                .foregroundStyle(Color.text3)
-        } content: {
+        SidebarSection("LAYERS (\(layers.count))", metrics: SidebarMetrics(expandedBodyInset: 0)) {
             VStack(alignment: .leading, spacing: Spacing.xs) {
                 ForEach(Array(layers.enumerated()), id: \.element.id) { index, layer in
                     VStack(spacing: 0) {

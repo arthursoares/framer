@@ -107,11 +107,12 @@ struct InspectorView: View {
     // MARK: - Layers Section
 
     private var layersSection: some View {
+        // Header-less section — `LayerListSection` owns its "LAYERS (n)"
+        // eyebrow internally rather than surfacing it through
+        // `SidebarSection`'s Header slot. `expandedBodyInset: 0` tightens
+        // the section's internal spacing so the layer row rhythm isn't
+        // double-padded.
         SidebarSection(metrics: SidebarMetrics(expandedBodyInset: 0)) {
-            EmptyView()
-        } content: {
-            // `LayerListSection` keeps owning its visible header until Task 5
-            // migrates the row-level grammar and state styling.
             LayerListSection(layers: layersBinding)
         }
     }
