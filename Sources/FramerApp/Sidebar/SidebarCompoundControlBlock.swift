@@ -1,5 +1,13 @@
 import SwiftUI
 
+/// Secondary content for `SidebarCompoundControlBlock`. Same result-builder
+/// approach as `SidebarControlRowTrailingValueContent` for the same reason:
+/// conditional secondary closures (`secondary: { if flag { row } }`) resolve
+/// to `_ConditionalContent<Row, EmptyView>` at compile time, which a naive
+/// `Secondary == EmptyView` check wouldn't catch — and the block would draw
+/// a divider above an empty second row. The `.absent` path tracks runtime
+/// presence so the divider + secondary stack render only when there's
+/// actual content.
 @MainActor
 struct SidebarCompoundControlBlockSecondaryContent {
     private let content: AnyView

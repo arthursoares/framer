@@ -3093,13 +3093,13 @@ struct CaptionLayerControls: View {
 
 // MARK: - TemplateTokenBar
 
-private struct TemplateToken: Identifiable {
+private struct TemplateToken: Identifiable, Hashable {
     let id: String
     let token: String
     let label: String
     let category: Category
 
-    enum Category: String, CaseIterable {
+    enum Category: String, CaseIterable, Hashable {
         case camera = "Camera"
         case date = "Date"
     }
