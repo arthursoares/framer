@@ -2153,21 +2153,29 @@ struct AspectRatioLayerControls: View {
 
                 SidebarCompoundControlBlock {
                     SidebarControlRow("Width") {
-                        TextField("W", value: Binding(
-                            get: { params.ratioWidth },
-                            set: { onChange(AspectRatioLayerParams(id: params.id, ratioWidth: max(1, $0), ratioHeight: params.ratioHeight, offsetX: params.offsetX, offsetY: params.offsetY)) }
-                        ), format: .number)
-                        .simpleLayerEditorInputStyle(width: nil, accessibilityLabel: "Width")
-                        .monospacedDigit()
+                        EmptyView()
+                    } trailingValue: {
+                        SidebarTrailingUnitCluster(unit: "") {
+                            TextField("", value: Binding(
+                                get: { params.ratioWidth },
+                                set: { onChange(AspectRatioLayerParams(id: params.id, ratioWidth: max(1, $0), ratioHeight: params.ratioHeight, offsetX: params.offsetX, offsetY: params.offsetY)) }
+                            ), format: .number)
+                            .simpleLayerEditorInputStyle(accessibilityLabel: "Width")
+                            .monospacedDigit()
+                        }
                     }
                 } secondary: {
                     SidebarControlRow("Height") {
-                        TextField("H", value: Binding(
-                            get: { params.ratioHeight },
-                            set: { onChange(AspectRatioLayerParams(id: params.id, ratioWidth: params.ratioWidth, ratioHeight: max(1, $0), offsetX: params.offsetX, offsetY: params.offsetY)) }
-                        ), format: .number)
-                        .simpleLayerEditorInputStyle(width: nil, accessibilityLabel: "Height")
-                        .monospacedDigit()
+                        EmptyView()
+                    } trailingValue: {
+                        SidebarTrailingUnitCluster(unit: "") {
+                            TextField("", value: Binding(
+                                get: { params.ratioHeight },
+                                set: { onChange(AspectRatioLayerParams(id: params.id, ratioWidth: params.ratioWidth, ratioHeight: max(1, $0), offsetX: params.offsetX, offsetY: params.offsetY)) }
+                            ), format: .number)
+                            .simpleLayerEditorInputStyle(accessibilityLabel: "Height")
+                            .monospacedDigit()
+                        }
                     }
                 }
             }
@@ -2557,18 +2565,22 @@ struct LayerFillPicker: View {
                         Slider(value: saturationBinding(params), in: -50...50)
                             .tint(Color.accentDim)
                     } trailingValue: {
-                        TextField("", value: saturationBinding(params), formatter: Self.signedFormatter)
-                            .simpleLayerEditorInputStyle(width: SidebarMetrics().controlValueFieldWidth, accessibilityLabel: "Saturation")
-                            .monospacedDigit()
+                        SidebarTrailingUnitCluster(unit: "") {
+                            TextField("", value: saturationBinding(params), formatter: Self.signedFormatter)
+                                .simpleLayerEditorInputStyle(accessibilityLabel: "Saturation")
+                                .monospacedDigit()
+                        }
                     }
                 } secondary: {
                     SidebarControlRow("Brightness") {
                         Slider(value: lightnessBinding(params), in: -50...50)
                             .tint(Color.accentDim)
                     } trailingValue: {
-                        TextField("", value: lightnessBinding(params), formatter: Self.signedFormatter)
-                            .simpleLayerEditorInputStyle(width: SidebarMetrics().controlValueFieldWidth, accessibilityLabel: "Brightness")
-                            .monospacedDigit()
+                        SidebarTrailingUnitCluster(unit: "") {
+                            TextField("", value: lightnessBinding(params), formatter: Self.signedFormatter)
+                                .simpleLayerEditorInputStyle(accessibilityLabel: "Brightness")
+                                .monospacedDigit()
+                        }
                     }
                 }
             }
