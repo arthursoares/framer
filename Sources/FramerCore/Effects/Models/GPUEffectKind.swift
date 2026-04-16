@@ -17,11 +17,10 @@ public enum GPUEffectKind: String, Codable, Hashable, Sendable, CaseIterable {
     case voronoi
     case vhs
 
-    /// Variants shown in the layer-add picker. Filters out four variants:
+    /// Variants shown in the layer-add picker. Filters out three variants:
     ///
     ///   - `.ascii`     → better-tuned + GPU-accelerated as `.shader` ASCII
     ///   - `.halftone`  → better-tuned + GPU-accelerated as `.shader` Halftone
-    ///   - `.pixelSort` → better-tuned + GPU-accelerated as `.shader` PixelSort
     ///   - `.dithering` → the `.dither` Layer type is the canonical dither
     ///     path. It's GPU-accelerated, exposes all 17 dither algorithms
     ///     (Bayer / Floyd-Steinberg / Atkinson / Sierra family / JJN /
@@ -33,12 +32,17 @@ public enum GPUEffectKind: String, Codable, Hashable, Sendable, CaseIterable {
     ///     the presets"). Hiding it from the picker avoids the half-shipped
     ///     feature surface.
     ///
+    /// PixelSort is exposed here as of sidebar harmony pass 4 — its GPU path
+    /// now routes through PixelSort.metal via `GlitchGPURenderer.renderPixelSort`
+    /// (the same shader the `.shader` layer uses), with the CPU loop in
+    /// `GlitchRenderer` as a headless-host fallback.
+    ///
     /// The enum cases themselves are preserved (YAML back-compat, preset
     /// roundtrip, Codable).
     public static var userFacingCases: [GPUEffectKind] {
         allCases.filter { kind in
             switch kind {
-            case .ascii, .halftone, .pixelSort, .dithering: return false
+            case .ascii, .halftone, .dithering: return false
             default: return true
             }
         }
