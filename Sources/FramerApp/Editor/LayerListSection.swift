@@ -3652,10 +3652,9 @@ struct DitherLayerControls: View {
 
 struct LUTLayerControls: View {
     @Environment(AppState.self) private var appState
+    @Environment(\.sidebarMetrics) private var metrics
     var params: LUTLayerParams
     var onChange: (LUTLayerParams) -> Void
-
-    private let metrics = SidebarMetrics()
 
     @State private var availableLUTs: [LUTInfo] = []
     @State private var thumbnailCache: [String: CGImage] = [:]
@@ -3758,31 +3757,31 @@ struct LUTLayerControls: View {
     @ViewBuilder
     private var lutThumbnailStrip: some View {
         if availableLUTs.isEmpty {
-            VStack(spacing: 8) {
-                Image(systemName: "photo.on.rectangle.angled")
-                    .font(.system(size: 32))
-                    .foregroundStyle(Color.text3)
-                Text("No LUTs available")
-                    .font(AppFont.controlLabel)
-                    .foregroundStyle(Color.text3)
-                Text("Import .cube files to get started")
-                    .font(.caption)
-                    .foregroundStyle(Color.text3)
-            }
-            .frame(maxWidth: denseContainedContentWidth, alignment: .leading)
-            .padding(.vertical, 16)
-            .denseControlRow("Preview")
-        } else {
-            ScrollView(.horizontal, showsIndicators: false) {
-                HStack(spacing: 6) {
-                    ForEach(availableLUTs) { lut in
-                        lutThumb(lut)
-                    }
+            SidebarFullWidthRow("Preview") {
+                VStack(spacing: metrics.expandedBodyInset) {
+                    Image(systemName: "photo.on.rectangle.angled")
+                        .font(.system(size: 32))
+                        .foregroundStyle(Color.text3)
+                    Text("No LUTs available")
+                        .font(AppFont.controlLabel)
+                        .foregroundStyle(Color.text3)
+                    Text("Import .cube files to get started")
+                        .font(.caption)
+                        .foregroundStyle(Color.text3)
                 }
-                .padding(.vertical, 4)
+                .padding(.vertical, metrics.expandedBodyInset * 2)
             }
-            .frame(maxWidth: denseContainedContentWidth, alignment: .leading)
-            .denseControlRow("Preview")
+        } else {
+            SidebarFullWidthRow("Preview") {
+                SidebarPreviewStrip(
+                    items: availableLUTs,
+                    tileWidth: 48,
+                    tileHeight: nil,
+                    spacing: metrics.expandedBodyInset
+                ) { lut in
+                    lutThumb(lut)
+                }
+            }
         }
     }
 
@@ -3800,31 +3799,27 @@ struct LUTLayerControls: View {
     }
 
     private var importButtons: some View {
-        HStack {
-            Button {
-                importLUT()
-            } label: {
-                Label("Import", systemImage: "square.and.arrow.down")
-                    .font(AppFont.controlLabel)
-            }
-            .buttonStyle(.plain)
-            .foregroundStyle(Color.text2)
+        SidebarFullWidthRow("Library") {
+            HStack(spacing: metrics.controlColumnSpacing) {
+                Button {
+                    importLUT()
+                } label: {
+                    Label("Import", systemImage: "square.and.arrow.down")
+                        .font(AppFont.controlLabel)
+                }
+                .buttonStyle(.plain)
+                .foregroundStyle(Color.text2)
 
-            Button {
-                openLUTsFolder()
-            } label: {
-                Label("Show Folder", systemImage: "folder")
-                    .font(AppFont.controlLabel)
+                Button {
+                    openLUTsFolder()
+                } label: {
+                    Label("Show Folder", systemImage: "folder")
+                        .font(AppFont.controlLabel)
+                }
+                .buttonStyle(.plain)
+                .foregroundStyle(Color.text2)
             }
-            .buttonStyle(.plain)
-            .foregroundStyle(Color.text2)
         }
-        .frame(maxWidth: denseContainedContentWidth, alignment: .leading)
-        .denseControlRow("Library")
-    }
-
-    private var denseContainedContentWidth: CGFloat {
-        metrics.containedPreviewMaxWidth - metrics.controlLabelWidth - metrics.controlColumnSpacing
     }
 
     private func lutThumb(_ lut: LUTInfo) -> some View {
