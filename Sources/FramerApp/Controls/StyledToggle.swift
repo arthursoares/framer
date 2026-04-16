@@ -17,7 +17,7 @@ struct StyledToggle: View {
         }
             .labelsHidden()
             .toggleStyle(StyledToggleControlStyle())
-            .accessibilityValue(isOn ? "On" : "Off")
+            .accessibilityValue(Text(isOn ? "On" : "Off"))
     }
 }
 

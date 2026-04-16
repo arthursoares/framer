@@ -12,7 +12,7 @@ fileprivate func labeledColorPicker(
     selection: Binding<Color>,
     onHexCommit: ((CodableColor) -> Void)? = nil
 ) -> some View {
-    ColorPickerWithHex(label, selection: selection, onHexCommit: onHexCommit)
+    ColorPickerWithHex(LocalizedStringKey(label), selection: selection, onHexCommit: onHexCommit)
         .denseControlRow(LocalizedStringKey(label))
 }
 
@@ -3619,13 +3619,16 @@ struct DitherLayerControls: View {
                             //      returns that preset on the next render and
                             //      snaps the picker back, silently reverting
                             //      the user's "Custom" click.
-                            // Appending one neutral grey satisfies both: the
-                            // existing colours are preserved, and the palette
-                            // shape (N + 1 entries, ending in #808080) matches
-                            // no canonical preset.
+                            // Trim to MAX-1 before appending so the neutral
+                            // swatch is always kept (a naive prefix(MAX) would
+                            // silently drop the appended neutral when the
+                            // current palette is already at MAX, leaving the
+                            // preset unchanged and the picker snapping back).
                             let base = colors.isEmpty ? VintagePalette.gameBoy : colors
-                            let seed = base + [CodableColor(unchecked: "#808080")]
-                            p.colorMode = .palette(Array(seed.prefix(DitherColorMode.MAX_PALETTE_COLORS)))
+                            let maxBaseCount = DitherColorMode.MAX_PALETTE_COLORS - 1
+                            let trimmedBase = Array(base.prefix(maxBaseCount))
+                            let seed = trimmedBase + [CodableColor(unchecked: "#808080")]
+                            p.colorMode = .palette(seed)
                         default:
                             p.colorMode = .palette(newValue.colors)
                         }

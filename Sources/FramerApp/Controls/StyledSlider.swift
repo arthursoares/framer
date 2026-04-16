@@ -31,7 +31,7 @@ struct StyledSlider: View {
                 .frame(maxWidth: .infinity)
                 .modifier(StyledSliderAccessibilityLabel(label: accessibilityLabel))
 
-            TextField("", value: constrainedTextFieldBinding, format: .number)
+            TextField("", value: snappedBinding, format: .number)
                 .textFieldStyle(.plain)
                 .font(AppFont.numericInput)
                 .foregroundStyle(Color.text1)
@@ -48,14 +48,9 @@ struct StyledSlider: View {
         }
     }
 
+    /// Shared snap-to-step binding — both the slider (drag) and the text
+    /// field (typed entry) clamp to `step` and stay within `range`.
     private var snappedBinding: Binding<Double> {
-        Binding(
-            get: { value },
-            set: { value = StyledSliderValueResolver.constrain($0, range: range, step: step) }
-        )
-    }
-
-    private var constrainedTextFieldBinding: Binding<Double> {
         Binding(
             get: { value },
             set: { value = StyledSliderValueResolver.constrain($0, range: range, step: step) }

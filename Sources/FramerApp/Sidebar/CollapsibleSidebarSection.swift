@@ -35,9 +35,11 @@ struct CollapsibleSidebarSection<Content: View, CollapsedContent: View>: View {
     var body: some View {
         VStack(alignment: .leading, spacing: metrics.expandedBodyInset) {
             Button {
-                withAnimation(.easeInOut(duration: 0.18)) {
-                    isExpanded.toggle()
-                }
+                // State toggle is intentionally bare — the `.animation(_:value:)`
+                // modifier below drives the transition. `withAnimation` inside
+                // the button action conflicts with SwiftUI's preferred
+                // transaction propagation.
+                isExpanded.toggle()
             } label: {
                 HStack(spacing: metrics.expandedBodyInset) {
                     Text(title)
@@ -60,15 +62,23 @@ struct CollapsibleSidebarSection<Content: View, CollapsedContent: View>: View {
             .accessibilityValue(Text(isExpanded ? "Expanded" : "Collapsed"))
             .accessibilityHint(Text("Toggle section"))
 
-            if isExpanded {
-                content
-                    .transition(.opacity.combined(with: .move(edge: .top)))
-            } else {
-                collapsedContent
-                    .transition(.opacity)
+            // The conditional content block is wrapped in a VStack that's
+            // clipped to its own bounds so the `.move(edge: .top)` transition
+            // slides UP into its own space instead of briefly peeking above
+            // the header row.
+            VStack(alignment: .leading, spacing: 0) {
+                if isExpanded {
+                    content
+                        .transition(.opacity.combined(with: .move(edge: .top)))
+                } else {
+                    collapsedContent
+                        .transition(.opacity)
+                }
             }
+            .clipped()
         }
         .frame(maxWidth: .infinity, alignment: .leading)
+        .animation(.easeInOut(duration: 0.18), value: isExpanded)
     }
 }
 

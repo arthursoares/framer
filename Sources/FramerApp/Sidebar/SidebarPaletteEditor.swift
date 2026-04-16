@@ -17,7 +17,27 @@ struct SidebarPaletteEditor: View {
     var minColors: Int = 1
     var defaultNewColor: CodableColor = .white
 
-    @State private var identities: [UUID] = []
+    @State private var identities: [UUID]
+
+    init(
+        colors: Binding<[CodableColor]>,
+        maxColors: Int = 16,
+        minColors: Int = 1,
+        defaultNewColor: CodableColor = .white
+    ) {
+        self._colors = colors
+        self.maxColors = maxColors
+        self.minColors = minColors
+        self.defaultNewColor = defaultNewColor
+        // Pre-populate identities at init time so the first body render
+        // already has stable IDs. Without this, `identities` would be empty
+        // on the first render, the pure `resolvedIdentities` below would
+        // return `[]`, the ForEach would render zero rows for one frame,
+        // then `.onAppear` would populate identities and a second render
+        // would flash the palette in. The init path avoids the flash by
+        // giving the first render matching IDs.
+        self._identities = State(initialValue: colors.wrappedValue.map { _ in UUID() })
+    }
 
     var body: some View {
         VStack(alignment: .leading, spacing: metrics.expandedBodyInset) {
@@ -38,18 +58,18 @@ struct SidebarPaletteEditor: View {
             }
         }
         .frame(maxWidth: metrics.containedPreviewMaxWidth, alignment: .leading)
-        .onAppear { syncIdentitiesToColors() }
         .onChange(of: colors.count) { _, _ in syncIdentitiesToColors() }
     }
 
-    /// Returns `identities`, padding with fresh UUIDs if `colors` grew before
-    /// `.onChange(of:)` had a chance to fire. Guarantees the `ForEach` binds
-    /// to exactly `colors.count` stable IDs on every render.
+    /// Pure accessor: returns whatever IDs are currently stored, truncated to
+    /// `colors.count` if the stored array is longer. Critically this does NOT
+    /// mint fresh UUIDs when `identities.count < colors.count` — doing so
+    /// inside `body` causes every render to hand ForEach a different ID for
+    /// the trailing rows, which flickers the ColorPicker instances between
+    /// frames. Instead, the missing IDs are added by `syncIdentitiesToColors()`
+    /// via `.onChange`, and any new rows render one frame later.
     private var resolvedIdentities: [UUID] {
-        if identities.count >= colors.count {
-            return Array(identities.prefix(colors.count))
-        }
-        return identities + (identities.count..<colors.count).map { _ in UUID() }
+        Array(identities.prefix(colors.count))
     }
 
     @ViewBuilder

@@ -17,7 +17,11 @@ struct PresetPreviewGrid: View {
     @Environment(\.sidebarMetrics) private var metrics
     // Thumbnails live on AppState (see presetThumbnails / presetThumbnailsKey)
     // so collapsing + re-expanding the Presets section doesn't discard work.
-    @State private var renderTasks: [UUID: Task<Void, Never>] = [:]
+    // A single Task? (not a dictionary keyed by fresh UUIDs) is sufficient —
+    // only one batch is ever in flight, and cancel-before-replace prevents
+    // the .onChange-plus-.onAppear race where the first task's handle was
+    // leaked under a one-use key and could never be cancelled.
+    @State private var renderTask: Task<Void, Never>?
     @State private var renamingPreset: Preset?
     @State private var renameText = ""
 
@@ -85,6 +89,12 @@ struct PresetPreviewGrid: View {
                         Divider()
                         Button(role: .destructive) {
                             try? appState.presetStore.delete(id: preset.id)
+                            // Purge the thumbnail synchronously so a quick
+                            // re-open of the Presets section doesn't briefly
+                            // surface the dead entry before the renderKey
+                            // change fires `schedulePreviewRenders` and
+                            // invalidates the whole cache.
+                            appState.presetThumbnails.removeValue(forKey: preset.id)
                             appState.loadPresets()
                         } label: {
                             Label("Delete", systemImage: "trash")
@@ -109,6 +119,14 @@ struct PresetPreviewGrid: View {
         }
         .onAppear {
             schedulePreviewRenders()
+        }
+        .onDisappear {
+            // Cancel in-flight work if the grid is torn down (section
+            // collapse, window close, navigation). The @State Task would
+            // otherwise keep running and write stale previews into
+            // appState.presetThumbnails from the background actor context.
+            renderTask?.cancel()
+            renderTask = nil
         }
         .alert("Rename Preset", isPresented: Binding(
             get: { renamingPreset != nil },
@@ -217,8 +235,8 @@ struct PresetPreviewGrid: View {
         // Cancel any in-flight work. Either we're about to re-enqueue the
         // same set (key changed) or we're going to filter down to just the
         // missing ones below.
-        for (_, task) in renderTasks { task.cancel() }
-        renderTasks.removeAll()
+        renderTask?.cancel()
+        renderTask = nil
 
         guard let photo = appState.selectedPhoto else { return }
 
@@ -242,7 +260,7 @@ struct PresetPreviewGrid: View {
         let rotation = photo.rotation
         let compactPreviewMaxDimension = 320
 
-        let task = Task {
+        renderTask = Task {
             try? await Task.sleep(for: .milliseconds(200))
             guard !Task.isCancelled else { return }
 
@@ -295,7 +313,6 @@ struct PresetPreviewGrid: View {
                 }
             }
         }
-        renderTasks[UUID()] = task
     }
 
     // MARK: - Save Preset
