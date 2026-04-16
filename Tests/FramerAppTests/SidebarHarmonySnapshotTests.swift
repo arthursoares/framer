@@ -113,7 +113,7 @@ final class SidebarHarmonySnapshotTests: XCTestCase {
             named: "output-rows-jpeg",
             of: makeOutputRows(outputFormat: .jpeg(quality: 85), stripMetadata: false),
             size: CGSize(width: 350, height: 260),
-            expectedSHA256: "5bdbeefe5dd27563566536341f50248f0d4be57d3d745c8f89a0457cc4d58702"
+            expectedSHA256: "7419a9e765c9ecee48da57e4cd05a1214b13bd37c97861520520ea97bb8e4dbf"
         )
     }
 
@@ -129,7 +129,7 @@ final class SidebarHarmonySnapshotTests: XCTestCase {
             named: "simple-border-editor",
             of: BorderLayerControls(params: BorderLayerParams()) { _ in },
             size: CGSize(width: 350, height: 240),
-            expectedSHA256: "67306baf767a2b27569af6bba1aac15b491f4e18ba00b495175c91abb0055b25"
+            expectedSHA256: "c2c87b969a04dbad779cfdc68805336ace395f5f32e50fd5aa69fc7d2f25b553"
         )
     }
 
@@ -138,14 +138,14 @@ final class SidebarHarmonySnapshotTests: XCTestCase {
             named: "dense-caption-editor",
             of: CaptionLayerControls(params: CaptionLayerParams()) { _ in },
             size: CGSize(width: 350, height: 760),
-            expectedSHA256: "0a75c6e16348a22007acd99e1644313cf4b1f041997c79ad9d5458daf646304a"
+            expectedSHA256: "9432c597d81dfa7722fcc662298e6722ea063477f47108ae801e97bfb2701d91"
         )
 
         assertSnapshot(
             named: "dense-dither-editor",
             of: DitherLayerControls(params: DitherLayerParams()) { _ in },
             size: CGSize(width: 350, height: 900),
-            expectedSHA256: "837be824de2794afd1a9fc85b1acd486958882b797a20fd5a2feb3044bfac146"
+            expectedSHA256: "60cdda539ae8d9613cef1f3c520ca9ee121d936f179848f6896960115568c2ff"
         )
     }
 
@@ -154,7 +154,7 @@ final class SidebarHarmonySnapshotTests: XCTestCase {
             named: "overlay-editor",
             of: OverlayLayerControls(params: OverlayLayerParams()) { _ in },
             size: CGSize(width: 350, height: 420),
-            expectedSHA256: "ee94e6469eb1a9537dc3dc92ec6a405d4e96742b75882601ce8bae7a52737699"
+            expectedSHA256: "ef203c160d6b9f9ff6b4debd318699c86a7aecb24debf87a3a5dbc81f2ce2a71"
         )
     }
 

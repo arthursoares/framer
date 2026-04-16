@@ -105,15 +105,23 @@ struct SidebarControlRow<Content: View>: View {
             HStack(alignment: .center, spacing: metrics.controlColumnSpacing) {
                 content
                     .frame(maxWidth: .infinity, alignment: trailingValue.hasContent ? .trailing : .leading)
-                    // Buffer against the trailing cluster. macOS NSSlider (used
-                    // by SwiftUI's Slider) renders its track and knob to the
-                    // very edge of its layout frame — at extreme values the
-                    // knob overlaps any view 10pt away. A few extra pt keep
-                    // the slider's hit-area and glyph away from the trailing
-                    // field's rounded rectangle. No effect on EmptyView / Toggle
-                    // / Picker content, which already render within their
-                    // intrinsic bounds.
-                    .padding(.trailing, trailingValue.hasContent ? metrics.controlTrailingClusterSpacing : 0)
+                    // Hard-clip content to its frame so macOS NSSlider (the
+                    // AppKit control backing SwiftUI's Slider) can't render
+                    // its track/knob into the trailing field's area. Without
+                    // clipping, the NSSlider rasteriser draws a few extra
+                    // pixels of track past the layout frame at every value,
+                    // which combined with the 10pt HStack gap produces the
+                    // visible overlap users reported on narrow sidebars.
+                    .clipShape(Rectangle())
+                    // Additional breathing room between the content frame and
+                    // the trailing cluster's rounded field. A full
+                    // `controlColumnSpacing` buffer plus the existing HStack
+                    // spacing gives ~20pt of empty space — enough that even if
+                    // the slider track does leak a pixel or two past
+                    // clip-shape (AppKit can still bleed layer-level
+                    // rasterisation in some edge cases), the user never sees
+                    // a visual overlap with the field.
+                    .padding(.trailing, trailingValue.hasContent ? metrics.controlColumnSpacing : 0)
 
                 if trailingValue.hasContent {
                     trailingValue.body
