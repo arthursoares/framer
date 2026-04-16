@@ -377,16 +377,21 @@ struct GPUEffectLayerControls: View {
                 )
             }
 
-            // Common adjustments (brightness / contrast / etc.) are NOT consumed
-            // by any bucket shader today — per GPUEffectKind.usesCommonAdjustments.
-            // Hidden globally. If shaders are later extended to apply them,
-            // flip the flag and they'll light up on the correct variants.
+            // Common adjustments consumed by every bucket shader via
+            // `applyCommonAdjustments` in ShaderCommon.h. Five of six fields
+            // apply (brightness / contrast / saturation / hueRotation / gamma);
+            // `sharpness` stays in the uniform struct for back-compat but is
+            // NOT rendered as a slider — the shared helper flags it as
+            // "0 = identity; not consumed by helpers" (ShaderCommon.h:162)
+            // because sharpening requires neighbour samples the bucket
+            // fragments don't take today. Use the `.shader` layer (Crimewave,
+            // Shiba, CRT, etc.) for sharpening until a sharpen kernel lands in
+            // the bucket family.
             if params.kind.usesCommonAdjustments {
                 adjustmentSlider(label: "Brightness", binding: commonBinding(\.brightness), range: -1...1)
                 adjustmentSlider(label: "Contrast", binding: commonBinding(\.contrast), range: 0...3)
                 adjustmentSlider(label: "Saturation", binding: commonBinding(\.saturation), range: 0...2)
                 adjustmentSlider(label: "Hue", binding: commonBinding(\.hueRotation), range: -1...1)
-                adjustmentSlider(label: "Sharpness", binding: commonBinding(\.sharpness), range: 0...2)
                 adjustmentSlider(label: "Gamma", binding: commonBinding(\.gamma), range: 0.2...2)
             }
 
