@@ -1607,34 +1607,6 @@ private struct SimpleLayerEditorDivider: View {
     }
 }
 
-private struct OverlayFullWidthControlRow<Content: View>: View {
-    let title: LocalizedStringKey
-    let content: Content
-
-    @Environment(\.sidebarMetrics) private var metrics
-    @Namespace private var accessibilityLabelNamespace
-
-    init(_ title: LocalizedStringKey, @ViewBuilder content: () -> Content) {
-        self.title = title
-        self.content = content()
-    }
-
-    var body: some View {
-        VStack(alignment: .leading, spacing: Spacing.xs / 2) {
-            Text(title)
-                .font(AppFont.controlLabel)
-                .foregroundStyle(Color.text2)
-                .accessibilityLabeledPair(role: .label, id: "OverlayFullWidthControlRowLabel", in: accessibilityLabelNamespace)
-
-            content
-                .frame(maxWidth: .infinity, alignment: .leading)
-                .accessibilityLabeledPair(role: .content, id: "OverlayFullWidthControlRowLabel", in: accessibilityLabelNamespace)
-        }
-        .padding(.horizontal, metrics.outerInset)
-        .padding(.vertical, Spacing.xs / 2)
-        .frame(maxWidth: .infinity, alignment: .leading)
-    }
-}
 
 struct BorderLayerControls: View {
     var params: BorderLayerParams
@@ -2282,7 +2254,7 @@ struct OverlayLayerControls: View {
     var params: OverlayLayerParams
     var onChange: (OverlayLayerParams) -> Void
 
-    private let metrics = SidebarMetrics()
+    @Environment(\.sidebarMetrics) private var metrics
 
     @State private var availableOverlays: [TextureFrameProvider.OverlayInfo] = []
     @State private var selectedKind: OverlayKind = .frame
@@ -2328,7 +2300,7 @@ struct OverlayLayerControls: View {
     // MARK: - Subviews
 
     private var kindPicker: some View {
-        OverlayFullWidthControlRow("Category") {
+        SidebarFullWidthRow("Category") {
             Picker("", selection: $selectedKind) {
                 Text("Frames").tag(OverlayKind.frame)
                 Text("Dust").tag(OverlayKind.dust)
@@ -2362,16 +2334,10 @@ struct OverlayLayerControls: View {
     }
 
     private var overlayThumbnailStrip: some View {
-        OverlayFullWidthControlRow("Preview") {
-            ScrollView(.horizontal, showsIndicators: false) {
-                HStack(spacing: 6) {
-                    ForEach(filteredOverlays) { overlay in
-                        overlayThumb(overlay)
-                    }
-                }
-                .padding(.vertical, 4)
+        SidebarFullWidthRow("Preview") {
+            SidebarPreviewStrip(items: filteredOverlays) { overlay in
+                overlayThumb(overlay)
             }
-            .frame(maxWidth: metrics.containedPreviewMaxWidth, alignment: .leading)
         }
     }
 
@@ -2400,7 +2366,7 @@ struct OverlayLayerControls: View {
     }
 
     private var openFolderButton: some View {
-        OverlayFullWidthControlRow("Library") {
+        SidebarFullWidthRow("Library") {
             Button {
                 if let dir = TextureFrameProvider.ensureUserOverlayDirectory() {
                     NSWorkspace.shared.open(dir)
@@ -2411,7 +2377,6 @@ struct OverlayLayerControls: View {
             }
             .buttonStyle(.plain)
             .foregroundStyle(Color.text2)
-            .frame(maxWidth: metrics.containedPreviewMaxWidth, alignment: .leading)
         }
     }
 
