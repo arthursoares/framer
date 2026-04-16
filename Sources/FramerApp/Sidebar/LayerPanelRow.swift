@@ -130,8 +130,8 @@ struct LayerPanelRow: View {
                 }
                 .padding(.top, LayerPanelRowLayout.expandedTopPadding)
                 .padding(.bottom, LayerPanelRowLayout.expandedBottomPadding)
-                .padding(.leading, metrics.outerInset)
-                .padding(.trailing, metrics.outerInset / 2)
+                .padding(.leading, LayerPanelRowChassis.expandedLeadingInset(metrics: metrics))
+                .padding(.trailing, LayerPanelRowChassis.expandedTrailingInset(metrics: metrics))
                 .foregroundStyle(Color.text1)
                 .tint(Color.accent)
                 .transition(.opacity.combined(with: .move(edge: .top)))
@@ -309,6 +309,26 @@ struct LayerPanelRow: View {
         case .gpuEffect(let params):
             return params.kind.label
         }
+    }
+}
+
+/// Chassis layout constants that are metrics-derived (not raw `Spacing.*`).
+/// Exposed internal so `LayerPanelRowLayoutTests` can assert the contract
+/// without view-hierarchy introspection. A regression that hard-codes a
+/// different value in `LayerPanelRow.body` would fail the test because the
+/// body uses the same entry points below.
+enum LayerPanelRowChassis {
+    /// Leading padding applied to the expanded body so its inner editor
+    /// label column aligns with the section grid's outer inset. Replaces
+    /// the pass-1 `Spacing.xl + Spacing.xs` (20pt) fixed value.
+    static func expandedLeadingInset(metrics: SidebarMetrics) -> CGFloat {
+        metrics.outerInset
+    }
+
+    /// Trailing padding on the expanded body. Kept half the leading inset
+    /// so layer rows stay visually tight on the right edge.
+    static func expandedTrailingInset(metrics: SidebarMetrics) -> CGFloat {
+        metrics.outerInset / 2
     }
 }
 
