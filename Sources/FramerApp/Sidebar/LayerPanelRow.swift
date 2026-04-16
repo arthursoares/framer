@@ -48,6 +48,8 @@ struct LayerPanelRow: View {
     @State private var isHoveringVisibilityToggle = false
     @State private var isHoveringDelete = false
 
+    @Environment(\.sidebarMetrics) private var metrics
+
     var body: some View {
         VStack(spacing: 0) {
             HStack(spacing: LayerPanelRowLayout.headerSpacing) {
@@ -128,8 +130,8 @@ struct LayerPanelRow: View {
                 }
                 .padding(.top, LayerPanelRowLayout.expandedTopPadding)
                 .padding(.bottom, LayerPanelRowLayout.expandedBottomPadding)
-                .padding(.leading, LayerPanelRowLayout.expandedLeadingPadding)
-                .padding(.trailing, LayerPanelRowLayout.expandedTrailingPadding)
+                .padding(.leading, metrics.outerInset)
+                .padding(.trailing, metrics.outerInset / 2)
                 .foregroundStyle(Color.text1)
                 .tint(Color.accent)
                 .transition(.opacity.combined(with: .move(edge: .top)))
@@ -326,8 +328,6 @@ private enum LayerPanelRowLayout {
     static let controlsSpacing = Spacing.md
     static let expandedTopPadding = Spacing.xs * 2
     static let expandedBottomPadding = Spacing.sm * 2
-    static let expandedLeadingPadding = Spacing.xl + Spacing.xs
-    static let expandedTrailingPadding = Spacing.xs
     static let hoverAnimation = Animation.easeInOut(duration: 0.15)
     static let expandAnimation = Animation.easeInOut(duration: 0.15)
 }
