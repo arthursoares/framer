@@ -25,16 +25,13 @@ enum InspectorOutputControlState {
 
 struct InspectorView: View {
     @Environment(AppState.self) var appState
+    @AppStorage("sidebarPresetsSectionExpanded") private var presetsExpanded: Bool = true
 
     var body: some View {
         SidebarShell {
             VStack(alignment: .leading, spacing: 16) {
-                // Active preset banner
-                if let presetName = appState.activePresetName {
-                    activePresetBanner(presetName)
-                }
-
-                // Presets section
+                // Presets section (collapsible; collapsed state shows the
+                // active preset banner inline if one is applied)
                 presetsSection
 
                 // Layers section
@@ -52,9 +49,10 @@ struct InspectorView: View {
         }
     }
 
-    // MARK: - Active Preset Banner
+    // MARK: - Active Preset Summary (shown when section is collapsed)
 
-    private func activePresetBanner(_ name: String) -> some View {
+    @ViewBuilder
+    private func activePresetSummary(_ name: String) -> some View {
         HStack(spacing: 6) {
             Image(systemName: "slider.horizontal.3")
                 .font(.system(size: 10))
@@ -80,6 +78,7 @@ struct InspectorView: View {
                     .foregroundStyle(Color.text2)
             }
             .buttonStyle(.plain)
+            .accessibilityLabel("Clear active preset")
         }
         .padding(.horizontal, 10)
         .padding(.vertical, 7)
@@ -93,8 +92,15 @@ struct InspectorView: View {
     // MARK: - Presets Section
 
     private var presetsSection: some View {
-        SidebarSection("PRESETS") {
+        CollapsibleSidebarSection(
+            "PRESETS",
+            isExpanded: $presetsExpanded
+        ) {
             PresetPreviewGrid()
+        } collapsedContent: {
+            if let presetName = appState.activePresetName {
+                activePresetSummary(presetName)
+            }
         }
     }
 

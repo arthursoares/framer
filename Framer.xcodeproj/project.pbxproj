@@ -49,6 +49,7 @@
 		83C339C5F6907392A7F11225 /* ImageThumbnailLoader.swift in Sources */ = {isa = PBXBuildFile; fileRef = D5BE1B7F799CD269EE2C1411 /* ImageThumbnailLoader.swift */; };
 		8B0B4CEE3882DC2ED4FBA8B3 /* LayerPanelRowStateResolverTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8F4005057620F710FB3C5103 /* LayerPanelRowStateResolverTests.swift */; };
 		8B4266040896BBED84762794 /* textures in Resources */ = {isa = PBXBuildFile; fileRef = B1EC2164F8A3DF317311D2C8 /* textures */; };
+		8F160BA890A60D6718F2A885 /* CollapsibleSidebarSection.swift in Sources */ = {isa = PBXBuildFile; fileRef = B16338D6414DE0340B3BABA3 /* CollapsibleSidebarSection.swift */; };
 		922190469E4BF28489790F32 /* SidebarHarmonySnapshotTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = DCC79DCD115A284F6B81A07B /* SidebarHarmonySnapshotTests.swift */; };
 		9697B0B0347D866B638B319A /* SidebarChipFlow.swift in Sources */ = {isa = PBXBuildFile; fileRef = 63F8D48B85CFFCB8D0C09504 /* SidebarChipFlow.swift */; };
 		978253B97253BE5ACF13ABA0 /* SidebarStateStyle.swift in Sources */ = {isa = PBXBuildFile; fileRef = 31D2CC0ACDC965EF2817C67B /* SidebarStateStyle.swift */; };
@@ -139,6 +140,7 @@
 		A8E704CEA7DD5812C7E8E102 /* SidebarLayoutPolicyTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SidebarLayoutPolicyTests.swift; sourceTree = "<group>"; };
 		AE7BB8B482ABBCD04C635554 /* swiftui-review */ = {isa = PBXFileReference; lastKnownFileType = folder; name = "swiftui-review"; path = .; sourceTree = SOURCE_ROOT; };
 		AF1AFA1E768D2A7B8991C8FA /* ZoomIndicator.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ZoomIndicator.swift; sourceTree = "<group>"; };
+		B16338D6414DE0340B3BABA3 /* CollapsibleSidebarSection.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CollapsibleSidebarSection.swift; sourceTree = "<group>"; };
 		B1EC2164F8A3DF317311D2C8 /* textures */ = {isa = PBXFileReference; lastKnownFileType = folder; name = textures; path = assets/textures; sourceTree = SOURCE_ROOT; };
 		B2205885A0B72C7BB1800460 /* PreviewArea.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PreviewArea.swift; sourceTree = "<group>"; };
 		B7A795F9CA0BC01E3F2251A9 /* PreferencesView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PreferencesView.swift; sourceTree = "<group>"; };
@@ -320,6 +322,7 @@
 		92DD413C9F3B3F8B7CAF2ACF /* Sidebar */ = {
 			isa = PBXGroup;
 			children = (
+				B16338D6414DE0340B3BABA3 /* CollapsibleSidebarSection.swift */,
 				D6C97FA89C679CAAAC4C845E /* LayerPanelRow.swift */,
 				63F8D48B85CFFCB8D0C09504 /* SidebarChipFlow.swift */,
 				9FCDE64F375DC8E762C4EF08 /* SidebarCompoundControlBlock.swift */,
@@ -574,6 +577,7 @@
 				561898C8DF6823EB3F4391AC /* AsyncThumbnail.swift in Sources */,
 				D3E6A433B5ACC95890FD16F7 /* BlendModeControls.swift in Sources */,
 				218BC28CA8616930DD60EB0B /* CanvasView.swift in Sources */,
+				8F160BA890A60D6718F2A885 /* CollapsibleSidebarSection.swift in Sources */,
 				28B7026CE98DD43E6D9501A9 /* ColorPickerWithHex.swift in Sources */,
 				FC5BB028D5897E5F76991EA5 /* ContentView.swift in Sources */,
 				22B4EA7AD13FDCDD650065E9 /* DesignTokens.swift in Sources */,
