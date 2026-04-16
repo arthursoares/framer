@@ -3598,13 +3598,31 @@ struct DitherLayerControls: View {
                 Picker("Preset", selection: Binding<VintagePalette.Preset>(
                     get: { selectedPreset },
                     set: { newValue in
+                        // Picking the same preset is a no-op. Prevents the
+                        // .custom branch below from mutating when the user
+                        // didn't actually change anything.
+                        guard newValue != selectedPreset else { return }
+
                         var p = params
                         switch newValue {
                         case .custom:
-                            // Seed Custom with the current colours if already
-                            // custom, else the classic Game Boy set as a starter.
-                            let seed = (selectedPreset == .custom) ? colors : VintagePalette.gameBoy
-                            p.colorMode = .palette(seed)
+                            // Seed Custom with the CURRENT colours plus an
+                            // extra neutral swatch. Two requirements drive this:
+                            //   1. Don't throw away what the user is editing —
+                            //      if they were on Game Boy, keep those colours
+                            //      as the starting point.
+                            //   2. The resulting palette must NOT match any
+                            //      preset, otherwise `VintagePalette.Preset.matching()`
+                            //      returns that preset on the next render and
+                            //      snaps the picker back, silently reverting
+                            //      the user's "Custom" click.
+                            // Appending one neutral grey satisfies both: the
+                            // existing colours are preserved, and the palette
+                            // shape (N + 1 entries, ending in #808080) matches
+                            // no canonical preset.
+                            let base = colors.isEmpty ? VintagePalette.gameBoy : colors
+                            let seed = base + [CodableColor(unchecked: "#808080")]
+                            p.colorMode = .palette(Array(seed.prefix(DitherColorMode.MAX_PALETTE_COLORS)))
                         default:
                             p.colorMode = .palette(newValue.colors)
                         }
