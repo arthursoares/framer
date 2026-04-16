@@ -15,7 +15,8 @@ private enum PresetPreviewGridLayout {
 struct PresetPreviewGrid: View {
     @Environment(AppState.self) var appState
     @Environment(\.sidebarMetrics) private var metrics
-    @State private var presetPreviews: [UUID: NSImage] = [:]
+    // Thumbnails live on AppState (see presetThumbnails / presetThumbnailsKey)
+    // so collapsing + re-expanding the Presets section doesn't discard work.
     @State private var renderTasks: [UUID: Task<Void, Never>] = [:]
     @State private var renamingPreset: Preset?
     @State private var renameText = ""
@@ -46,7 +47,7 @@ struct PresetPreviewGrid: View {
                     PresetPreviewCard(
                         preset: preset,
                         isActive: appState.activePresetName == preset.name,
-                        thumbnail: appState.selectedPhoto != nil ? presetPreviews[preset.id] : nil,
+                        thumbnail: appState.selectedPhoto != nil ? appState.presetThumbnails[preset.id] : nil,
                         onTap: {
                             appState.currentConfig = preset.config
                             appState.activePresetName = preset.name
@@ -206,15 +207,37 @@ struct PresetPreviewGrid: View {
 
     // MARK: - Preview Rendering
 
+    /// Refreshes `appState.presetThumbnails` against the current render key.
+    /// - If the key changed since the cache was last populated, all stale
+    ///   thumbnails are dropped and every preset is re-rendered.
+    /// - If the key matches (common case: user expanded/collapsed the Presets
+    ///   section without changing photo or preset list), only presets with
+    ///   missing thumbnails are rendered — the rest are served from cache.
     private func schedulePreviewRenders() {
-        // Cancel all in-flight renders
+        // Cancel any in-flight work. Either we're about to re-enqueue the
+        // same set (key changed) or we're going to filter down to just the
+        // missing ones below.
         for (_, task) in renderTasks { task.cancel() }
         renderTasks.removeAll()
-        presetPreviews.removeAll()
 
         guard let photo = appState.selectedPhoto else { return }
 
         let presets = appState.presets
+        let currentKey = renderKey
+
+        if appState.presetThumbnailsKey != currentKey {
+            // Input changed (new photo, rotation, or preset list) — cache is
+            // stale. Drop everything and rebuild.
+            appState.presetThumbnails.removeAll()
+            appState.presetThumbnailsKey = currentKey
+        }
+
+        // Only render presets that don't already have a thumbnail cached.
+        // This is what makes the section collapse/expand cheap: when the view
+        // remounts with the same key, `missingPresets` is empty.
+        let missingPresets = presets.filter { appState.presetThumbnails[$0.id] == nil }
+        guard !missingPresets.isEmpty else { return }
+
         let url = photo.url
         let rotation = photo.rotation
         let compactPreviewMaxDimension = 320
@@ -228,8 +251,8 @@ struct PresetPreviewGrid: View {
                 var nextIndex = 0
 
                 func enqueueNext() {
-                    guard nextIndex < presets.count else { return }
-                    let preset = presets[nextIndex]
+                    guard nextIndex < missingPresets.count else { return }
+                    let preset = missingPresets[nextIndex]
                     nextIndex += 1
 
                     group.addTask {
@@ -251,7 +274,7 @@ struct PresetPreviewGrid: View {
                                 height: CGFloat(cgImage.height) / scale
                             ))
                             await MainActor.run {
-                                presetPreviews[preset.id] = preview
+                                appState.presetThumbnails[preset.id] = preview
                             }
                         } catch {
                             // Silently fail — card shows placeholder
@@ -259,7 +282,7 @@ struct PresetPreviewGrid: View {
                     }
                 }
 
-                for _ in 0..<min(maxConcurrentPresetRenders, presets.count) {
+                for _ in 0..<min(maxConcurrentPresetRenders, missingPresets.count) {
                     enqueueNext()
                 }
 
