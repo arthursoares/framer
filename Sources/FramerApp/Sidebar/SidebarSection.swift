@@ -41,3 +41,15 @@ extension SidebarSection where Header == Text {
         }, content: content)
     }
 }
+
+/// Header-less convenience: `SidebarSection(metrics: ...) { content }`. Used
+/// by the Layers section in `InspectorView` which owns its own header row
+/// inside `LayerListSection` rather than the section eyebrow.
+extension SidebarSection where Header == EmptyView {
+    init(
+        metrics: SidebarMetrics? = nil,
+        @ViewBuilder content: () -> Content
+    ) {
+        self.init(metrics: metrics, header: { EmptyView() }, content: content)
+    }
+}
