@@ -20,6 +20,7 @@
 		27840E879F2D1EFA8AC27B30 /* SidebarMetrics.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7A91B04DC698FB944769C025 /* SidebarMetrics.swift */; };
 		28B7026CE98DD43E6D9501A9 /* ColorPickerWithHex.swift in Sources */ = {isa = PBXBuildFile; fileRef = 448D6F42AA7A9F492A2E3436 /* ColorPickerWithHex.swift */; };
 		2C4077C14DDD32351C143C80 /* LayerDetailView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1DEB778B387F70ED23D4EBEB /* LayerDetailView.swift */; };
+		338A7CAB108690B509EFDEB9 /* SidebarTrailingReadoutCluster.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9742662458DDF186223791B8 /* SidebarTrailingReadoutCluster.swift */; };
 		368885FBBB78321CA6E2C3F8 /* ZoomState.swift in Sources */ = {isa = PBXBuildFile; fileRef = 265766D49FCE4081CCC68D33 /* ZoomState.swift */; };
 		469EBA583F3674764B8E843A /* LayerListSection.swift in Sources */ = {isa = PBXBuildFile; fileRef = 07CE80E5C2C968E54B507CD5 /* LayerListSection.swift */; };
 		46CCDA87AAA5DDD9AB84615F /* SidebarLayoutContainmentTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3FE688FA9CD9246744F2CEAD /* SidebarLayoutContainmentTests.swift */; };
@@ -117,6 +118,7 @@
 		88CEC286BDB1ADC6E0637ACA /* PresetPreviewGrid.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PresetPreviewGrid.swift; sourceTree = "<group>"; };
 		8A6E6F60B12048759BD1E60C /* PreviewViewModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PreviewViewModel.swift; sourceTree = "<group>"; };
 		8F4005057620F710FB3C5103 /* LayerPanelRowStateResolverTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LayerPanelRowStateResolverTests.swift; sourceTree = "<group>"; };
+		9742662458DDF186223791B8 /* SidebarTrailingReadoutCluster.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SidebarTrailingReadoutCluster.swift; sourceTree = "<group>"; };
 		99841491BD0A545FF7E469B5 /* FramerMobile.app */ = {isa = PBXFileReference; includeInIndex = 0; lastKnownFileType = wrapper.application; path = FramerMobile.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		9B9A4BC738FB9F539C9A7AFB /* Framer.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = Framer.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		9FCDE64F375DC8E762C4EF08 /* SidebarCompoundControlBlock.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SidebarCompoundControlBlock.swift; sourceTree = "<group>"; };
@@ -307,6 +309,7 @@
 				F897939392FCE2D13C8C970F /* SidebarSection.swift */,
 				3542BBBACEDB4B91751AC57E /* SidebarShell.swift */,
 				31D2CC0ACDC965EF2817C67B /* SidebarStateStyle.swift */,
+				9742662458DDF186223791B8 /* SidebarTrailingReadoutCluster.swift */,
 				583D2597C550F8BE5C2A7FDA /* SidebarTrailingUnitCluster.swift */,
 			);
 			path = Sidebar;
@@ -572,6 +575,7 @@
 				A33B23C72428E520B21D613C /* SidebarSection.swift in Sources */,
 				A687E051304ECD37FDB039D2 /* SidebarShell.swift in Sources */,
 				978253B97253BE5ACF13ABA0 /* SidebarStateStyle.swift in Sources */,
+				338A7CAB108690B509EFDEB9 /* SidebarTrailingReadoutCluster.swift in Sources */,
 				261407E520DAB7C287F6F41C /* SidebarTrailingUnitCluster.swift in Sources */,
 				FC79FBDAF4E782AEE11A281A /* StyledSlider.swift in Sources */,
 				6D03D0240A8EA39304652EE3 /* StyledToggle.swift in Sources */,

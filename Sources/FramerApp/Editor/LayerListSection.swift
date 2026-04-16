@@ -1951,9 +1951,12 @@ struct CanvasLayerControls: View {
             SidebarControlRow("Output Pixels") {
                 EmptyView()
             } trailingValue: {
-                Text("\(params.width) x \(params.height) px")
-                    .font(AppFont.mono(10))
-                    .foregroundStyle(Color.text3)
+                SidebarTrailingReadoutCluster(unit: "px") {
+                    Text("\(params.width)×\(params.height)")
+                        .font(AppFont.mono(10))
+                        .foregroundStyle(Color.text3)
+                        .monospacedDigit()
+                }
             }
         }
     }
@@ -2190,22 +2193,24 @@ struct AspectRatioLayerControls: View {
                     Slider(value: offsetXBinding, in: -1...1)
                         .tint(Color.accentDim)
                 } trailingValue: {
-                    Text(String(format: "%.1f", params.offsetX))
-                        .font(AppFont.mono(10))
-                        .foregroundStyle(Color.text3)
-                        .monospacedDigit()
-                        .frame(width: SidebarMetrics().controlReadoutWidth, alignment: .trailing)
+                    SidebarTrailingReadoutCluster {
+                        Text(String(format: "%.1f", params.offsetX))
+                            .font(AppFont.mono(10))
+                            .foregroundStyle(Color.text3)
+                            .monospacedDigit()
+                    }
                 }
             } secondary: {
                 SidebarControlRow("Offset Y") {
                     Slider(value: offsetYBinding, in: -1...1)
                         .tint(Color.accentDim)
                 } trailingValue: {
-                    Text(String(format: "%.1f", params.offsetY))
-                        .font(AppFont.mono(10))
-                        .foregroundStyle(Color.text3)
-                        .monospacedDigit()
-                        .frame(width: SidebarMetrics().controlReadoutWidth, alignment: .trailing)
+                    SidebarTrailingReadoutCluster {
+                        Text(String(format: "%.1f", params.offsetY))
+                            .font(AppFont.mono(10))
+                            .foregroundStyle(Color.text3)
+                            .monospacedDigit()
+                    }
                 }
             }
         }
