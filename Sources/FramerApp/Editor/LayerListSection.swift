@@ -2355,12 +2355,12 @@ struct OverlayLayerControls: View {
 
     private var opacityControl: some View {
         SidebarControlRow("Opacity") {
-            StyledSlider(
+            StyledSliderWithUnit(
                 value: opacityBinding,
                 range: 0...100,
                 accessibilityLabel: "Opacity",
                 step: 1,
-                suffix: "%"
+                unit: "%"
             )
         }
     }
@@ -2722,7 +2722,7 @@ struct CaptionLayerControls: View {
                         value: offsetXBinding,
                         range: -200...200,
                         step: 1,
-                        suffix: "px"
+                        unit: "px"
                     )
                 } secondary: {
                     DenseSliderControlRow(
@@ -2730,7 +2730,7 @@ struct CaptionLayerControls: View {
                         value: offsetYBinding,
                         range: -200...200,
                         step: 1,
-                        suffix: "px"
+                        unit: "px"
                     )
                 }
 
@@ -2790,7 +2790,7 @@ struct CaptionLayerControls: View {
                             value: fontSizeBinding(pts),
                             range: 8...120,
                             step: 1,
-                            suffix: "pt"
+                            unit: "pt"
                         )
                     }
                 }
@@ -3120,19 +3120,26 @@ struct DenseSliderControlRow: View {
     let range: ClosedRange<Double>
     var accessibilityLabel: LocalizedStringKey? = nil
     let step: Double
-    var suffix: String = ""
-    var inputWidth: CGFloat = 55
+    var unit: LocalizedStringKey? = nil
 
     var body: some View {
         SidebarControlRow(title) {
-            StyledSlider(
-                value: $value,
-                range: range,
-                accessibilityLabel: accessibilityLabel ?? title,
-                step: step,
-                suffix: suffix,
-                inputWidth: inputWidth
-            )
+            if let unit {
+                StyledSliderWithUnit(
+                    value: $value,
+                    range: range,
+                    accessibilityLabel: accessibilityLabel ?? title,
+                    step: step,
+                    unit: unit
+                )
+            } else {
+                StyledSlider(
+                    value: $value,
+                    range: range,
+                    accessibilityLabel: accessibilityLabel ?? title,
+                    step: step
+                )
+            }
         }
     }
 }
@@ -3254,7 +3261,7 @@ struct DitherLayerControls: View {
                 ),
                 range: 1...8,
                 step: 1,
-                suffix: "×"
+                unit: "×"
             )
 
             if case .twoTone(let fg, let bg) = params.colorMode {
@@ -3355,7 +3362,7 @@ struct DitherLayerControls: View {
                     ),
                     range: 0...100,
                     step: 10,
-                    suffix: "%"
+                    unit: "%"
                 )
             } secondary: {
                 Text("Pre-sharpen to preserve edge detail")
@@ -3375,7 +3382,7 @@ struct DitherLayerControls: View {
                     ),
                     range: 0...100,
                     step: 10,
-                    suffix: "%"
+                    unit: "%"
                 )
             } secondary: {
                 Text("Boost contrast before dithering")
@@ -3754,7 +3761,7 @@ struct LUTLayerControls: View {
             ),
             range: 0...100,
             step: 5,
-            suffix: "%"
+            unit: "%"
         )
     }
 

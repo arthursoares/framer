@@ -134,12 +134,12 @@ struct InspectorView: View {
             } secondary: {
                 if jpegQuality != nil {
                     SidebarControlRow("Quality") {
-                        StyledSlider(
+                        StyledSliderWithUnit(
                             value: jpegQualityBinding,
                             range: 60...100,
                             accessibilityLabel: "Quality",
                             step: 5,
-                            suffix: "%"
+                            unit: "%"
                         )
                     }
                 }
