@@ -2696,7 +2696,6 @@ struct CaptionLayerControls: View {
             Picker("", selection: captionModeIndex) {
                 Text("Template").tag(0)
                 Text("Custom").tag(1)
-                Text("None").tag(2)
             }
             .pickerStyle(.menu)
             .labelsHidden()
@@ -2867,6 +2866,17 @@ struct CaptionLayerControls: View {
         .onChange(of: params.fontSize) { _, newFontSize in
             fontSizeMode = Self.fontSizeMode(for: newFontSize)
         }
+        .onAppear {
+            // Migrate legacy `.none` captions to `.template` on first render so
+            // the picker's selected value and the body's rendered content stay
+            // in sync. Users disable a caption layer via the row's visibility
+            // toggle, not by keeping it in `.none` mode.
+            if case .none = params.mode {
+                var p = params
+                p.mode = .template(" - {{mon}} '{{year2}} -")
+                onChange(p)
+            }
+        }
     }
 
     private static func fontSizeMode(for fontSize: FontSize) -> FontSizeMode {
@@ -2912,7 +2922,13 @@ struct CaptionLayerControls: View {
                 switch params.mode {
                 case .template: 0
                 case .custom: 1
-                case .none: 2
+                // Legacy `.none` layers (from older preset YAML) surface as
+                // Template in the picker so users never see an empty
+                // selection. The body below migrates them on first render
+                // via `.onAppear`, and if the user interacts with the picker
+                // they overwrite it either way. `.none` stays in the model
+                // for preset back-compat but is no longer a user choice.
+                case .none: 0
                 }
             },
             set: { idx in
@@ -2925,7 +2941,7 @@ struct CaptionLayerControls: View {
                     if case .custom = params.mode { return }
                     p.mode = .custom("")
                 default:
-                    p.mode = .none
+                    return
                 }
                 onChange(p)
             }
