@@ -85,12 +85,13 @@ struct ExportBar: View {
 
     @ViewBuilder
     private var queueIndicator: some View {
-        let running = appState.exportQueue.filter { $0.status == .running }
-        let failed = appState.exportQueue.filter { if case .failed = $0.status { return true }; return false }
-        let cancelled = appState.exportQueue.filter { $0.status == .cancelled }
+        // Single-pass summary of the export queue. Previously this computed
+        // three independent `.filter` passes over `exportQueue`; one reduce
+        // captures the only states that affect the indicator.
+        let summary = queueSummary()
 
         HStack(spacing: ExportBarLayout.buttonSpacing) {
-            if let job = running.first {
+            if let job = summary.firstRunning {
                 ProgressView(value: job.progress)
                     .progressViewStyle(.circular)
                     .controlSize(.mini)
@@ -98,11 +99,11 @@ struct ExportBar: View {
                 Text("\(job.completedCount)/\(job.items.count)")
                     .font(AppFont.photoCount)
                     .foregroundStyle(Color.text2)
-            } else if !failed.isEmpty {
+            } else if summary.hasFailed {
                 Image(systemName: "exclamationmark.triangle.fill")
                     .font(.system(size: 10))
                     .foregroundStyle(Color.error)
-            } else if !cancelled.isEmpty {
+            } else if summary.hasCancelled {
                 Image(systemName: "xmark.circle.fill")
                     .font(.system(size: 10))
                     .foregroundStyle(Color.text3)
@@ -110,6 +111,27 @@ struct ExportBar: View {
                 Image(systemName: "checkmark.circle.fill")
                     .font(.system(size: 10))
                     .foregroundStyle(Color.success)
+            }
+        }
+    }
+
+    private struct QueueSummary {
+        var firstRunning: ExportJob?
+        var hasFailed: Bool = false
+        var hasCancelled: Bool = false
+    }
+
+    private func queueSummary() -> QueueSummary {
+        appState.exportQueue.reduce(into: QueueSummary()) { summary, job in
+            switch job.status {
+            case .running:
+                if summary.firstRunning == nil { summary.firstRunning = job }
+            case .failed:
+                summary.hasFailed = true
+            case .cancelled:
+                summary.hasCancelled = true
+            case .queued, .done:
+                break
             }
         }
     }

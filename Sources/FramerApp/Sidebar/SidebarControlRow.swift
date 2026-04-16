@@ -20,6 +20,18 @@ struct SidebarControlRowStyle: Sendable, Equatable {
     }
 }
 
+/// Trailing-value content for `SidebarControlRow`. A small hand-rolled
+/// result-builder type (rather than a plain `View` generic) so the row can
+/// distinguish "no trailing content at all" from "trailing content wrapped
+/// in a conditional that currently renders EmptyView".
+///
+/// Without this distinction, `secondary: { if jpegQuality != nil { row } }`
+/// resolves to `_ConditionalContent<Row, EmptyView>` — a non-EmptyView type
+/// that wouldn't be caught by a compile-time `TrailingValue == EmptyView`
+/// check, and the row would reserve trailing space + flip content alignment
+/// even when the conditional's false branch was active. The builder's
+/// `.absent` case tracks absence at runtime so the layout decisions stay
+/// correct in both unconditional and conditional trailing closures.
 @MainActor
 struct SidebarControlRowTrailingValueContent {
     private let content: AnyView
