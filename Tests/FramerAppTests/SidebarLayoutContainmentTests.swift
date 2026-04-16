@@ -37,6 +37,46 @@ final class SidebarLayoutContainmentTests: XCTestCase {
         )
     }
 
+    func test_sidebarFullWidthRow_fitsWithinContainedWidth() {
+        assertFitsSidebarWidth(
+            SidebarFullWidthRow("Probe") {
+                Rectangle().fill(Color.red).frame(height: 40)
+            },
+            name: "SidebarFullWidthRow"
+        )
+    }
+
+    func test_sidebarPreviewStrip_fitsWithinContainedWidth() {
+        let items = (0..<30).map { ContainmentProbeItem(id: $0) }
+        assertFitsSidebarWidth(
+            SidebarPreviewStrip(items: items) { _ in
+                Rectangle().fill(Color.blue)
+            },
+            name: "SidebarPreviewStrip"
+        )
+    }
+
+    func test_sidebarPaletteEditor_fitsWithinContainedWidth() {
+        let palette: [CodableColor] = [.white, .black, (try? CodableColor(hex: "FF0000")) ?? .white]
+        assertFitsSidebarWidth(
+            SidebarPaletteEditor(colors: .constant(palette)),
+            name: "SidebarPaletteEditor"
+        )
+    }
+
+    func test_sidebarChipFlow_fitsWithinContainedWidth() {
+        let tokens = Array("abcdefghijklmnopqrstuvwxyz0123456789").map(String.init)
+        assertFitsSidebarWidth(
+            SidebarChipFlow(items: tokens) { token in
+                Text("{\(token)}")
+                    .font(AppFont.mono(10))
+                    .padding(.horizontal, 6)
+                    .padding(.vertical, 2)
+            },
+            name: "SidebarChipFlow"
+        )
+    }
+
     private func assertFitsSidebarWidth<V: View>(
         _ view: V,
         name: String,
@@ -89,6 +129,8 @@ final class SidebarLayoutContainmentTests: XCTestCase {
         collect(from: root)
         return frames
     }
+
+    private struct ContainmentProbeItem: Identifiable { let id: Int }
 
     private func hasClipViewAncestor(_ view: NSView) -> Bool {
         var current: NSView? = view.superview
