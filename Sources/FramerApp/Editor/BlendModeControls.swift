@@ -64,7 +64,7 @@ struct BlendModeControls: View {
                 range: 0...100,
                 accessibilityLabel: "Opacity",
                 step: 1,
-                suffix: "%"
+                unit: "%"
             )
         }
     }

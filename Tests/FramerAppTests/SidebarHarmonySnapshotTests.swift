@@ -113,7 +113,7 @@ final class SidebarHarmonySnapshotTests: XCTestCase {
             named: "output-rows-jpeg",
             of: makeOutputRows(outputFormat: .jpeg(quality: 85), stripMetadata: false),
             size: CGSize(width: 350, height: 260),
-            expectedSHA256: "fa188c40cf015bb514b7a6f81ccb396a9baba20453de65d5ed2a0bf5ee43ee91"
+            expectedSHA256: "8245b324274aed1f1b3e036097315f75e851313dfb75cb964b30010b42157ad5"
         )
     }
 
@@ -138,14 +138,14 @@ final class SidebarHarmonySnapshotTests: XCTestCase {
             named: "dense-caption-editor",
             of: CaptionLayerControls(params: CaptionLayerParams()) { _ in },
             size: CGSize(width: 350, height: 760),
-            expectedSHA256: "151af5cd43526277e1ecf79f0c9e48b323367d80c9c54767eb2d75eab2ea6669"
+            expectedSHA256: "b6257238a6bc024fe4c9636e5853a19f3bd23fefe18e45585b8b8b33912781c7"
         )
 
         assertSnapshot(
             named: "dense-dither-editor",
             of: DitherLayerControls(params: DitherLayerParams()) { _ in },
             size: CGSize(width: 350, height: 900),
-            expectedSHA256: "08d49afe4177c61db66403a7ffb68c50e091e58a47de8d9bdff7d4b4f82e4cb8"
+            expectedSHA256: "83ec8c2965f4dfb08374f3f79af95cc150717f04103203a2bbfb2cb3cc7318b6"
         )
     }
 
@@ -154,7 +154,7 @@ final class SidebarHarmonySnapshotTests: XCTestCase {
             named: "overlay-editor",
             of: OverlayLayerControls(params: OverlayLayerParams()) { _ in },
             size: CGSize(width: 350, height: 420),
-            expectedSHA256: "a164b2a7ff9b300bd70ff37e0eea3dcc0f887a0f0c67eb4f3aa8ced9c3d0029b"
+            expectedSHA256: "5d65a2bd48331fd678b05a1286fd67074c46f68e159b038a4b9eb7f2c8911930"
         )
     }
 
@@ -189,11 +189,11 @@ final class SidebarHarmonySnapshotTests: XCTestCase {
             } secondary: {
                 if let jpegQuality = InspectorOutputControlState.jpegQuality(for: outputFormat) {
                     SidebarControlRow("Quality") {
-                        StyledSlider(
+                        StyledSliderWithUnit(
                             value: .constant(jpegQuality),
                             range: 60...100,
                             step: 5,
-                            suffix: "%"
+                            unit: "%"
                         )
                     }
                 }
