@@ -1,18 +1,37 @@
 import SwiftUI
 import FramerCore
 
+enum InspectorOutputControlState {
+    static func formatSelection(for outputFormat: OutputFormat) -> String {
+        outputFormat == .png ? "png" : "jpeg"
+    }
+
+    static func applyFormatSelection(_ selection: String, to config: inout ProcessingConfig) {
+        config.outputFormat = selection == "png" ? .png : .jpeg(quality: 100)
+    }
+
+    static func jpegQuality(for outputFormat: OutputFormat) -> Double? {
+        guard case .jpeg(let quality) = outputFormat else {
+            return nil
+        }
+
+        return Double(quality)
+    }
+
+    static func setJPEGQuality(_ quality: Double, on config: inout ProcessingConfig) {
+        config.outputFormat = .jpeg(quality: Int(quality))
+    }
+}
+
 struct InspectorView: View {
     @Environment(AppState.self) var appState
+    @AppStorage("sidebarPresetsSectionExpanded") private var presetsExpanded: Bool = true
 
     var body: some View {
-        ScrollView {
+        SidebarShell {
             VStack(alignment: .leading, spacing: 16) {
-                // Active preset banner
-                if let presetName = appState.activePresetName {
-                    activePresetBanner(presetName)
-                }
-
-                // Presets section
+                // Presets section (collapsible; collapsed state shows the
+                // active preset banner inline if one is applied)
                 presetsSection
 
                 // Layers section
@@ -21,14 +40,8 @@ struct InspectorView: View {
                 // Output section
                 outputSection
             }
-            .padding(12)
-        }
-        .safeAreaInset(edge: .bottom, spacing: 0) {
+        } footer: {
             ExportBar()
-        }
-        .background(Color.surface1)
-        .overlay(alignment: .leading) {
-            Rectangle().fill(Color.borderDefault).frame(width: 1)
         }
         .onAppear { ensureLayersInitialized() }
         .onChange(of: appState.currentConfig.layers == nil) { _, layersAreNil in
@@ -36,9 +49,10 @@ struct InspectorView: View {
         }
     }
 
-    // MARK: - Active Preset Banner
+    // MARK: - Active Preset Summary (shown when section is collapsed)
 
-    private func activePresetBanner(_ name: String) -> some View {
+    @ViewBuilder
+    private func activePresetSummary(_ name: String) -> some View {
         HStack(spacing: 6) {
             Image(systemName: "slider.horizontal.3")
                 .font(.system(size: 10))
@@ -64,6 +78,7 @@ struct InspectorView: View {
                     .foregroundStyle(Color.text2)
             }
             .buttonStyle(.plain)
+            .accessibilityLabel("Clear active preset")
         }
         .padding(.horizontal, 10)
         .padding(.vertical, 7)
@@ -77,20 +92,29 @@ struct InspectorView: View {
     // MARK: - Presets Section
 
     private var presetsSection: some View {
-        VStack(alignment: .leading, spacing: 8) {
-            Text("PRESETS")
-                .font(AppFont.sectionHeader)
-                .tracking(1.5)
-                .foregroundStyle(Color.text3)
-
+        CollapsibleSidebarSection(
+            "PRESETS",
+            isExpanded: $presetsExpanded
+        ) {
             PresetPreviewGrid()
+        } collapsedContent: {
+            if let presetName = appState.activePresetName {
+                activePresetSummary(presetName)
+            }
         }
     }
 
     // MARK: - Layers Section
 
     private var layersSection: some View {
-        LayerListSection(layers: layersBinding)
+        // Header-less section — `LayerListSection` owns its "LAYERS (n)"
+        // eyebrow internally rather than surfacing it through
+        // `SidebarSection`'s Header slot. `expandedBodyInset: 0` tightens
+        // the section's internal spacing so the layer row rhythm isn't
+        // double-padded.
+        SidebarSection(metrics: SidebarMetrics(expandedBodyInset: 0)) {
+            LayerListSection(layers: layersBinding)
+        }
     }
 
     private var layersBinding: Binding<[CompositionLayer]> {
@@ -109,61 +133,69 @@ struct InspectorView: View {
     // MARK: - Output Section
 
     private var outputSection: some View {
-        VStack(alignment: .leading, spacing: 8) {
-            Text("OUTPUT")
-                .font(AppFont.sectionHeader)
-                .tracking(1.5)
-                .foregroundStyle(Color.text3)
-
-            // Format picker
-            HStack {
-                Text("Format")
-                    .font(AppFont.controlLabel)
-                    .foregroundStyle(Color.text2)
-                Spacer()
-                FormatPicker(selection: outputFormatBinding)
-            }
-
-            // Quality slider (JPEG only)
-            if case .jpeg(let q) = appState.currentConfig.outputFormat {
-                HStack {
-                    Text("Quality")
-                        .font(AppFont.controlLabel)
-                        .foregroundStyle(Color.text2)
-                    Spacer()
-                    StyledSlider(
-                        value: Binding(
-                            get: { Double(q) },
-                            set: { appState.currentConfig.outputFormat = .jpeg(quality: Int($0)) }
-                        ),
-                        range: 60...100,
-                        step: 5,
-                        suffix: "%"
-                    )
-                    .frame(maxWidth: 180)
+        SidebarSection("OUTPUT") {
+            SidebarCompoundControlBlock {
+                SidebarControlRow("Format") {
+                    FormatPicker(selection: outputFormatBinding)
+                }
+            } secondary: {
+                if jpegQuality != nil {
+                    SidebarControlRow("Quality") {
+                        Slider(value: jpegQualityBinding, in: 60...100, step: 5)
+                            .tint(Color.accentDim)
+                            .accessibilityLabel(Text("Quality"))
+                    } trailingValue: {
+                        SidebarTrailingUnitCluster(unit: "%") {
+                            TextField("", value: jpegQualityBinding, format: .number)
+                                .textFieldStyle(.plain)
+                                .font(AppFont.numericInput)
+                                .foregroundStyle(Color.text1)
+                                .multilineTextAlignment(.trailing)
+                                .padding(.horizontal, 6)
+                                .padding(.vertical, 3)
+                                .background(Color.surface3, in: RoundedRectangle(cornerRadius: CornerRadius.sm))
+                                .overlay(
+                                    RoundedRectangle(cornerRadius: CornerRadius.sm)
+                                        .stroke(Color.borderDefault, lineWidth: 1)
+                                )
+                                .monospacedDigit()
+                                .accessibilityLabel(Text("Quality"))
+                        }
+                    }
                 }
             }
 
-            // Strip EXIF toggle
-            HStack {
-                Text("Strip EXIF metadata")
-                    .font(AppFont.controlLabel)
-                    .foregroundStyle(Color.text2)
-                Spacer()
-                StyledToggle(isOn: Binding(
-                    get: { appState.currentConfig.noMetadata },
-                    set: { appState.currentConfig.noMetadata = $0 }
-                ))
+            SidebarControlRow("Strip EXIF metadata") {
+                EmptyView()
+            } trailingValue: {
+                StyledToggle(isOn: noMetadataBinding)
+                    .padding(.trailing, 1)
             }
         }
     }
 
-    private var outputFormatBinding: Binding<String> {
+    private var jpegQuality: Double? {
+        InspectorOutputControlState.jpegQuality(for: appState.currentConfig.outputFormat)
+    }
+
+    private var jpegQualityBinding: Binding<Double> {
         Binding(
-            get: { appState.currentConfig.outputFormat == .png ? "png" : "jpeg" },
-            set: { appState.currentConfig.outputFormat = $0 == "png" ? .png : .jpeg(quality: 100) }
+            get: { jpegQuality ?? 100 },
+            set: { InspectorOutputControlState.setJPEGQuality($0, on: &appState.currentConfig) }
         )
     }
 
+    private var noMetadataBinding: Binding<Bool> {
+        Binding(
+            get: { appState.currentConfig.noMetadata },
+            set: { appState.currentConfig.noMetadata = $0 }
+        )
+    }
 
+    private var outputFormatBinding: Binding<String> {
+        Binding(
+            get: { InspectorOutputControlState.formatSelection(for: appState.currentConfig.outputFormat) },
+            set: { InspectorOutputControlState.applyFormatSelection($0, to: &appState.currentConfig) }
+        )
+    }
 }

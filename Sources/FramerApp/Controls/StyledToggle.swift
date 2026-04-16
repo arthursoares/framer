@@ -2,21 +2,41 @@ import SwiftUI
 
 struct StyledToggle: View {
     @Binding var isOn: Bool
+    private let label: LocalizedStringKey?
+
+    init(_ label: LocalizedStringKey? = nil, isOn: Binding<Bool>) {
+        self._isOn = isOn
+        self.label = label
+    }
 
     var body: some View {
+        Toggle(isOn: $isOn) {
+            if let label {
+                Text(label)
+            }
+        }
+            .labelsHidden()
+            .toggleStyle(StyledToggleControlStyle())
+            .accessibilityValue(Text(isOn ? "On" : "Off"))
+    }
+}
+
+private struct StyledToggleControlStyle: ToggleStyle {
+    func makeBody(configuration: Configuration) -> some View {
         Button {
-            isOn.toggle()
+            configuration.isOn.toggle()
         } label: {
             Capsule()
-                .fill(isOn ? Color.accentDim : Color.surface4)
+                .fill(configuration.isOn ? Color.accentDim : Color.surface4)
                 .frame(width: 32, height: 18)
-                .overlay(alignment: isOn ? .trailing : .leading) {
+                .overlay(alignment: configuration.isOn ? .trailing : .leading) {
                     Circle()
-                        .fill(isOn ? Color.text0 : Color.text2)
+                        .fill(configuration.isOn ? Color.text0 : Color.text2)
                         .frame(width: 12, height: 12)
                         .padding(3)
                 }
         }
         .buttonStyle(.plain)
+        .contentShape(Capsule())
     }
 }

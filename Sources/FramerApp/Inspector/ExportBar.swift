@@ -1,8 +1,15 @@
 import SwiftUI
 import FramerCore
 
+private enum ExportBarLayout {
+    static let buttonSpacing = 4.0
+    static let buttonVerticalPadding = 7.0
+    static let queuePopoverWidth = 260.0
+}
+
 struct ExportBar: View {
     @Environment(AppState.self) var appState
+    @Environment(\.sidebarMetrics) private var metrics
     @AppStorage("lastExportDirectory") private var lastExportDirectory: String = ""
     @State private var showingExportSheet = false
     @State private var showingQueuePopover = false
@@ -13,44 +20,34 @@ struct ExportBar: View {
     var body: some View {
         VStack(spacing: 0) {
             Rectangle().fill(Color.borderDefault).frame(height: 1)
-            HStack(spacing: 12) {
-                // Export Selected
-                Button {
-                    promptAndExport(appState.library.filter { appState.selectedItems.contains($0.id) })
-                } label: {
-                    HStack(spacing: 4) {
-                        Image(systemName: "square.and.arrow.up")
-                            .font(.system(size: 10))
-                        Text("Selected")
-                            .font(AppFont.buttonText)
-                        if !appState.selectedItems.isEmpty {
-                            Text("\(appState.selectedItems.count)")
-                                .font(AppFont.badgeSummary)
-                                .padding(.horizontal, 5)
-                                .padding(.vertical, 1)
-                                .background(Color.surface4, in: Capsule())
-                        }
+            HStack(spacing: metrics.expandedBodyInset) {
+                actionButton(
+                    title: "Selected",
+                    systemImage: "square.and.arrow.up",
+                    count: appState.selectedItems.isEmpty ? nil : appState.selectedItems.count,
+                    stateStyle: .hover,
+                    countBackground: Color.surface3,
+                    countForeground: Color.text1,
+                    action: {
+                        promptAndExport(appState.library.filter { appState.selectedItems.contains($0.id) })
                     }
-                    .foregroundStyle(Color.text1)
-                    .padding(.horizontal, 12)
-                    .padding(.vertical, 7)
-                    .background(Color.surface3, in: RoundedRectangle(cornerRadius: CornerRadius.md))
-                    .overlay(
-                        RoundedRectangle(cornerRadius: CornerRadius.md)
-                            .stroke(Color.borderDefault, lineWidth: 1)
-                    )
-                }
-                .buttonStyle(.plain)
+                )
                 .disabled(appState.selectedItems.isEmpty)
 
                 Spacer()
 
-                // Queue indicator
                 if !appState.exportQueue.isEmpty {
                     Button {
                         showingQueuePopover.toggle()
                     } label: {
                         queueIndicator
+                            .padding(.horizontal, metrics.outerInset)
+                            .padding(.vertical, ExportBarLayout.buttonVerticalPadding)
+                            .background(SidebarStateStyle.hover.backgroundColor, in: RoundedRectangle(cornerRadius: CornerRadius.md))
+                            .overlay {
+                                RoundedRectangle(cornerRadius: CornerRadius.md)
+                                    .stroke(SidebarStateStyle.hover.borderColor, lineWidth: 1)
+                            }
                     }
                     .buttonStyle(.plain)
                     .popover(isPresented: $showingQueuePopover) {
@@ -58,37 +55,21 @@ struct ExportBar: View {
                     }
                 }
 
-                // Export All
-                Button {
-                    promptAndExport(appState.library)
-                } label: {
-                    HStack(spacing: 4) {
-                        Image(systemName: "square.and.arrow.up.on.square")
-                            .font(.system(size: 10))
-                        Text("All")
-                            .font(AppFont.buttonText)
-                        if !appState.library.isEmpty {
-                            Text("\(appState.library.count)")
-                                .font(AppFont.badgeSummary)
-                                .padding(.horizontal, 5)
-                                .padding(.vertical, 1)
-                                .background(Color.accent.opacity(0.2), in: Capsule())
-                        }
+                actionButton(
+                    title: "All",
+                    systemImage: "square.and.arrow.up.on.square",
+                    count: appState.library.isEmpty ? nil : appState.library.count,
+                    stateStyle: .selectedCurrent,
+                    countBackground: Color.accentGlow,
+                    countForeground: Color.accent,
+                    action: {
+                        promptAndExport(appState.library)
                     }
-                    .foregroundStyle(Color.text0)
-                    .padding(.horizontal, 12)
-                    .padding(.vertical, 7)
-                    .background(Color.accentDim, in: RoundedRectangle(cornerRadius: CornerRadius.md))
-                    .overlay(
-                        RoundedRectangle(cornerRadius: CornerRadius.md)
-                            .stroke(Color.accent, lineWidth: 1)
-                    )
-                }
-                .buttonStyle(.plain)
+                )
                 .disabled(appState.library.isEmpty)
             }
-            .padding(.horizontal, 12)
-            .padding(.vertical, 10)
+            .padding(.horizontal, metrics.outerInset)
+            .padding(.vertical, metrics.expandedBodyInset)
             .background(Color.surface1)
         }
         .onReceive(NotificationCenter.default.publisher(for: .framerExportSelected)) { _ in
@@ -104,12 +85,13 @@ struct ExportBar: View {
 
     @ViewBuilder
     private var queueIndicator: some View {
-        let running = appState.exportQueue.filter { $0.status == .running }
-        let failed = appState.exportQueue.filter { if case .failed = $0.status { return true }; return false }
-        let cancelled = appState.exportQueue.filter { $0.status == .cancelled }
+        // Single-pass summary of the export queue. Previously this computed
+        // three independent `.filter` passes over `exportQueue`; one reduce
+        // captures the only states that affect the indicator.
+        let summary = queueSummary()
 
-        HStack(spacing: 4) {
-            if let job = running.first {
+        HStack(spacing: ExportBarLayout.buttonSpacing) {
+            if let job = summary.firstRunning {
                 ProgressView(value: job.progress)
                     .progressViewStyle(.circular)
                     .controlSize(.mini)
@@ -117,11 +99,11 @@ struct ExportBar: View {
                 Text("\(job.completedCount)/\(job.items.count)")
                     .font(AppFont.photoCount)
                     .foregroundStyle(Color.text2)
-            } else if !failed.isEmpty {
+            } else if summary.hasFailed {
                 Image(systemName: "exclamationmark.triangle.fill")
                     .font(.system(size: 10))
                     .foregroundStyle(Color.error)
-            } else if !cancelled.isEmpty {
+            } else if summary.hasCancelled {
                 Image(systemName: "xmark.circle.fill")
                     .font(.system(size: 10))
                     .foregroundStyle(Color.text3)
@@ -131,6 +113,65 @@ struct ExportBar: View {
                     .foregroundStyle(Color.success)
             }
         }
+    }
+
+    private struct QueueSummary {
+        var firstRunning: ExportJob?
+        var hasFailed: Bool = false
+        var hasCancelled: Bool = false
+    }
+
+    private func queueSummary() -> QueueSummary {
+        appState.exportQueue.reduce(into: QueueSummary()) { summary, job in
+            switch job.status {
+            case .running:
+                if summary.firstRunning == nil { summary.firstRunning = job }
+            case .failed:
+                summary.hasFailed = true
+            case .cancelled:
+                summary.hasCancelled = true
+            case .queued, .done:
+                break
+            }
+        }
+    }
+
+    private func actionButton(
+        title: LocalizedStringKey,
+        systemImage: String,
+        count: Int?,
+        stateStyle: SidebarStateStyle,
+        countBackground: Color,
+        countForeground: Color,
+        action: @escaping () -> Void
+    ) -> some View {
+        Button(action: action) {
+            HStack(spacing: ExportBarLayout.buttonSpacing) {
+                Image(systemName: systemImage)
+                    .font(.system(size: 10))
+                Text(title)
+                    .font(AppFont.buttonText)
+
+                if let count {
+                    Text("\(count)")
+                        .font(AppFont.badgeSummary)
+                        .foregroundStyle(countForeground)
+                        .padding(.horizontal, 5)
+                        .padding(.vertical, 1)
+                        .background(countBackground, in: Capsule())
+                }
+            }
+            .foregroundStyle(stateStyle.foregroundColor)
+            .padding(.horizontal, metrics.outerInset)
+            .padding(.vertical, ExportBarLayout.buttonVerticalPadding)
+            .background(stateStyle.backgroundColor, in: RoundedRectangle(cornerRadius: CornerRadius.md))
+            .overlay {
+                RoundedRectangle(cornerRadius: CornerRadius.md)
+                    .stroke(stateStyle.borderColor, lineWidth: 1)
+            }
+            .opacity(stateStyle.opacity)
+        }
+        .buttonStyle(.plain)
     }
 
     // MARK: - Export Logic
@@ -269,9 +310,10 @@ struct ExportBar: View {
 
 struct ExportQueuePopover: View {
     @Environment(AppState.self) var appState
+    @Environment(\.sidebarMetrics) private var metrics
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 8) {
+        VStack(alignment: .leading, spacing: metrics.expandedBodyInset) {
             HStack {
                 Text("EXPORT QUEUE")
                     .font(AppFont.sectionHeader)
@@ -292,13 +334,15 @@ struct ExportQueuePopover: View {
                 jobRow(job)
             }
         }
-        .padding(14)
-        .frame(width: 260)
+        .padding(metrics.outerInset)
+        .frame(width: ExportBarLayout.queuePopoverWidth)
         .background(Color.surface1)
     }
 
     private func jobRow(_ job: ExportJob) -> some View {
-        HStack(spacing: 6) {
+        let rowStyle = jobRowStyle(job)
+
+        return HStack(spacing: Spacing.sm) {
             statusIcon(job.status)
             VStack(alignment: .leading, spacing: 2) {
                 HStack(spacing: 4) {
@@ -351,7 +395,22 @@ struct ExportQueuePopover: View {
                 .buttonStyle(.plain)
             }
         }
-        .padding(.vertical, 2)
+        .padding(.horizontal, metrics.expandedBodyInset)
+        .padding(.vertical, metrics.expandedBodyInset)
+        .background(rowStyle.backgroundColor, in: RoundedRectangle(cornerRadius: CornerRadius.md))
+        .overlay {
+            RoundedRectangle(cornerRadius: CornerRadius.md)
+                .stroke(rowStyle.borderColor, lineWidth: 1)
+        }
+    }
+
+    private func jobRowStyle(_ job: ExportJob) -> SidebarStateStyle {
+        switch job.status {
+        case .running:
+            return .focus
+        case .queued, .done, .cancelled, .failed:
+            return .hover
+        }
     }
 
     @ViewBuilder

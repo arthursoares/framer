@@ -2,6 +2,20 @@ import SwiftUI
 import AppKit
 import FramerCore
 
+/// Wraps a `ColorPickerWithHex` leaf in a `denseControlRow` so the visible
+/// label appears in the sidebar's 104pt label column instead of floating
+/// inline next to the color well. Introduced as part of sidebar harmony
+/// pass 3 to eliminate the stray "Color" / "Fill Color" / "Foreground" /
+/// etc. chips rendered by `ColorPicker`'s own label.
+fileprivate func labeledColorPicker(
+    _ label: String,
+    selection: Binding<Color>,
+    onHexCommit: ((CodableColor) -> Void)? = nil
+) -> some View {
+    ColorPickerWithHex(LocalizedStringKey(label), selection: selection, onHexCommit: onHexCommit)
+        .denseControlRow(LocalizedStringKey(label))
+}
+
 // MARK: - LayerListSection
 
 struct LayerListSection: View {
@@ -11,68 +25,78 @@ struct LayerListSection: View {
     @State private var dropTargetIndex: Int?
 
     var body: some View {
-        Section {
-            ForEach(Array(layers.enumerated()), id: \.element.id) { index, layer in
-                VStack(spacing: 0) {
-                    // Drop indicator line above this row
-                    if dropTargetIndex == index {
-                        dropIndicator
-                    }
-
-                    LayerRow(
-                        layer: binding(for: layer),
-                        onDelete: { removeLayer(at: index) },
-                        onMoveUp: index > 0 ? { moveLayer(from: index, to: index - 1) } : nil,
-                        onMoveDown: index < layers.count - 1 ? { moveLayer(from: index, to: index + 1) } : nil
-                    )
-                    .opacity(draggingLayerID == layer.id ? 0.3 : 1.0)
-                    .draggable(layer.id.uuidString) {
-                        Label(layer.label, systemImage: layer.iconName)
-                            .padding(.horizontal, 10)
-                            .padding(.vertical, 6)
-                            .background(Color.surface2, in: RoundedRectangle(cornerRadius: 6))
-                            .overlay(RoundedRectangle(cornerRadius: 6).stroke(Color.accent.opacity(0.3), lineWidth: 1))
-                            .onAppear { draggingLayerID = layer.id }
-                    }
-                    .dropDestination(for: String.self) { items, _ in
-                        dropTargetIndex = nil
-                        draggingLayerID = nil
-                        guard let droppedIDString = items.first,
-                              let droppedID = UUID(uuidString: droppedIDString),
-                              let fromIndex = layers.firstIndex(where: { $0.id == droppedID }),
-                              fromIndex != index else { return false }
-                        let toOffset = index > fromIndex ? index + 1 : index
-                        let snapshot = layers
-                        let layersBinding = $layers
-                        withAnimation(.easeInOut(duration: 0.2)) {
-                            layers.move(fromOffsets: IndexSet(integer: fromIndex), toOffset: toOffset)
+        SidebarSection("LAYERS (\(layers.count))", metrics: SidebarMetrics(expandedBodyInset: 0)) {
+            VStack(alignment: .leading, spacing: Spacing.xs) {
+                ForEach(Array(layers.enumerated()), id: \.element.id) { index, layer in
+                    VStack(spacing: 0) {
+                        if dropTargetIndex == index {
+                            dropIndicator
                         }
-                        undoManager?.registerUndo(withTarget: UndoProxy.shared) { @MainActor _ in
+
+                        LayerPanelRow(
+                            layer: binding(for: layer),
+                            isDragging: draggingLayerID == layer.id,
+                            isDropTarget: dropTargetIndex == index,
+                            onDelete: { removeLayer(at: index) },
+                            onMoveUp: index > 0 ? { moveLayer(from: index, to: index - 1) } : nil,
+                            onMoveDown: index < layers.count - 1 ? { moveLayer(from: index, to: index + 1) } : nil
+                        )
+                        .draggable(layer.id.uuidString) {
+                            let draggingStyle = SidebarStateStyle.dragging
+
+                            return Label(layer.label, systemImage: layer.iconName)
+                                .foregroundStyle(draggingStyle.foregroundColor)
+                                .padding(.horizontal, Spacing.md)
+                                .padding(.vertical, Spacing.sm)
+                                .background(
+                                    draggingStyle.backgroundColor,
+                                    in: RoundedRectangle(cornerRadius: CornerRadius.md)
+                                )
+                                .overlay(
+                                    RoundedRectangle(cornerRadius: CornerRadius.md)
+                                        .stroke(draggingStyle.borderColor, lineWidth: 1)
+                                )
+                                .onAppear { draggingLayerID = layer.id }
+                        }
+                        .dropDestination(for: String.self) { items, _ in
+                            dropTargetIndex = nil
+                            draggingLayerID = nil
+                            guard let droppedIDString = items.first,
+                                  let droppedID = UUID(uuidString: droppedIDString),
+                                  let fromIndex = layers.firstIndex(where: { $0.id == droppedID }),
+                                  fromIndex != index else { return false }
+
+                            let toOffset = index > fromIndex ? index + 1 : index
+                            let snapshot = layers
+                            let layersBinding = $layers
+
                             withAnimation(.easeInOut(duration: 0.2)) {
-                                layersBinding.wrappedValue = snapshot
+                                layers.move(fromOffsets: IndexSet(integer: fromIndex), toOffset: toOffset)
+                            }
+
+                            undoManager?.registerUndo(withTarget: UndoProxy.shared) { @MainActor _ in
+                                withAnimation(.easeInOut(duration: 0.2)) {
+                                    layersBinding.wrappedValue = snapshot
+                                }
+                            }
+
+                            undoManager?.setActionName("Move Layer")
+                            return true
+                        } isTargeted: { targeted in
+                            withAnimation(.easeInOut(duration: 0.15)) {
+                                dropTargetIndex = targeted ? index : (dropTargetIndex == index ? nil : dropTargetIndex)
                             }
                         }
-                        undoManager?.setActionName("Move Layer")
-                        return true
-                    } isTargeted: { targeted in
-                        withAnimation(.easeInOut(duration: 0.15)) {
-                            dropTargetIndex = targeted ? index : (dropTargetIndex == index ? nil : dropTargetIndex)
+
+                        if index == layers.count - 1 && dropTargetIndex == layers.count {
+                            dropIndicator
                         }
                     }
-
-                    // Drop indicator after last row
-                    if index == layers.count - 1 && dropTargetIndex == layers.count {
-                        dropIndicator
-                    }
                 }
-            }
 
-            addLayerMenu
-        } header: {
-            Text("LAYERS (\(layers.count))")
-                .font(AppFont.sectionHeader)
-                .tracking(1.5)
-                .foregroundStyle(Color.text3)
+                addLayerMenu
+                    .padding(.top, Spacing.xs)
+            }
         }
     }
 
@@ -265,231 +289,24 @@ private final class UndoProxy: NSObject, Sendable {
     static let shared = UndoProxy()
 }
 
-// MARK: - LayerRow
-
-struct LayerRow: View {
-    @Binding var layer: CompositionLayer
-    let onDelete: () -> Void
-    var onMoveUp: (() -> Void)?
-    var onMoveDown: (() -> Void)?
-
-    @State private var isHovering = false
-    @State private var isExpanded = false
-    @State private var isHoveringVisibilityToggle = false
-    @State private var isHoveringDelete = false
-
-    var body: some View {
-        VStack(spacing: 0) {
-            // Tappable header row
-            HStack(spacing: 6) {
-                // Disclosure chevron
-                Image(systemName: "chevron.right")
-                    .font(.system(size: 9, weight: .bold))
-                    .foregroundStyle(Color.text3)
-                    .rotationEffect(.degrees(isExpanded ? 90 : 0))
-                    .frame(width: 16, height: 16)
-
-                // Drag handle
-                Image(systemName: "line.3.horizontal")
-                    .font(.system(size: 11))
-                    .foregroundStyle(Color.text3)
-                    .frame(width: 20)
-                    .opacity(0.6)
-
-                Image(systemName: layer.iconName)
-                    .foregroundStyle(Color.text2)
-                    .frame(width: 20)
-
-                Text(layer.label)
-                    .font(AppFont.layerName)
-                    .foregroundStyle(layer.isEnabled ? Color.text0 : Color.text2)
-
-                Spacer()
-
-                Text(layerSummary)
-                    .font(AppFont.badgeSummary)
-                    .foregroundStyle(Color.text2)
-                    .padding(.horizontal, 6)
-                    .padding(.vertical, 2)
-                    .background(Color.surface4, in: Capsule())
-
-                Button {
-                    layer.isEnabled.toggle()
-                } label: {
-                    Image(systemName: layer.isEnabled ? "eye" : "eye.slash")
-                        .font(.caption)
-                        .foregroundStyle(isHoveringVisibilityToggle ? Color.text1 : (layer.isEnabled ? Color.text2 : Color.text3))
-                        .frame(width: 24, height: 20)
-                        .contentShape(Rectangle())
-                }
-                .buttonStyle(.plain)
-                .onHover { isHoveringVisibilityToggle = $0 }
-                .accessibilityLabel(layer.isEnabled ? "Disable layer" : "Enable layer")
-
-                Button {
-                    onDelete()
-                } label: {
-                    Image(systemName: "xmark")
-                        .font(.caption2)
-                        .foregroundStyle(isHoveringDelete ? Color.error : Color.text3)
-                        .frame(width: 20, height: 20)
-                        .contentShape(Rectangle())
-                }
-                .buttonStyle(.plain)
-                .onHover { isHoveringDelete = $0 }
-                .opacity(isHovering ? 1 : 0.4)
-                .animation(.easeInOut(duration: 0.15), value: isHovering)
-                .accessibilityLabel("Delete layer")
-            }
-            .padding(.horizontal, 8)
-            .padding(.vertical, 8)
-            .contentShape(Rectangle())
-            .onTapGesture {
-                withAnimation(.easeInOut(duration: 0.15)) {
-                    isExpanded.toggle()
-                }
-            }
-            .onHover { isHovering = $0 }
-
-            // Lazy controls — only built when expanded
-            if isExpanded {
-                VStack(alignment: .leading, spacing: 10) {
-                    layerControls
-                }
-                .padding(.top, 8)
-                .padding(.bottom, 12)
-                .padding(.leading, 20)
-                .padding(.trailing, 4)
-                .foregroundStyle(Color.text1)
-                .tint(Color.accent)
-                .transition(.opacity.combined(with: .move(edge: .top)))
-            }
-        }
-        .background(
-            RoundedRectangle(cornerRadius: CornerRadius.md)
-                .fill(isExpanded ? Color.surface2 : (isHovering ? Color.surface2.opacity(0.5) : .clear))
-        )
-        .opacity(layer.isEnabled ? 1.0 : 0.65)
-        .overlay(
-            RoundedRectangle(cornerRadius: CornerRadius.md)
-                .stroke(isExpanded ? Color.borderDefault : (isHovering ? Color.borderDefault : .clear), lineWidth: 1)
-        )
-        .contextMenu {
-            if let onMoveUp {
-                Button { onMoveUp() } label: {
-                    Label("Move Up", systemImage: "chevron.up")
-                }
-            }
-            if let onMoveDown {
-                Button { onMoveDown() } label: {
-                    Label("Move Down", systemImage: "chevron.down")
-                }
-            }
-            Divider()
-            Button {
-                layer.isEnabled.toggle()
-            } label: {
-                Label(layer.isEnabled ? "Disable Layer" : "Enable Layer",
-                      systemImage: layer.isEnabled ? "eye.slash" : "eye")
-            }
-            Divider()
-            Button(role: .destructive) {
-                onDelete()
-            } label: {
-                Label("Delete Layer", systemImage: "trash")
-            }
-        }
-    }
-
-    @ViewBuilder
-    private var layerControls: some View {
-        switch layer {
-        case .border(let params):
-            BorderLayerControls(params: params) { layer = .border($0) }
-        case .padding(let params):
-            PaddingLayerControls(params: params) { layer = .padding($0) }
-        case .canvas(let params):
-            CanvasLayerControls(params: params) { layer = .canvas($0) }
-        case .resize(let params):
-            ResizeLayerControls(params: params) { layer = .resize($0) }
-        case .overlay(let params):
-            OverlayLayerControls(params: params) { layer = .overlay($0) }
-        case .orientation(let params):
-            OrientationLayerControls(params: params) { layer = .orientation($0) }
-        case .caption(let params):
-            CaptionLayerControls(params: params) { layer = .caption($0) }
-        case .dither(let params):
-            DitherLayerControls(params: params) { layer = .dither($0) }
-        case .aspectRatio(let params):
-            AspectRatioLayerControls(params: params) { layer = .aspectRatio($0) }
-        case .lut(let params):
-            LUTLayerControls(params: params) { layer = .lut($0) }
-        case .shader(let params):
-            ShaderLayerControls(params: params) { layer = .shader($0) }
-        case .gpuEffect(let params):
-            GPUEffectLayerControls(params: params) { layer = .gpuEffect($0) }
-        }
-    }
-
-    private var layerSummary: String {
-        if !layer.isEnabled {
-            return "Disabled"
-        }
-        switch layer {
-        case .border(let p):
-            switch p.thickness {
-            case .pixels(let px): return "\(px)px"
-            case .percent(let pct): return "\(Int(pct))%"
-            }
-        case .padding(let p):
-            return "\(p.thickness)px"
-        case .canvas(let p):
-            return "\(p.width)x\(p.height)"
-        case .resize(let p):
-            return "max \(p.maxWidth)x\(p.maxHeight)"
-        case .overlay(let p):
-            if p.overlayName.isEmpty { return "None" }
-            return "\(p.kind.label) \(Int(p.opacity))%"
-        case .orientation(let p):
-            return p.target.rawValue.capitalized
-        case .caption(let p):
-            switch p.mode {
-            case .template: return "Template"
-            case .custom: return "Custom"
-            case .none: return "Off"
-            }
-        case .dither(let p):
-            return p.algorithm.label
-        case .aspectRatio(let p):
-            return "\(p.ratioWidth):\(p.ratioHeight)"
-        case .lut(let p):
-            return p.lutName.isEmpty ? "None" : p.lutName
-        case .shader(let p):
-            return p.style.label
-        case .gpuEffect(let p):
-            return p.kind.label
-        }
-    }
-}
-
 struct GPUEffectLayerControls: View {
     var params: GPUEffectLayerParams
     var onChange: (GPUEffectLayerParams) -> Void
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 8) {
+        VStack(alignment: .leading, spacing: 0) {
             // Per-variant layers (Option B of the bucket-UI refactor): each
             // GPU-effect variant is a first-class entry in the layer-add
             // menu, so the kind is fixed at creation. Show it here as a
             // read-only label so users know which layer they're editing
             // without offering mid-flight variant switching (which would
             // require re-picking every parameter for the new kind).
-            HStack {
-                Label(params.kind.label, systemImage: params.kind.menuIcon)
-                    .font(AppFont.controlLabel)
-                    .foregroundStyle(Color.text1)
-                Spacer()
-            }
+            Label(params.kind.label, systemImage: params.kind.menuIcon)
+                .font(AppFont.controlLabel)
+                .foregroundStyle(Color.text1)
+                .denseControlRow("Effect")
+
+            SimpleLayerEditorDivider()
 
             BlendModeControls(
                 blendMode: Binding(
@@ -502,6 +319,8 @@ struct GPUEffectLayerControls: View {
                 )
             )
 
+            SimpleLayerEditorDivider()
+
             // Global control blocks are gated by GPUEffectKind capability flags.
             // Each variant's shader only reads a subset of the shared
             // common/geometry/color uniforms — showing sliders the shader
@@ -510,24 +329,20 @@ struct GPUEffectLayerControls: View {
             // when the current kind actually consumes it.
 
             if params.kind.usesGeometry {
-                HStack {
-                    Text("Scale")
-                        .font(AppFont.controlLabel)
-                        .foregroundStyle(Color.text2)
-                    Slider(value: scaleBinding, in: 0.5...2.0)
-                    Text(String(format: "%.2f", scaleBinding.wrappedValue))
-                        .monospacedDigit()
-                        .frame(width: 44)
-                }
-
-                HStack {
-                    Text("Spacing")
-                        .font(AppFont.controlLabel)
-                        .foregroundStyle(Color.text2)
-                    Slider(value: spacingBinding, in: 1...8)
-                    Text(String(format: "%.1f", spacingBinding.wrappedValue))
-                        .monospacedDigit()
-                        .frame(width: 40)
+                SidebarCompoundControlBlock {
+                    DenseSliderControlRow(
+                        title: "Scale",
+                        value: scaleBinding,
+                        range: 0.5...2.0,
+                        step: 0.05
+                    )
+                } secondary: {
+                    DenseSliderControlRow(
+                        title: "Spacing",
+                        value: spacingBinding,
+                        range: 1...8,
+                        step: 0.1
+                    )
                 }
             }
 
@@ -538,52 +353,58 @@ struct GPUEffectLayerControls: View {
                 // array, so the shader had nothing to quantise against.
                 // Dropped from the menu until the bucket renderer grows a
                 // palette uniform the way DitherGPURenderer has.
-                Picker("Color Mode", selection: colorModeBinding) {
+                Picker("", selection: colorModeBinding) {
                     Text("Source").tag(GPUEffectColorMode.source)
                     Text("FG/BG").tag(GPUEffectColorMode.foregroundBackground)
                     Text("Mono").tag(GPUEffectColorMode.monochrome)
                 }
                 .pickerStyle(.menu)
+                .labelsHidden()
+                .denseControlRow("Color Mode")
             }
 
             if params.kind.usesBackgroundIntensity || params.kind.usesColorModeAndFgBg {
-                HStack {
-                    Text("Background")
-                        .font(AppFont.controlLabel)
-                        .foregroundStyle(Color.text2)
-                    Slider(value: backgroundIntensityBinding, in: 0...1)
-                    Text(String(format: "%.2f", backgroundIntensityBinding.wrappedValue))
-                        .monospacedDigit()
-                        .frame(width: 44)
-                }
+                DenseSliderControlRow(
+                    title: "Background",
+                    value: backgroundIntensityBinding,
+                    range: 0...1,
+                    step: 0.05
+                )
             }
 
-            // Common adjustments (brightness / contrast / etc.) are NOT consumed
-            // by any bucket shader today — per GPUEffectKind.usesCommonAdjustments.
-            // Hidden globally. If shaders are later extended to apply them,
-            // flip the flag and they'll light up on the correct variants.
+            // Common adjustments consumed by every bucket shader via
+            // `applyCommonAdjustments` in ShaderCommon.h. Five of six fields
+            // apply (brightness / contrast / saturation / hueRotation / gamma);
+            // `sharpness` stays in the uniform struct for back-compat but is
+            // NOT rendered as a slider — the shared helper flags it as
+            // "0 = identity; not consumed by helpers" (ShaderCommon.h:162)
+            // because sharpening requires neighbour samples the bucket
+            // fragments don't take today. Use the `.shader` layer (Crimewave,
+            // Shiba, CRT, etc.) for sharpening until a sharpen kernel lands in
+            // the bucket family.
             if params.kind.usesCommonAdjustments {
                 adjustmentSlider(label: "Brightness", binding: commonBinding(\.brightness), range: -1...1)
                 adjustmentSlider(label: "Contrast", binding: commonBinding(\.contrast), range: 0...3)
                 adjustmentSlider(label: "Saturation", binding: commonBinding(\.saturation), range: 0...2)
                 adjustmentSlider(label: "Hue", binding: commonBinding(\.hueRotation), range: -1...1)
-                adjustmentSlider(label: "Sharpness", binding: commonBinding(\.sharpness), range: 0...2)
                 adjustmentSlider(label: "Gamma", binding: commonBinding(\.gamma), range: 0.2...2)
             }
 
             if case .textCell(let common, let geometry, let color, let payload) = params.params,
                params.kind == .ascii {
-                Picker("Character Set", selection: characterSetBinding) {
+                Picker("", selection: characterSetBinding) {
                     Text("ASCII").tag(GPUEffectCharacterSet.classicASCII)
                     Text("Blocks").tag(GPUEffectCharacterSet.blocks)
                     Text("Binary").tag(GPUEffectCharacterSet.binary)
                     Text("Dense").tag(GPUEffectCharacterSet.dense)
                 }
                 .pickerStyle(.menu)
+                .labelsHidden()
+                .denseControlRow("Character Set")
 
                 adjustmentSlider(label: "Intensity", binding: textCellBinding(\.intensity), range: 0...1)
 
-                ColorPickerWithHex("Foreground", selection: Binding(
+                labeledColorPicker("Foreground", selection: Binding(
                     get: { nsColor(from: payload.foreground ?? CodableColor(unchecked: "#FFFFFF")) },
                     set: { newColor in
                         guard let hex = newColor.hexString, let codable = try? CodableColor(hex: hex) else { return }
@@ -593,7 +414,7 @@ struct GPUEffectLayerControls: View {
                     }
                 ))
 
-                ColorPickerWithHex("Background", selection: Binding(
+                labeledColorPicker("Background", selection: Binding(
                     get: { nsColor(from: payload.background ?? CodableColor(unchecked: "#101010")) },
                     set: { newColor in
                         guard let hex = newColor.hexString, let codable = try? CodableColor(hex: hex) else { return }
@@ -606,24 +427,32 @@ struct GPUEffectLayerControls: View {
 
             if case .textCell(let common, let geometry, let color, let payload) = params.params,
                params.kind == .dots {
-                Picker("Dot Shape", selection: dotShapeBinding) {
+                Picker("", selection: dotShapeBinding) {
                     Text("Circle").tag(DotShape.circle)
                     Text("Square").tag(DotShape.square)
                     Text("Diamond").tag(DotShape.diamond)
                 }
                 .pickerStyle(.menu)
+                .labelsHidden()
+                .denseControlRow("Dot Shape")
 
-                Picker("Grid", selection: dotGridBinding) {
+                Picker("", selection: dotGridBinding) {
                     Text("Square").tag(DotGridType.square)
                     Text("Hex").tag(DotGridType.hex)
                 }
                 .pickerStyle(.menu)
+                .labelsHidden()
+                .denseControlRow("Grid")
 
                 adjustmentSlider(label: "Dot Size", binding: textCellBinding(\.sizeMultiplier), range: 0.1...2.0)
                 adjustmentSlider(label: "Intensity", binding: textCellBinding(\.intensity), range: 0...1)
-                Toggle("Invert", isOn: textInvertBinding)
+                SidebarControlRow("Invert") {
+                    EmptyView()
+                } trailingValue: {
+                    StyledToggle(isOn: textInvertBinding)
+                }
 
-                ColorPickerWithHex("Foreground", selection: Binding(
+                labeledColorPicker("Foreground", selection: Binding(
                     get: { nsColor(from: payload.foreground ?? CodableColor(unchecked: "#FFFFFF")) },
                     set: { newColor in
                         guard let hex = newColor.hexString, let codable = try? CodableColor(hex: hex) else { return }
@@ -633,7 +462,7 @@ struct GPUEffectLayerControls: View {
                     }
                 ))
 
-                ColorPickerWithHex("Background", selection: Binding(
+                labeledColorPicker("Background", selection: Binding(
                     get: { nsColor(from: payload.background ?? CodableColor(unchecked: "#111111")) },
                     set: { newColor in
                         guard let hex = newColor.hexString, let codable = try? CodableColor(hex: hex) else { return }
@@ -646,19 +475,21 @@ struct GPUEffectLayerControls: View {
 
             if case .textCell(let common, let geometry, let color, let payload) = params.params,
                params.kind == .blockify {
-                Picker("Style", selection: blockStyleBinding) {
+                Picker("", selection: blockStyleBinding) {
                     Text("Solid").tag(BlockStyle.solid)
                     Text("Shaded").tag(BlockStyle.shaded)
                     Text("Outlined").tag(BlockStyle.outlined)
                 }
                 .pickerStyle(.menu)
+                .labelsHidden()
+                .denseControlRow("Style")
 
                 // Shaded mode reuses `borderWidth` as the radial-falloff
                 // strength (0 = flat like solid, 1 = full bubble). Outlined
                 // mode still uses it as the inset thickness.
                 adjustmentSlider(label: "Border Width", binding: blockBorderWidthBinding, range: 0...1)
 
-                ColorPickerWithHex("Foreground", selection: Binding(
+                labeledColorPicker("Foreground", selection: Binding(
                     get: { nsColor(from: payload.foreground ?? CodableColor(unchecked: "#FFFFFF")) },
                     set: { newColor in
                         guard let hex = newColor.hexString, let codable = try? CodableColor(hex: hex) else { return }
@@ -668,7 +499,7 @@ struct GPUEffectLayerControls: View {
                     }
                 ))
 
-                ColorPickerWithHex("Background", selection: Binding(
+                labeledColorPicker("Background", selection: Binding(
                     get: { nsColor(from: payload.background ?? CodableColor(unchecked: "#111111")) },
                     set: { newColor in
                         guard let hex = newColor.hexString, let codable = try? CodableColor(hex: hex) else { return }
@@ -678,7 +509,7 @@ struct GPUEffectLayerControls: View {
                     }
                 ))
 
-                ColorPickerWithHex("Border Color", selection: Binding(
+                labeledColorPicker("Border Color", selection: Binding(
                     get: { nsColor(from: payload.borderColor ?? CodableColor(unchecked: "#00FFAA")) },
                     set: { newColor in
                         guard let hex = newColor.hexString, let codable = try? CodableColor(hex: hex) else { return }
@@ -704,15 +535,17 @@ struct GPUEffectLayerControls: View {
                 // repurposing scheme. Kept out of the UI until one of those
                 // lands so users stop chasing a slider that does nothing.
 
-                Picker("Direction", selection: matrixDirectionBinding) {
+                Picker("", selection: matrixDirectionBinding) {
                     Text("Down").tag(TextCellFlowDirection.down)
                     Text("Up").tag(TextCellFlowDirection.up)
                     Text("Left").tag(TextCellFlowDirection.left)
                     Text("Right").tag(TextCellFlowDirection.right)
                 }
                 .pickerStyle(.menu)
+                .labelsHidden()
+                .denseControlRow("Direction")
 
-                ColorPickerWithHex("Rain Color", selection: Binding(
+                labeledColorPicker("Rain Color", selection: Binding(
                     get: { nsColor(from: payload.rainColor ?? CodableColor(unchecked: "#00FF66")) },
                     set: { newColor in
                         guard let hex = newColor.hexString, let codable = try? CodableColor(hex: hex) else { return }
@@ -725,22 +558,30 @@ struct GPUEffectLayerControls: View {
 
             if case .glitch = params.params,
                params.kind == .pixelSort {
-                Picker("Direction", selection: glitchDirectionBinding) {
+                Picker("", selection: glitchDirectionBinding) {
                     Text("Horizontal").tag(GlitchDirection.horizontal)
                     Text("Vertical").tag(GlitchDirection.vertical)
                 }
                 .pickerStyle(.menu)
+                .labelsHidden()
+                .denseControlRow("Direction")
 
-                Picker("Sort Mode", selection: sortModeBinding) {
+                Picker("", selection: sortModeBinding) {
                     Text("Brightness").tag(PixelSortMode.brightness)
                     Text("Luminance").tag(PixelSortMode.luminance)
                     Text("Hue").tag(PixelSortMode.hue)
                 }
                 .pickerStyle(.menu)
+                .labelsHidden()
+                .denseControlRow("Sort Mode")
 
                 adjustmentSlider(label: "Streak", binding: glitchBinding(\.streakLength), range: 0...1)
                 adjustmentSlider(label: "Random", binding: glitchBinding(\.randomness), range: 0...1)
-                Toggle("Reverse", isOn: reverseBinding)
+                SidebarControlRow("Reverse") {
+                    EmptyView()
+                } trailingValue: {
+                    StyledToggle(isOn: reverseBinding)
+                }
             }
 
             if case .glitch(_, _, _, _) = params.params,
@@ -760,11 +601,13 @@ struct GPUEffectLayerControls: View {
                 adjustmentSlider(label: "Frequency", binding: edgeFieldBinding(\.frequency), range: 0.1...4)
                 adjustmentSlider(label: "Thickness", binding: edgeFieldBinding(\.thickness), range: 0.05...1)
 
-                Picker("Direction", selection: edgeDirectionBinding) {
+                Picker("", selection: edgeDirectionBinding) {
                     Text("Horizontal").tag(EdgeFieldDirection.horizontal)
                     Text("Vertical").tag(EdgeFieldDirection.vertical)
                 }
                 .pickerStyle(.menu)
+                .labelsHidden()
+                .denseControlRow("Direction")
                 // Line Count multiplies the wave-band frequency: the shader
                 // computes countFactor = max(1, lineCount/spacing) and
                 // multiplies `frequency` by it. Range 1..40 covers from "no
@@ -782,13 +625,19 @@ struct GPUEffectLayerControls: View {
                 adjustmentSlider(label: "Field Intensity", binding: edgeFieldBinding(\.fieldIntensity), range: 0...1)
                 adjustmentSlider(label: "Octaves", binding: noiseOctavesBinding, range: 1...6)
                 adjustmentSlider(label: "Scale", binding: edgeFieldBinding(\.amplitude), range: 0.1...1)
-                Picker("Noise Type", selection: noiseTypeBinding) {
+                Picker("", selection: noiseTypeBinding) {
                     Text("Value (IGN)").tag(NoiseFieldType.value)
                     Text("Simplex").tag(NoiseFieldType.simplex)
                     Text("Cellular").tag(NoiseFieldType.cellular)
                 }
                 .pickerStyle(.menu)
-                Toggle("Invert", isOn: edgeInvertBinding)
+                .labelsHidden()
+                .denseControlRow("Noise Type")
+                SidebarControlRow("Invert") {
+                    EmptyView()
+                } trailingValue: {
+                    StyledToggle(isOn: edgeInvertBinding)
+                }
                 // Speed + Animate stay hidden (no time uniform yet).
                 // Distort Only stays hidden (shader generates standalone,
                 // doesn't distort source UVs).
@@ -796,18 +645,24 @@ struct GPUEffectLayerControls: View {
 
             if case .edgeField(let common, let geometry, let color, let payload) = params.params,
                params.kind == .edgeDetection {
-                Picker("Algorithm", selection: edgeAlgorithmBinding) {
+                Picker("", selection: edgeAlgorithmBinding) {
                     Text("Sobel").tag(EdgeAlgorithm.sobel)
                     Text("Laplacian").tag(EdgeAlgorithm.laplacian)
                 }
                 .pickerStyle(.menu)
+                .labelsHidden()
+                .denseControlRow("Algorithm")
 
                 adjustmentSlider(label: "Line Strength", binding: edgeFieldBinding(\.lineStrength), range: 0...1)
                 adjustmentSlider(label: "Threshold", binding: edgeThresholdBinding, range: 0...1)
                 adjustmentSlider(label: "Line Width", binding: edgeFieldBinding(\.thickness), range: 0.05...1)
-                Toggle("Invert", isOn: edgeInvertBinding)
+                SidebarControlRow("Invert") {
+                    EmptyView()
+                } trailingValue: {
+                    StyledToggle(isOn: edgeInvertBinding)
+                }
 
-                ColorPickerWithHex("Edge Color", selection: Binding(
+                labeledColorPicker("Edge Color", selection: Binding(
                     get: { nsColor(from: payload.edgeColor ?? CodableColor(unchecked: "#FFFFFF")) },
                     set: { newColor in
                         guard let hex = newColor.hexString, let codable = try? CodableColor(hex: hex) else { return }
@@ -820,19 +675,25 @@ struct GPUEffectLayerControls: View {
 
             if case .edgeField(let common, let geometry, let color, let payload) = params.params,
                params.kind == .contour {
-                Picker("Fill Mode", selection: contourFillModeBinding) {
+                Picker("", selection: contourFillModeBinding) {
                     Text("Lines").tag(ContourFillMode.linesOnly)
                     Text("Bands").tag(ContourFillMode.filledBands)
                 }
                 .pickerStyle(.menu)
+                .labelsHidden()
+                .denseControlRow("Fill Mode")
 
                 adjustmentSlider(label: "Line Strength", binding: edgeFieldBinding(\.lineStrength), range: 0...1)
                 adjustmentSlider(label: "Field Intensity", binding: edgeFieldBinding(\.fieldIntensity), range: 0.01...1)
                 adjustmentSlider(label: "Levels", binding: contourLevelsBinding, range: 2...24)
                 adjustmentSlider(label: "Line Width", binding: edgeFieldBinding(\.thickness), range: 0.05...1)
-                Toggle("Invert", isOn: edgeInvertBinding)
+                SidebarControlRow("Invert") {
+                    EmptyView()
+                } trailingValue: {
+                    StyledToggle(isOn: edgeInvertBinding)
+                }
 
-                ColorPickerWithHex("Contour Color", selection: Binding(
+                labeledColorPicker("Contour Color", selection: Binding(
                     get: { nsColor(from: payload.edgeColor ?? CodableColor(unchecked: "#FFFFFF")) },
                     set: { newColor in
                         guard let hex = newColor.hexString, let codable = try? CodableColor(hex: hex) else { return }
@@ -849,9 +710,13 @@ struct GPUEffectLayerControls: View {
                 adjustmentSlider(label: "Wall Strength", binding: edgeFieldBinding(\.lineStrength), range: 0...1)
                 adjustmentSlider(label: "Cell Fill", binding: edgeFieldBinding(\.fieldIntensity), range: 0...1)
                 adjustmentSlider(label: "Edge Width", binding: voronoiEdgeWidthBinding, range: 0.05...1)
-                Toggle("Randomize", isOn: voronoiRandomizeBinding)
+                SidebarControlRow("Randomize") {
+                    EmptyView()
+                } trailingValue: {
+                    StyledToggle(isOn: voronoiRandomizeBinding)
+                }
 
-                ColorPickerWithHex("Edge Color", selection: Binding(
+                labeledColorPicker("Edge Color", selection: Binding(
                     get: { nsColor(from: payload.edgeColor ?? CodableColor(unchecked: "#FFFFFF")) },
                     set: { newColor in
                         guard let hex = newColor.hexString, let codable = try? CodableColor(hex: hex) else { return }
@@ -864,16 +729,22 @@ struct GPUEffectLayerControls: View {
 
             if case .printSampling(let common, let geometry, let color, let payload) = params.params {
                 if params.kind == .halftone {
-                    Picker("Shape", selection: halftoneShapeBinding) {
+                    Picker("", selection: halftoneShapeBinding) {
                         Text("Circle").tag(HalftoneShape.circle)
                         Text("Square").tag(HalftoneShape.square)
                         Text("Diamond").tag(HalftoneShape.diamond)
                     }
                     .pickerStyle(.menu)
+                    .labelsHidden()
+                    .denseControlRow("Shape")
 
                     adjustmentSlider(label: "Angle", binding: halftoneAngleBinding, range: 0...90)
 
-                    Toggle("Invert", isOn: invertBinding)
+                    SidebarControlRow("Invert") {
+                        EmptyView()
+                    } trailingValue: {
+                    StyledToggle(isOn: invertBinding)
+                    }
                 }
 
                 if params.kind == .crosshatch {
@@ -886,7 +757,11 @@ struct GPUEffectLayerControls: View {
                     adjustmentSlider(label: "Angle", binding: hatchAngleBinding, range: 0...90)
                     adjustmentSlider(label: "Line Width", binding: hatchLineWidthBinding, range: 0.05...1)
                     adjustmentSlider(label: "Random", binding: hatchRandomnessBinding, range: 0...1)
-                    Toggle("Invert", isOn: invertBinding)
+                    SidebarControlRow("Invert") {
+                        EmptyView()
+                    } trailingValue: {
+                    StyledToggle(isOn: invertBinding)
+                    }
                 }
 
                 if params.kind == .threshold {
@@ -894,11 +769,19 @@ struct GPUEffectLayerControls: View {
                     // Not exposed before so users were stuck at the default.
                     adjustmentSlider(label: "Threshold", binding: printSamplingBinding(\.threshold), range: 0...1)
                     adjustmentSlider(label: "Levels", binding: thresholdLevelsBinding, range: 2...8)
-                    Toggle("Dither", isOn: thresholdDitherBinding)
-                    Toggle("Invert", isOn: invertBinding)
+                    SidebarControlRow("Dither") {
+                        EmptyView()
+                    } trailingValue: {
+                    StyledToggle(isOn: thresholdDitherBinding)
+                    }
+                    SidebarControlRow("Invert") {
+                        EmptyView()
+                    } trailingValue: {
+                    StyledToggle(isOn: invertBinding)
+                    }
                 }
 
-                ColorPickerWithHex("Foreground", selection: Binding(
+                labeledColorPicker("Foreground", selection: Binding(
                     get: { nsColor(from: payload.foreground ?? CodableColor(unchecked: "#FFFFFF")) },
                     set: { newColor in
                         guard let hex = newColor.hexString, let codable = try? CodableColor(hex: hex) else { return }
@@ -908,7 +791,7 @@ struct GPUEffectLayerControls: View {
                     }
                 ))
 
-                ColorPickerWithHex("Background", selection: Binding(
+                labeledColorPicker("Background", selection: Binding(
                     get: { nsColor(from: payload.background ?? CodableColor(unchecked: "#000000")) },
                     set: { newColor in
                         guard let hex = newColor.hexString, let codable = try? CodableColor(hex: hex) else { return }
@@ -1015,15 +898,12 @@ struct GPUEffectLayerControls: View {
     }
 
     private func adjustmentSlider(label: String, binding: Binding<Double>, range: ClosedRange<Double>) -> some View {
-        HStack {
-            Text(label)
-                .font(AppFont.controlLabel)
-                .foregroundStyle(Color.text2)
-            Slider(value: binding, in: range)
-            Text(String(format: "%.2f", binding.wrappedValue))
-                .monospacedDigit()
-                .frame(width: 44)
-        }
+        DenseSliderControlRow(
+            title: LocalizedStringKey(label),
+            value: binding,
+            range: range,
+            step: 0.05
+        )
     }
 
     private var colorModeBinding: Binding<GPUEffectColorMode> {
@@ -1706,6 +1586,42 @@ struct GPUEffectLayerControls: View {
 
 // MARK: - BorderLayerControls
 
+private extension View {
+    func simpleLayerEditorInputStyle(width: CGFloat? = SidebarMetrics().controlValueFieldWidth) -> some View {
+        self
+            .textFieldStyle(.plain)
+            .font(AppFont.numericInput)
+            .foregroundStyle(Color.text1)
+            .multilineTextAlignment(.trailing)
+            .padding(.horizontal, 6)
+            .padding(.vertical, 3)
+            .frame(width: width)
+            .background(Color.surface3, in: RoundedRectangle(cornerRadius: CornerRadius.sm))
+            .overlay(
+                RoundedRectangle(cornerRadius: CornerRadius.sm)
+                    .stroke(Color.borderDefault, lineWidth: 1)
+            )
+    }
+
+    func simpleLayerEditorInputStyle(width: CGFloat? = SidebarMetrics().controlValueFieldWidth, accessibilityLabel: String) -> some View {
+        simpleLayerEditorInputStyle(width: width)
+            .accessibilityLabel(Text(accessibilityLabel))
+    }
+}
+
+private struct SimpleLayerEditorDivider: View {
+    @Environment(\.sidebarMetrics) private var metrics
+
+    var body: some View {
+        Rectangle()
+            .fill(Color.borderDefault)
+            .frame(height: metrics.controlStackDividerThickness)
+            .padding(.horizontal, metrics.controlStackDividerInset)
+            .accessibilityHidden(true)
+    }
+}
+
+
 struct BorderLayerControls: View {
     var params: BorderLayerParams
     var onChange: (BorderLayerParams) -> Void
@@ -1717,37 +1633,53 @@ struct BorderLayerControls: View {
         case percent = "%"
     }
 
+    init(params: BorderLayerParams, onChange: @escaping (BorderLayerParams) -> Void) {
+        self.params = params
+        self.onChange = onChange
+        _thicknessMode = State(initialValue: Self.thicknessMode(for: params.thickness))
+    }
+
     var body: some View {
-        VStack(alignment: .leading, spacing: 4) {
-            HStack {
-                Text("Thickness")
-                    .font(AppFont.controlLabel)
-                    .foregroundStyle(Color.text2)
-                Spacer()
-                Picker("", selection: $thicknessMode) {
-                    ForEach(ThicknessMode.allCases, id: \.self) { mode in
-                        Text(mode.rawValue).tag(mode)
+        VStack(alignment: .leading, spacing: SidebarMetrics().expandedBodyInset) {
+            SidebarCompoundControlBlock {
+                SidebarControlRow("Mode") {
+                    Picker("Thickness Mode", selection: $thicknessMode) {
+                        ForEach(ThicknessMode.allCases, id: \.self) { mode in
+                            Text(mode.rawValue).tag(mode)
+                        }
+                    }
+                    .pickerStyle(.segmented)
+                    .frame(width: SidebarMetrics().controlSegmentedModeWidth)
+                    .labelsHidden()
+                }
+            } secondary: {
+                SidebarControlRow("Thickness") {
+                    Slider(value: thicknessValue, in: thicknessRange)
+                        .tint(Color.accentDim)
+                } trailingValue: {
+                    SidebarTrailingUnitCluster(unit: LocalizedStringKey(thicknessMode.rawValue)) {
+                        TextField("", value: thicknessValue, format: .number)
+                            .simpleLayerEditorInputStyle(accessibilityLabel: "Thickness")
+                            .monospacedDigit()
                     }
                 }
-                .pickerStyle(.segmented)
-                .frame(width: 80)
-                .labelsHidden()
             }
 
-            HStack {
-                Slider(value: thicknessValue, in: thicknessRange)
-                TextField("", value: thicknessValue, format: .number)
-                    .textFieldStyle(.roundedBorder)
-                    .frame(width: 55)
-                    .multilineTextAlignment(.trailing)
-                    .monospacedDigit()
-                Text(thicknessMode.rawValue)
-                    .foregroundStyle(Color.text2)
-                    .frame(width: 20)
-            }
+            ColorPickerWithHex("", selection: colorBinding)
+                .denseControlRow("Color")
         }
+        .onChange(of: params.thickness) { _, newThickness in
+            thicknessMode = Self.thicknessMode(for: newThickness)
+        }
+    }
 
-        ColorPickerWithHex("Color", selection: colorBinding)
+    private static func thicknessMode(for thickness: BorderSize) -> ThicknessMode {
+        switch thickness {
+        case .pixels:
+            .pixels
+        case .percent:
+            .percent
+        }
     }
 
     private var thicknessValue: Binding<Double> {
@@ -1794,27 +1726,25 @@ struct PaddingLayerControls: View {
     var onChange: (PaddingLayerParams) -> Void
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 4) {
-            Text("Thickness")
-                .font(AppFont.controlLabel)
-                .foregroundStyle(Color.text2)
-            HStack {
+        VStack(alignment: .leading, spacing: 0) {
+            SidebarControlRow("Thickness") {
                 Slider(value: thicknessBinding, in: 0...400)
-                TextField("", value: thicknessBinding, format: .number)
-                    .textFieldStyle(.roundedBorder)
-                    .frame(width: 55)
-                    .multilineTextAlignment(.trailing)
-                    .monospacedDigit()
-                Text("px")
-                    .foregroundStyle(Color.text2)
-                    .frame(width: 20)
+                    .tint(Color.accentDim)
+            } trailingValue: {
+                SidebarTrailingUnitCluster(unit: "px") {
+                    TextField("", value: thicknessBinding, format: .number)
+                        .simpleLayerEditorInputStyle(accessibilityLabel: "Thickness")
+                        .monospacedDigit()
+                }
             }
-        }
 
-        LayerFillPicker(fill: params.fill) { newFill in
-            var p = params
-            p.fill = newFill
-            onChange(p)
+            SimpleLayerEditorDivider()
+
+            LayerFillPicker(fill: params.fill) { newFill in
+                var p = params
+                p.fill = newFill
+                onChange(p)
+            }
         }
     }
 
@@ -1861,27 +1791,47 @@ struct CanvasLayerControls: View {
     }
 
     var body: some View {
-        presetPicker
+        VStack(alignment: .leading, spacing: 0) {
+            SidebarCompoundControlBlock {
+                SidebarControlRow("Preset") {
+                    presetPicker
+                        .labelsHidden()
+                }
+            } secondary: {
+                SidebarControlRow("Size Mode") {
+                    Picker("Size Mode", selection: $sizeMode) {
+                        ForEach(SizeMode.allCases, id: \.self) { mode in
+                            Text(mode.rawValue).tag(mode)
+                        }
+                    }
+                    .pickerStyle(.segmented)
+                    .labelsHidden()
+                }
+            }
 
-        Picker("Size Mode", selection: $sizeMode) {
-            ForEach(SizeMode.allCases, id: \.self) { mode in
-                Text(mode.rawValue).tag(mode)
+            SimpleLayerEditorDivider()
+
+            if sizeMode == .pixels {
+                pixelFields
+            } else {
+                physicalFields
+
+                SimpleLayerEditorDivider()
+
+                pixelSummary
+            }
+
+            SimpleLayerEditorDivider()
+
+            LayerFillPicker(fill: params.fill) { newFill in
+                var p = params
+                p.fill = newFill
+                onChange(p)
             }
         }
-        .pickerStyle(.segmented)
-
-        if sizeMode == .pixels {
-            pixelFields
-        } else {
-            physicalFields
-        }
-
-        pixelSummary
-
-        LayerFillPicker(fill: params.fill) { newFill in
-            var p = params
-            p.fill = newFill
-            onChange(p)
+        .onAppear(perform: syncEditorStateFromParams)
+        .onChange(of: params) { _, _ in
+            syncEditorStateFromParams()
         }
     }
 
@@ -1901,83 +1851,80 @@ struct CanvasLayerControls: View {
     }
 
     private var pixelFields: some View {
-        HStack(spacing: 12) {
-            VStack(alignment: .leading, spacing: 4) {
-                Text("Width")
-                    .font(AppFont.controlLabel)
-                    .foregroundStyle(Color.text2)
-                HStack(spacing: 4) {
+        SidebarCompoundControlBlock {
+            SidebarControlRow("Width") {
+                EmptyView()
+            } trailingValue: {
+                SidebarTrailingUnitCluster(unit: "px") {
                     TextField("", value: widthBinding, format: .number)
-                        .textFieldStyle(.roundedBorder)
+                        .simpleLayerEditorInputStyle(accessibilityLabel: "Width")
                         .monospacedDigit()
-                    Text("px").foregroundStyle(Color.text2)
                 }
             }
-            VStack(alignment: .leading, spacing: 4) {
-                Text("Height")
-                    .font(AppFont.controlLabel)
-                    .foregroundStyle(Color.text2)
-                HStack(spacing: 4) {
+        } secondary: {
+            SidebarControlRow("Height") {
+                EmptyView()
+            } trailingValue: {
+                SidebarTrailingUnitCluster(unit: "px") {
                     TextField("", value: heightBinding, format: .number)
-                        .textFieldStyle(.roundedBorder)
+                        .simpleLayerEditorInputStyle(accessibilityLabel: "Height")
                         .monospacedDigit()
-                    Text("px").foregroundStyle(Color.text2)
                 }
             }
         }
     }
 
     private var physicalFields: some View {
-        VStack(spacing: 8) {
-            HStack {
-                Picker("Unit", selection: $physicalUnit) {
-                    ForEach(PhysicalUnit.allCases, id: \.self) { u in
-                        Text(u.rawValue).tag(u)
+        VStack(alignment: .leading, spacing: 0) {
+            SidebarCompoundControlBlock {
+                SidebarControlRow("Unit") {
+                    Picker("Unit", selection: $physicalUnit) {
+                        ForEach(PhysicalUnit.allCases, id: \.self) { u in
+                            Text(u.rawValue).tag(u)
+                        }
+                    }
+                    .pickerStyle(.segmented)
+                    .frame(width: SidebarMetrics().controlUnitPickerWidth)
+                    .labelsHidden()
+                    .onChange(of: physicalUnit) { oldUnit, newUnit in
+                        convertUnit(from: oldUnit, to: newUnit)
                     }
                 }
-                .pickerStyle(.segmented)
-                .frame(width: 100)
-                .onChange(of: physicalUnit) { oldUnit, newUnit in
-                    convertUnit(from: oldUnit, to: newUnit)
-                }
-
-                Spacer()
-
-                VStack(alignment: .leading, spacing: 2) {
-                    Text("DPI")
-                        .font(AppFont.controlLabel)
-                        .foregroundStyle(Color.text2)
-                    TextField("", value: $dpi, format: .number)
-                        .frame(width: 50)
-                        .textFieldStyle(.roundedBorder)
-                        .monospacedDigit()
-                        .onChange(of: dpi) { _, _ in syncPhysicalToPixels() }
+            } secondary: {
+                SidebarControlRow("DPI") {
+                    EmptyView()
+                } trailingValue: {
+                    SidebarTrailingUnitCluster(unit: "dpi") {
+                        TextField("", value: $dpi, format: .number)
+                            .simpleLayerEditorInputStyle(accessibilityLabel: "DPI")
+                            .monospacedDigit()
+                            .onChange(of: dpi) { _, _ in syncPhysicalToPixels() }
+                    }
                 }
             }
 
-            HStack(spacing: 12) {
-                VStack(alignment: .leading, spacing: 4) {
-                    Text("Width")
-                        .font(AppFont.controlLabel)
-                        .foregroundStyle(Color.text2)
-                    HStack(spacing: 4) {
+            SimpleLayerEditorDivider()
+
+            SidebarCompoundControlBlock {
+                SidebarControlRow("Width") {
+                    EmptyView()
+                } trailingValue: {
+                    SidebarTrailingUnitCluster(unit: LocalizedStringKey(physicalUnit.rawValue)) {
                         TextField("", value: $widthPhysical, format: .number.precision(.fractionLength(1)))
-                            .textFieldStyle(.roundedBorder)
+                            .simpleLayerEditorInputStyle(accessibilityLabel: "Width")
                             .monospacedDigit()
                             .onChange(of: widthPhysical) { _, _ in syncPhysicalToPixels() }
-                        Text(physicalUnit.rawValue).foregroundStyle(Color.text2)
                     }
                 }
-                VStack(alignment: .leading, spacing: 4) {
-                    Text("Height")
-                        .font(AppFont.controlLabel)
-                        .foregroundStyle(Color.text2)
-                    HStack(spacing: 4) {
+            } secondary: {
+                SidebarControlRow("Height") {
+                    EmptyView()
+                } trailingValue: {
+                    SidebarTrailingUnitCluster(unit: LocalizedStringKey(physicalUnit.rawValue)) {
                         TextField("", value: $heightPhysical, format: .number.precision(.fractionLength(1)))
-                            .textFieldStyle(.roundedBorder)
+                            .simpleLayerEditorInputStyle(accessibilityLabel: "Height")
                             .monospacedDigit()
                             .onChange(of: heightPhysical) { _, _ in syncPhysicalToPixels() }
-                        Text(physicalUnit.rawValue).foregroundStyle(Color.text2)
                     }
                 }
             }
@@ -1987,11 +1934,15 @@ struct CanvasLayerControls: View {
     @ViewBuilder
     private var pixelSummary: some View {
         if sizeMode == .physical {
-            HStack {
-                Spacer()
-                Text("\(params.width) x \(params.height) px")
-                    .font(AppFont.mono(10))
-                    .foregroundStyle(Color.text3)
+            SidebarControlRow("Output Pixels") {
+                EmptyView()
+            } trailingValue: {
+                SidebarTrailingReadoutCluster(unit: "px") {
+                    Text("\(params.width)×\(params.height)")
+                        .font(AppFont.mono(10))
+                        .foregroundStyle(Color.text3)
+                        .monospacedDigit()
+                }
             }
         }
     }
@@ -2041,6 +1992,29 @@ struct CanvasLayerControls: View {
         let hMM = heightPhysical * oldUnit.toMM
         widthPhysical = wMM / newUnit.toMM
         heightPhysical = hMM / newUnit.toMM
+    }
+
+    private func syncEditorStateFromParams() {
+        presetIndex = matchingPresetIndex(for: params)
+        syncPhysicalStateFromParams()
+    }
+
+    private func syncPhysicalStateFromParams() {
+        let safeDPI = max(dpi, 1)
+        let widthMM = Double(params.width) / Double(safeDPI) * 25.4
+        let heightMM = Double(params.height) / Double(safeDPI) * 25.4
+        widthPhysical = widthMM / physicalUnit.toMM
+        heightPhysical = heightMM / physicalUnit.toMM
+    }
+
+    private func matchingPresetIndex(for params: CanvasLayerParams) -> Int {
+        switch (params.width, params.height) {
+        case (1080, 1350): return 0
+        case (1771, 1181): return 1
+        case (2125, 1535): return 2
+        case (3507, 2480): return 3
+        default: return 99
+        }
     }
 
     // MARK: - Presets
@@ -2096,22 +2070,25 @@ struct ResizeLayerControls: View {
     var onChange: (ResizeLayerParams) -> Void
 
     var body: some View {
-        HStack(spacing: 12) {
-            VStack(alignment: .leading, spacing: 4) {
-                Text("Max Width")
-                    .font(AppFont.controlLabel)
-                    .foregroundStyle(Color.text2)
-                TextField("", value: maxWidthBinding, format: .number)
-                    .textFieldStyle(.roundedBorder)
-                    .monospacedDigit()
+        SidebarCompoundControlBlock {
+            SidebarControlRow("Max Width") {
+                EmptyView()
+            } trailingValue: {
+                SidebarTrailingUnitCluster(unit: "px") {
+                    TextField("", value: maxWidthBinding, format: .number)
+                        .simpleLayerEditorInputStyle(accessibilityLabel: "Max Width")
+                        .monospacedDigit()
+                }
             }
-            VStack(alignment: .leading, spacing: 4) {
-                Text("Max Height")
-                    .font(AppFont.controlLabel)
-                    .foregroundStyle(Color.text2)
-                TextField("", value: maxHeightBinding, format: .number)
-                    .textFieldStyle(.roundedBorder)
-                    .monospacedDigit()
+        } secondary: {
+            SidebarControlRow("Max Height") {
+                EmptyView()
+            } trailingValue: {
+                SidebarTrailingUnitCluster(unit: "px") {
+                    TextField("", value: maxHeightBinding, format: .number)
+                        .simpleLayerEditorInputStyle(accessibilityLabel: "Max Height")
+                        .monospacedDigit()
+                }
             }
         }
     }
@@ -2160,72 +2137,75 @@ struct AspectRatioLayerControls: View {
     }
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 4) {
-            Text("Ratio")
-                .font(AppFont.controlLabel)
-                .foregroundStyle(Color.text2)
-            Picker("", selection: ratioBinding) {
-                ForEach(presets, id: \.label) { preset in
-                    Text(preset.label).tag("\(preset.w):\(preset.h)")
+        VStack(alignment: .leading, spacing: 0) {
+            SidebarControlRow("Ratio") {
+                Picker("Ratio", selection: ratioBinding) {
+                    ForEach(presets, id: \.label) { preset in
+                        Text(preset.label).tag("\(preset.w):\(preset.h)")
+                    }
+                    Text("Custom").tag("custom")
                 }
-                Text("Custom").tag("custom")
+                .labelsHidden()
             }
-            .labelsHidden()
-        }
 
-        if isCustom {
-            HStack(spacing: 8) {
-                VStack(alignment: .leading, spacing: 4) {
-                    Text("Width")
-                        .font(AppFont.controlLabel)
-                        .foregroundStyle(Color.text2)
-                    TextField("W", value: Binding(
-                        get: { params.ratioWidth },
-                        set: { onChange(AspectRatioLayerParams(id: params.id, ratioWidth: max(1, $0), ratioHeight: params.ratioHeight, offsetX: params.offsetX, offsetY: params.offsetY)) }
-                    ), format: .number)
-                    .textFieldStyle(.roundedBorder)
-                    .monospacedDigit()
+            if isCustom {
+                SimpleLayerEditorDivider()
+
+                SidebarCompoundControlBlock {
+                    SidebarControlRow("Width") {
+                        EmptyView()
+                    } trailingValue: {
+                        SidebarTrailingUnitCluster(unit: "") {
+                            TextField("", value: Binding(
+                                get: { params.ratioWidth },
+                                set: { onChange(AspectRatioLayerParams(id: params.id, ratioWidth: max(1, $0), ratioHeight: params.ratioHeight, offsetX: params.offsetX, offsetY: params.offsetY)) }
+                            ), format: .number)
+                            .simpleLayerEditorInputStyle(accessibilityLabel: "Width")
+                            .monospacedDigit()
+                        }
+                    }
+                } secondary: {
+                    SidebarControlRow("Height") {
+                        EmptyView()
+                    } trailingValue: {
+                        SidebarTrailingUnitCluster(unit: "") {
+                            TextField("", value: Binding(
+                                get: { params.ratioHeight },
+                                set: { onChange(AspectRatioLayerParams(id: params.id, ratioWidth: params.ratioWidth, ratioHeight: max(1, $0), offsetX: params.offsetX, offsetY: params.offsetY)) }
+                            ), format: .number)
+                            .simpleLayerEditorInputStyle(accessibilityLabel: "Height")
+                            .monospacedDigit()
+                        }
+                    }
                 }
-                Text(":")
-                    .foregroundStyle(Color.text3)
-                    .padding(.top, 18)
-                VStack(alignment: .leading, spacing: 4) {
-                    Text("Height")
-                        .font(AppFont.controlLabel)
-                        .foregroundStyle(Color.text2)
-                    TextField("H", value: Binding(
-                        get: { params.ratioHeight },
-                        set: { onChange(AspectRatioLayerParams(id: params.id, ratioWidth: params.ratioWidth, ratioHeight: max(1, $0), offsetX: params.offsetX, offsetY: params.offsetY)) }
-                    ), format: .number)
-                    .textFieldStyle(.roundedBorder)
-                    .monospacedDigit()
+            }
+
+            SimpleLayerEditorDivider()
+
+            SidebarCompoundControlBlock {
+                SidebarControlRow("Offset X") {
+                    Slider(value: offsetXBinding, in: -1...1)
+                        .tint(Color.accentDim)
+                } trailingValue: {
+                    SidebarTrailingReadoutCluster {
+                        Text(String(format: "%.1f", params.offsetX))
+                            .font(AppFont.mono(10))
+                            .foregroundStyle(Color.text3)
+                            .monospacedDigit()
+                    }
                 }
-            }
-        }
-
-        VStack(alignment: .leading, spacing: 4) {
-            Text("Offset X")
-                .font(AppFont.controlLabel)
-                .foregroundStyle(Color.text2)
-            HStack {
-                Slider(value: offsetXBinding, in: -1...1)
-                Text(String(format: "%.1f", params.offsetX))
-                    .font(AppFont.mono(10))
-                    .monospacedDigit()
-                    .frame(width: 30)
-            }
-        }
-
-        VStack(alignment: .leading, spacing: 4) {
-            Text("Offset Y")
-                .font(AppFont.controlLabel)
-                .foregroundStyle(Color.text2)
-            HStack {
-                Slider(value: offsetYBinding, in: -1...1)
-                Text(String(format: "%.1f", params.offsetY))
-                    .font(AppFont.mono(10))
-                    .monospacedDigit()
-                    .frame(width: 30)
+            } secondary: {
+                SidebarControlRow("Offset Y") {
+                    Slider(value: offsetYBinding, in: -1...1)
+                        .tint(Color.accentDim)
+                } trailingValue: {
+                    SidebarTrailingReadoutCluster {
+                        Text(String(format: "%.1f", params.offsetY))
+                            .font(AppFont.mono(10))
+                            .foregroundStyle(Color.text3)
+                            .monospacedDigit()
+                    }
+                }
             }
         }
     }
@@ -2267,12 +2247,15 @@ struct OrientationLayerControls: View {
     var onChange: (OrientationLayerParams) -> Void
 
     var body: some View {
-        Picker("Target", selection: targetBinding) {
-            ForEach(OrientationTarget.allCases, id: \.self) { target in
-                Text(target.rawValue.capitalized).tag(target)
+        SidebarControlRow("Target") {
+            Picker("Target", selection: targetBinding) {
+                ForEach(OrientationTarget.allCases, id: \.self) { target in
+                    Text(target.rawValue.capitalized).tag(target)
+                }
             }
+            .pickerStyle(.menu)
+            .labelsHidden()
         }
-        .pickerStyle(.segmented)
     }
 
     private var targetBinding: Binding<OrientationTarget> {
@@ -2293,104 +2276,129 @@ struct OverlayLayerControls: View {
     var params: OverlayLayerParams
     var onChange: (OverlayLayerParams) -> Void
 
+    @Environment(\.sidebarMetrics) private var metrics
+
     @State private var availableOverlays: [TextureFrameProvider.OverlayInfo] = []
     @State private var selectedKind: OverlayKind = .frame
 
+    init(params: OverlayLayerParams, onChange: @escaping (OverlayLayerParams) -> Void) {
+        self.params = params
+        self.onChange = onChange
+        _selectedKind = State(initialValue: params.kind)
+    }
+
     var body: some View {
-        kindPicker
-        overlayPicker
-        overlayThumbnailStrip
-        blendModePicker
-        opacityControl
-        openFolderButton
+        VStack(alignment: .leading, spacing: 0) {
+            kindPicker
+
+            SimpleLayerEditorDivider()
+
+            overlayPicker
+
+            if !filteredOverlays.isEmpty {
+                SimpleLayerEditorDivider()
+
+                overlayThumbnailStrip
+            }
+
+            SimpleLayerEditorDivider()
+
+            SidebarCompoundControlBlock {
+                blendModePicker
+            } secondary: {
+                opacityControl
+            }
+
+            SimpleLayerEditorDivider()
+
+            openFolderButton
+        }
+        .onAppear(perform: loadOverlays)
+        .onChange(of: params.kind) { _, newKind in
+            selectedKind = newKind
+        }
     }
 
     // MARK: - Subviews
 
     private var kindPicker: some View {
-        Picker("Category", selection: $selectedKind) {
-            Text("Frames").tag(OverlayKind.frame)
-            Text("Dust").tag(OverlayKind.dust)
-            Text("Light Leaks").tag(OverlayKind.lightLeak)
-            Text("Wet Plate").tag(OverlayKind.wetPlate)
-        }
-        .pickerStyle(.segmented)
-        .onAppear {
-            selectedKind = params.kind
-            loadOverlays()
-        }
-        .onChange(of: selectedKind) { _, newKind in
-            var p = params
-            p.kind = newKind
-            p.blendMode = OverlayBlendMode.defaultFor(newKind)
-            if !filteredOverlays.contains(where: { $0.id == p.overlayName }) {
-                p.overlayName = ""
+        SidebarFullWidthRow("Category") {
+            Picker("", selection: $selectedKind) {
+                Text("Frames").tag(OverlayKind.frame)
+                Text("Dust").tag(OverlayKind.dust)
+                Text("Light Leaks").tag(OverlayKind.lightLeak)
+                Text("Wet Plate").tag(OverlayKind.wetPlate)
             }
-            onChange(p)
+            .pickerStyle(.menu)
+            .labelsHidden()
+            .onChange(of: selectedKind) { _, newKind in
+                var p = params
+                p.kind = newKind
+                p.blendMode = OverlayBlendMode.defaultFor(newKind)
+                if !filteredOverlays.contains(where: { $0.id == p.overlayName }) {
+                    p.overlayName = ""
+                }
+                onChange(p)
+            }
         }
     }
 
     private var overlayPicker: some View {
-        Picker("Overlay", selection: overlayNameBinding) {
+        Picker("", selection: overlayNameBinding) {
             Text("None").tag("")
             ForEach(filteredOverlays) { overlay in
                 Text(overlay.displayName).tag(overlay.id)
             }
         }
+        .pickerStyle(.menu)
+        .labelsHidden()
+        .denseControlRow("Overlay")
     }
 
-    @ViewBuilder
     private var overlayThumbnailStrip: some View {
-        if !filteredOverlays.isEmpty {
-            ScrollView(.horizontal, showsIndicators: false) {
-                HStack(spacing: 6) {
-                    ForEach(filteredOverlays) { overlay in
-                        overlayThumb(overlay)
-                    }
-                }
-                .padding(.vertical, 4)
+        SidebarFullWidthRow("Preview") {
+            SidebarPreviewStrip(items: filteredOverlays) { overlay in
+                overlayThumb(overlay)
             }
         }
     }
 
     private var blendModePicker: some View {
-        Picker("Blend Mode", selection: blendModeBinding) {
-            ForEach(OverlayBlendMode.allCases, id: \.self) { mode in
-                Text(mode.label).tag(mode)
+        SidebarControlRow("Blend Mode") {
+            Picker("", selection: blendModeBinding) {
+                ForEach(OverlayBlendMode.allCases, id: \.self) { mode in
+                    Text(mode.label).tag(mode)
+                }
             }
+            .pickerStyle(.menu)
+            .labelsHidden()
         }
     }
 
     private var opacityControl: some View {
-        VStack(alignment: .leading, spacing: 4) {
-            Text("Opacity")
-                .font(AppFont.controlLabel)
-                .foregroundStyle(Color.text2)
-            HStack {
-                Slider(value: opacityBinding, in: 0...100)
-                TextField("", value: opacityBinding, format: .number)
-                    .textFieldStyle(.roundedBorder)
-                    .frame(width: 55)
-                    .multilineTextAlignment(.trailing)
-                    .monospacedDigit()
-                Text("%")
-                    .foregroundStyle(Color.text2)
-                    .frame(width: 20)
-            }
-        }
+        DenseSliderControlRow(
+            title: "Opacity",
+            value: opacityBinding,
+            range: 0...100,
+            accessibilityLabel: "Opacity",
+            step: 1,
+            unit: "%"
+        )
     }
 
     private var openFolderButton: some View {
-        Button {
-            if let dir = TextureFrameProvider.ensureUserOverlayDirectory() {
-                NSWorkspace.shared.open(dir)
+        SidebarFullWidthRow("Library") {
+            Button {
+                if let dir = TextureFrameProvider.ensureUserOverlayDirectory() {
+                    NSWorkspace.shared.open(dir)
+                }
+            } label: {
+                Label("Open Overlays Folder", systemImage: "folder")
+                    .font(AppFont.controlLabel)
             }
-        } label: {
-            Label("Open Overlays Folder", systemImage: "folder")
-                .font(AppFont.controlLabel)
+            .buttonStyle(.plain)
+            .foregroundStyle(Color.text2)
         }
-        .buttonStyle(.plain)
-        .foregroundStyle(Color.text2)
     }
 
     // MARK: - Thumbnail
@@ -2524,49 +2532,55 @@ struct LayerFillPicker: View {
     }()
 
     var body: some View {
-        Picker("Fill", selection: fillModeBinding) {
-            Text("Solid Color").tag(0)
-            Text("Dominant Color").tag(1)
-            Text("Linear Gradient").tag(2)
-            Text("Radial Gradient").tag(3)
-        }
-
-        if case .color(let c) = fill {
-            ColorPickerWithHex("Fill Color", selection: Binding(
-                get: { Color(nsColor: NSColor(cgColor: c.cgColor) ?? .white) },
-                set: { newColor in
-                    guard let hex = newColor.hexString else { return }
-                    guard let codable = try? CodableColor(hex: hex) else { return }
-                    onChange(.color(codable))
+        VStack(alignment: .leading, spacing: 0) {
+            SidebarControlRow("Fill") {
+                Picker("Fill", selection: fillModeBinding) {
+                    Text("Solid Color").tag(0)
+                    Text("Dominant Color").tag(1)
+                    Text("Linear Gradient").tag(2)
+                    Text("Radial Gradient").tag(3)
                 }
-            ))
-        }
-
-        if let params = fill.gradientParams {
-            VStack(alignment: .leading, spacing: 4) {
-                Text("Saturation")
-                    .font(AppFont.controlLabel)
-                    .foregroundStyle(Color.text2)
-                HStack {
-                    Slider(value: saturationBinding(params), in: -50...50)
-                    TextField("", value: saturationBinding(params), formatter: Self.signedFormatter)
-                        .textFieldStyle(.roundedBorder)
-                        .frame(width: 50)
-                        .multilineTextAlignment(.trailing)
-                        .monospacedDigit()
-                }
+                .labelsHidden()
             }
-            VStack(alignment: .leading, spacing: 4) {
-                Text("Brightness")
-                    .font(AppFont.controlLabel)
-                    .foregroundStyle(Color.text2)
-                HStack {
-                    Slider(value: lightnessBinding(params), in: -50...50)
-                    TextField("", value: lightnessBinding(params), formatter: Self.signedFormatter)
-                        .textFieldStyle(.roundedBorder)
-                        .frame(width: 50)
-                        .multilineTextAlignment(.trailing)
-                        .monospacedDigit()
+
+            if case .color(let c) = fill {
+                SimpleLayerEditorDivider()
+
+                labeledColorPicker("Fill Color", selection: Binding(
+                    get: { Color(nsColor: NSColor(cgColor: c.cgColor) ?? .white) },
+                    set: { newColor in
+                        guard let hex = newColor.hexString else { return }
+                        guard let codable = try? CodableColor(hex: hex) else { return }
+                        onChange(.color(codable))
+                    }
+                ))
+            }
+
+            if let params = fill.gradientParams {
+                SimpleLayerEditorDivider()
+
+                SidebarCompoundControlBlock {
+                    SidebarControlRow("Saturation") {
+                        Slider(value: saturationBinding(params), in: -50...50)
+                            .tint(Color.accentDim)
+                    } trailingValue: {
+                        SidebarTrailingUnitCluster(unit: "") {
+                            TextField("", value: saturationBinding(params), formatter: Self.signedFormatter)
+                                .simpleLayerEditorInputStyle(accessibilityLabel: "Saturation")
+                                .monospacedDigit()
+                        }
+                    }
+                } secondary: {
+                    SidebarControlRow("Brightness") {
+                        Slider(value: lightnessBinding(params), in: -50...50)
+                            .tint(Color.accentDim)
+                    } trailingValue: {
+                        SidebarTrailingUnitCluster(unit: "") {
+                            TextField("", value: lightnessBinding(params), formatter: Self.signedFormatter)
+                                .simpleLayerEditorInputStyle(accessibilityLabel: "Brightness")
+                                .monospacedDigit()
+                        }
+                    }
                 }
             }
         }
@@ -2640,6 +2654,12 @@ struct CaptionLayerControls: View {
         case custom = "Custom"
     }
 
+    init(params: CaptionLayerParams, onChange: @escaping (CaptionLayerParams) -> Void) {
+        self.params = params
+        self.onChange = onChange
+        _fontSizeMode = State(initialValue: Self.fontSizeMode(for: params.fontSize))
+    }
+
     private static let signedIntFormatter: NumberFormatter = {
         let f = NumberFormatter()
         f.numberStyle = .decimal
@@ -2666,202 +2686,218 @@ struct CaptionLayerControls: View {
     }
 
     var body: some View {
-        // Caption mode
-        Picker("Mode", selection: captionModeIndex) {
-            Text("Template").tag(0)
-            Text("Custom").tag(1)
-            Text("None").tag(2)
-        }
-        .pickerStyle(.segmented)
-
-        switch params.mode {
-        case .template:
-            TextField("Template", text: captionTemplateText)
-                .font(.system(.body, design: .monospaced))
-            TemplateTokenBar(text: captionTemplateText)
-        case .custom:
-            TextField("Caption text", text: captionCustomText)
-        case .none:
-            EmptyView()
-        }
-
-        if captionEnabled {
-            // Position
-            Picker("Position", selection: positionBinding) {
-                Text("Bottom").tag(CaptionPosition.bottom)
-                Text("Top").tag(CaptionPosition.top)
+        VStack(alignment: .leading, spacing: 0) {
+            Picker("", selection: captionModeIndex) {
+                Text("Template").tag(0)
+                Text("Custom").tag(1)
             }
-            .pickerStyle(.segmented)
+            .pickerStyle(.menu)
+            .labelsHidden()
+            .denseControlRow("Mode")
 
-            // Alignment
-            Picker("Alignment", selection: alignmentBinding) {
-                Text("Left").tag(CaptionAlignment.left)
-                Text("Center").tag(CaptionAlignment.center)
-                Text("Right").tag(CaptionAlignment.right)
-            }
-            .pickerStyle(.segmented)
+            switch params.mode {
+            case .template:
+                SimpleLayerEditorDivider()
 
-            // Offset X
-            VStack(alignment: .leading, spacing: 4) {
-                Text("Offset X")
-                    .font(AppFont.controlLabel)
-                    .foregroundStyle(Color.text2)
-                HStack {
-                    Slider(value: offsetXBinding, in: -200...200)
-                    TextField("", value: offsetXBinding, formatter: Self.signedIntFormatter)
-                        .textFieldStyle(.roundedBorder)
-                        .frame(width: 55)
-                        .multilineTextAlignment(.trailing)
-                        .monospacedDigit()
-                    Text("px")
-                        .foregroundStyle(Color.text2)
-                        .frame(width: 20)
+                SidebarCompoundControlBlock {
+                    TextField("Template", text: captionTemplateText)
+                        .font(.system(.body, design: .monospaced))
+                        .denseControlRow("Template")
+                } secondary: {
+                    TemplateTokenBar(text: captionTemplateText)
+                        .denseSupportingRow("Tokens")
                 }
+            case .custom:
+                SimpleLayerEditorDivider()
+
+                TextField("Caption text", text: captionCustomText)
+                    .denseControlRow("Caption")
+            case .none:
+                EmptyView()
             }
 
-            // Offset Y
-            VStack(alignment: .leading, spacing: 4) {
-                Text("Offset Y")
-                    .font(AppFont.controlLabel)
-                    .foregroundStyle(Color.text2)
-                HStack {
-                    Slider(value: offsetYBinding, in: -200...200)
-                    TextField("", value: offsetYBinding, formatter: Self.signedIntFormatter)
-                        .textFieldStyle(.roundedBorder)
-                        .frame(width: 55)
-                        .multilineTextAlignment(.trailing)
-                        .monospacedDigit()
-                    Text("px")
-                        .foregroundStyle(Color.text2)
-                        .frame(width: 20)
-                }
-            }
+            if captionEnabled {
+                SimpleLayerEditorDivider()
 
-            // Font
-            Picker("Font", selection: fontNameBinding) {
-                ForEach(monospacedFontList, id: \.self) { name in
-                    Text(name).tag(name)
+                SidebarCompoundControlBlock {
+                    Picker("", selection: positionBinding) {
+                        Text("Bottom").tag(CaptionPosition.bottom)
+                        Text("Top").tag(CaptionPosition.top)
+                    }
+                    .pickerStyle(.menu)
+                    .labelsHidden()
+                    .denseControlRow("Position")
+                } secondary: {
+                    Picker("", selection: alignmentBinding) {
+                        Text("Left").tag(CaptionAlignment.left)
+                        Text("Center").tag(CaptionAlignment.center)
+                        Text("Right").tag(CaptionAlignment.right)
+                    }
+                    .pickerStyle(.menu)
+                    .labelsHidden()
+                    .denseControlRow("Alignment")
                 }
-            }
 
-            // Style toggles
-            HStack(spacing: 8) {
-                Text("Style")
-                Spacer()
-                Toggle(isOn: fontStyleBinding(.bold)) {
-                    Text("B").bold()
-                }
-                .toggleStyle(.button)
+                SimpleLayerEditorDivider()
 
-                Toggle(isOn: fontStyleBinding(.italic)) {
-                    Text("I").italic()
+                SidebarCompoundControlBlock {
+                    DenseSliderControlRow(
+                        title: "Offset X",
+                        value: offsetXBinding,
+                        range: -200...200,
+                        step: 1,
+                        unit: "px"
+                    )
+                } secondary: {
+                    DenseSliderControlRow(
+                        title: "Offset Y",
+                        value: offsetYBinding,
+                        range: -200...200,
+                        step: 1,
+                        unit: "px"
+                    )
                 }
-                .toggleStyle(.button)
-            }
 
-            // Font size
-            Picker("Size", selection: $fontSizeMode) {
-                ForEach(FontSizeMode.allCases, id: \.self) { mode in
-                    Text(mode.rawValue).tag(mode)
-                }
-            }
-            .pickerStyle(.segmented)
-            .onAppear {
-                switch params.fontSize {
-                case .auto: fontSizeMode = .auto
-                case .fixed: fontSizeMode = .custom
-                }
-            }
-            .onChange(of: fontSizeMode) { _, newValue in
-                var p = params
-                switch newValue {
-                case .auto:
-                    p.fontSize = .auto
-                case .custom:
-                    if case .auto = params.fontSize {
-                        p.fontSize = .fixed(24)
+                SimpleLayerEditorDivider()
+
+                Picker("", selection: fontNameBinding) {
+                    ForEach(monospacedFontList, id: \.self) { name in
+                        Text(name).tag(name)
                     }
                 }
-                onChange(p)
-            }
+                .pickerStyle(.menu)
+                .labelsHidden()
+                .denseControlRow("Font")
 
-            if case .fixed(let pts) = params.fontSize {
-                VStack(alignment: .leading, spacing: 4) {
-                    Text("Font Size")
-                        .font(AppFont.controlLabel)
-                        .foregroundStyle(Color.text2)
-                    HStack {
-                        Slider(value: fontSizeBinding(pts), in: 8...120)
-                        TextField("", value: fontSizeBinding(pts), format: .number)
-                            .textFieldStyle(.roundedBorder)
-                            .frame(width: 55)
-                            .multilineTextAlignment(.trailing)
-                            .monospacedDigit()
-                        Text("pt")
-                            .foregroundStyle(Color.text2)
-                            .frame(width: 20)
+                SimpleLayerEditorDivider()
+
+                HStack(spacing: 8) {
+                    Toggle(isOn: fontStyleBinding(.bold)) {
+                        Text("B").bold()
+                    }
+                    .toggleStyle(.button)
+
+                    Toggle(isOn: fontStyleBinding(.italic)) {
+                        Text("I").italic()
+                    }
+                    .toggleStyle(.button)
+                }
+                .denseControlRow("Style")
+
+                SimpleLayerEditorDivider()
+
+                SidebarCompoundControlBlock {
+                    Picker("", selection: $fontSizeMode) {
+                        ForEach(FontSizeMode.allCases, id: \.self) { mode in
+                            Text(mode.rawValue).tag(mode)
+                        }
+                    }
+                    .pickerStyle(.menu)
+                    .labelsHidden()
+                    .denseControlRow("Size")
+                    .onChange(of: fontSizeMode) { _, newValue in
+                        var p = params
+                        switch newValue {
+                        case .auto:
+                            p.fontSize = .auto
+                        case .custom:
+                            if case .auto = params.fontSize {
+                                p.fontSize = .fixed(24)
+                            }
+                        }
+                        onChange(p)
+                    }
+                } secondary: {
+                    if case .fixed(let pts) = params.fontSize {
+                        DenseSliderControlRow(
+                            title: "Font Size",
+                            value: fontSizeBinding(pts),
+                            range: 8...120,
+                            step: 1,
+                            unit: "pt"
+                        )
                     }
                 }
-            }
 
-            // Font color mode
-            VStack(alignment: .leading, spacing: 4) {
-                Text("Font Color")
-                    .font(AppFont.controlLabel)
-                    .foregroundStyle(Color.text2)
+                SimpleLayerEditorDivider()
+
                 Picker("", selection: fontColorModeIndex) {
                     Text("Custom").tag(0)
                     Text("Dominant").tag(1)
                     Text("Invert").tag(2)
                 }
-                .pickerStyle(.segmented)
+                .pickerStyle(.menu)
                 .labelsHidden()
-            }
+                .denseControlRow("Font Color")
 
-            if case .fixed = params.fontColorMode {
-                ColorPickerWithHex("Color", selection: fontColorBinding)
-            }
+                if case .fixed = params.fontColorMode {
+                    SimpleLayerEditorDivider()
 
-            if case .dominant(let sat, let light) = params.fontColorMode {
-                captionColorAdjustmentSliders(saturation: sat, lightness: light) { s, l in
-                    var p = params; p.fontColorMode = .dominant(saturationShift: s, lightnessShift: l); onChange(p)
+                    labeledColorPicker("Color", selection: fontColorBinding)
+                }
+
+                if case .dominant(let sat, let light) = params.fontColorMode {
+                    SimpleLayerEditorDivider()
+
+                    captionColorAdjustmentSliders(saturation: sat, lightness: light) { s, l in
+                        var p = params
+                        p.fontColorMode = .dominant(saturationShift: s, lightnessShift: l)
+                        onChange(p)
+                    }
+                }
+
+                if case .dominantInverted(let sat, let light) = params.fontColorMode {
+                    SimpleLayerEditorDivider()
+
+                    captionColorAdjustmentSliders(saturation: sat, lightness: light) { s, l in
+                        var p = params
+                        p.fontColorMode = .dominantInverted(saturationShift: s, lightnessShift: l)
+                        onChange(p)
+                    }
                 }
             }
-            if case .dominantInverted(let sat, let light) = params.fontColorMode {
-                captionColorAdjustmentSliders(saturation: sat, lightness: light) { s, l in
-                    var p = params; p.fontColorMode = .dominantInverted(saturationShift: s, lightnessShift: l); onChange(p)
-                }
+        }
+        .onChange(of: params.fontSize) { _, newFontSize in
+            fontSizeMode = Self.fontSizeMode(for: newFontSize)
+        }
+        .onAppear {
+            // Migrate legacy `.none` captions to `.template` on first render so
+            // the picker's selected value and the body's rendered content stay
+            // in sync. Users disable a caption layer via the row's visibility
+            // toggle, not by keeping it in `.none` mode.
+            if case .none = params.mode {
+                var p = params
+                p.mode = .template(" - {{mon}} '{{year2}} -")
+                onChange(p)
             }
+        }
+    }
+
+    private static func fontSizeMode(for fontSize: FontSize) -> FontSizeMode {
+        switch fontSize {
+        case .auto:
+            .auto
+        case .fixed:
+            .custom
         }
     }
 
     @ViewBuilder
     private func captionColorAdjustmentSliders(saturation: Double, lightness: Double, onChange: @escaping (Double, Double) -> Void) -> some View {
-        VStack(alignment: .leading, spacing: 4) {
-            Text("Saturation")
-                .font(AppFont.controlLabel)
-                .foregroundStyle(Color.text2)
-            HStack {
-                Slider(value: Binding(get: { saturation }, set: { onChange($0, lightness) }), in: -50...50)
-                TextField("", value: Binding(get: { saturation }, set: { onChange($0, lightness) }), format: .number)
-                    .textFieldStyle(.roundedBorder)
-                    .frame(width: 50)
-                    .multilineTextAlignment(.trailing)
-                    .monospacedDigit()
-            }
-        }
-        VStack(alignment: .leading, spacing: 4) {
-            Text("Brightness")
-                .font(AppFont.controlLabel)
-                .foregroundStyle(Color.text2)
-            HStack {
-                Slider(value: Binding(get: { lightness }, set: { onChange(saturation, $0) }), in: -50...50)
-                TextField("", value: Binding(get: { lightness }, set: { onChange(saturation, $0) }), format: .number)
-                    .textFieldStyle(.roundedBorder)
-                    .frame(width: 50)
-                    .multilineTextAlignment(.trailing)
-                    .monospacedDigit()
-            }
+        SidebarCompoundControlBlock {
+            DenseSliderControlRow(
+                title: "Saturation",
+                value: Binding(get: { saturation }, set: { onChange($0, lightness) }),
+                range: -50...50,
+                step: 1
+            )
+        } secondary: {
+            DenseSliderControlRow(
+                title: "Brightness",
+                value: Binding(get: { lightness }, set: { onChange(saturation, $0) }),
+                range: -50...50,
+                step: 1
+            )
         }
     }
 
@@ -2880,7 +2916,13 @@ struct CaptionLayerControls: View {
                 switch params.mode {
                 case .template: 0
                 case .custom: 1
-                case .none: 2
+                // Legacy `.none` layers (from older preset YAML) surface as
+                // Template in the picker so users never see an empty
+                // selection. The body below migrates them on first render
+                // via `.onAppear`, and if the user interacts with the picker
+                // they overwrite it either way. `.none` stays in the model
+                // for preset back-compat but is no longer a user choice.
+                case .none: 0
                 }
             },
             set: { idx in
@@ -2893,7 +2935,7 @@ struct CaptionLayerControls: View {
                     if case .custom = params.mode { return }
                     p.mode = .custom("")
                 default:
-                    p.mode = .none
+                    return
                 }
                 onChange(p)
             }
@@ -3046,13 +3088,13 @@ struct CaptionLayerControls: View {
 
 // MARK: - TemplateTokenBar
 
-private struct TemplateToken: Identifiable {
+private struct TemplateToken: Identifiable, Hashable {
     let id: String
     let token: String
     let label: String
     let category: Category
 
-    enum Category: String, CaseIterable {
+    enum Category: String, CaseIterable, Hashable {
         case camera = "Camera"
         case date = "Date"
     }
@@ -3076,10 +3118,11 @@ private struct TemplateToken: Identifiable {
 }
 
 struct TemplateTokenBar: View {
+    @Environment(\.sidebarMetrics) private var metrics
     @Binding var text: String
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 6) {
+        VStack(alignment: .leading, spacing: metrics.expandedBodyInset) {
             ForEach(TemplateToken.Category.allCases, id: \.rawValue) { category in
                 tokenRow(category)
             }
@@ -3087,190 +3130,313 @@ struct TemplateTokenBar: View {
     }
 
     private func tokenRow(_ category: TemplateToken.Category) -> some View {
-        HStack(spacing: 4) {
+        HStack(alignment: .top, spacing: metrics.expandedBodyInset) {
             Text(category.rawValue)
                 .font(AppFont.body(10))
                 .foregroundStyle(Color.text3)
                 .frame(width: 48, alignment: .trailing)
 
-            FlowLayout(spacing: 4) {
-                ForEach(TemplateToken.all.filter { $0.category == category }) { token in
-                    Button {
-                        text.append(token.token)
-                    } label: {
-                        Text(token.label)
-                            .font(AppFont.controlLabel)
-                            .padding(.horizontal, 6)
-                            .padding(.vertical, 2)
-                            .background(Color.surface4, in: Capsule())
-                    }
-                    .buttonStyle(.plain)
-                    .help("Insert \(token.token)")
+            SidebarChipFlow(
+                items: TemplateToken.all.filter { $0.category == category },
+                spacing: metrics.expandedBodyInset - 2
+            ) { token in
+                Button {
+                    text.append(token.token)
+                } label: {
+                    Text(token.label)
+                        .font(AppFont.controlLabel)
+                        .padding(.horizontal, metrics.expandedBodyInset)
+                        .padding(.vertical, 2)
+                        .background(Color.surface4, in: Capsule())
                 }
+                .buttonStyle(.plain)
+                .help("Insert \(token.token)")
             }
         }
     }
 }
 
-/// Simple horizontal flow layout for wrapping token chips.
-struct FlowLayout: Layout {
-    var spacing: CGFloat = 4
+struct DenseSliderControlRow: View {
+    let title: LocalizedStringKey
+    @Binding var value: Double
+    let range: ClosedRange<Double>
+    var accessibilityLabel: LocalizedStringKey? = nil
+    let step: Double
+    var unit: LocalizedStringKey? = nil
 
-    func sizeThatFits(proposal: ProposedViewSize, subviews: Subviews, cache: inout ()) -> CGSize {
-        let result = arrange(proposal: proposal, subviews: subviews)
-        return result.size
-    }
-
-    func placeSubviews(in bounds: CGRect, proposal: ProposedViewSize, subviews: Subviews, cache: inout ()) {
-        let result = arrange(proposal: proposal, subviews: subviews)
-        for (index, origin) in result.origins.enumerated() {
-            subviews[index].place(
-                at: CGPoint(x: bounds.minX + origin.x, y: bounds.minY + origin.y),
-                proposal: .unspecified
-            )
-        }
-    }
-
-    private func arrange(proposal: ProposedViewSize, subviews: Subviews) -> (size: CGSize, origins: [CGPoint]) {
-        let maxWidth = proposal.width ?? .infinity
-        var origins: [CGPoint] = []
-        var x: CGFloat = 0
-        var y: CGFloat = 0
-        var rowHeight: CGFloat = 0
-        var totalWidth: CGFloat = 0
-
-        for subview in subviews {
-            let size = subview.sizeThatFits(.unspecified)
-            if x + size.width > maxWidth, x > 0 {
-                x = 0
-                y += rowHeight + spacing
-                rowHeight = 0
+    var body: some View {
+        SidebarControlRow(title) {
+            Slider(value: snappedBinding, in: range)
+                .tint(Color.accentDim)
+                .accessibilityLabel(Text(accessibilityLabel ?? title))
+        } trailingValue: {
+            SidebarTrailingUnitCluster(unit: unit ?? "") {
+                TextField("", value: snappedBinding, format: .number)
+                    .simpleLayerEditorInputStyle()
+                    .monospacedDigit()
+                    .accessibilityLabel(Text(accessibilityLabel ?? title))
             }
-            origins.append(CGPoint(x: x, y: y))
-            rowHeight = max(rowHeight, size.height)
-            x += size.width + spacing
-            totalWidth = max(totalWidth, x - spacing)
         }
+    }
 
-        return (CGSize(width: totalWidth, height: y + rowHeight), origins)
+    /// Shared snap-to-step binding — both the slider (drag) and the text
+    /// field (typed entry) route through it so their values stay locked to
+    /// `step` and within `range`.
+    private var snappedBinding: Binding<Double> {
+        Binding(
+            get: { value },
+            set: { value = StyledSliderValueResolver.constrain($0, range: range, step: step) }
+        )
+    }
+}
+
+private struct DenseSupplementaryControlRow<Content: View>: View {
+    let title: LocalizedStringKey
+    let content: Content
+
+    @Environment(\.sidebarMetrics) private var metrics
+
+    init(_ title: LocalizedStringKey, @ViewBuilder content: () -> Content) {
+        self.title = title
+        self.content = content()
+    }
+
+    var body: some View {
+        HStack(alignment: .top, spacing: metrics.controlColumnSpacing) {
+            Text(title)
+                .font(AppFont.body(10))
+                .foregroundStyle(Color.text3)
+                .frame(width: metrics.controlLabelWidth, alignment: .leading)
+
+            content
+                .frame(maxWidth: .infinity, alignment: .leading)
+        }
+        .padding(.horizontal, metrics.outerInset)
+        .padding(.top, 3)
+        .padding(.bottom, 6)
+        .accessibilityElement(children: .combine)
+    }
+}
+
+private extension View {
+    func denseControlRow(_ title: LocalizedStringKey) -> some View {
+        SidebarControlRow(title) {
+            self
+                .frame(maxWidth: .infinity, alignment: .leading)
+        }
+    }
+
+    func denseSupportingRow(_ title: LocalizedStringKey) -> some View {
+        DenseSupplementaryControlRow(title) {
+            self
+        }
     }
 }
 
 // MARK: - DitherLayerControls
 
 struct DitherLayerControls: View {
+    @Environment(\.sidebarMetrics) private var metrics
     var params: DitherLayerParams
     var onChange: (DitherLayerParams) -> Void
 
     var body: some View {
-        BlendModeControls(
-            blendMode: Binding(
-                get: { params.blendMode },
-                set: { var p = params; p.blendMode = $0; onChange(p) }
-            ),
-            opacity: Binding(
-                get: { params.opacity },
-                set: { var p = params; p.opacity = $0; onChange(p) }
+        VStack(alignment: .leading, spacing: 0) {
+            BlendModeControls(
+                blendMode: Binding(
+                    get: { params.blendMode },
+                    set: { var p = params; p.blendMode = $0; onChange(p) }
+                ),
+                opacity: Binding(
+                    get: { params.opacity },
+                    set: { var p = params; p.opacity = $0; onChange(p) }
+                )
             )
-        )
 
-        Picker("Algorithm", selection: algorithmBinding) {
-            ForEach(DitherAlgorithm.allCases, id: \.self) { algo in
-                Text(algo.label).tag(algo)
+            SimpleLayerEditorDivider()
+
+            Picker("", selection: algorithmBinding) {
+                ForEach(DitherAlgorithm.allCases, id: \.self) { algo in
+                    Text(algo.label).tag(algo)
+                }
             }
-        }
+            .pickerStyle(.menu)
+            .labelsHidden()
+            .denseControlRow("Algorithm")
 
-        Picker("Color Mode", selection: colorModeTag) {
-            Text("B&W").tag(0)
-            Text("Two-Tone").tag(1)
-            Text("Dominant").tag(3)
-            Text("Color").tag(2)
-            Text("Palette").tag(4)
-        }
-        .pickerStyle(.segmented)
+            SimpleLayerEditorDivider()
 
-        if params.algorithm == .bayer {
-            Stepper(
-                "Bayer Level: \(params.bayerLevel)",
-                value: bayerLevelBinding,
-                in: 1...4
+            Picker("", selection: colorModeTag) {
+                Text("B&W").tag(0)
+                Text("Two-Tone").tag(1)
+                Text("Dominant").tag(3)
+                Text("Color").tag(2)
+                Text("Palette").tag(4)
+            }
+            .pickerStyle(.menu)
+            .labelsHidden()
+            .denseControlRow("Color Mode")
+
+            if params.algorithm == .bayer {
+                SimpleLayerEditorDivider()
+
+                SidebarCompoundControlBlock {
+                    Picker("", selection: bayerLevelBinding) {
+                        ForEach(1...4, id: \.self) { level in
+                            Text("Level \(level)").tag(level)
+                        }
+                    }
+                    .pickerStyle(.menu)
+                    .labelsHidden()
+                    .denseControlRow("Bayer Level")
+                } secondary: {
+                    Text("\(1 << (params.bayerLevel + 1))×\(1 << (params.bayerLevel + 1)) matrix")
+                        .font(AppFont.numericInput)
+                        .foregroundStyle(Color.text2)
+                        .denseSupportingRow("Pattern")
+                }
+            }
+
+            SimpleLayerEditorDivider()
+
+            DenseSliderControlRow(
+                title: "Pixel Scale",
+                value: Binding(
+                    get: { Double(params.pixelScale) },
+                    set: { pixelScaleBinding.wrappedValue = Int($0.rounded()) }
+                ),
+                range: 1...8,
+                step: 1,
+                unit: "×"
             )
-            .caption("(\(1 << (params.bayerLevel + 1))×\(1 << (params.bayerLevel + 1)))")
-        }
 
-        Stepper(
-            "Pixel Scale: \(params.pixelScale)×",
-            value: pixelScaleBinding,
-            in: 1...8
-        )
+            if case .twoTone(let fg, let bg) = params.colorMode {
+                SimpleLayerEditorDivider()
+                labeledColorPicker("Foreground", selection: foregroundBinding(fg: fg, bg: bg))
 
-        if case .twoTone(let fg, let bg) = params.colorMode {
-            ColorPickerWithHex("Foreground", selection: foregroundBinding(fg: fg, bg: bg))
-            ColorPickerWithHex("Background", selection: backgroundBinding(fg: fg, bg: bg))
-        }
+                SimpleLayerEditorDivider()
+                labeledColorPicker("Background", selection: backgroundBinding(fg: fg, bg: bg))
+            }
 
-        if case .dominantTwoTone(let flipped, let sat, let light) = params.colorMode {
-            Toggle("Flip Colors", isOn: Binding(
-                get: { flipped },
-                set: { var p = params; p.colorMode = .dominantTwoTone(flipped: $0, saturationShift: sat, lightnessShift: light); onChange(p) }
-            ))
-            .caption("Swap foreground and background")
+            if case .dominantTwoTone(let flipped, let sat, let light) = params.colorMode {
+                SimpleLayerEditorDivider()
 
-            VStack(alignment: .leading, spacing: 4) {
-                Text("Saturation")
-                    .font(AppFont.controlLabel)
+                SidebarCompoundControlBlock {
+                    SidebarControlRow("Flip Colors") {
+                        EmptyView()
+                    } trailingValue: {
+                        StyledToggle(isOn: Binding(
+                            get: { flipped },
+                            set: { var p = params; p.colorMode = .dominantTwoTone(flipped: $0, saturationShift: sat, lightnessShift: light); onChange(p) }
+                        ))
+                    }
+                } secondary: {
+                    Text("Swap foreground and background")
+                        .font(AppFont.body(10))
+                        .foregroundStyle(Color.text2)
+                        .denseSupportingRow("Details")
+                }
+
+                SimpleLayerEditorDivider()
+
+                SidebarCompoundControlBlock {
+                    DenseSliderControlRow(
+                        title: "Saturation",
+                        value: Binding(
+                            get: { sat },
+                            set: { var p = params; p.colorMode = .dominantTwoTone(flipped: flipped, saturationShift: $0, lightnessShift: light); onChange(p) }
+                        ),
+                        range: -50...50,
+                        step: 1
+                    )
+                } secondary: {
+                    DenseSliderControlRow(
+                        title: "Brightness",
+                        value: Binding(
+                            get: { light },
+                            set: { var p = params; p.colorMode = .dominantTwoTone(flipped: flipped, saturationShift: sat, lightnessShift: $0); onChange(p) }
+                        ),
+                        range: -50...50,
+                        step: 1
+                    )
+                }
+            }
+
+            if case .color(let levels) = params.colorMode {
+                SimpleLayerEditorDivider()
+
+                DenseSliderControlRow(
+                    title: "Levels",
+                    value: Binding(
+                        get: { Double(levels) },
+                        set: { levelsBinding(levels).wrappedValue = Int($0.rounded()) }
+                    ),
+                    range: 2...8,
+                    step: 1
+                )
+            }
+
+            if case .palette(let colors) = params.colorMode {
+                SimpleLayerEditorDivider()
+                paletteEditor(colors: colors)
+            }
+
+            SimpleLayerEditorDivider()
+
+            SidebarCompoundControlBlock {
+                DenseSliderControlRow(
+                    title: "Threshold",
+                    value: thresholdBinding,
+                    range: 0.1...0.9,
+                    step: 0.05
+                )
+            } secondary: {
+                Text("Lower = darker, higher = brighter")
+                    .font(AppFont.body(10))
                     .foregroundStyle(Color.text2)
-                Slider(value: Binding(
-                    get: { sat },
-                    set: { var p = params; p.colorMode = .dominantTwoTone(flipped: flipped, saturationShift: $0, lightnessShift: light); onChange(p) }
-                ), in: -50...50)
+                    .denseSupportingRow("Details")
             }
-            VStack(alignment: .leading, spacing: 4) {
-                Text("Brightness")
-                    .font(AppFont.controlLabel)
+
+            SimpleLayerEditorDivider()
+
+            SidebarCompoundControlBlock {
+                DenseSliderControlRow(
+                    title: "Sharpen",
+                    value: Binding(
+                        get: { params.sharpen * 100 },
+                        set: { sharpenBinding.wrappedValue = $0 / 100 }
+                    ),
+                    range: 0...100,
+                    step: 10,
+                    unit: "%"
+                )
+            } secondary: {
+                Text("Pre-sharpen to preserve edge detail")
+                    .font(AppFont.body(10))
                     .foregroundStyle(Color.text2)
-                Slider(value: Binding(
-                    get: { light },
-                    set: { var p = params; p.colorMode = .dominantTwoTone(flipped: flipped, saturationShift: sat, lightnessShift: $0); onChange(p) }
-                ), in: -50...50)
+                    .denseSupportingRow("Details")
+            }
+
+            SimpleLayerEditorDivider()
+
+            SidebarCompoundControlBlock {
+                DenseSliderControlRow(
+                    title: "Contrast",
+                    value: Binding(
+                        get: { params.contrast * 100 },
+                        set: { contrastBinding.wrappedValue = $0 / 100 }
+                    ),
+                    range: 0...100,
+                    step: 10,
+                    unit: "%"
+                )
+            } secondary: {
+                Text("Boost contrast before dithering")
+                    .font(AppFont.body(10))
+                    .foregroundStyle(Color.text2)
+                    .denseSupportingRow("Details")
             }
         }
-
-        if case .color(let levels) = params.colorMode {
-            Stepper(
-                "Levels: \(levels) per channel",
-                value: levelsBinding(levels),
-                in: 2...8
-            )
-        }
-
-        if case .palette(let colors) = params.colorMode {
-            paletteEditor(colors: colors)
-        }
-
-        VStack(alignment: .leading, spacing: 4) {
-            Text("Threshold: \(String(format: "%.2f", params.threshold))")
-                .font(AppFont.controlLabel)
-                .foregroundStyle(Color.text2)
-            Slider(value: thresholdBinding, in: 0.1...0.9, step: 0.05)
-        }
-        .caption("Lower = darker, Higher = brighter")
-
-        VStack(alignment: .leading, spacing: 4) {
-            Text("Sharpen: \(String(format: "%.0f%%", params.sharpen * 100))")
-                .font(AppFont.controlLabel)
-                .foregroundStyle(Color.text2)
-            Slider(value: sharpenBinding, in: 0...1, step: 0.1)
-        }
-        .caption("Pre-sharpen to preserve edge detail")
-
-        VStack(alignment: .leading, spacing: 4) {
-            Text("Contrast: \(String(format: "%.0f%%", params.contrast * 100))")
-                .font(AppFont.controlLabel)
-                .foregroundStyle(Color.text2)
-            Slider(value: contrastBinding, in: 0...1, step: 0.1)
-        }
-        .caption("Boost contrast before dithering")
     }
 
     // MARK: - Bindings
@@ -3425,82 +3591,74 @@ struct DitherLayerControls: View {
     private func paletteEditor(colors: [CodableColor]) -> some View {
         let selectedPreset = VintagePalette.Preset.matching(colors)
 
-        VStack(alignment: .leading, spacing: 6) {
-            Picker("Preset", selection: Binding<VintagePalette.Preset>(
-                get: { selectedPreset },
-                set: { newValue in
-                    var p = params
-                    switch newValue {
-                    case .custom:
-                        // Seed Custom with the current colours if already
-                        // custom, else the classic Game Boy set as a starter.
-                        let seed = (selectedPreset == .custom) ? colors : VintagePalette.gameBoy
-                        p.colorMode = .palette(seed)
-                    default:
-                        p.colorMode = .palette(newValue.colors)
-                    }
-                    onChange(p)
-                }
-            )) {
-                ForEach(VintagePalette.Preset.allCases, id: \.self) { preset in
-                    Text(preset.rawValue).tag(preset)
-                }
-            }
-            .pickerStyle(.menu)
+        SidebarFullWidthRow("Palette") {
+            VStack(alignment: .leading, spacing: metrics.expandedBodyInset) {
+                Picker("Preset", selection: Binding<VintagePalette.Preset>(
+                    get: { selectedPreset },
+                    set: { newValue in
+                        // Picking the same preset is a no-op. Prevents the
+                        // .custom branch below from mutating when the user
+                        // didn't actually change anything.
+                        guard newValue != selectedPreset else { return }
 
-            ForEach(Array(colors.enumerated()), id: \.offset) { idx, color in
-                HStack(spacing: 8) {
-                    ColorPickerWithHex("Colour \(idx + 1)", selection: Binding(
-                        get: { Color(nsColor: NSColor(cgColor: color.cgColor) ?? .white) },
-                        set: { newColor in
-                            guard let hex = newColor.hexString,
-                                  let codable = try? CodableColor(hex: hex) else { return }
-                            var p = params
-                            var next = colors
-                            next[idx] = codable
-                            p.colorMode = .palette(next)
-                            onChange(p)
-                        }
-                    ))
-                    Button {
-                        guard colors.count > 2 else { return }
                         var p = params
-                        var next = colors
-                        next.remove(at: idx)
-                        p.colorMode = .palette(next)
+                        switch newValue {
+                        case .custom:
+                            // Seed Custom with the CURRENT colours plus an
+                            // extra neutral swatch. Two requirements drive this:
+                            //   1. Don't throw away what the user is editing —
+                            //      if they were on Game Boy, keep those colours
+                            //      as the starting point.
+                            //   2. The resulting palette must NOT match any
+                            //      preset, otherwise `VintagePalette.Preset.matching()`
+                            //      returns that preset on the next render and
+                            //      snaps the picker back, silently reverting
+                            //      the user's "Custom" click.
+                            // Trim to MAX-1 before appending so the neutral
+                            // swatch is always kept (a naive prefix(MAX) would
+                            // silently drop the appended neutral when the
+                            // current palette is already at MAX, leaving the
+                            // preset unchanged and the picker snapping back).
+                            let base = colors.isEmpty ? VintagePalette.gameBoy : colors
+                            let maxBaseCount = DitherColorMode.MAX_PALETTE_COLORS - 1
+                            let trimmedBase = Array(base.prefix(maxBaseCount))
+                            let seed = trimmedBase + [CodableColor(unchecked: "#808080")]
+                            p.colorMode = .palette(seed)
+                        default:
+                            p.colorMode = .palette(newValue.colors)
+                        }
                         onChange(p)
-                    } label: {
-                        Image(systemName: "minus.circle")
                     }
-                    .buttonStyle(.borderless)
-                    .disabled(colors.count <= 2)
+                )) {
+                    ForEach(VintagePalette.Preset.allCases, id: \.self) { preset in
+                        Text(preset.rawValue).tag(preset)
+                    }
                 }
-            }
+                .pickerStyle(.menu)
 
-            if colors.count < DitherColorMode.MAX_PALETTE_COLORS {
-                Button {
-                    var p = params
-                    var next = colors
-                    next.append(colors.last ?? CodableColor(unchecked: "#000000"))
-                    p.colorMode = .palette(next)
-                    onChange(p)
-                } label: {
-                    Label("Add Colour", systemImage: "plus.circle")
-                }
-                .buttonStyle(.borderless)
+                SidebarPaletteEditor(
+                    colors: paletteBinding(currentColors: colors),
+                    maxColors: DitherColorMode.MAX_PALETTE_COLORS,
+                    minColors: 2,
+                    defaultNewColor: colors.last ?? CodableColor(unchecked: "#000000")
+                )
             }
         }
     }
-}
 
-private extension View {
-    func caption(_ text: String) -> some View {
-        VStack(alignment: .leading, spacing: 2) {
-            self
-            Text(text)
-                .font(AppFont.controlLabel)
-                .foregroundStyle(Color.text2)
-        }
+    /// Adapter that turns `params.colorMode = .palette([...])` into a
+    /// `Binding<[CodableColor]>` for `SidebarPaletteEditor`. The captured
+    /// `colors` snapshot is the getter's source of truth each render pass;
+    /// the setter routes updates back through `onChange`.
+    private func paletteBinding(currentColors colors: [CodableColor]) -> Binding<[CodableColor]> {
+        Binding(
+            get: { colors },
+            set: { newColors in
+                var p = params
+                p.colorMode = .palette(newColors)
+                onChange(p)
+            }
+        )
     }
 }
 
@@ -3508,6 +3666,7 @@ private extension View {
 
 struct LUTLayerControls: View {
     @Environment(AppState.self) private var appState
+    @Environment(\.sidebarMetrics) private var metrics
     var params: LUTLayerParams
     var onChange: (LUTLayerParams) -> Void
 
@@ -3517,7 +3676,7 @@ struct LUTLayerControls: View {
     @State private var renameText = ""
 
     var body: some View {
-        VStack(spacing: 12) {
+        VStack(alignment: .leading, spacing: 0) {
             BlendModeControls(
                 blendMode: Binding(
                     get: { params.blendMode },
@@ -3528,9 +3687,17 @@ struct LUTLayerControls: View {
                     set: { var p = params; p.opacity = $0; onChange(p) }
                 )
             )
+
+            SimpleLayerEditorDivider()
             lutPicker
+
+            SimpleLayerEditorDivider()
             lutThumbnailStrip
+
+            SimpleLayerEditorDivider()
             intensityControl
+
+            SimpleLayerEditorDivider()
             importButtons
         }
         .task {
@@ -3564,12 +3731,15 @@ struct LUTLayerControls: View {
     }
 
     private var lutPicker: some View {
-        Picker("LUT", selection: lutNameBinding) {
+        Picker("", selection: lutNameBinding) {
             Text("None").tag("")
             ForEach(availableLUTs) { lut in
                 Text(lut.displayName).tag(lut.id)
             }
         }
+        .pickerStyle(.menu)
+        .labelsHidden()
+        .denseControlRow("LUT")
     }
 
     @MainActor
@@ -3601,65 +3771,68 @@ struct LUTLayerControls: View {
     @ViewBuilder
     private var lutThumbnailStrip: some View {
         if availableLUTs.isEmpty {
-            VStack(spacing: 8) {
-                Image(systemName: "photo.on.rectangle.angled")
-                    .font(.system(size: 32))
-                    .foregroundStyle(Color.text3)
-                Text("No LUTs available")
-                    .font(AppFont.controlLabel)
-                    .foregroundStyle(Color.text3)
-                Text("Import .cube files to get started")
-                    .font(.caption)
-                    .foregroundStyle(Color.text3)
-            }
-            .frame(maxWidth: .infinity)
-            .padding(.vertical, 16)
-        } else {
-            ScrollView(.horizontal, showsIndicators: false) {
-                HStack(spacing: 6) {
-                    ForEach(availableLUTs) { lut in
-                        lutThumb(lut)
-                    }
+            SidebarFullWidthRow("Preview") {
+                VStack(spacing: metrics.expandedBodyInset) {
+                    Image(systemName: "photo.on.rectangle.angled")
+                        .font(.system(size: 32))
+                        .foregroundStyle(Color.text3)
+                    Text("No LUTs available")
+                        .font(AppFont.controlLabel)
+                        .foregroundStyle(Color.text3)
+                    Text("Import .cube files to get started")
+                        .font(.caption)
+                        .foregroundStyle(Color.text3)
                 }
-                .padding(.vertical, 4)
+                .padding(.vertical, metrics.expandedBodyInset * 2)
+            }
+        } else {
+            SidebarFullWidthRow("Preview") {
+                SidebarPreviewStrip(
+                    items: availableLUTs,
+                    tileWidth: 48,
+                    tileHeight: nil,
+                    spacing: metrics.expandedBodyInset
+                ) { lut in
+                    lutThumb(lut)
+                }
             }
         }
     }
 
     private var intensityControl: some View {
-        VStack(alignment: .leading, spacing: 4) {
-            HStack {
-                Text("Intensity")
-                    .font(AppFont.controlLabel)
-                    .foregroundStyle(Color.text2)
-                Spacer()
-                Text("\(Int(params.intensity * 100))%")
-                    .font(AppFont.controlLabel)
-                    .foregroundStyle(Color.text2)
-            }
-            Slider(value: intensityBinding, in: 0...1, step: 0.05)
-        }
+        DenseSliderControlRow(
+            title: "Intensity",
+            value: Binding(
+                get: { params.intensity * 100 },
+                set: { intensityBinding.wrappedValue = $0 / 100 }
+            ),
+            range: 0...100,
+            step: 5,
+            unit: "%"
+        )
     }
 
     private var importButtons: some View {
-        HStack {
-            Button {
-                importLUT()
-            } label: {
-                Label("Import", systemImage: "square.and.arrow.down")
-                    .font(AppFont.controlLabel)
-            }
-            .buttonStyle(.plain)
-            .foregroundStyle(Color.text2)
+        SidebarFullWidthRow("Library") {
+            HStack(spacing: metrics.controlColumnSpacing) {
+                Button {
+                    importLUT()
+                } label: {
+                    Label("Import", systemImage: "square.and.arrow.down")
+                        .font(AppFont.controlLabel)
+                }
+                .buttonStyle(.plain)
+                .foregroundStyle(Color.text2)
 
-            Button {
-                openLUTsFolder()
-            } label: {
-                Label("Show Folder", systemImage: "folder")
-                    .font(AppFont.controlLabel)
+                Button {
+                    openLUTsFolder()
+                } label: {
+                    Label("Show Folder", systemImage: "folder")
+                        .font(AppFont.controlLabel)
+                }
+                .buttonStyle(.plain)
+                .foregroundStyle(Color.text2)
             }
-            .buttonStyle(.plain)
-            .foregroundStyle(Color.text2)
         }
     }
 
@@ -3870,7 +4043,7 @@ struct ShaderLayerControls: View {
     var onChange: (ShaderLayerParams) -> Void
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 8) {
+        VStack(alignment: .leading, spacing: 0) {
             BlendModeControls(
                 blendMode: Binding(
                     get: { params.blendMode },
@@ -3882,6 +4055,8 @@ struct ShaderLayerControls: View {
                 )
             )
 
+            SimpleLayerEditorDivider()
+
             sliderRow(
                 title: "Intensity",
                 value: params.intensity,
@@ -3892,6 +4067,8 @@ struct ShaderLayerControls: View {
                 updated.intensity = value
                 onChange(updated)
             }
+
+            SimpleLayerEditorDivider()
 
             switch params.params {
             case .ascii(let asciiParams):
@@ -3968,49 +4145,49 @@ struct ShaderLayerControls: View {
 
         // Resolution toggle. Independent of character set / font — see
         // ASCIIShaderParams.highDetail for the axis split.
-        Toggle("High Detail (16×16 atlas)", isOn: Binding(
-            get: { asciiParams.highDetail },
-            set: { updateASCII(asciiParams, highDetail: $0) }
-        ))
-
-        VStack(alignment: .leading, spacing: 4) {
-            Text("Colors")
-                .font(AppFont.controlLabel)
-                .foregroundStyle(Color.text2)
-            Picker("", selection: Binding(
-                get: {
-                    switch asciiParams.colorMode {
-                    case .manual: return 0
-                    case .dominantTwoTone: return 1
-                    case .source: return 2
-                    case .gradient: return 3
-                    }
-                },
-                set: { mode in
-                    switch mode {
-                    case 1:
-                        updateASCII(asciiParams, colorMode: .dominantTwoTone())
-                    case 2:
-                        updateASCII(asciiParams, colorMode: .source())
-                    case 3:
-                        updateASCII(asciiParams, colorMode: .gradient(color1: .black, color2: .white))
-                    default:
-                        updateASCII(asciiParams, colorMode: .manual(foreground: .white, background: .black))
-                    }
-                }
-            )) {
-                Text("Manual").tag(0)
-                Text("Dominant").tag(1)
-                Text("Source").tag(2)
-                Text("Gradient").tag(3)
-            }
-            .labelsHidden()
-            .pickerStyle(.segmented)
+        SidebarControlRow("High Detail") {
+            EmptyView()
+        } trailingValue: {
+            StyledToggle(isOn: Binding(
+                get: { asciiParams.highDetail },
+                set: { updateASCII(asciiParams, highDetail: $0) }
+            ))
         }
+
+        Picker("", selection: Binding(
+            get: {
+                switch asciiParams.colorMode {
+                case .manual: return 0
+                case .dominantTwoTone: return 1
+                case .source: return 2
+                case .gradient: return 3
+                }
+            },
+            set: { mode in
+                switch mode {
+                case 1:
+                    updateASCII(asciiParams, colorMode: .dominantTwoTone())
+                case 2:
+                    updateASCII(asciiParams, colorMode: .source())
+                case 3:
+                    updateASCII(asciiParams, colorMode: .gradient(color1: .black, color2: .white))
+                default:
+                    updateASCII(asciiParams, colorMode: .manual(foreground: .white, background: .black))
+                }
+            }
+        )) {
+            Text("Manual").tag(0)
+            Text("Dominant").tag(1)
+            Text("Source").tag(2)
+            Text("Gradient").tag(3)
+        }
+        .pickerStyle(.menu)
+        .labelsHidden()
+        .denseControlRow("Colors")
 
         switch asciiParams.colorMode {
         case .manual(let foreground, let background):
-            ColorPickerWithHex("Foreground", selection: Binding(
+            labeledColorPicker("Foreground", selection: Binding(
                 get: { Color(cgColor: foreground.cgColor) },
                 set: { value in
                     guard let hex = value.hexString, let color = try? CodableColor(hex: hex) else { return }
@@ -4020,7 +4197,7 @@ struct ShaderLayerControls: View {
                 updateASCII(asciiParams, colorMode: .manual(foreground: color, background: background))
             })
 
-            ColorPickerWithHex("Background", selection: Binding(
+            labeledColorPicker("Background", selection: Binding(
                 get: { Color(cgColor: background.cgColor) },
                 set: { value in
                     guard let hex = value.hexString, let color = try? CodableColor(hex: hex) else { return }
@@ -4030,16 +4207,20 @@ struct ShaderLayerControls: View {
                 updateASCII(asciiParams, colorMode: .manual(foreground: foreground, background: color))
             })
         case .dominantTwoTone(let flipped, let saturationShift, let lightnessShift):
-            Toggle("Flip Palette", isOn: Binding(
-                get: { flipped },
-                set: { value in
-                    updateASCII(asciiParams, colorMode: .dominantTwoTone(
-                        flipped: value,
-                        saturationShift: saturationShift,
-                        lightnessShift: lightnessShift
-                    ))
-                }
-            ))
+            SidebarControlRow("Flip Palette") {
+                EmptyView()
+            } trailingValue: {
+                StyledToggle(isOn: Binding(
+                    get: { flipped },
+                    set: { value in
+                        updateASCII(asciiParams, colorMode: .dominantTwoTone(
+                            flipped: value,
+                            saturationShift: saturationShift,
+                            lightnessShift: lightnessShift
+                        ))
+                    }
+                ))
+            }
 
             sliderRow(
                 title: "Saturation",
@@ -4067,7 +4248,7 @@ struct ShaderLayerControls: View {
                 ))
             }
         case .source(let background):
-            ColorPickerWithHex("Background", selection: Binding(
+            labeledColorPicker("Background", selection: Binding(
                 get: { Color(cgColor: background.cgColor) },
                 set: { value in
                     guard let hex = value.hexString, let color = try? CodableColor(hex: hex) else { return }
@@ -4077,7 +4258,7 @@ struct ShaderLayerControls: View {
                 updateASCII(asciiParams, colorMode: .source(background: color))
             })
         case .gradient(let color1, let color2, let background):
-            ColorPickerWithHex("Dark Color", selection: Binding(
+            labeledColorPicker("Dark Color", selection: Binding(
                 get: { Color(cgColor: color1.cgColor) },
                 set: { value in
                     guard let hex = value.hexString, let color = try? CodableColor(hex: hex) else { return }
@@ -4087,7 +4268,7 @@ struct ShaderLayerControls: View {
                 updateASCII(asciiParams, colorMode: .gradient(color1: color, color2: color2, background: background))
             })
 
-            ColorPickerWithHex("Bright Color", selection: Binding(
+            labeledColorPicker("Bright Color", selection: Binding(
                 get: { Color(cgColor: color2.cgColor) },
                 set: { value in
                     guard let hex = value.hexString, let color = try? CodableColor(hex: hex) else { return }
@@ -4097,7 +4278,7 @@ struct ShaderLayerControls: View {
                 updateASCII(asciiParams, colorMode: .gradient(color1: color1, color2: color, background: background))
             })
 
-            ColorPickerWithHex("Background", selection: Binding(
+            labeledColorPicker("Background", selection: Binding(
                 get: { Color(cgColor: background.cgColor) },
                 set: { value in
                     guard let hex = value.hexString, let color = try? CodableColor(hex: hex) else { return }
@@ -4108,12 +4289,18 @@ struct ShaderLayerControls: View {
             })
         }
 
-        Toggle("Invert", isOn: Binding(
-            get: { asciiParams.invert },
-            set: { value in
-                updateASCII(asciiParams, invert: value)
-            }
-        ))
+        SidebarControlRow("Invert") {
+            EmptyView()
+        } trailingValue: {
+            StyledToggle(isOn: Binding(
+                get: {
+                    asciiParams.invert
+                },
+                set: { value in
+                    updateASCII(asciiParams, invert: value)
+                }
+            ))
+        }
     }
 
     /// Character-palette picker. Presets are derived from the stored string
@@ -4126,67 +4313,52 @@ struct ShaderLayerControls: View {
         let selectedPreset = ASCIIPreset.matching(asciiParams.characters)
         let characterCount = (asciiParams.characters ?? "").count
 
-        VStack(alignment: .leading, spacing: 8) {
-            Text("Characters")
-                .font(AppFont.controlLabel)
-                .foregroundStyle(Color.text2)
+        Picker("", selection: Binding<ASCIIPreset>(
+            get: { selectedPreset },
+            set: { newValue in
+                switch newValue {
+                case .default:
+                    updateASCII(asciiParams, characters: .some(nil))
+                case .custom:
+                    let current = asciiParams.characters
+                    let alreadyCustom = current.map { ASCIIPreset.matching($0) == .custom } ?? false
+                    let seed: String = alreadyCustom ? (current ?? "") : " .:*@"
+                    updateASCII(asciiParams, characters: .some(seed))
+                default:
+                    updateASCII(asciiParams, characters: .some(newValue.characters))
+                }
+            }
+        )) {
+            ForEach(ASCIIPreset.allCases, id: \.self) { preset in
+                Text(preset.rawValue).tag(preset)
+            }
+        }
+        .pickerStyle(.menu)
+        .labelsHidden()
+        .denseControlRow("Characters")
 
-            Picker("", selection: Binding<ASCIIPreset>(
-                get: { selectedPreset },
-                set: { newValue in
-                    switch newValue {
-                    case .default:
-                        updateASCII(asciiParams, characters: .some(nil))
-                    case .custom:
-                        // Preserve whatever string the user currently has if
-                        // it's already non-preset. Otherwise seed with a
-                        // deliberately-not-a-preset starter so the picker
-                        // actually stays on Custom — if we seeded with
-                        // Classic's literal the next render would re-derive
-                        // `.classic` and snap the picker back.
-                        let current = asciiParams.characters
-                        let alreadyCustom = current.map { ASCIIPreset.matching($0) == .custom } ?? false
-                        let seed: String = alreadyCustom ? (current ?? "") : " .:*@"
-                        updateASCII(asciiParams, characters: .some(seed))
-                    default:
-                        updateASCII(asciiParams, characters: .some(newValue.characters))
+        if selectedPreset == .custom {
+            TextField(
+                " .:-=+*#%@",
+                text: Binding(
+                    get: { asciiParams.characters ?? "" },
+                    set: { newValue in
+                        let trimmed = String(newValue.prefix(10))
+                        updateASCII(asciiParams, characters: .some(trimmed.isEmpty ? nil : trimmed))
                     }
-                }
-            )) {
-                ForEach(ASCIIPreset.allCases, id: \.self) { preset in
-                    Text(preset.rawValue).tag(preset)
-                }
-            }
-            .pickerStyle(.menu)
-            .labelsHidden()
-
-            if selectedPreset == .custom {
-                TextField(
-                    " .:-=+*#%@",
-                    text: Binding(
-                        get: { asciiParams.characters ?? "" },
-                        set: { newValue in
-                            let trimmed = String(newValue.prefix(10))
-                            updateASCII(asciiParams, characters: .some(trimmed.isEmpty ? nil : trimmed))
-                        }
-                    )
                 )
-                .font(.system(.body, design: .monospaced))
-                .textFieldStyle(.roundedBorder)
+            )
+            .font(.system(.body, design: .monospaced))
+            .textFieldStyle(.roundedBorder)
+            .denseControlRow("Custom")
 
-                HStack(spacing: 6) {
-                    Text("\(characterCount) / 10")
-                        .font(.caption)
-                        .foregroundStyle(Color.text2)
-                    Spacer()
-                }
+            Text("\(characterCount) / 10")
+                .font(.caption)
+                .foregroundStyle(Color.text2)
+                .denseSupportingRow("Length")
 
-                // Mini ramp preview: 10 cells, each the character that would
-                // rasterise at that luminance slot over a gray background
-                // matching the relative luma. Makes the N-across-10 mapping
-                // explicit without the user having to apply + re-render.
-                asciiRampPreview(for: asciiParams.characters ?? "")
-            }
+            asciiRampPreview(for: asciiParams.characters ?? "")
+                .denseSupportingRow("Preview")
         }
     }
 
@@ -4201,25 +4373,21 @@ struct ShaderLayerControls: View {
     @ViewBuilder
     private func asciiFontControl(_ asciiParams: ASCIIShaderParams) -> some View {
         let families = Self.systemFontFamilies
-        VStack(alignment: .leading, spacing: 4) {
-            Text("Font")
-                .font(AppFont.controlLabel)
-                .foregroundStyle(Color.text2)
-            Picker("", selection: Binding<String>(
-                get: { asciiParams.fontName ?? "" },
-                set: { newValue in
-                    updateASCII(asciiParams, fontName: .some(newValue.isEmpty ? nil : newValue))
-                }
-            )) {
-                Text("System Default").tag("")
-                Divider()
-                ForEach(families, id: \.self) { family in
-                    Text(family).tag(family)
-                }
+        Picker("", selection: Binding<String>(
+            get: { asciiParams.fontName ?? "" },
+            set: { newValue in
+                updateASCII(asciiParams, fontName: .some(newValue.isEmpty ? nil : newValue))
             }
-            .pickerStyle(.menu)
-            .labelsHidden()
+        )) {
+            Text("System Default").tag("")
+            Divider()
+            ForEach(families, id: \.self) { family in
+                Text(family).tag(family)
+            }
         }
+        .pickerStyle(.menu)
+        .labelsHidden()
+        .denseControlRow("Font")
     }
 
     private static let systemFontFamilies: [String] = {
@@ -4331,7 +4499,7 @@ struct ShaderLayerControls: View {
 
     @ViewBuilder
     private func pixelSortControls(_ pixelSortParams: PixelSortShaderParams) -> some View {
-        Picker("Direction", selection: Binding(
+        Picker("", selection: Binding(
             get: { pixelSortParams.direction },
             set: { value in
                 var updated = pixelSortParams
@@ -4343,6 +4511,9 @@ struct ShaderLayerControls: View {
                 Text(direction.rawValue.capitalized).tag(direction)
             }
         }
+        .pickerStyle(.menu)
+        .labelsHidden()
+        .denseControlRow("Direction")
 
         // Span criterion. Luminance is the classic Framer behaviour; the four
         // Kim Asendorf cases come from the original 2010 ASDF Pixel Sort
@@ -4350,7 +4521,7 @@ struct ShaderLayerControls: View {
         // predicate so the sorted streaks emerge from different regions of
         // the image. Previously shipping in the data model + shader but
         // hidden from the UI.
-        Picker("Span Mode", selection: Binding(
+        Picker("", selection: Binding(
             get: { pixelSortParams.spanMode },
             set: { value in
                 var updated = pixelSortParams; updated.spanMode = value
@@ -4364,12 +4535,14 @@ struct ShaderLayerControls: View {
             Text("Dark (Kim)").tag(PixelSortSpanMode.kimDark)
         }
         .pickerStyle(.menu)
+        .labelsHidden()
+        .denseControlRow("Span Mode")
 
         // Sort criterion — orthogonal to span mode. Decides what value
         // pixels are RANKED by inside a span: Luminance (classic Rec.601),
         // Brightness (max(r,g,b), preserves saturated colours), or Hue
         // (HSV angle, rainbow-streak effect).
-        Picker("Sort By", selection: Binding(
+        Picker("", selection: Binding(
             get: { pixelSortParams.sortBy },
             set: { value in
                 var updated = pixelSortParams; updated.sortBy = value
@@ -4381,6 +4554,8 @@ struct ShaderLayerControls: View {
             Text("Hue").tag(PixelSortCriterion.hue)
         }
         .pickerStyle(.menu)
+        .labelsHidden()
+        .denseControlRow("Sort By")
 
         sliderRow(
             title: "Threshold",
@@ -4428,13 +4603,17 @@ struct ShaderLayerControls: View {
         }
         // Flip sort direction — sorts descending by luminance (bright at
         // start of span) instead of ascending.
-        Toggle("Reverse", isOn: Binding(
-            get: { pixelSortParams.reverse },
-            set: { value in
-                var updated = pixelSortParams; updated.reverse = value
-                onChange(params.withParams(.pixelSort(updated)))
-            }
-        ))
+        SidebarControlRow("Reverse") {
+            EmptyView()
+        } trailingValue: {
+            StyledToggle(isOn: Binding(
+                get: { pixelSortParams.reverse },
+                set: { value in
+                    var updated = pixelSortParams; updated.reverse = value
+                    onChange(params.withParams(.pixelSort(updated)))
+                }
+            ))
+        }
     }
 
     @ViewBuilder
@@ -4506,13 +4685,17 @@ struct ShaderLayerControls: View {
             var updated = halftoneParams; updated.contrast = value
             onChange(params.withParams(.halftone(updated)))
         }
-        Toggle("Monochrome", isOn: Binding(
-            get: { halftoneParams.monochrome },
-            set: { value in
-                var updated = halftoneParams; updated.monochrome = value
-                onChange(params.withParams(.halftone(updated)))
-            }
-        ))
+        SidebarControlRow("Monochrome") {
+            EmptyView()
+        } trailingValue: {
+            StyledToggle(isOn: Binding(
+                get: { halftoneParams.monochrome },
+                set: { value in
+                    var updated = halftoneParams; updated.monochrome = value
+                    onChange(params.withParams(.halftone(updated)))
+                }
+            ))
+        }
     }
 
     @ViewBuilder
@@ -4582,18 +4765,12 @@ struct ShaderLayerControls: View {
         step: Double,
         onSet: @escaping @MainActor @Sendable (Double) -> Void
     ) -> some View {
-        VStack(alignment: .leading, spacing: 4) {
-            HStack {
-                Text(title)
-                    .font(AppFont.controlLabel)
-                    .foregroundStyle(Color.text2)
-                Spacer()
-                Text(step >= 1 ? "\(Int(value.rounded()))" : String(format: "%.2f", value))
-                    .font(AppFont.controlLabel)
-                    .foregroundStyle(Color.text2)
-            }
-            Slider(value: Binding(get: { value }, set: onSet), in: range, step: step)
-        }
+        DenseSliderControlRow(
+            title: LocalizedStringKey(title),
+            value: Binding(get: { value }, set: onSet),
+            range: range,
+            step: step
+        )
     }
 }
 

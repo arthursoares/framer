@@ -1,16 +1,26 @@
 import SwiftUI
 import FramerCore
 
+private enum PresetPreviewCardLayout {
+    static let cornerRadius = CornerRadius.lg
+    static let thumbnailCornerRadius = CornerRadius.md
+}
+
 struct PresetPreviewCard: View {
     let preset: Preset
     let isActive: Bool
     let thumbnail: NSImage?
     let onTap: () -> Void
 
+    @Environment(\.sidebarMetrics) private var metrics
+
+    private var stateStyle: SidebarStateStyle {
+        isActive ? .selectedCurrent : .hover
+    }
+
     var body: some View {
         Button(action: onTap) {
-            VStack(spacing: 0) {
-                // Thumbnail area — 1:1
+            VStack(alignment: .leading, spacing: metrics.expandedBodyInset) {
                 ZStack {
                     Color.surface3
 
@@ -21,35 +31,35 @@ struct PresetPreviewCard: View {
                     }
                 }
                 .aspectRatio(1, contentMode: .fit)
+                .clipShape(RoundedRectangle(cornerRadius: PresetPreviewCardLayout.thumbnailCornerRadius))
+                .overlay {
+                    RoundedRectangle(cornerRadius: PresetPreviewCardLayout.thumbnailCornerRadius)
+                        .stroke(Color.borderDefault, lineWidth: 1)
+                }
 
-                // Label strip
-                Text(preset.name)
-                    .font(AppFont.templateToken)
-                    .foregroundStyle(isActive ? Color.accent : Color.text2)
-                    .lineLimit(1)
-                    .frame(maxWidth: .infinity)
-                    .padding(.vertical, 4)
-                    .background(isActive ? Color.accentGlow : Color.surface2)
-            }
-            .clipShape(RoundedRectangle(cornerRadius: CornerRadius.md))
-            .overlay(
-                RoundedRectangle(cornerRadius: CornerRadius.md)
-                    .stroke(isActive ? Color.accent : .clear, lineWidth: 2)
-            )
-            .shadow(color: isActive ? Color.accent.opacity(0.15) : .clear, radius: 6)
-            .overlay(alignment: .topTrailing) {
-                if isActive {
-                    Circle()
-                        .fill(Color.accent)
-                        .frame(width: 14, height: 14)
-                        .overlay {
-                            Image(systemName: "checkmark")
-                                .font(.system(size: 7, weight: .bold))
-                                .foregroundStyle(Color.surface0)
-                        }
-                        .offset(x: -4, y: 4)
+                HStack(spacing: Spacing.sm) {
+                    Text(preset.name)
+                        .font(AppFont.templateToken)
+                        .foregroundStyle(isActive ? Color.accent : Color.text1)
+                        .lineLimit(1)
+
+                    Spacer(minLength: 0)
+
+                    if isActive {
+                        Image(systemName: "checkmark.circle.fill")
+                            .font(.system(size: 11, weight: .semibold))
+                            .foregroundStyle(Color.accent)
+                    }
                 }
             }
+            .padding(metrics.expandedBodyInset)
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .background(stateStyle.backgroundColor, in: RoundedRectangle(cornerRadius: PresetPreviewCardLayout.cornerRadius))
+            .overlay {
+                RoundedRectangle(cornerRadius: PresetPreviewCardLayout.cornerRadius)
+                    .stroke(stateStyle.borderColor, lineWidth: 1)
+            }
+            .opacity(stateStyle.opacity)
         }
         .buttonStyle(.plain)
     }

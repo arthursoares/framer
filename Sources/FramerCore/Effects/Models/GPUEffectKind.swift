@@ -17,11 +17,10 @@ public enum GPUEffectKind: String, Codable, Hashable, Sendable, CaseIterable {
     case voronoi
     case vhs
 
-    /// Variants shown in the layer-add picker. Filters out four variants:
+    /// Variants shown in the layer-add picker. Filters out three variants:
     ///
     ///   - `.ascii`     → better-tuned + GPU-accelerated as `.shader` ASCII
     ///   - `.halftone`  → better-tuned + GPU-accelerated as `.shader` Halftone
-    ///   - `.pixelSort` → better-tuned + GPU-accelerated as `.shader` PixelSort
     ///   - `.dithering` → the `.dither` Layer type is the canonical dither
     ///     path. It's GPU-accelerated, exposes all 17 dither algorithms
     ///     (Bayer / Floyd-Steinberg / Atkinson / Sierra family / JJN /
@@ -33,12 +32,17 @@ public enum GPUEffectKind: String, Codable, Hashable, Sendable, CaseIterable {
     ///     the presets"). Hiding it from the picker avoids the half-shipped
     ///     feature surface.
     ///
+    /// PixelSort is exposed here as of sidebar harmony pass 4 — its GPU path
+    /// now routes through PixelSort.metal via `GlitchGPURenderer.renderPixelSort`
+    /// (the same shader the `.shader` layer uses), with the CPU loop in
+    /// `GlitchRenderer` as a headless-host fallback.
+    ///
     /// The enum cases themselves are preserved (YAML back-compat, preset
     /// roundtrip, Codable).
     public static var userFacingCases: [GPUEffectKind] {
         allCases.filter { kind in
             switch kind {
-            case .ascii, .halftone, .pixelSort, .dithering: return false
+            case .ascii, .halftone, .dithering: return false
             default: return true
             }
         }
@@ -100,12 +104,24 @@ public enum GPUEffectKind: String, Codable, Hashable, Sendable, CaseIterable {
     }
 
     /// Common adjustments (brightness / contrast / saturation / hueRotation /
-    /// gamma). All bucket fragments now wrap their source sample in
-    /// `applyCommonAdjustments` (see ShaderCommon.h), so flipping this true
-    /// surfaces the standard adjustment controls in the sidebar. Sharpness is
-    /// not consumed (would require neighbour samples per-shader); leave the
-    /// uniform field for future use.
-    public var usesCommonAdjustments: Bool { true }
+    /// gamma). All bucket fragments EXCEPT pixelSort wrap their source sample
+    /// in `applyCommonAdjustments` (see ShaderCommon.h); flipping this true
+    /// surfaces the standard adjustment controls in the sidebar. Sharpness
+    /// is not consumed (would require neighbour samples per-shader); the
+    /// uniform field stays for future use.
+    ///
+    /// PixelSort returns false — Effects/Metal/PixelSort.metal marks its
+    /// `colorBlock` uniform as unused and never calls
+    /// `applyCommonAdjustments(u.common, …)`, so the common-adjustment sliders
+    /// would show as inert controls (the same pattern as the Sharpness slider
+    /// we removed in pass 3). Wire a colour pre-pass into both GPU and CPU
+    /// pixel-sort paths before flipping this to true.
+    public var usesCommonAdjustments: Bool {
+        switch self {
+        case .pixelSort: return false
+        default: return true
+        }
+    }
 
     /// SF Symbol name for the layer-add menu entry.
     public var menuIcon: String {

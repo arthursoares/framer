@@ -1,8 +1,13 @@
 // GlitchGPURenderer.swift
-// GPU path for the Glitch bucket (`.gpuEffect.glitch.vhs` — pixelSort has its
-// own dedicated shader wired through ShaderStyle.pixelSort). Called by
-// GlitchRenderer.renderPreview for variants whose fragment shader is in
-// Effects/Metal/Glitch.metal.
+// GPU paths for the Glitch bucket (`.gpuEffect.glitch.*`). Each variant is
+// called from `GlitchRenderer.renderPreview` which falls back to the CPU path
+// in `GlitchRenderer` on `MetalEffectError`.
+//
+// VHS dispatches to Glitch.metal's `glitchFragment`.
+// PixelSort dispatches to PixelSort.metal's `pixelSortFragment`, reusing the
+// same shader the `.shader` layer's PixelSort style uses (the bucket brings
+// its own GlitchParameters adapter; the Shader layer has its own
+// PixelSortRenderer for full-featured params).
 
 import Foundation
 import CoreGraphics
@@ -26,6 +31,31 @@ public enum GlitchGPURenderer {
         var scanlines:     Float  = 0
         var trackingError: Float  = 0
         var _pad0:         Float  = 0
+    }
+
+    // Mirrors PixelSortUniforms in PixelSort.metal. Duplicated in-file (vs.
+    // reused from PixelSortRenderer) because the Shader layer's version is
+    // fileprivate and serves a richer parameter surface; the bucket maps a
+    // leaner GlitchParameters → uniforms subset here.
+    private struct PixelSortUniforms {
+        var common   = FramerCommonUniformsLayout()
+        var geometry = FramerGeometryUniformsLayout()
+        var color    = FramerColorUniformsLayout()
+
+        var intensity:   Float  = 1
+        var threshold:   Float  = 0
+        var direction:   UInt32 = 0     // 0 horizontal, 1 vertical, 2 diagonal
+        var spanCap:     Int32  = 24
+
+        var widthPx:     Float  = 0
+        var heightPx:    Float  = 0
+        var spanMode:    UInt32 = 0     // 0 luminance, 1..4 Kim Asendorf (bucket: always 0)
+        var reverse:     UInt32 = 0
+
+        var randomness:  Float  = 0
+        var sortBy:      UInt32 = 0     // 0 luminance, 1 brightness, 2 hue
+        var _pad0:       Float  = 0
+        var _pad1:       Float  = 0
     }
 
     public static func renderVHS(
@@ -59,6 +89,80 @@ public enum GlitchGPURenderer {
         uniforms.colorBleed    = Float(clamp01(params.colorBleed))
         uniforms.scanlines     = Float(clamp01(params.scanlines))
         uniforms.trackingError = Float(clamp01(params.trackingError))
+
+        let uniformData = uniformBytes(uniforms)
+
+        let outputTexture = try MetalRenderPass.encode(
+            pipeline: pipeline,
+            source: sourceTexture,
+            auxTextures: [],
+            sampler: sampler,
+            uniformBytes: uniformData,
+            outputSize: (width, height),
+            library: library
+        )
+        return try MetalTextureSupport.makeCGImage(from: outputTexture)
+    }
+
+    /// GPU dispatch for pixelSort in the Glitch bucket. Maps GlitchParameters
+    /// (the bucket's leaner struct) onto the PixelSort.metal uniforms and runs
+    /// `pixelSortFragment`. The bucket doesn't expose Kim-Asendorf span modes,
+    /// so `spanMode` is fixed at 0 (classic luminance span). Threshold,
+    /// direction, sort mode, streak length, randomness, and reverse all map
+    /// straight across.
+    public static func renderPixelSort(
+        input: CGImage,
+        common: GPUEffectCommonParameters,
+        geometry: GPUEffectGeometryParameters,
+        color: GPUEffectColorParameters,
+        params: GlitchParameters,
+        outputSize: CGSize
+    ) throws -> CGImage {
+        guard let library = MetalEffectLibrary.shared else {
+            throw MetalEffectError.metalUnavailable
+        }
+
+        let width  = max(1, Int(outputSize.width.rounded()))
+        let height = max(1, Int(outputSize.height.rounded()))
+
+        let pipeline = try library.pipeline(for: "pixelSortFragment")
+        // Nearest sampling — span detection compares per-pixel luminance and
+        // bilinear interpolation would smear span boundaries.
+        let sampler = try library.nearestClamp()
+        let sourceTexture = try MetalTextureSupport.makeTexture(from: input, device: library.device)
+
+        var uniforms = PixelSortUniforms()
+        mapCommon(common, into: &uniforms.common)
+        mapGeometry(geometry, into: &uniforms.geometry)
+        mapColor(color, into: &uniforms.color)
+
+        // `amount` drives blend intensity (matches CPU path's
+        // `params.intensity * pixelSortParams.amount`; Glitch bucket's own
+        // intensity defaults to 1.0 so amount alone is the dial).
+        uniforms.intensity  = Float(clamp01(params.amount))
+        uniforms.threshold  = Float(clamp01(params.threshold))
+        uniforms.direction  = {
+            switch params.direction {
+            case .horizontal: return 0
+            case .vertical:   return 1
+            }
+        }()
+        // Streak length is a 0..1 UI dial; the shader's spanCap is 1..256.
+        // Quadratic curve gives fine control in the 0..0.5 band where users
+        // spend most of the sliding time, then opens up to full span near 1.
+        uniforms.spanCap    = Int32(max(1, min(256, Int((params.streakLength * params.streakLength * 255.0 + 1).rounded()))))
+        uniforms.widthPx    = Float(width)
+        uniforms.heightPx   = Float(height)
+        uniforms.spanMode   = 0
+        uniforms.reverse    = params.reverse ? 1 : 0
+        uniforms.randomness = Float(clamp01(params.randomness))
+        uniforms.sortBy     = {
+            switch params.sortMode {
+            case .luminance:  return 0
+            case .brightness: return 1
+            case .hue:        return 2
+            }
+        }()
 
         let uniformData = uniformBytes(uniforms)
 

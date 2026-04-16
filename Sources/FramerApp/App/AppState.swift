@@ -21,6 +21,12 @@ final class AppState {
     var exportQueue: [ExportJob] = []
     private var exportTasks: [UUID: Task<Void, Never>] = [:]
 
+    /// Cached preset-preview thumbnails. A separate `@Observable` instance so
+    /// writes during a background render batch invalidate only views that
+    /// actually read the cache (the Presets grid), not every view tracking
+    /// AppState properties generally.
+    let presetThumbnailCache = PresetThumbnailCache()
+
 
     init() {
         presetStore.initializeDefaults()

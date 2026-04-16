@@ -12,14 +12,27 @@ public enum GlitchRenderer {
             return input
         }
 
-        // GPU fast path for VHS — see Effects/Metal/Glitch.metal::vhsVariant.
-        // Falls back to the CPU pixel loop below on MetalEffectError. PixelSort
-        // isn't dispatched here: it routes through `.shader` layer type via
-        // ShaderStyle.pixelSort + ShaderRenderer.apply, which already has a
-        // GPU path (PixelSortRenderer + PixelSort.metal).
+        // GPU fast paths. Each maps to its Metal shader; both fall back to
+        // the CPU pixel loop below on `MetalEffectError` (headless hosts,
+        // missing device, etc).
+        //
+        //   - VHS → Effects/Metal/Glitch.metal::glitchFragment (variant 0)
+        //   - PixelSort → Effects/Metal/PixelSort.metal::pixelSortFragment,
+        //     same shader the .shader layer's PixelSort style uses. The
+        //     bucket routes through a separate GlitchGPURenderer entry
+        //     point that maps the leaner GlitchParameters onto the shader's
+        //     uniforms (no Kim-Asendorf span modes, fixed intensity=amount).
         if effect == .vhs {
             do {
                 return try GlitchGPURenderer.renderVHS(
+                    input: input, common: common, geometry: geometry,
+                    color: color, params: payload, outputSize: outputSize)
+            } catch is MetalEffectError {
+                // fall through to CPU
+            }
+        } else if effect == .pixelSort {
+            do {
+                return try GlitchGPURenderer.renderPixelSort(
                     input: input, common: common, geometry: geometry,
                     color: color, params: payload, outputSize: outputSize)
             } catch is MetalEffectError {
@@ -164,49 +177,103 @@ public enum GlitchRenderer {
             return (position, pixelScore(at: offset, in: sourcePixels, mode: payload.sortMode))
         }
 
-        let active = scored.filter { $0.score >= payload.threshold }
-        let inactive = Set(scored.filter { $0.score < payload.threshold }.map(\.position))
-        let sortedActive = active.sorted { lhs, rhs in
+        // Active positions in their original order (the ones that pass the
+        // threshold — these are the ones that get sorted).
+        let activeScored = scored.filter { $0.score >= payload.threshold }
+        let activeInOriginalOrder = activeScored.map(\.position)
+        // Same positions, re-ordered by score. `activeInOriginalOrder[i]` is
+        // the fragment whose sorted counterpart lives at
+        // `sortedActivePositions[i]`.
+        let sortedActivePositions = activeScored.sorted { lhs, rhs in
             payload.reverse ? lhs.score > rhs.score : lhs.score < rhs.score
         }.map(\.position)
 
+        // Map original-order rank per active position for O(1) lookup below.
+        var originalRank: [Int: Int] = [:]
+        originalRank.reserveCapacity(activeInOriginalOrder.count)
+        for (rank, p) in activeInOriginalOrder.enumerated() {
+            originalRank[p] = rank
+        }
+
+        // `amount` is the blend factor between original and sorted, matching
+        // `mix(currentColor, sortedColor, saturate(uniforms.intensity))` in
+        // Effects/Metal/PixelSort.metal. Previously the CPU path treated
+        // `amount` as a sort-rank scaling (`baseIndex = normalized × count × max(0.2, amount)`),
+        // which made amount=0 render the darkest ~20% of every span instead
+        // of passing through the original pixels. GPU and CPU now agree on
+        // semantics: amount=0 → original, amount=1 → fully sorted (subject
+        // to `randomness` jitter).
+        let alpha = max(0.0, min(1.0, payload.amount))
+        let randomness = max(0.0, min(1.0, payload.randomness))
+
         for (index, position) in positions.enumerated() {
             let outputIndex = offsetForPosition(position)
-            let sourcePosition: Int
+            let originalIdx = offsetForPosition(position)
 
-            if inactive.contains(position) || sortedActive.isEmpty {
-                sourcePosition = position
-            } else {
-                let normalized = Double(index) / Double(max(1, positions.count - 1))
-                let baseIndex = Int((normalized * Double(sortedActive.count - 1) * max(0.2, payload.amount)).rounded())
-                let jitter = Int((sin(Double(seedBase + index * 17)) * payload.randomness * Double(sortedActive.count)).rounded())
-                let clamped = min(sortedActive.count - 1, max(0, baseIndex + jitter))
-                sourcePosition = sortedActive[clamped]
+            guard let rank = originalRank[position], !sortedActivePositions.isEmpty else {
+                // Below threshold or no active positions — pass through
+                // original unchanged. Matches the shader's early-return for
+                // `!psInSpan(currentColor, effective, uniforms.spanMode)`.
+                outputPixels[outputIndex]     = sourcePixels[originalIdx]
+                outputPixels[outputIndex + 1] = sourcePixels[originalIdx + 1]
+                outputPixels[outputIndex + 2] = sourcePixels[originalIdx + 2]
+                outputPixels[outputIndex + 3] = sourcePixels[originalIdx + 3]
+                continue
             }
 
-            let sourceIndex = offsetForPosition(sourcePosition)
-            outputPixels[outputIndex] = sourcePixels[sourceIndex]
-            outputPixels[outputIndex + 1] = sourcePixels[sourceIndex + 1]
-            outputPixels[outputIndex + 2] = sourcePixels[sourceIndex + 2]
-            outputPixels[outputIndex + 3] = sourcePixels[sourceIndex + 3]
+            // Apply per-index jitter within sorted rank space so `randomness`
+            // produces the same visible noise on CPU and GPU.
+            let jitter = Int((sin(Double(seedBase + index * 17)) * randomness * Double(sortedActivePositions.count)).rounded())
+            let clamped = min(sortedActivePositions.count - 1, max(0, rank + jitter))
+            let sortedIdx = offsetForPosition(sortedActivePositions[clamped])
+
+            outputPixels[outputIndex]     = blendChannel(sourcePixels[originalIdx],     sourcePixels[sortedIdx],     alpha: alpha)
+            outputPixels[outputIndex + 1] = blendChannel(sourcePixels[originalIdx + 1], sourcePixels[sortedIdx + 1], alpha: alpha)
+            outputPixels[outputIndex + 2] = blendChannel(sourcePixels[originalIdx + 2], sourcePixels[sortedIdx + 2], alpha: alpha)
+            outputPixels[outputIndex + 3] = blendChannel(sourcePixels[originalIdx + 3], sourcePixels[sortedIdx + 3], alpha: alpha)
         }
     }
 
+    @inline(__always)
+    private static func blendChannel(_ original: UInt8, _ sorted: UInt8, alpha: Double) -> UInt8 {
+        let mixed = (1.0 - alpha) * Double(original) + alpha * Double(sorted)
+        return UInt8(max(0.0, min(255.0, mixed)).rounded())
+    }
+
+    /// CPU counterpart of `psSortValue` in `Effects/Metal/PixelSort.metal`.
+    /// All three modes return a value in `[0, 1]` so the sort comparator
+    /// stays well-ordered and the threshold dial (also `[0, 1]`) has the
+    /// intended effect on every sort criterion.
+    ///
+    /// Pre-pass-3 this function had two bugs that made the CPU fallback
+    /// diverge from the GPU shader:
+    ///   - `.brightness` returned the Rec.709 luminance formula (same as
+    ///     `.luminance`). The GPU shader returns `max(r, g, b)`, so sorting
+    ///     preserved saturated colours on GPU but desaturated them on CPU.
+    ///   - `.hue` returned the raw HSV sector value in `[-1, 6)` instead of
+    ///     a normalised hue in `[0, 1]`. Negative scores (blue-dominant
+    ///     pixels) always fell below any positive threshold, leaving whole
+    ///     hue ranges unsorted.
     private static func pixelScore(at index: Int, in pixels: [UInt8], mode: PixelSortMode) -> Double {
         let r = Double(pixels[index]) / 255.0
         let g = Double(pixels[index + 1]) / 255.0
         let b = Double(pixels[index + 2]) / 255.0
         switch mode {
-        case .brightness, .luminance:
+        case .luminance:
             return (0.2126 * r) + (0.7152 * g) + (0.0722 * b)
+        case .brightness:
+            return max(r, max(g, b))
         case .hue:
             let maxValue = max(r, g, b)
             let minValue = min(r, g, b)
             let delta = maxValue - minValue
-            guard delta > 0 else { return 0 }
-            if maxValue == r { return ((g - b) / delta).truncatingRemainder(dividingBy: 6) }
-            if maxValue == g { return ((b - r) / delta) + 2 }
-            return ((r - g) / delta) + 4
+            guard delta > 1e-5 else { return 0 }
+            var h: Double
+            if      maxValue == r { h = (g - b) / delta }
+            else if maxValue == g { h = 2.0 + (b - r) / delta }
+            else                  { h = 4.0 + (r - g) / delta }
+            h /= 6.0
+            return h < 0 ? h + 1.0 : h
         }
     }
 
