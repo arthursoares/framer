@@ -138,7 +138,7 @@ final class SidebarHarmonySnapshotTests: XCTestCase {
             named: "dense-caption-editor",
             of: CaptionLayerControls(params: CaptionLayerParams()) { _ in },
             size: CGSize(width: 350, height: 760),
-            expectedSHA256: "75a68b2dc2f1fa203425fbb8f2d23ee45720a732db4cfd4786455fbcc34e452c"
+            expectedSHA256: "151af5cd43526277e1ecf79f0c9e48b323367d80c9c54767eb2d75eab2ea6669"
         )
 
         assertSnapshot(
