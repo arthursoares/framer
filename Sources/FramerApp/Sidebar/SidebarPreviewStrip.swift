@@ -7,20 +7,39 @@ struct SidebarPreviewStrip<Data: RandomAccessCollection, Content: View>: View
 where Data.Element: Identifiable {
     @Environment(\.sidebarMetrics) private var metrics
     private let items: Data
-    private let tileSize: CGFloat
+    private let tileWidth: CGFloat?
+    private let tileHeight: CGFloat?
     private let spacing: CGFloat
     private let content: (Data.Element) -> Content
 
     init(
         items: Data,
-        tileSize: CGFloat = 72,
-        spacing: CGFloat? = nil,
+        tileWidth: CGFloat? = 72,
+        tileHeight: CGFloat? = 72,
+        spacing: CGFloat = 6,
         @ViewBuilder content: @escaping (Data.Element) -> Content
     ) {
         self.items = items
-        self.tileSize = tileSize
-        self.spacing = spacing ?? 6
+        self.tileWidth = tileWidth
+        self.tileHeight = tileHeight
+        self.spacing = spacing
         self.content = content
+    }
+
+    /// Convenience initialiser: square tiles.
+    init(
+        items: Data,
+        tileSize: CGFloat,
+        spacing: CGFloat = 6,
+        @ViewBuilder content: @escaping (Data.Element) -> Content
+    ) {
+        self.init(
+            items: items,
+            tileWidth: tileSize,
+            tileHeight: tileSize,
+            spacing: spacing,
+            content: content
+        )
     }
 
     var body: some View {
@@ -28,7 +47,7 @@ where Data.Element: Identifiable {
             HStack(spacing: spacing) {
                 ForEach(items) { item in
                     content(item)
-                        .frame(width: tileSize, height: tileSize)
+                        .frame(width: tileWidth, height: tileHeight)
                 }
             }
         }
