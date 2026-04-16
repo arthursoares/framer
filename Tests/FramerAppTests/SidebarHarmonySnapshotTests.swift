@@ -189,7 +189,7 @@ final class SidebarHarmonySnapshotTests: XCTestCase {
             } secondary: {
                 if let jpegQuality = InspectorOutputControlState.jpegQuality(for: outputFormat) {
                     SidebarControlRow("Quality") {
-                        StyledSliderWithUnit(
+                        StyledUnitSlider(
                             value: .constant(jpegQuality),
                             range: 60...100,
                             step: 5,

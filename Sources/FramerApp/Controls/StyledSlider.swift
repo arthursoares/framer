@@ -14,7 +14,7 @@ enum StyledSliderValueResolver {
 
 /// Slider + inline numeric field. Unit rendering is intentionally NOT handled
 /// here — callers that need a unit suffix compose either
-/// `StyledSliderWithUnit` (convenience wrapper) or `SidebarTrailingUnitCluster`
+/// `StyledUnitSlider` (convenience wrapper) or `SidebarTrailingUnitCluster`
 /// from inside a `SidebarControlRow`'s `trailingValue`.
 struct StyledSlider: View {
     @Environment(\.sidebarMetrics) private var metrics
@@ -67,7 +67,7 @@ struct StyledSlider: View {
 /// `SidebarTrailingUnitCluster` width contract. Use when a row is
 /// "slider + field + unit" as a single content unit, rather than splitting
 /// across a `SidebarControlRow`'s content / trailingValue slots.
-struct StyledSliderWithUnit: View {
+struct StyledUnitSlider: View {
     @Environment(\.sidebarMetrics) private var metrics
     @Binding var value: Double
     let range: ClosedRange<Double>
