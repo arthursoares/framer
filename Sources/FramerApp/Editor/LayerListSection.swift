@@ -3095,20 +3095,21 @@ struct TemplateTokenBar: View {
                 .foregroundStyle(Color.text3)
                 .frame(width: 48, alignment: .trailing)
 
-            SidebarFlowLayout(horizontalSpacing: metrics.expandedBodyInset - 2, verticalSpacing: metrics.expandedBodyInset - 2) {
-                ForEach(TemplateToken.all.filter { $0.category == category }) { token in
-                    Button {
-                        text.append(token.token)
-                    } label: {
-                        Text(token.label)
-                            .font(AppFont.controlLabel)
-                            .padding(.horizontal, metrics.expandedBodyInset)
-                            .padding(.vertical, 2)
-                            .background(Color.surface4, in: Capsule())
-                    }
-                    .buttonStyle(.plain)
-                    .help("Insert \(token.token)")
+            SidebarChipFlow(
+                items: TemplateToken.all.filter { $0.category == category },
+                spacing: metrics.expandedBodyInset - 2
+            ) { token in
+                Button {
+                    text.append(token.token)
+                } label: {
+                    Text(token.label)
+                        .font(AppFont.controlLabel)
+                        .padding(.horizontal, metrics.expandedBodyInset)
+                        .padding(.vertical, 2)
+                        .background(Color.surface4, in: Capsule())
                 }
+                .buttonStyle(.plain)
+                .help("Insert \(token.token)")
             }
         }
     }
