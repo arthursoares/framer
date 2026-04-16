@@ -32,6 +32,7 @@
 		5892BBEB7A0417F38655E94A /* EditorView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 64CED49C5EAE3C454E6EFF20 /* EditorView.swift */; };
 		5936B8F040EAD4CACF703F02 /* SidebarCompoundControlBlock.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9FCDE64F375DC8E762C4EF08 /* SidebarCompoundControlBlock.swift */; };
 		5A2B972194FE5D29D42336D4 /* InspectorView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 388ADD8B50D095C06DE84470 /* InspectorView.swift */; };
+		5D88DB10337BFE8E0F0A5BC3 /* PresetThumbnailCache.swift in Sources */ = {isa = PBXBuildFile; fileRef = CD7D50222EA07D94CD173F52 /* PresetThumbnailCache.swift */; };
 		6008AC967F78C371F1DE8F51 /* PreviewArea.swift in Sources */ = {isa = PBXBuildFile; fileRef = B2205885A0B72C7BB1800460 /* PreviewArea.swift */; };
 		62B6DBD3B476520075DE5BB6 /* BottomPanel.swift in Sources */ = {isa = PBXBuildFile; fileRef = FC61E7BD757670C3FC26800E /* BottomPanel.swift */; };
 		66B12BD55EAE11AE1657CBAE /* SidebarLayoutPolicyTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = A8E704CEA7DD5812C7E8E102 /* SidebarLayoutPolicyTests.swift */; };
@@ -146,6 +147,7 @@
 		B7A795F9CA0BC01E3F2251A9 /* PreferencesView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PreferencesView.swift; sourceTree = "<group>"; };
 		C09A4DE3276B25184A9769BF /* SidebarMetricsTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SidebarMetricsTests.swift; sourceTree = "<group>"; };
 		C20010735E58CE243ED6744A /* FramerCommands.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FramerCommands.swift; sourceTree = "<group>"; };
+		CD7D50222EA07D94CD173F52 /* PresetThumbnailCache.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PresetThumbnailCache.swift; sourceTree = "<group>"; };
 		CE5B96A143FA192F9CB0A8C1 /* LayerStrip.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LayerStrip.swift; sourceTree = "<group>"; };
 		D5BE1B7F799CD269EE2C1411 /* ImageThumbnailLoader.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ImageThumbnailLoader.swift; sourceTree = "<group>"; };
 		D6C97FA89C679CAAAC4C845E /* LayerPanelRow.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LayerPanelRow.swift; sourceTree = "<group>"; };
@@ -366,6 +368,7 @@
 			children = (
 				1987EB46D78379EB25A7E6A5 /* PresetPreviewCard.swift */,
 				88CEC286BDB1ADC6E0637ACA /* PresetPreviewGrid.swift */,
+				CD7D50222EA07D94CD173F52 /* PresetThumbnailCache.swift */,
 			);
 			path = Presets;
 			sourceTree = "<group>";
@@ -595,6 +598,7 @@
 				D2E564203E647371EAED04D0 /* PreferencesView.swift in Sources */,
 				520BFA062991397A6556B18B /* PresetPreviewCard.swift in Sources */,
 				189C0C29CB6FD5F19617D667 /* PresetPreviewGrid.swift in Sources */,
+				5D88DB10337BFE8E0F0A5BC3 /* PresetThumbnailCache.swift in Sources */,
 				02AB8ECED2BAEEB2B7CC18BA /* PreviewViewModel.swift in Sources */,
 				9697B0B0347D866B638B319A /* SidebarChipFlow.swift in Sources */,
 				5936B8F040EAD4CACF703F02 /* SidebarCompoundControlBlock.swift in Sources */,

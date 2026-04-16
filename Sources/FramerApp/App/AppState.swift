@@ -21,17 +21,11 @@ final class AppState {
     var exportQueue: [ExportJob] = []
     private var exportTasks: [UUID: Task<Void, Never>] = [:]
 
-    /// Cached preset-preview thumbnails, keyed by preset ID. Lives on AppState
-    /// so the cache survives PresetPreviewGrid's view lifecycle — when the
-    /// collapsible Presets section hides its body, SwiftUI tears down the
-    /// grid view and its @State. Without this shared cache, every
-    /// expand/collapse cycle would rebuild every thumbnail from scratch.
-    var presetThumbnails: [UUID: NSImage] = [:]
-
-    /// Identifies the input snapshot that produced the current
-    /// `presetThumbnails` entries. When the photo / rotation / preset list
-    /// changes, the grid compares this key and invalidates stale entries.
-    var presetThumbnailsKey: PresetPreviewRenderKey?
+    /// Cached preset-preview thumbnails. A separate `@Observable` instance so
+    /// writes during a background render batch invalidate only views that
+    /// actually read the cache (the Presets grid), not every view tracking
+    /// AppState properties generally.
+    let presetThumbnailCache = PresetThumbnailCache()
 
 
     init() {
