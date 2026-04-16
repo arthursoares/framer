@@ -2355,7 +2355,7 @@ struct OverlayLayerControls: View {
 
     private var opacityControl: some View {
         SidebarControlRow("Opacity") {
-            StyledSliderWithUnit(
+            StyledUnitSlider(
                 value: opacityBinding,
                 range: 0...100,
                 accessibilityLabel: "Opacity",
@@ -3126,7 +3126,7 @@ struct DenseSliderControlRow: View {
     var body: some View {
         SidebarControlRow(title) {
             if let unit {
-                StyledSliderWithUnit(
+                StyledUnitSlider(
                     value: $value,
                     range: range,
                     accessibilityLabel: accessibilityLabel ?? title,
