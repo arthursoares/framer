@@ -12,7 +12,7 @@ struct PresetPreviewCard: View {
     let thumbnail: NSImage?
     let onTap: () -> Void
 
-    private let metrics = SidebarMetrics()
+    @Environment(\.sidebarMetrics) private var metrics
 
     private var stateStyle: SidebarStateStyle {
         isActive ? .selectedCurrent : .hover

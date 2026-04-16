@@ -1596,7 +1596,7 @@ private extension View {
 }
 
 private struct SimpleLayerEditorDivider: View {
-    private let metrics = SidebarMetrics()
+    @Environment(\.sidebarMetrics) private var metrics
 
     var body: some View {
         Rectangle()
@@ -1611,7 +1611,7 @@ private struct OverlayFullWidthControlRow<Content: View>: View {
     let title: LocalizedStringKey
     let content: Content
 
-    private let metrics = SidebarMetrics()
+    @Environment(\.sidebarMetrics) private var metrics
     @Namespace private var accessibilityLabelNamespace
 
     init(_ title: LocalizedStringKey, @ViewBuilder content: () -> Content) {
@@ -3219,7 +3219,7 @@ private struct DenseSupplementaryControlRow<Content: View>: View {
     let title: LocalizedStringKey
     let content: Content
 
-    private let metrics = SidebarMetrics()
+    @Environment(\.sidebarMetrics) private var metrics
 
     init(_ title: LocalizedStringKey, @ViewBuilder content: () -> Content) {
         self.title = title

@@ -40,6 +40,7 @@ struct SidebarShell<Content: View, Footer: View>: View {
                 .fill(Color.borderDefault)
                 .frame(width: 1)
         }
+        .environment(\.sidebarMetrics, metrics)
     }
 }
 

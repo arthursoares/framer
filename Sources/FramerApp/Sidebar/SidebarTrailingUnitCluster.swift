@@ -1,19 +1,22 @@
 import SwiftUI
 
 struct SidebarTrailingUnitCluster<Field: View>: View {
-    private let metrics: SidebarMetrics
+    @Environment(\.sidebarMetrics) private var envMetrics
+    private let overrideMetrics: SidebarMetrics?
     private let unit: LocalizedStringKey
     private let field: Field
 
     init(
         unit: LocalizedStringKey,
-        metrics: SidebarMetrics = SidebarMetrics(),
+        metrics: SidebarMetrics? = nil,
         @ViewBuilder field: () -> Field
     ) {
-        self.metrics = metrics
+        self.overrideMetrics = metrics
         self.unit = unit
         self.field = field()
     }
+
+    private var metrics: SidebarMetrics { overrideMetrics ?? envMetrics }
 
     var body: some View {
         HStack(alignment: .center, spacing: metrics.controlTrailingClusterSpacing) {

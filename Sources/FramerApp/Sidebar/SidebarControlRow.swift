@@ -69,26 +69,29 @@ enum SidebarControlRowTrailingValueContentBuilder {
 }
 
 struct SidebarControlRow<Content: View>: View {
+    @Environment(\.sidebarMetrics) private var envMetrics
     @Namespace private var accessibilityLabelNamespace
     private let label: LocalizedStringKey
-    private let metrics: SidebarMetrics
+    private let overrideMetrics: SidebarMetrics?
     private let style: SidebarControlRowStyle
     private let content: Content
     private let trailingValue: SidebarControlRowTrailingValueContent
 
     init(
         _ label: LocalizedStringKey,
-        metrics: SidebarMetrics = SidebarMetrics(),
+        metrics: SidebarMetrics? = nil,
         style: SidebarControlRowStyle = .default,
         @ViewBuilder content: () -> Content,
         @SidebarControlRowTrailingValueContentBuilder trailingValue: () -> SidebarControlRowTrailingValueContent
     ) {
         self.label = label
-        self.metrics = metrics
+        self.overrideMetrics = metrics
         self.style = style
         self.content = content()
         self.trailingValue = trailingValue()
     }
+
+    private var metrics: SidebarMetrics { overrideMetrics ?? envMetrics }
 
     var body: some View {
         HStack(alignment: .center, spacing: metrics.controlColumnSpacing) {
@@ -121,7 +124,7 @@ struct SidebarControlRow<Content: View>: View {
 extension SidebarControlRow {
     init(
         _ label: LocalizedStringKey,
-        metrics: SidebarMetrics = SidebarMetrics(),
+        metrics: SidebarMetrics? = nil,
         style: SidebarControlRowStyle = .default,
         @ViewBuilder content: () -> Content
     ) {

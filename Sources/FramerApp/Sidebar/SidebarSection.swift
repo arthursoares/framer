@@ -1,19 +1,22 @@
 import SwiftUI
 
 struct SidebarSection<Header: View, Content: View>: View {
-    private let metrics: SidebarMetrics
+    @Environment(\.sidebarMetrics) private var envMetrics
+    private let overrideMetrics: SidebarMetrics?
     private let header: Header
     private let content: Content
 
     init(
-        metrics: SidebarMetrics = SidebarMetrics(),
+        metrics: SidebarMetrics? = nil,
         @ViewBuilder header: () -> Header,
         @ViewBuilder content: () -> Content
     ) {
-        self.metrics = metrics
+        self.overrideMetrics = metrics
         self.header = header()
         self.content = content()
     }
+
+    private var metrics: SidebarMetrics { overrideMetrics ?? envMetrics }
 
     var body: some View {
         VStack(alignment: .leading, spacing: metrics.expandedBodyInset) {
@@ -27,7 +30,7 @@ struct SidebarSection<Header: View, Content: View>: View {
 extension SidebarSection where Header == Text {
     init(
         _ title: LocalizedStringKey,
-        metrics: SidebarMetrics = SidebarMetrics(),
+        metrics: SidebarMetrics? = nil,
         @ViewBuilder content: () -> Content
     ) {
         self.init(metrics: metrics, header: {

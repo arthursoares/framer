@@ -5,19 +5,22 @@ import SwiftUI
 /// so editable rows and read-only readouts occupy an identical trailing column
 /// and adjacent labels stay aligned.
 struct SidebarTrailingReadoutCluster<Content: View>: View {
-    private let metrics: SidebarMetrics
+    @Environment(\.sidebarMetrics) private var envMetrics
+    private let overrideMetrics: SidebarMetrics?
     private let unit: LocalizedStringKey
     private let content: Content
 
     init(
         unit: LocalizedStringKey = "",
-        metrics: SidebarMetrics = SidebarMetrics(),
+        metrics: SidebarMetrics? = nil,
         @ViewBuilder content: () -> Content
     ) {
-        self.metrics = metrics
+        self.overrideMetrics = metrics
         self.unit = unit
         self.content = content()
     }
+
+    private var metrics: SidebarMetrics { overrideMetrics ?? envMetrics }
 
     var body: some View {
         HStack(alignment: .center, spacing: metrics.controlTrailingClusterSpacing) {

@@ -9,14 +9,13 @@ private enum ExportBarLayout {
 
 struct ExportBar: View {
     @Environment(AppState.self) var appState
+    @Environment(\.sidebarMetrics) private var metrics
     @AppStorage("lastExportDirectory") private var lastExportDirectory: String = ""
     @State private var showingExportSheet = false
     @State private var showingQueuePopover = false
     @State private var pendingExportItems: [PhotoItem] = []
     @State private var selectedPresetIDs: Set<UUID> = []
     @State private var includeCurrentSettings = true
-
-    private let metrics = SidebarMetrics()
 
     var body: some View {
         VStack(spacing: 0) {
@@ -289,8 +288,7 @@ struct ExportBar: View {
 
 struct ExportQueuePopover: View {
     @Environment(AppState.self) var appState
-
-    private let metrics = SidebarMetrics()
+    @Environment(\.sidebarMetrics) private var metrics
 
     var body: some View {
         VStack(alignment: .leading, spacing: metrics.expandedBodyInset) {
