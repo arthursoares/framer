@@ -105,6 +105,15 @@ struct SidebarControlRow<Content: View>: View {
             HStack(alignment: .center, spacing: metrics.controlColumnSpacing) {
                 content
                     .frame(maxWidth: .infinity, alignment: trailingValue.hasContent ? .trailing : .leading)
+                    // Buffer against the trailing cluster. macOS NSSlider (used
+                    // by SwiftUI's Slider) renders its track and knob to the
+                    // very edge of its layout frame — at extreme values the
+                    // knob overlaps any view 10pt away. A few extra pt keep
+                    // the slider's hit-area and glyph away from the trailing
+                    // field's rounded rectangle. No effect on EmptyView / Toggle
+                    // / Picker content, which already render within their
+                    // intrinsic bounds.
+                    .padding(.trailing, trailingValue.hasContent ? metrics.controlTrailingClusterSpacing : 0)
 
                 if trailingValue.hasContent {
                     trailingValue.body
