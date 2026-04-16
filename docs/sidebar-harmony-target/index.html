@@ -1,0 +1,2527 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Sidebar Harmony Target State</title>
+  <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Crect width='100' height='100' rx='24' fill='%23141416'/%3E%3Cpath d='M24 24h20v52H24zM56 24h20v52H56z' fill='%23d4956a'/%3E%3C/svg%3E">
+  <meta name="description" content="Target state specification for the macOS inspector sidebar after the second harmonization pass. Documents the unified layout contract, canonical row patterns, and per-editor target layouts.">
+  <style>
+    :root {
+      --surface-0: #0e0e10;
+      --surface-1: #141416;
+      --surface-2: #1a1a1e;
+      --surface-3: #222226;
+      --surface-4: #2a2a2f;
+      --text-0: #f0ede8;
+      --text-1: #b8b4ad;
+      --text-2: #7d7a74;
+      --text-3: #4e4c48;
+      --accent: #d4956a;
+      --accent-dim: #a06840;
+      --accent-glow: rgba(212, 149, 106, 0.08);
+      --accent-subtle: rgba(212, 149, 106, 0.15);
+      --success: #5e9f6d;
+      --warning: #f1c27d;
+      --error: #c75a5a;
+      --border: rgba(255, 255, 255, 0.08);
+      --border-strong: rgba(255, 255, 255, 0.14);
+      --shadow-soft: 0 22px 60px rgba(0, 0, 0, 0.34);
+      --shadow-card: 0 18px 44px rgba(0, 0, 0, 0.22);
+
+      --space-1: 0.25rem;
+      --space-2: 0.5rem;
+      --space-3: 0.75rem;
+      --space-4: 1rem;
+      --space-5: 1.5rem;
+      --space-6: 2rem;
+      --space-7: 3rem;
+
+      --radius-sm: 0.5rem;
+      --radius-md: 0.75rem;
+      --radius-lg: 1.25rem;
+      --radius-xl: 1.75rem;
+
+      --font-ui: "Atkinson Hyperlegible Next", "Atkinson Hyperlegible", "Avenir Next", "Segoe UI", sans-serif;
+      --font-display: "Iowan Old Style", "Palatino Linotype", "Book Antiqua", Georgia, serif;
+      --font-mono: "Source Code Pro", "SF Mono", "SFMono-Regular", Consolas, monospace;
+
+      /* Canonical sidebar tokens (matches SidebarMetrics after the pass) */
+      --sb-width: 350px;
+      --sb-outer-inset: 12px;
+      --sb-row-gap: 16px;
+      --sb-body-inset: 6px;
+      --sb-row-min-h: 30px;
+      --sb-label-w: 104px;
+      --sb-column-gap: 10px;
+      --sb-trailing-min: 48px;
+      --sb-cluster-gap: 6px;
+      --sb-unit-w: 24px;
+      --sb-field-w: 55px;
+      --sb-readout-w: 55px; /* unified from 36/55 → single 55pt readout box */
+      --sb-seg-mode-w: 80px;
+      --sb-unit-picker-w: 100px;
+    }
+
+    * { box-sizing: border-box; }
+
+    html { scroll-behavior: smooth; }
+
+    body {
+      margin: 0;
+      font-family: var(--font-ui);
+      background:
+        radial-gradient(circle at top, rgba(212, 149, 106, 0.12), transparent 32%),
+        linear-gradient(180deg, #171618 0%, var(--surface-0) 24%, #0b0b0d 100%);
+      color: var(--text-0);
+      line-height: 1.6;
+    }
+
+    a { color: inherit; }
+
+    .shell {
+      width: min(1240px, calc(100% - 2rem));
+      margin: 0 auto;
+    }
+
+    .eyebrow, .kicker, .section-label, th, .mini-label, .mock-heading {
+      font-family: var(--font-mono);
+      letter-spacing: 0.14em;
+      text-transform: uppercase;
+    }
+
+    /* Header / Nav */
+    header {
+      position: relative;
+      padding: var(--space-5) 0 var(--space-7);
+      overflow: hidden;
+    }
+
+    header::after {
+      content: "";
+      position: absolute;
+      inset: 2rem -10% auto;
+      height: 420px;
+      background:
+        linear-gradient(135deg, rgba(212, 149, 106, 0.12), transparent 48%),
+        repeating-linear-gradient(90deg, transparent, transparent 26px, rgba(255, 255, 255, 0.03) 26px, rgba(255, 255, 255, 0.03) 27px);
+      pointer-events: none;
+      mask-image: linear-gradient(180deg, rgba(0, 0, 0, 1), transparent);
+    }
+
+    nav {
+      position: sticky;
+      top: 0;
+      z-index: 10;
+      backdrop-filter: blur(18px);
+      background: rgba(20, 20, 22, 0.82);
+      border-bottom: 1px solid rgba(255, 255, 255, 0.06);
+    }
+
+    .nav-inner {
+      display: flex; align-items: center; justify-content: space-between;
+      gap: var(--space-4);
+      padding: 0.9rem 0;
+    }
+
+    .brand {
+      display: flex; align-items: center;
+      gap: var(--space-3);
+      font-family: var(--font-mono);
+      text-decoration: none;
+    }
+
+    .brand-badge {
+      width: 2.25rem; height: 2.25rem;
+      display: grid; place-items: center;
+      border-radius: 0.7rem;
+      background: linear-gradient(145deg, rgba(212, 149, 106, 0.2), rgba(212, 149, 106, 0.04));
+      border: 1px solid rgba(212, 149, 106, 0.24);
+      box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.08);
+    }
+
+    .brand-badge svg { width: 18px; height: 18px; }
+
+    .brand-text { font-size: 0.9rem; color: var(--text-1); }
+
+    .nav-links {
+      display: flex; flex-wrap: wrap; justify-content: flex-end;
+      gap: var(--space-3);
+      list-style: none; padding: 0; margin: 0;
+      color: var(--text-2); font-size: 0.82rem;
+    }
+
+    .nav-links a { text-decoration: none; }
+    .nav-links a:hover { color: var(--text-0); }
+
+    .hero {
+      position: relative;
+      display: grid;
+      grid-template-columns: minmax(0, 1.15fr) minmax(300px, 0.85fr);
+      gap: var(--space-6);
+      align-items: start;
+      z-index: 1;
+    }
+
+    .eyebrow {
+      display: inline-flex;
+      gap: var(--space-2);
+      align-items: center;
+      padding: 0.45rem 0.7rem;
+      border-radius: 999px;
+      color: var(--text-1);
+      background: rgba(255, 255, 255, 0.04);
+      border: 1px solid rgba(255, 255, 255, 0.08);
+      margin-bottom: var(--space-4);
+      font-size: 0.72rem;
+    }
+
+    h1, h2, h3, h4 { line-height: 1.15; margin: 0; }
+
+    h1 {
+      font-family: var(--font-display);
+      font-size: clamp(2.6rem, 5.5vw, 4.4rem);
+      letter-spacing: -0.03em;
+      margin-bottom: var(--space-4);
+      max-width: 14ch;
+    }
+
+    .hero-copy p {
+      margin: 0 0 var(--space-4) 0;
+      max-width: 64ch;
+      font-size: 1.04rem;
+      color: var(--text-1);
+    }
+
+    .hero-aside {
+      padding: var(--space-5);
+      border-radius: var(--radius-xl);
+      background:
+        linear-gradient(180deg, rgba(34, 34, 38, 0.88), rgba(20, 20, 22, 0.95)),
+        var(--surface-1);
+      border: 1px solid rgba(255, 255, 255, 0.08);
+      box-shadow: var(--shadow-soft);
+    }
+
+    .hero-aside h3 {
+      font-family: var(--font-display);
+      font-size: 1.35rem;
+      margin-bottom: var(--space-3);
+    }
+
+    .hero-aside ul {
+      list-style: none; padding: 0; margin: 0;
+      font-size: 0.88rem;
+      color: var(--text-1);
+    }
+
+    .hero-aside li {
+      padding: 0.55rem 0;
+      border-bottom: 1px dashed rgba(255, 255, 255, 0.06);
+      display: flex; gap: var(--space-2); align-items: flex-start;
+    }
+
+    .hero-aside li:last-child { border-bottom: 0; }
+
+    .hero-aside .num {
+      font-family: var(--font-mono);
+      color: var(--accent);
+      font-size: 0.78rem;
+      min-width: 1.6rem;
+    }
+
+    /* Sections */
+    section {
+      padding: var(--space-7) 0;
+      border-top: 1px solid rgba(255, 255, 255, 0.04);
+    }
+
+    .section-label {
+      font-size: 0.72rem;
+      color: var(--text-2);
+      margin-bottom: var(--space-2);
+    }
+
+    h2 {
+      font-family: var(--font-display);
+      font-size: clamp(1.7rem, 3.2vw, 2.35rem);
+      letter-spacing: -0.02em;
+      margin-bottom: var(--space-3);
+    }
+
+    .section-intro {
+      max-width: 70ch;
+      color: var(--text-1);
+      font-size: 1rem;
+      margin-bottom: var(--space-5);
+    }
+
+    h3 {
+      font-family: var(--font-display);
+      font-size: 1.3rem;
+      letter-spacing: -0.01em;
+      margin-bottom: var(--space-2);
+    }
+
+    h4 {
+      font-size: 0.98rem;
+      color: var(--text-0);
+      margin-bottom: var(--space-2);
+    }
+
+    p { margin: 0 0 var(--space-3) 0; color: var(--text-1); }
+
+    code {
+      font-family: var(--font-mono);
+      font-size: 0.82em;
+      padding: 0.12rem 0.38rem;
+      border-radius: 0.35rem;
+      background: rgba(255, 255, 255, 0.05);
+      color: var(--text-0);
+    }
+
+    /* Tables */
+    .matrix-wrap {
+      overflow: hidden;
+      border-radius: var(--radius-md);
+      border: 1px solid rgba(255, 255, 255, 0.06);
+      background: rgba(255, 255, 255, 0.02);
+    }
+
+    table { width: 100%; border-collapse: collapse; }
+
+    th, td {
+      padding: 0.78rem 0.95rem;
+      text-align: left; vertical-align: top;
+      border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+      font-size: 0.9rem;
+    }
+
+    th {
+      font-size: 0.72rem;
+      color: var(--text-2);
+      background: rgba(255, 255, 255, 0.015);
+    }
+
+    td strong { color: var(--text-0); }
+    td code { background: rgba(212, 149, 106, 0.08); color: var(--accent); }
+
+    /* Token cards */
+    .tokens-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(170px, 1fr));
+      gap: var(--space-3);
+      margin: var(--space-4) 0 var(--space-2);
+    }
+
+    .token {
+      padding: 0.85rem;
+      border-radius: var(--radius-md);
+      background: rgba(255, 255, 255, 0.025);
+      border: 1px solid rgba(255, 255, 255, 0.06);
+    }
+
+    .token-name {
+      font-family: var(--font-mono);
+      font-size: 0.72rem;
+      color: var(--text-2);
+      letter-spacing: 0.05em;
+    }
+
+    .token-value {
+      display: block;
+      font-family: var(--font-display);
+      font-size: 1.3rem;
+      margin-top: 0.22rem;
+      color: var(--text-0);
+    }
+
+    .token-note {
+      font-size: 0.74rem;
+      color: var(--text-2);
+      margin-top: 0.3rem;
+    }
+
+    .token.is-new { border-color: rgba(94, 159, 109, 0.28); background: rgba(94, 159, 109, 0.06); }
+    .token.is-new .token-name { color: var(--success); }
+
+    /* Sidebar mock — pixel-accurate 350pt */
+    .sidebar-mock {
+      width: var(--sb-width);
+      margin: 0 auto;
+      background: var(--surface-1);
+      border: 1px solid var(--border);
+      border-radius: var(--radius-md);
+      box-shadow: var(--shadow-card);
+      overflow: hidden;
+      font-family: var(--font-ui);
+    }
+
+    .sb-header {
+      padding: calc(var(--sb-outer-inset)) calc(var(--sb-outer-inset));
+      border-bottom: 1px solid var(--border);
+      background: var(--surface-1);
+      font-family: var(--font-mono);
+      font-size: 0.68rem;
+      color: var(--text-3);
+      letter-spacing: 0.16em;
+      display: flex; justify-content: space-between; align-items: center;
+    }
+
+    .sb-section {
+      padding: var(--sb-outer-inset);
+      display: flex; flex-direction: column;
+      gap: var(--sb-row-gap);
+      border-bottom: 1px solid rgba(255, 255, 255, 0.04);
+    }
+
+    .sb-section-head {
+      font-family: var(--font-mono);
+      font-size: 0.62rem;
+      color: var(--text-3);
+      letter-spacing: 0.16em;
+      text-transform: uppercase;
+      margin-bottom: calc(var(--sb-body-inset) - 2px);
+    }
+
+    .sb-section-body {
+      display: flex; flex-direction: column;
+      gap: 0;
+    }
+
+    /* Row primitive: label + control + trailing */
+    .sb-row {
+      display: grid;
+      grid-template-columns: var(--sb-label-w) 1fr auto;
+      column-gap: var(--sb-column-gap);
+      align-items: center;
+      min-height: var(--sb-row-min-h);
+      padding: 0 var(--sb-outer-inset);
+    }
+
+    .sb-row.no-label { grid-template-columns: 1fr auto; }
+    .sb-row.no-trailing { grid-template-columns: var(--sb-label-w) 1fr; }
+    .sb-row.full-width { grid-template-columns: 1fr; }
+
+    .sb-label {
+      font-size: 0.72rem;
+      color: var(--text-2);
+      font-weight: 500;
+    }
+
+    .sb-control {
+      min-width: 0;
+      display: flex;
+      align-items: center;
+      justify-content: flex-end; /* trailing contract */
+      gap: var(--sb-column-gap);
+    }
+
+    .sb-row.no-trailing .sb-control { justify-content: flex-start; }
+
+    /* Trailing value cluster */
+    .sb-trailing {
+      min-width: var(--sb-trailing-min);
+      display: inline-flex;
+      align-items: center;
+      justify-content: flex-end;
+      gap: var(--sb-cluster-gap);
+    }
+
+    .sb-field {
+      width: var(--sb-field-w);
+      padding: 2px 5px;
+      border-radius: 4px;
+      background: var(--surface-3);
+      border: 1px solid var(--border);
+      color: var(--text-0);
+      font-family: var(--font-mono);
+      font-size: 0.72rem;
+      text-align: right;
+      box-sizing: border-box;
+    }
+
+    .sb-field.narrow { width: 50px; }
+
+    .sb-readout {
+      width: var(--sb-readout-w);
+      font-family: var(--font-mono);
+      font-size: 0.72rem;
+      color: var(--text-3);
+      text-align: right;
+      display: inline-block;
+    }
+
+    .sb-unit {
+      width: var(--sb-unit-w);
+      font-family: var(--font-mono);
+      font-size: 0.62rem;
+      color: var(--text-3);
+      text-align: left;
+      display: inline-block;
+    }
+
+    /* Slider */
+    .sb-slider {
+      position: relative;
+      flex: 1 1 auto;
+      height: 18px;
+      display: flex; align-items: center;
+    }
+
+    .sb-slider .track {
+      position: relative;
+      width: 100%;
+      height: 3px;
+      border-radius: 999px;
+      background: var(--surface-4);
+    }
+
+    .sb-slider .fill {
+      position: absolute;
+      left: 0; top: 0; bottom: 0;
+      width: var(--slider-val, 40%);
+      background: var(--accent-dim);
+      border-radius: 999px;
+    }
+
+    .sb-slider .knob {
+      position: absolute;
+      left: var(--slider-val, 40%);
+      top: 50%;
+      transform: translate(-50%, -50%);
+      width: 12px; height: 12px;
+      border-radius: 999px;
+      background: var(--text-0);
+      border: 1px solid rgba(0, 0, 0, 0.4);
+    }
+
+    /* Segmented picker */
+    .sb-segmented {
+      display: inline-flex;
+      padding: 2px;
+      border-radius: 6px;
+      background: var(--surface-3);
+      border: 1px solid var(--border);
+      gap: 0;
+    }
+
+    .sb-segmented-item {
+      padding: 3px 10px;
+      font-size: 0.72rem;
+      color: var(--text-2);
+      border-radius: 4px;
+      font-family: var(--font-mono);
+    }
+
+    .sb-segmented-item.active {
+      background: var(--surface-4);
+      color: var(--text-0);
+    }
+
+    .sb-segmented.mode-w { width: var(--sb-seg-mode-w); }
+    .sb-segmented.unit-w { width: var(--sb-unit-picker-w); }
+    .sb-segmented.mode-w .sb-segmented-item, .sb-segmented.unit-w .sb-segmented-item { flex: 1; text-align: center; }
+
+    /* Menu picker */
+    .sb-menu {
+      flex: 1 1 auto;
+      min-width: 0;
+      padding: 3px 8px;
+      border-radius: 4px;
+      background: var(--surface-3);
+      border: 1px solid var(--border);
+      font-size: 0.75rem;
+      color: var(--text-0);
+      display: flex; align-items: center; justify-content: space-between;
+    }
+
+    .sb-menu::after { content: "⌄"; color: var(--text-3); font-size: 0.85rem; margin-left: 6px; }
+
+    /* Toggle */
+    .sb-toggle {
+      position: relative;
+      width: 32px; height: 18px;
+      border-radius: 999px;
+      background: var(--surface-4);
+      flex: none;
+    }
+
+    .sb-toggle::after {
+      content: "";
+      position: absolute;
+      top: 3px; left: 3px;
+      width: 12px; height: 12px;
+      border-radius: 999px;
+      background: var(--text-2);
+      transition: all 0.2s;
+    }
+
+    .sb-toggle.on { background: var(--accent-dim); }
+    .sb-toggle.on::after { left: 17px; background: var(--text-0); }
+
+    /* Color swatch */
+    .sb-color {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+    }
+
+    .sb-color-swatch {
+      width: 22px; height: 22px;
+      border-radius: 4px;
+      background: var(--fill, #ffffff);
+      border: 1px solid var(--border);
+    }
+
+    .sb-hex {
+      width: 80px;
+      padding: 2px 6px;
+      border-radius: 4px;
+      background: var(--surface-3);
+      border: 1px solid var(--border);
+      color: var(--text-0);
+      font-family: var(--font-mono);
+      font-size: 0.7rem;
+    }
+
+    /* Compound block: stacked rows with divider */
+    .sb-compound {
+      display: flex;
+      flex-direction: column;
+    }
+
+    .sb-compound .sb-row + .sb-row { border-top: 1px solid var(--border); }
+
+    /* Full-width content row */
+    .sb-fullwidth-row {
+      padding: calc(var(--sb-body-inset)/2) var(--sb-outer-inset);
+      display: flex; flex-direction: column;
+      gap: 4px;
+    }
+
+    .sb-fullwidth-title {
+      font-size: 0.7rem;
+      color: var(--text-2);
+    }
+
+    .sb-fullwidth-body {
+      max-width: calc(var(--sb-width) - 2 * var(--sb-outer-inset));
+    }
+
+    /* Preview strip (horizontal scroll of tiles) */
+    .sb-preview-strip {
+      display: flex; gap: 6px;
+      overflow: hidden;
+      padding: 2px 0;
+    }
+
+    .sb-tile {
+      flex: none;
+      width: 72px; height: 72px;
+      border-radius: 4px;
+      background: var(--surface-3);
+      border: 1px solid var(--border);
+      position: relative;
+    }
+
+    .sb-tile.active { border-color: var(--accent); box-shadow: 0 0 0 1px var(--accent); }
+    .sb-tile::after {
+      content: attr(data-label);
+      position: absolute;
+      bottom: -14px; left: 0; right: 0;
+      font-family: var(--font-mono);
+      font-size: 0.58rem;
+      color: var(--text-3);
+      text-align: center;
+    }
+
+    /* Chip flow row (caption tokens) */
+    .sb-chip-flow {
+      display: flex; flex-wrap: wrap;
+      gap: 4px;
+    }
+
+    .sb-chip {
+      padding: 3px 8px;
+      border-radius: 4px;
+      background: var(--surface-3);
+      color: var(--text-1);
+      border: 1px solid var(--border);
+      font-family: var(--font-mono);
+      font-size: 0.66rem;
+    }
+
+    .sb-chip.accent { color: var(--accent); border-color: rgba(212, 149, 106, 0.28); background: var(--accent-glow); }
+
+    /* Palette editor rows */
+    .sb-palette {
+      display: flex; flex-direction: column;
+      gap: var(--sb-body-inset);
+    }
+
+    .sb-palette-row {
+      display: flex; align-items: center;
+      gap: var(--sb-column-gap);
+    }
+
+    .sb-palette-row .sb-color-swatch { width: 18px; height: 18px; }
+
+    .sb-palette-minus {
+      margin-left: auto;
+      color: var(--text-3);
+      font-size: 0.85rem;
+    }
+
+    .sb-divider {
+      height: 1px;
+      background: var(--border);
+      margin: 0 var(--sb-outer-inset);
+    }
+
+    /* Layer row chassis (expanded) */
+    .sb-layer-row {
+      margin: calc(var(--sb-body-inset) / 2) var(--sb-outer-inset);
+      border-radius: 8px;
+      background: var(--surface-2);
+      border: 1px solid var(--border);
+      overflow: hidden;
+    }
+
+    .sb-layer-row.selected { border-color: var(--accent); background: var(--accent-subtle); }
+
+    .sb-layer-head {
+      display: flex; align-items: center;
+      gap: 8px;
+      padding: 6px 10px;
+    }
+
+    .sb-layer-disclosure {
+      width: 14px; height: 14px;
+      color: var(--text-3);
+      font-size: 0.7rem;
+      display: grid; place-items: center;
+    }
+
+    .sb-layer-icon {
+      width: 18px; height: 18px;
+      display: grid; place-items: center;
+      color: var(--text-2);
+      font-size: 0.8rem;
+    }
+
+    .sb-layer-title {
+      flex: 1;
+      font-size: 0.78rem;
+      color: var(--text-0);
+    }
+
+    .sb-layer-badge {
+      padding: 2px 7px;
+      border-radius: 999px;
+      background: var(--surface-4);
+      color: var(--text-2);
+      font-family: var(--font-mono);
+      font-size: 0.62rem;
+    }
+
+    .sb-layer-visibility, .sb-layer-delete {
+      width: 16px; height: 16px;
+      color: var(--text-3);
+      font-size: 0.72rem;
+      display: grid; place-items: center;
+    }
+
+    .sb-layer-body {
+      padding: 2px 0 8px 0;
+      background: var(--surface-1);
+      border-top: 1px solid var(--border);
+    }
+
+    /* Annotation overlay */
+    .annotated {
+      position: relative;
+      padding: var(--space-5) var(--space-4) var(--space-6) var(--space-4);
+      border-radius: var(--radius-md);
+      background: rgba(255, 255, 255, 0.02);
+      border: 1px solid var(--border);
+    }
+
+    .annotation {
+      position: absolute;
+      font-family: var(--font-mono);
+      font-size: 0.66rem;
+      color: var(--accent);
+      letter-spacing: 0.08em;
+      display: flex; align-items: center; gap: 5px;
+    }
+
+    .annotation::before {
+      content: "";
+      width: 18px;
+      border-top: 1px dashed rgba(212, 149, 106, 0.5);
+    }
+
+    /* Before/after */
+    .ba-grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: var(--space-4);
+      margin: var(--space-4) 0;
+    }
+
+    .ba-panel {
+      padding: var(--space-4);
+      border-radius: var(--radius-md);
+      background: rgba(255, 255, 255, 0.025);
+      border: 1px solid var(--border);
+      display: flex; flex-direction: column; gap: var(--space-3);
+    }
+
+    .ba-panel.bad { border-color: rgba(199, 90, 90, 0.3); }
+    .ba-panel.good { border-color: rgba(94, 159, 109, 0.3); }
+
+    .ba-heading {
+      display: flex; align-items: center; gap: 6px;
+      font-family: var(--font-mono);
+      font-size: 0.68rem;
+      letter-spacing: 0.1em;
+      text-transform: uppercase;
+      color: var(--text-2);
+    }
+
+    .ba-heading .dot {
+      width: 8px; height: 8px; border-radius: 999px; display: inline-block;
+    }
+
+    .ba-panel.bad .ba-heading { color: var(--error); }
+    .ba-panel.bad .ba-heading .dot { background: var(--error); }
+    .ba-panel.good .ba-heading { color: var(--success); }
+    .ba-panel.good .ba-heading .dot { background: var(--success); }
+
+    .ba-note {
+      font-size: 0.82rem;
+      color: var(--text-1);
+    }
+
+    .ba-code {
+      font-family: var(--font-mono);
+      font-size: 0.74rem;
+      padding: var(--space-3);
+      border-radius: var(--radius-sm);
+      background: rgba(0, 0, 0, 0.35);
+      color: var(--text-1);
+      overflow-x: auto;
+      white-space: pre;
+      line-height: 1.5;
+    }
+
+    .ba-code .hi { color: var(--accent); }
+    .ba-code .bad { color: var(--error); }
+    .ba-code .gd { color: var(--success); }
+    .ba-code .mute { color: var(--text-3); }
+
+    /* Editor cards grid */
+    .editor-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(400px, 1fr));
+      gap: var(--space-5);
+      margin: var(--space-4) 0;
+    }
+
+    .editor-card {
+      padding: var(--space-4);
+      border-radius: var(--radius-md);
+      background: rgba(255, 255, 255, 0.02);
+      border: 1px solid var(--border);
+    }
+
+    .editor-card h4 {
+      display: flex; align-items: center; justify-content: space-between;
+      gap: var(--space-2);
+      margin-bottom: var(--space-3);
+    }
+
+    .editor-card .score {
+      font-family: var(--font-mono);
+      font-size: 0.66rem;
+      padding: 2px 8px;
+      border-radius: 999px;
+      background: var(--accent-glow);
+      color: var(--accent);
+      letter-spacing: 0.1em;
+    }
+
+    .editor-card .editor-meta {
+      font-size: 0.75rem;
+      color: var(--text-2);
+      margin-bottom: var(--space-3);
+      font-family: var(--font-mono);
+    }
+
+    .editor-card .editor-mock {
+      margin: 0 auto;
+      transform: scale(0.95);
+      transform-origin: top center;
+    }
+
+    /* Patterns grid */
+    .patterns-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(380px, 1fr));
+      gap: var(--space-4);
+      margin: var(--space-4) 0;
+    }
+
+    .pattern-card {
+      padding: var(--space-4);
+      border-radius: var(--radius-md);
+      background: rgba(255, 255, 255, 0.02);
+      border: 1px solid var(--border);
+    }
+
+    .pattern-card h4 {
+      font-family: var(--font-mono);
+      font-size: 0.74rem;
+      letter-spacing: 0.08em;
+      color: var(--text-2);
+      text-transform: uppercase;
+      margin-bottom: var(--space-1);
+    }
+
+    .pattern-card .pattern-name {
+      font-family: var(--font-display);
+      font-size: 1.1rem;
+      color: var(--text-0);
+      margin-bottom: var(--space-3);
+    }
+
+    .pattern-card .pattern-use {
+      font-size: 0.82rem;
+      color: var(--text-2);
+      margin-top: var(--space-3);
+    }
+
+    .pattern-card .pattern-use code { color: var(--accent); background: var(--accent-glow); }
+
+    /* Migration checklist */
+    .checklist {
+      display: flex; flex-direction: column;
+      gap: var(--space-3);
+      margin: var(--space-4) 0;
+    }
+
+    .check-item {
+      display: grid;
+      grid-template-columns: auto 1fr auto;
+      column-gap: var(--space-3);
+      padding: var(--space-4);
+      border-radius: var(--radius-md);
+      background: rgba(255, 255, 255, 0.02);
+      border: 1px solid var(--border);
+      align-items: start;
+    }
+
+    .check-num {
+      font-family: var(--font-display);
+      font-size: 1.8rem;
+      color: var(--accent);
+      line-height: 1;
+      padding-top: 2px;
+    }
+
+    .check-body { min-width: 0; }
+
+    .check-title {
+      font-family: var(--font-display);
+      font-size: 1.18rem;
+      margin-bottom: 4px;
+      color: var(--text-0);
+    }
+
+    .check-desc { font-size: 0.88rem; color: var(--text-1); margin: 0 0 8px 0; }
+
+    .check-effort {
+      font-family: var(--font-mono);
+      font-size: 0.66rem;
+      padding: 3px 9px;
+      border-radius: 999px;
+      background: rgba(255, 255, 255, 0.04);
+      color: var(--text-2);
+      letter-spacing: 0.08em;
+      text-transform: uppercase;
+      white-space: nowrap;
+    }
+
+    .check-effort.s { background: rgba(94, 159, 109, 0.15); color: var(--success); }
+    .check-effort.m { background: rgba(241, 194, 125, 0.15); color: var(--warning); }
+    .check-effort.l { background: rgba(199, 90, 90, 0.15); color: var(--error); }
+
+    .check-tests {
+      font-family: var(--font-mono);
+      font-size: 0.74rem;
+      color: var(--text-2);
+      margin-top: 4px;
+    }
+
+    .check-tests code { color: var(--text-1); background: rgba(255, 255, 255, 0.04); font-size: 0.72rem; }
+
+    /* Footer */
+    footer {
+      padding: var(--space-6) 0 var(--space-7);
+      border-top: 1px solid rgba(255, 255, 255, 0.06);
+      color: var(--text-2);
+      font-size: 0.82rem;
+    }
+
+    footer .shell { display: flex; justify-content: space-between; flex-wrap: wrap; gap: var(--space-3); }
+
+    /* Pill */
+    .pill {
+      display: inline-flex; align-items: center; gap: 6px;
+      padding: 3px 9px;
+      border-radius: 999px;
+      font-size: 0.74rem;
+      color: var(--text-1);
+      background: rgba(255, 255, 255, 0.04);
+      border: 1px solid var(--border);
+      font-family: var(--font-mono);
+      letter-spacing: 0.04em;
+    }
+
+    .pill.accent { color: var(--accent); background: var(--accent-glow); border-color: rgba(212, 149, 106, 0.28); }
+    .pill.success { color: var(--success); background: rgba(94, 159, 109, 0.12); border-color: rgba(94, 159, 109, 0.28); }
+    .pill.warn { color: var(--warning); background: rgba(241, 194, 125, 0.1); border-color: rgba(241, 194, 125, 0.28); }
+
+    /* Utility */
+    .stack-sm > * + * { margin-top: var(--space-3); }
+    .stack-md > * + * { margin-top: var(--space-4); }
+
+    .mono { font-family: var(--font-mono); }
+    .muted { color: var(--text-2); }
+
+    @media (max-width: 720px) {
+      .hero { grid-template-columns: 1fr; }
+      .ba-grid { grid-template-columns: 1fr; }
+      .editor-grid { grid-template-columns: 1fr; }
+      .patterns-grid { grid-template-columns: 1fr; }
+    }
+  </style>
+</head>
+<body>
+  <nav>
+    <div class="shell nav-inner">
+      <a class="brand" href="#top">
+        <span class="brand-badge">
+          <svg viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+            <rect x="3" y="3" width="6" height="18" rx="1.5" fill="#d4956a"/>
+            <rect x="15" y="3" width="6" height="18" rx="1.5" fill="#d4956a"/>
+          </svg>
+        </span>
+        <span class="brand-text">framer · sidebar harmony</span>
+      </a>
+      <ul class="nav-links">
+        <li><a href="#contract">Contract</a></li>
+        <li><a href="#primitives">Primitives</a></li>
+        <li><a href="#patterns">Patterns</a></li>
+        <li><a href="#editors">Editors</a></li>
+        <li><a href="#fixes">Before/After</a></li>
+        <li><a href="#plan">Migration</a></li>
+        <li><a href="#shipped">Shipped</a></li>
+      </ul>
+    </div>
+  </nav>
+
+  <header id="top">
+    <div class="shell">
+      <div class="hero">
+        <div class="hero-copy">
+          <span class="eyebrow"><span class="dot" style="background: var(--accent); width: 8px; height: 8px; border-radius: 999px;"></span>Pass 2 · Target State · 2026-04-16</span>
+          <h1>A single contract for every row.</h1>
+          <p>Pass 1 shipped the primitives — <code>SidebarMetrics</code>, <code>SidebarControlRow</code>, <code>SidebarCompoundControlBlock</code>, <code>SidebarTrailingUnitCluster</code>, <code>SidebarShell</code>. They work. What pass 1 did <em>not</em> deliver is harmony, because the primitives coexist with a parallel token system (<code>SimpleLayerEditorLayout</code>), a chassis that doesn't participate (<code>LayerPanelRow</code>), and per-component metric re-instantiation that lets every editor drift quietly.</p>
+          <p>This document specifies the target state after pass 2: one token namespace, one label column, one trailing cluster, one readout width, one propagation path. Every layer editor is mocked at <code>350pt</code> below in its post-pass form so the visual contract is unambiguous.</p>
+        </div>
+        <aside class="hero-aside">
+          <h3>The seven fixes</h3>
+          <ul>
+            <li><span class="num">01</span><span>Retire <code>SimpleLayerEditorLayout</code> — fold widths into <code>SidebarMetrics</code></span></li>
+            <li><span class="num">02</span><span>Add <code>SidebarTrailingReadoutCluster</code> for read-only rows</span></li>
+            <li><span class="num">03</span><span>Thread <code>SidebarMetrics</code> via <code>@Environment</code></span></li>
+            <li><span class="num">04</span><span>Adopt metrics inside <code>LayerPanelRow</code> chassis</span></li>
+            <li><span class="num">05</span><span>Extract <code>SidebarPreviewStrip</code> / <code>SidebarPaletteEditor</code> / <code>SidebarChipFlow</code></span></li>
+            <li><span class="num">06</span><span>Promote <code>OverlayFullWidthControlRow</code> → <code>SidebarFullWidthRow</code></span></li>
+            <li><span class="num">07</span><span>Rationalize <code>StyledSlider</code> suffix vs <code>SidebarTrailingUnitCluster</code></span></li>
+          </ul>
+        </aside>
+      </div>
+    </div>
+  </header>
+
+  <!-- ========== CONTRACT ========== -->
+  <section id="contract">
+    <div class="shell">
+      <div class="section-label">01 · Layout contract</div>
+      <h2>One namespace for every measurement</h2>
+      <p class="section-intro">Today <code>SimpleLayerEditorLayout</code> (<code>LayerListSection.swift:1575</code>) shadows <code>SidebarMetrics</code> with parallel tokens, and the two disagree in three places (<code>compactFieldWidth = 50</code>, <code>valueTextWidth = 36</code>, and an unnamed suffix width of <code>20</code> inside <code>StyledSlider</code>). After the pass there is exactly one source of truth.</p>
+
+      <h3 style="margin-top: var(--space-5); margin-bottom: var(--space-2);">Canonical <code>SidebarMetrics</code></h3>
+      <div class="tokens-grid">
+        <div class="token"><div class="token-name">outerInset</div><span class="token-value">12pt</span><div class="token-note">Horizontal padding for every row</div></div>
+        <div class="token"><div class="token-name">rowGap</div><span class="token-value">16pt</span><div class="token-note">Gap between adjacent sections</div></div>
+        <div class="token"><div class="token-name">expandedBodyInset</div><span class="token-value">6pt</span><div class="token-note">Spacing inside compound blocks</div></div>
+        <div class="token"><div class="token-name">controlRowMinHeight</div><span class="token-value">30pt</span><div class="token-note">Target row height</div></div>
+        <div class="token"><div class="token-name">controlLabelWidth</div><span class="token-value">104pt</span><div class="token-note">Every label aligns at this width</div></div>
+        <div class="token"><div class="token-name">controlColumnSpacing</div><span class="token-value">10pt</span><div class="token-note">Gap label → control</div></div>
+        <div class="token"><div class="token-name">controlTrailingValueWidth</div><span class="token-value">48pt</span><div class="token-note">Minimum trailing block width</div></div>
+        <div class="token"><div class="token-name">controlTrailingClusterSpacing</div><span class="token-value">6pt</span><div class="token-note">Field → unit gap</div></div>
+        <div class="token"><div class="token-name">controlUnitSuffixWidth</div><span class="token-value">24pt</span><div class="token-note">Unit suffix column</div></div>
+        <div class="token"><div class="token-name">controlValueFieldWidth</div><span class="token-value">55pt</span><div class="token-note">Editable numeric field</div></div>
+        <div class="token is-new"><div class="token-name">controlReadoutWidth</div><span class="token-value">55pt</span><div class="token-note">New · read-only numeric (unifies 36 → 55)</div></div>
+        <div class="token is-new"><div class="token-name">controlSegmentedModeWidth</div><span class="token-value">80pt</span><div class="token-note">New · 2-item segmented picker</div></div>
+        <div class="token is-new"><div class="token-name">controlUnitPickerWidth</div><span class="token-value">100pt</span><div class="token-note">New · 2-item unit picker</div></div>
+        <div class="token"><div class="token-name">fullWidthRowHorizontalInset</div><span class="token-value">12pt</span><div class="token-note">Matches outerInset</div></div>
+        <div class="token"><div class="token-name">containedPreviewMaxWidth</div><span class="token-value">326pt</span><div class="token-note">= 350 − 2·12 (computed)</div></div>
+      </div>
+
+      <h3 style="margin-top: var(--space-5); margin-bottom: var(--space-2);">Width band</h3>
+      <div class="tokens-grid">
+        <div class="token"><div class="token-name">minimumWidth</div><span class="token-value">300pt</span><div class="token-note">SidebarLayoutPolicy</div></div>
+        <div class="token"><div class="token-name">idealWidth</div><span class="token-value">350pt</span><div class="token-note">Canvas for every mock here</div></div>
+        <div class="token"><div class="token-name">maximumWidth</div><span class="token-value">520pt</span><div class="token-note">Upper bound on drag</div></div>
+      </div>
+
+      <h3 style="margin-top: var(--space-5); margin-bottom: var(--space-2);">Retired tokens</h3>
+      <div class="matrix-wrap">
+        <table>
+          <thead>
+            <tr><th>Retired</th><th>Location</th><th>Replacement</th></tr>
+          </thead>
+          <tbody>
+            <tr><td><code>SimpleLayerEditorLayout.fieldWidth = 55</code></td><td>LayerListSection.swift:1577</td><td><code>metrics.controlValueFieldWidth</code></td></tr>
+            <tr><td><code>SimpleLayerEditorLayout.compactFieldWidth = 50</code></td><td>LayerListSection.swift:1578</td><td><code>metrics.controlValueFieldWidth</code> (unify at 55)</td></tr>
+            <tr><td><code>SimpleLayerEditorLayout.suffixWidth = 24</code></td><td>LayerListSection.swift:1579</td><td><code>metrics.controlUnitSuffixWidth</code></td></tr>
+            <tr><td><code>SimpleLayerEditorLayout.valueTextWidth = 36</code></td><td>LayerListSection.swift:1580</td><td><code>metrics.controlReadoutWidth</code> (promoted to 55)</td></tr>
+            <tr><td><code>SimpleLayerEditorLayout.thicknessModeWidth = 80</code></td><td>LayerListSection.swift:1581</td><td><code>metrics.controlSegmentedModeWidth</code></td></tr>
+            <tr><td><code>SimpleLayerEditorLayout.unitPickerWidth = 100</code></td><td>LayerListSection.swift:1582</td><td><code>metrics.controlUnitPickerWidth</code></td></tr>
+            <tr><td><code>StyledSlider suffix frame width: 20</code></td><td>StyledSlider.swift:49</td><td>Remove suffix branch; compose via <code>SidebarTrailingUnitCluster</code></td></tr>
+            <tr><td><code>LayerPanelRowLayout</code> raw <code>Spacing.*</code></td><td>LayerPanelRow.swift:313</td><td>Derive from injected <code>SidebarMetrics</code></td></tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </section>
+
+  <!-- ========== PRIMITIVES ========== -->
+  <section id="primitives">
+    <div class="shell">
+      <div class="section-label">02 · Primitives</div>
+      <h2>The finished primitive set</h2>
+      <p class="section-intro">After the pass, ten primitives cover every row and section shape the sidebar needs. Six already exist and three are new (green). Each primitive reads <code>SidebarMetrics</code> from environment — no more default-arg <code>SidebarMetrics()</code> construction.</p>
+
+      <div class="matrix-wrap">
+        <table>
+          <thead>
+            <tr><th>Primitive</th><th>Status</th><th>Responsibility</th><th>Canonical call site</th></tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td><strong>SidebarShell</strong></td>
+              <td><span class="pill">exists</span></td>
+              <td>Bounded container, footer safe-area, leading border, background</td>
+              <td><code>InspectorView</code></td>
+            </tr>
+            <tr>
+              <td><strong>SidebarSection</strong></td>
+              <td><span class="pill">exists</span></td>
+              <td>Eyebrow header + content group</td>
+              <td><code>InspectorView.outputSection</code></td>
+            </tr>
+            <tr>
+              <td><strong>SidebarControlRow</strong></td>
+              <td><span class="pill">exists</span></td>
+              <td>Label · content · optional trailing value; flips alignment</td>
+              <td>Every single-row editor</td>
+            </tr>
+            <tr>
+              <td><strong>SidebarCompoundControlBlock</strong></td>
+              <td><span class="pill">exists</span></td>
+              <td>Primary row + optional secondary row with divider</td>
+              <td><code>BlendModeControls</code>, Canvas fields</td>
+            </tr>
+            <tr>
+              <td><strong>SidebarTrailingUnitCluster</strong></td>
+              <td><span class="pill">exists</span></td>
+              <td>Editable <code>[value][unit]</code> trailing cluster</td>
+              <td>Border Thickness, Canvas Width</td>
+            </tr>
+            <tr>
+              <td><strong>SidebarTrailingReadoutCluster</strong></td>
+              <td><span class="pill success">new · pass 2</span></td>
+              <td>Read-only <code>[value][unit]</code>; uses the same widths so editable and read-only rows align</td>
+              <td>AspectRatio Offset, Canvas pixelSummary</td>
+            </tr>
+            <tr>
+              <td><strong>SidebarFullWidthRow</strong></td>
+              <td><span class="pill success">new · pass 2</span></td>
+              <td>Title + full-width content; promoted from private <code>OverlayFullWidthControlRow</code></td>
+              <td>Overlay preview, LUT library, ASCII ramp</td>
+            </tr>
+            <tr>
+              <td><strong>SidebarPreviewStrip</strong></td>
+              <td><span class="pill success">new · pass 2</span></td>
+              <td>Horizontal tile strip bounded by <code>containedPreviewMaxWidth</code></td>
+              <td>Overlay thumbnails, LUT library</td>
+            </tr>
+            <tr>
+              <td><strong>SidebarPaletteEditor</strong></td>
+              <td><span class="pill success">new · pass 2</span></td>
+              <td>Swatch + hex + delete triplet rows, add button</td>
+              <td>Dither palette</td>
+            </tr>
+            <tr>
+              <td><strong>SidebarChipFlow</strong></td>
+              <td><span class="pill success">new · pass 2</span></td>
+              <td>Flow layout bounded to <code>containedPreviewMaxWidth</code></td>
+              <td>Caption tokens, ASCII ramp</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </section>
+
+  <!-- ========== ROW PATTERNS ========== -->
+  <section id="patterns">
+    <div class="shell">
+      <div class="section-label">03 · Row patterns</div>
+      <h2>Nine canonical shapes</h2>
+      <p class="section-intro">Every inspector row fits one of these nine shapes. If you find yourself writing a <code>HStack</code> in a layer editor, stop — there's a pattern for it.</p>
+
+      <div class="patterns-grid">
+        <div class="pattern-card">
+          <h4>P1 · Label-only action</h4>
+          <div class="pattern-name">Label + button chip</div>
+          <div class="sidebar-mock" style="width: 100%;">
+            <div class="sb-section-body">
+              <div class="sb-row">
+                <div class="sb-label">Color</div>
+                <div class="sb-control" style="justify-content: flex-start;">
+                  <div class="sb-color"><div class="sb-color-swatch" style="--fill:#ffffff;"></div><div class="sb-hex">FFFFFF</div></div>
+                </div>
+                <div></div>
+              </div>
+            </div>
+          </div>
+          <p class="pattern-use">Use: <code>SidebarControlRow</code> with content, no trailing value.</p>
+        </div>
+
+        <div class="pattern-card">
+          <h4>P2 · Control + no label</h4>
+          <div class="pattern-name">Segmented anchored to label column</div>
+          <div class="sidebar-mock" style="width: 100%;">
+            <div class="sb-section-body">
+              <div class="sb-row">
+                <div class="sb-label">Mode</div>
+                <div class="sb-control" style="justify-content: flex-start;">
+                  <div class="sb-segmented mode-w">
+                    <div class="sb-segmented-item active">px</div>
+                    <div class="sb-segmented-item">%</div>
+                  </div>
+                </div>
+                <div></div>
+              </div>
+            </div>
+          </div>
+          <p class="pattern-use">Use: <code>SidebarControlRow</code> + segmented picker with <code>.frame(width: metrics.controlSegmentedModeWidth)</code>.</p>
+        </div>
+
+        <div class="pattern-card">
+          <h4>P3 · Editable numeric + unit</h4>
+          <div class="pattern-name">The bread-and-butter row</div>
+          <div class="sidebar-mock" style="width: 100%;">
+            <div class="sb-section-body">
+              <div class="sb-row">
+                <div class="sb-label">Thickness</div>
+                <div class="sb-control">
+                  <div class="sb-slider" style="--slider-val: 20%;"><div class="track"></div><div class="fill"></div><div class="knob"></div></div>
+                </div>
+                <div class="sb-trailing"><input class="sb-field" value="24" readonly><span class="sb-unit">px</span></div>
+              </div>
+            </div>
+          </div>
+          <p class="pattern-use">Use: <code>SidebarControlRow</code> + slider content + <code>SidebarTrailingUnitCluster</code>.</p>
+        </div>
+
+        <div class="pattern-card">
+          <h4>P4 · Read-only trailing readout</h4>
+          <div class="pattern-name">Computed or derived value</div>
+          <div class="sidebar-mock" style="width: 100%;">
+            <div class="sb-section-body">
+              <div class="sb-row">
+                <div class="sb-label">Output Pixels</div>
+                <div class="sb-control"><div></div></div>
+                <div class="sb-trailing"><span class="sb-readout">1771</span><span class="sb-unit">× 1181 px</span></div>
+              </div>
+              <div class="sb-row">
+                <div class="sb-label">Offset X</div>
+                <div class="sb-control">
+                  <div class="sb-slider" style="--slider-val: 50%;"><div class="track"></div><div class="fill"></div><div class="knob"></div></div>
+                </div>
+                <div class="sb-trailing"><span class="sb-readout">0.0</span><span class="sb-unit"></span></div>
+              </div>
+            </div>
+          </div>
+          <p class="pattern-use">Use: <code>SidebarControlRow</code> + new <code>SidebarTrailingReadoutCluster</code>. Width matches editable fields so rows align.</p>
+        </div>
+
+        <div class="pattern-card">
+          <h4>P5 · Trailing toggle</h4>
+          <div class="pattern-name">Boolean in lieu of value</div>
+          <div class="sidebar-mock" style="width: 100%;">
+            <div class="sb-section-body">
+              <div class="sb-row">
+                <div class="sb-label">Strip EXIF metadata</div>
+                <div class="sb-control"></div>
+                <div class="sb-trailing"><div class="sb-toggle on"></div></div>
+              </div>
+              <div class="sb-row">
+                <div class="sb-label">Flip Colors</div>
+                <div class="sb-control"></div>
+                <div class="sb-trailing"><div class="sb-toggle"></div></div>
+              </div>
+            </div>
+          </div>
+          <p class="pattern-use">Use: <code>SidebarControlRow</code> with <code>EmptyView</code> content, <code>StyledToggle</code> in trailing.</p>
+        </div>
+
+        <div class="pattern-card">
+          <h4>P6 · Compound block (stacked)</h4>
+          <div class="pattern-name">Related pair sharing a chassis</div>
+          <div class="sidebar-mock" style="width: 100%;">
+            <div class="sb-section-body">
+              <div class="sb-compound">
+                <div class="sb-row">
+                  <div class="sb-label">Blend Mode</div>
+                  <div class="sb-control"><div class="sb-menu">Normal</div></div>
+                  <div></div>
+                </div>
+                <div class="sb-row">
+                  <div class="sb-label">Opacity</div>
+                  <div class="sb-control">
+                    <div class="sb-slider" style="--slider-val: 75%;"><div class="track"></div><div class="fill"></div><div class="knob"></div></div>
+                  </div>
+                  <div class="sb-trailing"><input class="sb-field" value="75" readonly><span class="sb-unit">%</span></div>
+                </div>
+              </div>
+            </div>
+          </div>
+          <p class="pattern-use">Use: <code>SidebarCompoundControlBlock { ... } secondary: { ... }</code>. Divider auto-renders.</p>
+        </div>
+
+        <div class="pattern-card">
+          <h4>P7 · Full-width content</h4>
+          <div class="pattern-name">Content that can't fit the 3-column grid</div>
+          <div class="sidebar-mock" style="width: 100%;">
+            <div class="sb-section-body">
+              <div class="sb-fullwidth-row">
+                <div class="sb-fullwidth-title">Preview</div>
+                <div class="sb-fullwidth-body">
+                  <div style="height: 90px; border-radius: 6px; background: linear-gradient(135deg, rgba(212,149,106,0.35), rgba(40,40,50,0.8)); border: 1px solid var(--border);"></div>
+                </div>
+              </div>
+            </div>
+          </div>
+          <p class="pattern-use">Use: new <code>SidebarFullWidthRow("Preview") { content }</code>. Content inherits <code>containedPreviewMaxWidth</code>.</p>
+        </div>
+
+        <div class="pattern-card">
+          <h4>P8 · Preview strip</h4>
+          <div class="pattern-name">Horizontal tile picker</div>
+          <div class="sidebar-mock" style="width: 100%;">
+            <div class="sb-section-body">
+              <div class="sb-fullwidth-row">
+                <div class="sb-fullwidth-title">Library</div>
+                <div class="sb-fullwidth-body">
+                  <div class="sb-preview-strip">
+                    <div class="sb-tile active" data-label="Dust"></div>
+                    <div class="sb-tile" data-label="Grain"></div>
+                    <div class="sb-tile" data-label="Leak"></div>
+                    <div class="sb-tile" data-label="Plate"></div>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+          <p class="pattern-use">Use: new <code>SidebarPreviewStrip(items:)</code>. Scrolls horizontally; tiles are metric-derived.</p>
+        </div>
+
+        <div class="pattern-card">
+          <h4>P9 · Chip flow</h4>
+          <div class="pattern-name">Template tokens, ramp glyphs</div>
+          <div class="sidebar-mock" style="width: 100%;">
+            <div class="sb-section-body">
+              <div class="sb-fullwidth-row">
+                <div class="sb-fullwidth-title">Tokens</div>
+                <div class="sb-fullwidth-body">
+                  <div class="sb-chip-flow">
+                    <span class="sb-chip accent">{filename}</span>
+                    <span class="sb-chip">{date}</span>
+                    <span class="sb-chip">{iso}</span>
+                    <span class="sb-chip">{aperture}</span>
+                    <span class="sb-chip">{shutter}</span>
+                    <span class="sb-chip">{lens}</span>
+                    <span class="sb-chip">{camera}</span>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+          <p class="pattern-use">Use: new <code>SidebarChipFlow(chips:)</code>. Wraps; bounded to <code>containedPreviewMaxWidth</code>.</p>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ========== EDITORS ========== -->
+  <section id="editors">
+    <div class="shell">
+      <div class="section-label">04 · Layer editor target state</div>
+      <h2>Twelve editors, one grammar</h2>
+      <p class="section-intro">Each mock below is what the editor looks like after the pass — rendered at the canonical 350pt sidebar width. Label column, field width, trailing cluster, unit suffix are identical across all of them.</p>
+
+      <div class="editor-grid">
+
+        <!-- 1. Border -->
+        <div class="editor-card">
+          <h4>1 · Border <span class="score">harmonized</span></h4>
+          <div class="editor-meta">LayerListSection.swift:1649 · uses P6 + P3 + P1</div>
+          <div class="sidebar-mock editor-mock">
+            <div class="sb-section">
+              <div class="sb-section-body">
+                <div class="sb-compound">
+                  <div class="sb-row">
+                    <div class="sb-label">Mode</div>
+                    <div class="sb-control" style="justify-content: flex-start;">
+                      <div class="sb-segmented mode-w">
+                        <div class="sb-segmented-item active">px</div>
+                        <div class="sb-segmented-item">%</div>
+                      </div>
+                    </div>
+                    <div></div>
+                  </div>
+                  <div class="sb-row">
+                    <div class="sb-label">Thickness</div>
+                    <div class="sb-control">
+                      <div class="sb-slider" style="--slider-val: 16%;"><div class="track"></div><div class="fill"></div><div class="knob"></div></div>
+                    </div>
+                    <div class="sb-trailing"><input class="sb-field" value="24" readonly><span class="sb-unit">px</span></div>
+                  </div>
+                </div>
+                <div class="sb-row" style="margin-top: 8px;">
+                  <div class="sb-label">Color</div>
+                  <div class="sb-control" style="justify-content: flex-start;">
+                    <div class="sb-color"><div class="sb-color-swatch" style="--fill:#ffffff;"></div><div class="sb-hex">FFFFFF</div></div>
+                  </div>
+                  <div></div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- 2. Padding -->
+        <div class="editor-card">
+          <h4>2 · Padding <span class="score">harmonized</span></h4>
+          <div class="editor-meta">LayerListSection.swift:1748 · uses P3 + fill picker</div>
+          <div class="sidebar-mock editor-mock">
+            <div class="sb-section">
+              <div class="sb-section-body">
+                <div class="sb-row">
+                  <div class="sb-label">Thickness</div>
+                  <div class="sb-control">
+                    <div class="sb-slider" style="--slider-val: 30%;"><div class="track"></div><div class="fill"></div><div class="knob"></div></div>
+                  </div>
+                  <div class="sb-trailing"><input class="sb-field" value="120" readonly><span class="sb-unit">px</span></div>
+                </div>
+              </div>
+              <div class="sb-divider" style="margin: 0;"></div>
+              <div class="sb-section-body">
+                <div class="sb-row">
+                  <div class="sb-label">Fill</div>
+                  <div class="sb-control"><div class="sb-menu">Solid Color</div></div>
+                  <div></div>
+                </div>
+                <div class="sb-row">
+                  <div class="sb-label">Fill Color</div>
+                  <div class="sb-control" style="justify-content: flex-start;">
+                    <div class="sb-color"><div class="sb-color-swatch" style="--fill:#1a1a1e;"></div><div class="sb-hex">1A1A1E</div></div>
+                  </div>
+                  <div></div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- 3. Canvas -->
+        <div class="editor-card">
+          <h4>3 · Canvas <span class="score">harmonized</span></h4>
+          <div class="editor-meta">LayerListSection.swift:1789 · uses P2 + P3 + P4 (pixel summary now uses readout cluster)</div>
+          <div class="sidebar-mock editor-mock">
+            <div class="sb-section">
+              <div class="sb-section-body">
+                <div class="sb-compound">
+                  <div class="sb-row">
+                    <div class="sb-label">Preset</div>
+                    <div class="sb-control"><div class="sb-menu">10×15 cm (300dpi)</div></div>
+                    <div></div>
+                  </div>
+                  <div class="sb-row">
+                    <div class="sb-label">Size Mode</div>
+                    <div class="sb-control" style="justify-content: flex-start;">
+                      <div class="sb-segmented mode-w">
+                        <div class="sb-segmented-item">Pixels</div>
+                        <div class="sb-segmented-item active">Physical</div>
+                      </div>
+                    </div>
+                    <div></div>
+                  </div>
+                </div>
+                <div class="sb-compound" style="margin-top: 6px;">
+                  <div class="sb-row">
+                    <div class="sb-label">Unit</div>
+                    <div class="sb-control" style="justify-content: flex-start;">
+                      <div class="sb-segmented unit-w">
+                        <div class="sb-segmented-item active">cm</div>
+                        <div class="sb-segmented-item">mm</div>
+                      </div>
+                    </div>
+                    <div></div>
+                  </div>
+                  <div class="sb-row">
+                    <div class="sb-label">DPI</div>
+                    <div class="sb-control"><div></div></div>
+                    <div class="sb-trailing"><input class="sb-field" value="300" readonly><span class="sb-unit">dpi</span></div>
+                  </div>
+                </div>
+                <div class="sb-compound" style="margin-top: 6px;">
+                  <div class="sb-row">
+                    <div class="sb-label">Width</div>
+                    <div class="sb-control"><div></div></div>
+                    <div class="sb-trailing"><input class="sb-field" value="15.0" readonly><span class="sb-unit">cm</span></div>
+                  </div>
+                  <div class="sb-row">
+                    <div class="sb-label">Height</div>
+                    <div class="sb-control"><div></div></div>
+                    <div class="sb-trailing"><input class="sb-field" value="10.0" readonly><span class="sb-unit">cm</span></div>
+                  </div>
+                </div>
+                <div class="sb-row" style="margin-top: 6px;">
+                  <div class="sb-label">Output Pixels</div>
+                  <div class="sb-control"><div></div></div>
+                  <div class="sb-trailing"><span class="sb-readout">1771</span><span class="sb-unit">× 1181</span></div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- 4. Resize -->
+        <div class="editor-card">
+          <h4>4 · Resize <span class="score">harmonized</span></h4>
+          <div class="editor-meta">LayerListSection.swift:2089 · exemplary — no changes needed</div>
+          <div class="sidebar-mock editor-mock">
+            <div class="sb-section">
+              <div class="sb-section-body">
+                <div class="sb-compound">
+                  <div class="sb-row">
+                    <div class="sb-label">Max Width</div>
+                    <div class="sb-control"><div></div></div>
+                    <div class="sb-trailing"><input class="sb-field" value="2048" readonly><span class="sb-unit">px</span></div>
+                  </div>
+                  <div class="sb-row">
+                    <div class="sb-label">Max Height</div>
+                    <div class="sb-control"><div></div></div>
+                    <div class="sb-trailing"><input class="sb-field" value="2048" readonly><span class="sb-unit">px</span></div>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- 5. AspectRatio -->
+        <div class="editor-card">
+          <h4>5 · Aspect Ratio <span class="score">harmonized</span></h4>
+          <div class="editor-meta">LayerListSection.swift:2142 · offsets now use readout cluster</div>
+          <div class="sidebar-mock editor-mock">
+            <div class="sb-section">
+              <div class="sb-section-body">
+                <div class="sb-row">
+                  <div class="sb-label">Ratio</div>
+                  <div class="sb-control"><div class="sb-menu">4:5</div></div>
+                  <div></div>
+                </div>
+                <div class="sb-compound" style="margin-top: 8px;">
+                  <div class="sb-row">
+                    <div class="sb-label">Offset X</div>
+                    <div class="sb-control">
+                      <div class="sb-slider" style="--slider-val: 50%;"><div class="track"></div><div class="fill"></div><div class="knob"></div></div>
+                    </div>
+                    <div class="sb-trailing"><span class="sb-readout">0.0</span><span class="sb-unit"></span></div>
+                  </div>
+                  <div class="sb-row">
+                    <div class="sb-label">Offset Y</div>
+                    <div class="sb-control">
+                      <div class="sb-slider" style="--slider-val: 50%;"><div class="track"></div><div class="fill"></div><div class="knob"></div></div>
+                    </div>
+                    <div class="sb-trailing"><span class="sb-readout">0.0</span><span class="sb-unit"></span></div>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- 6. Orientation -->
+        <div class="editor-card">
+          <h4>6 · Orientation <span class="score">harmonized</span></h4>
+          <div class="editor-meta">LayerListSection.swift:2256 · single row</div>
+          <div class="sidebar-mock editor-mock">
+            <div class="sb-section">
+              <div class="sb-section-body">
+                <div class="sb-row">
+                  <div class="sb-label">Target</div>
+                  <div class="sb-control" style="justify-content: flex-start;">
+                    <div class="sb-segmented" style="width: 200px;">
+                      <div class="sb-segmented-item active" style="flex:1;text-align:center;">Portrait</div>
+                      <div class="sb-segmented-item" style="flex:1;text-align:center;">Landscape</div>
+                      <div class="sb-segmented-item" style="flex:1;text-align:center;">Square</div>
+                    </div>
+                  </div>
+                  <div></div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- 7. Overlay -->
+        <div class="editor-card">
+          <h4>7 · Overlay <span class="score">harmonized</span></h4>
+          <div class="editor-meta">LayerListSection.swift:2286 · preview/library use new PreviewStrip</div>
+          <div class="sidebar-mock editor-mock">
+            <div class="sb-section">
+              <div class="sb-section-body">
+                <div class="sb-compound">
+                  <div class="sb-row">
+                    <div class="sb-label">Category</div>
+                    <div class="sb-control"><div class="sb-menu">Dust &amp; Scratches</div></div>
+                    <div></div>
+                  </div>
+                  <div class="sb-row">
+                    <div class="sb-label">Overlay</div>
+                    <div class="sb-control"><div class="sb-menu">dust-01</div></div>
+                    <div></div>
+                  </div>
+                </div>
+                <div class="sb-fullwidth-row" style="margin-top: 8px;">
+                  <div class="sb-fullwidth-title">Preview</div>
+                  <div class="sb-fullwidth-body">
+                    <div style="height: 90px; border-radius: 4px; background: linear-gradient(135deg, rgba(120,120,130,0.6), rgba(40,40,50,0.85)); border: 1px solid var(--border);"></div>
+                  </div>
+                </div>
+                <div class="sb-fullwidth-row">
+                  <div class="sb-fullwidth-title">Library</div>
+                  <div class="sb-fullwidth-body">
+                    <div class="sb-preview-strip">
+                      <div class="sb-tile active" data-label="dust-01"></div>
+                      <div class="sb-tile" data-label="dust-02"></div>
+                      <div class="sb-tile" data-label="grain"></div>
+                      <div class="sb-tile" data-label="leak"></div>
+                    </div>
+                  </div>
+                </div>
+                <div class="sb-divider" style="margin: 16px 12px 0;"></div>
+                <div class="sb-compound" style="margin-top: 6px;">
+                  <div class="sb-row">
+                    <div class="sb-label">Blend Mode</div>
+                    <div class="sb-control"><div class="sb-menu">Multiply</div></div>
+                    <div></div>
+                  </div>
+                  <div class="sb-row">
+                    <div class="sb-label">Opacity</div>
+                    <div class="sb-control">
+                      <div class="sb-slider" style="--slider-val: 65%;"><div class="track"></div><div class="fill"></div><div class="knob"></div></div>
+                    </div>
+                    <div class="sb-trailing"><input class="sb-field" value="65" readonly><span class="sb-unit">%</span></div>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- 8. Caption -->
+        <div class="editor-card">
+          <h4>8 · Caption <span class="score">harmonized</span></h4>
+          <div class="editor-meta">LayerListSection.swift:2661 · TemplateTokenBar → SidebarChipFlow</div>
+          <div class="sidebar-mock editor-mock">
+            <div class="sb-section">
+              <div class="sb-section-body">
+                <div class="sb-row">
+                  <div class="sb-label">Mode</div>
+                  <div class="sb-control" style="justify-content: flex-start;">
+                    <div class="sb-segmented" style="width: 220px;">
+                      <div class="sb-segmented-item active" style="flex:1;text-align:center;">Template</div>
+                      <div class="sb-segmented-item" style="flex:1;text-align:center;">Custom</div>
+                      <div class="sb-segmented-item" style="flex:1;text-align:center;">Off</div>
+                    </div>
+                  </div>
+                  <div></div>
+                </div>
+                <div class="sb-divider"></div>
+                <div class="sb-compound" style="margin-top: 6px;">
+                  <div class="sb-row">
+                    <div class="sb-label">Template</div>
+                    <div class="sb-control"><div class="sb-menu">{filename} · {date}</div></div>
+                    <div></div>
+                  </div>
+                </div>
+                <div class="sb-fullwidth-row" style="margin-top: 6px;">
+                  <div class="sb-fullwidth-title">Tokens</div>
+                  <div class="sb-fullwidth-body">
+                    <div class="sb-chip-flow">
+                      <span class="sb-chip accent">{filename}</span>
+                      <span class="sb-chip accent">{date}</span>
+                      <span class="sb-chip">{iso}</span>
+                      <span class="sb-chip">{aperture}</span>
+                      <span class="sb-chip">{shutter}</span>
+                      <span class="sb-chip">{lens}</span>
+                    </div>
+                  </div>
+                </div>
+                <div class="sb-divider" style="margin-top: 10px;"></div>
+                <div class="sb-compound" style="margin-top: 6px;">
+                  <div class="sb-row">
+                    <div class="sb-label">Position</div>
+                    <div class="sb-control"><div class="sb-menu">Below</div></div>
+                    <div></div>
+                  </div>
+                  <div class="sb-row">
+                    <div class="sb-label">Alignment</div>
+                    <div class="sb-control" style="justify-content: flex-start;">
+                      <div class="sb-segmented" style="width: 130px;">
+                        <div class="sb-segmented-item active" style="flex:1;text-align:center;">L</div>
+                        <div class="sb-segmented-item" style="flex:1;text-align:center;">C</div>
+                        <div class="sb-segmented-item" style="flex:1;text-align:center;">R</div>
+                      </div>
+                    </div>
+                    <div></div>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- 9. Dither -->
+        <div class="editor-card">
+          <h4>9 · Dither <span class="score">harmonized</span></h4>
+          <div class="editor-meta">LayerListSection.swift:3268 · palette uses SidebarPaletteEditor</div>
+          <div class="sidebar-mock editor-mock">
+            <div class="sb-section">
+              <div class="sb-section-body">
+                <div class="sb-row">
+                  <div class="sb-label">Algorithm</div>
+                  <div class="sb-control"><div class="sb-menu">Bayer 8×8</div></div>
+                  <div></div>
+                </div>
+                <div class="sb-row">
+                  <div class="sb-label">Pixel Scale</div>
+                  <div class="sb-control">
+                    <div class="sb-slider" style="--slider-val: 25%;"><div class="track"></div><div class="fill"></div><div class="knob"></div></div>
+                  </div>
+                  <div class="sb-trailing"><input class="sb-field" value="2" readonly><span class="sb-unit">×</span></div>
+                </div>
+                <div class="sb-row">
+                  <div class="sb-label">Flip Colors</div>
+                  <div class="sb-control"><div></div></div>
+                  <div class="sb-trailing"><div class="sb-toggle"></div></div>
+                </div>
+                <div class="sb-fullwidth-row" style="margin-top: 6px;">
+                  <div class="sb-fullwidth-title">Palette</div>
+                  <div class="sb-fullwidth-body">
+                    <div class="sb-palette">
+                      <div class="sb-palette-row">
+                        <div class="sb-color-swatch" style="--fill:#0e0e10; width: 18px; height: 18px;"></div>
+                        <div class="sb-hex">0E0E10</div>
+                        <span class="sb-palette-minus">⊖</span>
+                      </div>
+                      <div class="sb-palette-row">
+                        <div class="sb-color-swatch" style="--fill:#f0ede8; width: 18px; height: 18px;"></div>
+                        <div class="sb-hex">F0EDE8</div>
+                        <span class="sb-palette-minus">⊖</span>
+                      </div>
+                      <div class="sb-palette-row">
+                        <div class="sb-color-swatch" style="--fill:#d4956a; width: 18px; height: 18px;"></div>
+                        <div class="sb-hex">D4956A</div>
+                        <span class="sb-palette-minus">⊖</span>
+                      </div>
+                      <span class="sb-chip" style="align-self: flex-start;">+ Add color</span>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- 10. LUT -->
+        <div class="editor-card">
+          <h4>10 · LUT <span class="score">harmonized</span></h4>
+          <div class="editor-meta">LayerListSection.swift:3693 · library uses PreviewStrip</div>
+          <div class="sidebar-mock editor-mock">
+            <div class="sidebar-mock editor-mock" style="width: 100%; border: none; box-shadow: none; border-radius: 0;">
+              <div class="sb-section">
+                <div class="sb-section-body">
+                  <div class="sb-row">
+                    <div class="sb-label">LUT</div>
+                    <div class="sb-control"><div class="sb-menu">Portra 800</div></div>
+                    <div></div>
+                  </div>
+                  <div class="sb-row">
+                    <div class="sb-label">Intensity</div>
+                    <div class="sb-control">
+                      <div class="sb-slider" style="--slider-val: 80%;"><div class="track"></div><div class="fill"></div><div class="knob"></div></div>
+                    </div>
+                    <div class="sb-trailing"><input class="sb-field" value="80" readonly><span class="sb-unit">%</span></div>
+                  </div>
+                  <div class="sb-fullwidth-row" style="margin-top: 6px;">
+                    <div class="sb-fullwidth-title">Library</div>
+                    <div class="sb-fullwidth-body">
+                      <div class="sb-preview-strip">
+                        <div class="sb-tile active" data-label="Portra"></div>
+                        <div class="sb-tile" data-label="Ektar"></div>
+                        <div class="sb-tile" data-label="Tri-X"></div>
+                        <div class="sb-tile" data-label="Gold"></div>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- 11. Shader -->
+        <div class="editor-card">
+          <h4>11 · Shader <span class="score">harmonized</span></h4>
+          <div class="editor-meta">LayerListSection.swift:4072 · ASCII ramp → SidebarChipFlow</div>
+          <div class="sidebar-mock editor-mock">
+            <div class="sb-section">
+              <div class="sb-section-body">
+                <div class="sb-row">
+                  <div class="sb-label">Style</div>
+                  <div class="sb-control"><div class="sb-menu">ASCII</div></div>
+                  <div></div>
+                </div>
+                <div class="sb-row">
+                  <div class="sb-label">Intensity</div>
+                  <div class="sb-control">
+                    <div class="sb-slider" style="--slider-val: 70%;"><div class="track"></div><div class="fill"></div><div class="knob"></div></div>
+                  </div>
+                  <div class="sb-trailing"><input class="sb-field" value="0.70" readonly><span class="sb-unit"></span></div>
+                </div>
+                <div class="sb-row">
+                  <div class="sb-label">Character Set</div>
+                  <div class="sb-control"><div class="sb-menu">Classic ASCII</div></div>
+                  <div></div>
+                </div>
+                <div class="sb-fullwidth-row" style="margin-top: 6px;">
+                  <div class="sb-fullwidth-title">Ramp</div>
+                  <div class="sb-fullwidth-body">
+                    <div class="sb-chip-flow">
+                      <span class="sb-chip" style="font-size: 0.8rem;"> </span>
+                      <span class="sb-chip" style="font-size: 0.8rem;">·</span>
+                      <span class="sb-chip" style="font-size: 0.8rem;">:</span>
+                      <span class="sb-chip" style="font-size: 0.8rem;">+</span>
+                      <span class="sb-chip" style="font-size: 0.8rem;">*</span>
+                      <span class="sb-chip" style="font-size: 0.8rem;">#</span>
+                      <span class="sb-chip" style="font-size: 0.8rem;">%</span>
+                      <span class="sb-chip" style="font-size: 0.8rem;">@</span>
+                    </div>
+                  </div>
+                </div>
+                <div class="sb-row">
+                  <div class="sb-label">High Detail</div>
+                  <div class="sb-control"><div></div></div>
+                  <div class="sb-trailing"><div class="sb-toggle on"></div></div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- 12. GPU Effect -->
+        <div class="editor-card">
+          <h4>12 · GPU Effect <span class="score">harmonized</span></h4>
+          <div class="editor-meta">LayerListSection.swift:283 · already primitive-pure; structural split into per-variant files is a separate concern</div>
+          <div class="sidebar-mock editor-mock">
+            <div class="sb-section">
+              <div class="sb-section-body">
+                <div class="sb-row">
+                  <div class="sb-label">Effect</div>
+                  <div class="sb-control" style="justify-content: flex-start;">
+                    <div style="display: flex; gap: 4px; align-items: center; color: var(--text-1); font-size: 0.8rem;">
+                      <span style="color: var(--accent); font-size: 0.9rem;">◐</span> Crosshatch
+                    </div>
+                  </div>
+                  <div></div>
+                </div>
+                <div class="sb-divider"></div>
+                <div class="sb-compound" style="margin-top: 6px;">
+                  <div class="sb-row">
+                    <div class="sb-label">Blend Mode</div>
+                    <div class="sb-control"><div class="sb-menu">Normal</div></div>
+                    <div></div>
+                  </div>
+                  <div class="sb-row">
+                    <div class="sb-label">Opacity</div>
+                    <div class="sb-control">
+                      <div class="sb-slider" style="--slider-val: 100%;"><div class="track"></div><div class="fill"></div><div class="knob"></div></div>
+                    </div>
+                    <div class="sb-trailing"><input class="sb-field" value="100" readonly><span class="sb-unit">%</span></div>
+                  </div>
+                </div>
+                <div class="sb-divider" style="margin-top: 10px;"></div>
+                <div class="sb-section-body" style="margin-top: 6px;">
+                  <div class="sb-row">
+                    <div class="sb-label">Threshold</div>
+                    <div class="sb-control">
+                      <div class="sb-slider" style="--slider-val: 45%;"><div class="track"></div><div class="fill"></div><div class="knob"></div></div>
+                    </div>
+                    <div class="sb-trailing"><input class="sb-field" value="0.45" readonly><span class="sb-unit"></span></div>
+                  </div>
+                  <div class="sb-row">
+                    <div class="sb-label">Density</div>
+                    <div class="sb-control">
+                      <div class="sb-slider" style="--slider-val: 60%;"><div class="track"></div><div class="fill"></div><div class="knob"></div></div>
+                    </div>
+                    <div class="sb-trailing"><input class="sb-field" value="0.60" readonly><span class="sb-unit"></span></div>
+                  </div>
+                  <div class="sb-row">
+                    <div class="sb-label">Angle</div>
+                    <div class="sb-control">
+                      <div class="sb-slider" style="--slider-val: 50%;"><div class="track"></div><div class="fill"></div><div class="knob"></div></div>
+                    </div>
+                    <div class="sb-trailing"><input class="sb-field" value="45" readonly><span class="sb-unit">°</span></div>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+      </div>
+
+      <h3 style="margin-top: var(--space-6); margin-bottom: var(--space-3);">Layer row chassis (expanded)</h3>
+      <p class="section-intro">After the pass, <code>LayerPanelRow</code> reads <code>SidebarMetrics</code> from environment. The expanded body's leading indent (<code>Spacing.xl + Spacing.xs = 28pt</code> today) is replaced by <code>metrics.outerInset = 12pt</code>, so the inner editor's label column aligns with the top-level sidebar grid instead of shifting right.</p>
+
+      <div class="sidebar-mock" style="max-width: 380px;">
+        <div class="sb-section" style="padding: 8px 12px; gap: 4px;">
+          <div class="sb-section-head">LAYERS (3)</div>
+          <div class="sb-section-body" style="gap: 4px;">
+            <div class="sb-layer-row">
+              <div class="sb-layer-head">
+                <div class="sb-layer-disclosure">›</div>
+                <div class="sb-layer-icon">⋮</div>
+                <div class="sb-layer-icon">□</div>
+                <div class="sb-layer-title">Border</div>
+                <div class="sb-layer-badge">24px</div>
+                <div class="sb-layer-visibility">◉</div>
+                <div class="sb-layer-delete">×</div>
+              </div>
+            </div>
+            <div class="sb-layer-row selected">
+              <div class="sb-layer-head">
+                <div class="sb-layer-disclosure" style="transform: rotate(90deg);">›</div>
+                <div class="sb-layer-icon">⋮</div>
+                <div class="sb-layer-icon">▥</div>
+                <div class="sb-layer-title">Padding</div>
+                <div class="sb-layer-badge">120px</div>
+                <div class="sb-layer-visibility">◉</div>
+                <div class="sb-layer-delete">×</div>
+              </div>
+              <div class="sb-layer-body">
+                <div class="sb-section-body" style="padding-top: 4px;">
+                  <div class="sb-row">
+                    <div class="sb-label">Thickness</div>
+                    <div class="sb-control">
+                      <div class="sb-slider" style="--slider-val: 30%;"><div class="track"></div><div class="fill"></div><div class="knob"></div></div>
+                    </div>
+                    <div class="sb-trailing"><input class="sb-field" value="120" readonly><span class="sb-unit">px</span></div>
+                  </div>
+                  <div class="sb-row">
+                    <div class="sb-label">Fill</div>
+                    <div class="sb-control"><div class="sb-menu">Solid</div></div>
+                    <div></div>
+                  </div>
+                </div>
+              </div>
+            </div>
+            <div class="sb-layer-row">
+              <div class="sb-layer-head">
+                <div class="sb-layer-disclosure">›</div>
+                <div class="sb-layer-icon">⋮</div>
+                <div class="sb-layer-icon">◫</div>
+                <div class="sb-layer-title">Overlay</div>
+                <div class="sb-layer-badge">Dust 65%</div>
+                <div class="sb-layer-visibility">◉</div>
+                <div class="sb-layer-delete">×</div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <p class="muted" style="text-align: center; margin-top: var(--space-3); font-size: 0.82rem;">Key change: expanded editor's label column sits at the same <code>104pt</code> as the section's outer grid. Before pass 2, it was offset by 28pt.</p>
+    </div>
+  </section>
+
+  <!-- ========== BEFORE / AFTER ========== -->
+  <section id="fixes">
+    <div class="shell">
+      <div class="section-label">05 · Before / after</div>
+      <h2>The seven fixes in concrete form</h2>
+      <p class="section-intro">Each fix below shows the current drift (left, red) and the target state (right, green) — with the exact code change and the test that will lock it in.</p>
+
+      <!-- Fix 01 -->
+      <h3 style="margin-top: var(--space-5); margin-bottom: var(--space-2);">Fix 01 · Retire <code>SimpleLayerEditorLayout</code></h3>
+      <p>Fold its widths into <code>SidebarMetrics</code>, then delete the enum. Mechanically 30 call sites; no behavior change when values match, and the 3 that don't (<code>compactFieldWidth = 50</code>, <code>valueTextWidth = 36</code>) need explicit decisions.</p>
+      <div class="ba-grid">
+        <div class="ba-panel bad">
+          <div class="ba-heading"><span class="dot"></span>Before · parallel tokens</div>
+          <div class="ba-code"><span class="mute">// LayerListSection.swift:1575</span>
+<span class="bad">private enum</span> SimpleLayerEditorLayout {
+    <span class="mute">static let</span> groupSpacing = SidebarMetrics().expandedBodyInset
+    <span class="mute">static let</span> fieldWidth = <span class="bad">55.0</span>          <span class="mute">// duplicates metrics</span>
+    <span class="mute">static let</span> compactFieldWidth = <span class="bad">50.0</span>   <span class="mute">// diverges!</span>
+    <span class="mute">static let</span> suffixWidth = <span class="bad">24.0</span>         <span class="mute">// duplicates metrics</span>
+    <span class="mute">static let</span> valueTextWidth = <span class="bad">36.0</span>      <span class="mute">// diverges!</span>
+    <span class="mute">static let</span> thicknessModeWidth = 80.0
+    <span class="mute">static let</span> unitPickerWidth = 100.0
+}</div>
+          <div class="ba-note">Two widths (<code>50</code>, <code>36</code>) silently disagree with their metric peers. Every <code>.simpleLayerEditorInputStyle(width:)</code> call must pick one.</div>
+        </div>
+        <div class="ba-panel good">
+          <div class="ba-heading"><span class="dot"></span>After · single namespace</div>
+          <div class="ba-code"><span class="mute">// SidebarMetrics.swift — additions</span>
+<span class="hi">struct</span> SidebarMetrics {
+    <span class="mute">// ...existing fields</span>
+    <span class="gd">let</span> controlReadoutWidth: CGFloat          <span class="mute">// was 36 → 55</span>
+    <span class="gd">let</span> controlSegmentedModeWidth: CGFloat    <span class="mute">// was 80</span>
+    <span class="gd">let</span> controlUnitPickerWidth: CGFloat       <span class="mute">// was 100</span>
+}
+
+<span class="mute">// SimpleLayerEditorLayout — deleted</span>
+<span class="mute">// All call sites now reach for `metrics.controlValueFieldWidth` etc.</span></div>
+          <div class="ba-note">Test: <code>SidebarMetricsTests.test_defaultMetrics_retiredTokens</code> asserts every retired constant is expressible via a single metric.</div>
+        </div>
+      </div>
+
+      <!-- Fix 02 -->
+      <h3 style="margin-top: var(--space-5); margin-bottom: var(--space-2);">Fix 02 · <code>SidebarTrailingReadoutCluster</code> primitive</h3>
+      <p>Today, read-only trailing values bypass the cluster and use <code>Text(...).frame(width: valueTextWidth = 36)</code>. That's narrower than the editable <code>55+24=79pt</code> trailing block, so rows that mix readable + editable values misalign their label columns.</p>
+      <div class="ba-grid">
+        <div class="ba-panel bad">
+          <div class="ba-heading"><span class="dot"></span>Before · AspectRatio offsets</div>
+          <div class="ba-code"><span class="mute">// LayerListSection.swift:2202-2207</span>
+trailingValue: {
+    Text(String(format: <span class="mute">"%.1f"</span>, params.offsetX))
+        .font(AppFont.mono(10))
+        .foregroundStyle(Color.text3)
+        .monospacedDigit()
+        .frame(width: <span class="bad">SimpleLayerEditorLayout.valueTextWidth</span>,
+               alignment: .trailing)  <span class="bad">// 36pt</span>
+}</div>
+          <div class="ba-note">Label "Offset X" sits further right than label "Thickness" in the editor above (which uses editable 55+24 cluster). Visually offset by 43pt.</div>
+        </div>
+        <div class="ba-panel good">
+          <div class="ba-heading"><span class="dot"></span>After · readout cluster</div>
+          <div class="ba-code"><span class="mute">// New primitive: Sources/FramerApp/Sidebar/SidebarTrailingReadoutCluster.swift</span>
+trailingValue: {
+    <span class="gd">SidebarTrailingReadoutCluster</span>(unit: <span class="mute">""</span>) {
+        Text(String(format: <span class="mute">"%.1f"</span>, params.offsetX))
+            .font(AppFont.mono(10))
+            .foregroundStyle(Color.text3)
+            .monospacedDigit()
+    }
+}</div>
+          <div class="ba-note">Test: <code>SidebarLayoutContainmentTests.test_readoutAlignsWithEditableRows</code> asserts labels align ±0.5pt across adjacent rows.</div>
+        </div>
+      </div>
+
+      <!-- Fix 03 -->
+      <h3 style="margin-top: var(--space-5); margin-bottom: var(--space-2);">Fix 03 · Thread metrics via <code>@Environment</code></h3>
+      <p>Every primitive currently takes <code>metrics: SidebarMetrics = SidebarMetrics()</code> as a default arg. If the shell overrides the width policy, children ignore it. Environment injection makes the shell's metrics authoritative.</p>
+      <div class="ba-grid">
+        <div class="ba-panel bad">
+          <div class="ba-heading"><span class="dot"></span>Before · local defaults</div>
+          <div class="ba-code"><span class="mute">// SidebarControlRow.swift:79</span>
+init(
+    _ label: LocalizedStringKey,
+    <span class="bad">metrics: SidebarMetrics = SidebarMetrics()</span>,
+    style: SidebarControlRowStyle = .default,
+    ...
+) { self.metrics = metrics }
+
+<span class="mute">// ExportBar.swift:19</span>
+<span class="bad">private let metrics = SidebarMetrics()</span>
+
+<span class="mute">// OverlayFullWidthControlRow (LayerListSection.swift:1624)</span>
+<span class="bad">private let metrics = SidebarMetrics()</span></div>
+          <div class="ba-note">Shell's <code>metrics.replacing(widthPolicy:)</code> at SidebarShell.swift:14 produces a value nobody reads.</div>
+        </div>
+        <div class="ba-panel good">
+          <div class="ba-heading"><span class="dot"></span>After · environment-threaded</div>
+          <div class="ba-code"><span class="mute">// Sources/FramerApp/Sidebar/SidebarMetricsEnvironment.swift</span>
+<span class="hi">private struct</span> SidebarMetricsKey: EnvironmentKey {
+    <span class="gd">static let</span> defaultValue = SidebarMetrics()
+}
+
+<span class="hi">extension</span> EnvironmentValues {
+    <span class="gd">var</span> sidebarMetrics: SidebarMetrics {
+        get { self[SidebarMetricsKey.self] }
+        set { self[SidebarMetricsKey.self] = newValue }
+    }
+}
+
+<span class="mute">// SidebarShell.body</span>
+ScrollView { ... }
+    .environment(\.sidebarMetrics, metrics)
+
+<span class="mute">// SidebarControlRow.body</span>
+<span class="hi">@Environment</span>(\.sidebarMetrics) <span class="gd">private var</span> metrics</div>
+          <div class="ba-note">Test: <code>SidebarEnvironmentTests.test_shellMetricsReachDescendants</code> renders a shell with a custom width policy and asserts children report the custom tokens.</div>
+        </div>
+      </div>
+
+      <!-- Fix 04 -->
+      <h3 style="margin-top: var(--space-5); margin-bottom: var(--space-2);">Fix 04 · <code>LayerPanelRow</code> chassis joins the system</h3>
+      <p>Today <code>LayerPanelRowLayout</code> uses raw <code>Spacing.xs/sm/xl/md</code> for every padding. The expanded-body leading indent (<code>Spacing.xl + Spacing.xs = 28pt</code>) shifts every expanded editor's label column 16pt to the right of a non-expanded editor's label column. After the pass, the chassis reads <code>metrics</code> from environment.</p>
+      <div class="ba-grid">
+        <div class="ba-panel bad">
+          <div class="ba-heading"><span class="dot"></span>Before · raw tokens</div>
+          <div class="ba-code"><span class="mute">// LayerPanelRow.swift:313-333</span>
+<span class="bad">private enum</span> LayerPanelRowLayout {
+    <span class="mute">static let</span> headerSpacing = Spacing.sm
+    <span class="mute">static let</span> disclosureSize = Spacing.xl
+    <span class="mute">static let</span> expandedLeadingPadding = <span class="bad">Spacing.xl + Spacing.xs</span>  <span class="mute">// 28pt</span>
+    <span class="mute">static let</span> expandedTrailingPadding = Spacing.xs
+    <span class="mute">// ...20+ more raw tokens</span>
+}</div>
+          <div class="ba-note">Editor rows inside <code>.padding(.leading, 28)</code> have their label columns pushed right of the sidebar's own label grid.</div>
+        </div>
+        <div class="ba-panel good">
+          <div class="ba-heading"><span class="dot"></span>After · metric-derived</div>
+          <div class="ba-code"><span class="mute">// LayerPanelRow.swift — body</span>
+<span class="hi">@Environment</span>(\.sidebarMetrics) <span class="gd">private var</span> metrics
+
+<span class="mute">// Expanded body padding</span>
+.padding(.top, metrics.expandedBodyInset)
+.padding(.bottom, metrics.rowGap / 2)
+.padding(.leading, <span class="gd">metrics.outerInset</span>)       <span class="mute">// 12pt</span>
+.padding(.trailing, metrics.outerInset / 2)</div>
+          <div class="ba-note">Test: <code>LayerPanelRowLayoutTests.test_expandedBodyAlignsWithSectionGrid</code> measures X-coordinate of an inner editor's label and asserts it equals the top-level section's label X.</div>
+        </div>
+      </div>
+
+      <!-- Fix 05 -->
+      <h3 style="margin-top: var(--space-5); margin-bottom: var(--space-2);">Fix 05 · Extract rich-affordance primitives</h3>
+      <p>TemplateTokenBar (Caption), palette editor (Dither), LUT tiles, ASCII ramp (Shader), overlay library all freelance their own grids, chip flows, and tile strips. Each deserves a named primitive that reads <code>metrics</code>.</p>
+      <div class="ba-grid">
+        <div class="ba-panel bad">
+          <div class="ba-heading"><span class="dot"></span>Before · inline freelance</div>
+          <div class="ba-code"><span class="mute">// LayerListSection.swift:3620-3688 (paletteEditor)</span>
+VStack(alignment: .leading, spacing: <span class="bad">6</span>) {
+    ForEach(colors.enumerated(), id: \.offset) { _, color <span class="mute">in</span>
+        HStack(spacing: <span class="bad">8</span>) {
+            ColorPickerWithHex(...)
+            Button { ... } label: {
+                Image(systemName: <span class="mute">"minus.circle"</span>)
+            }
+        }
+    }
+}</div>
+          <div class="ba-note">Plus hardcoded <code>HStack(spacing: 6)</code> in LUT tiles, <code>HStack(spacing: 2)</code> in ASCII ramp, <code>FlowLayout(spacing: 4)</code> in caption tokens — four independent spacing decisions for similar affordances.</div>
+        </div>
+        <div class="ba-panel good">
+          <div class="ba-heading"><span class="dot"></span>After · named primitives</div>
+          <div class="ba-code"><span class="mute">// Sources/FramerApp/Sidebar/SidebarPaletteEditor.swift</span>
+<span class="gd">SidebarPaletteEditor</span>(colors: $colors)
+
+<span class="mute">// Sources/FramerApp/Sidebar/SidebarPreviewStrip.swift</span>
+<span class="gd">SidebarPreviewStrip</span>(items: luts) { lut <span class="mute">in</span>
+    LUTThumbnail(lut: lut)
+}
+
+<span class="mute">// Sources/FramerApp/Sidebar/SidebarChipFlow.swift</span>
+<span class="gd">SidebarChipFlow</span>(chips: tokens) { token <span class="mute">in</span>
+    SidebarChip(token.label, state: .accent)
+}</div>
+          <div class="ba-note">Test: <code>SidebarLayoutContainmentTests</code> expanded to cover palette/strip/flow primitives — all stay within <code>metrics.containedPreviewMaxWidth</code>.</div>
+        </div>
+      </div>
+
+      <!-- Fix 06 -->
+      <h3 style="margin-top: var(--space-5); margin-bottom: var(--space-2);">Fix 06 · Promote <code>OverlayFullWidthControlRow</code></h3>
+      <p>Private to <code>LayerListSection.swift:1620</code>, used only by Overlay. But the shape ("title + full-width content") is generic — every preview/library/palette/ramp row needs it. Move it to <code>Sources/FramerApp/Sidebar/</code> as <code>SidebarFullWidthRow</code>.</p>
+      <div class="ba-grid">
+        <div class="ba-panel bad">
+          <div class="ba-heading"><span class="dot"></span>Before · private + duplicate</div>
+          <div class="ba-code"><span class="mute">// LayerListSection.swift:1620 — private</span>
+<span class="bad">private struct</span> OverlayFullWidthControlRow&lt;Content: View&gt;: View {
+    private let metrics = SidebarMetrics()  <span class="bad">// local default</span>
+    ...
+    VStack(... spacing: <span class="bad">Spacing.xs / 2</span>) { ... }
+        .padding(.vertical, <span class="bad">Spacing.xs / 2</span>)
+}</div>
+          <div class="ba-note">Every other "rich content" affordance (Caption tokens, LUT library, Dither palette, ASCII ramp) reinvents this shape with slightly different spacing.</div>
+        </div>
+        <div class="ba-panel good">
+          <div class="ba-heading"><span class="dot"></span>After · promoted + public</div>
+          <div class="ba-code"><span class="mute">// Sources/FramerApp/Sidebar/SidebarFullWidthRow.swift</span>
+<span class="hi">struct</span> SidebarFullWidthRow&lt;Content: View&gt;: View {
+    <span class="hi">@Environment</span>(\.sidebarMetrics) <span class="gd">private var</span> metrics
+    <span class="gd">let</span> title: LocalizedStringKey
+    <span class="gd">let</span> content: Content
+
+    <span class="hi">var</span> body: <span class="hi">some</span> View {
+        VStack(alignment: .leading, spacing: metrics.expandedBodyInset / 2) {
+            Text(title)
+                .font(AppFont.controlLabel)
+                .foregroundStyle(Color.text2)
+            content
+                .frame(maxWidth: <span class="gd">metrics.containedPreviewMaxWidth</span>,
+                       alignment: .leading)
+        }
+        .padding(.horizontal, metrics.outerInset)
+    }
+}</div>
+          <div class="ba-note">Consumer count jumps from 1 (Overlay) to 5 (Overlay, Caption, LUT, Shader, Dither). Single point of truth.</div>
+        </div>
+      </div>
+
+      <!-- Fix 07 -->
+      <h3 style="margin-top: var(--space-5); margin-bottom: var(--space-2);">Fix 07 · <code>StyledSlider</code> stops rendering its own suffix</h3>
+      <p><code>StyledSlider</code> has a <code>suffix</code> param that draws a unit label at <code>frame(width: 20)</code> — which diverges from <code>metrics.controlUnitSuffixWidth = 24</code>. When the same row has <em>another</em> unit cluster nearby, suffixes render at two widths. Remove the slider's suffix path; compose via <code>SidebarTrailingUnitCluster</code>.</p>
+      <div class="ba-grid">
+        <div class="ba-panel bad">
+          <div class="ba-heading"><span class="dot"></span>Before · double suffix system</div>
+          <div class="ba-code"><span class="mute">// StyledSlider.swift:45-50</span>
+<span class="hi">if</span> !suffix.isEmpty {
+    Text(suffix)
+        .font(AppFont.mono(9))
+        .foregroundStyle(Color.text3)
+        .frame(width: <span class="bad">20</span>)   <span class="mute">// != metric 24!</span>
+}
+
+<span class="mute">// Consumer — InspectorView.swift:137-143</span>
+StyledSlider(
+    value: jpegQualityBinding,
+    range: 60...100,
+    step: 5,
+    <span class="bad">suffix: "%"</span>   <span class="mute">// in-band suffix</span>
+)</div>
+          <div class="ba-note">When this slider appears beside a <code>SidebarTrailingUnitCluster</code>, units render at 20pt vs 24pt — 4pt misalignment visible.</div>
+        </div>
+        <div class="ba-panel good">
+          <div class="ba-heading"><span class="dot"></span>After · cluster-only suffixes</div>
+          <div class="ba-code"><span class="mute">// StyledSlider.swift — suffix param removed</span>
+<span class="hi">struct</span> StyledSlider: View {
+    <span class="hi">@Binding var</span> value: Double
+    <span class="gd">let</span> range: ClosedRange&lt;Double&gt;
+    <span class="gd">var</span> accessibilityLabel: LocalizedStringKey? = nil
+    <span class="gd">var</span> step: Double = 1
+    <span class="mute">// inputWidth removed — always metric</span>
+}
+
+<span class="mute">// Consumer — compose with cluster</span>
+SidebarControlRow(<span class="mute">"Quality"</span>) {
+    StyledSlider(value: jpegQualityBinding, range: 60...100, step: 5)
+} trailingValue: {
+    <span class="gd">SidebarTrailingUnitCluster</span>(unit: <span class="mute">"%"</span>) {
+        TextField(<span class="mute">""</span>, value: jpegQualityBinding, format: .number)
+    }
+}</div>
+          <div class="ba-note">Test: <code>StyledSliderTests.test_sliderRendersNoInlineSuffix</code> asserts <code>StyledSlider</code>'s body does not contain a <code>Text</code> child at 20pt width.</div>
+        </div>
+      </div>
+
+    </div>
+  </section>
+
+  <!-- ========== MIGRATION ========== -->
+  <section id="plan">
+    <div class="shell">
+      <div class="section-label">06 · Migration plan</div>
+      <h2>Seven steps, one commit per step</h2>
+      <p class="section-intro">Each step has a test that fails before and passes after, mirroring the pass-1 plan's TDD rhythm. Estimated total effort ≈ 2–3 engineering days. Commit after each step so regressions are bisectable.</p>
+
+      <div class="checklist">
+        <div class="check-item">
+          <div class="check-num">01</div>
+          <div class="check-body">
+            <div class="check-title">Retire <code>SimpleLayerEditorLayout</code></div>
+            <p class="check-desc">Add <code>controlReadoutWidth</code>, <code>controlSegmentedModeWidth</code>, <code>controlUnitPickerWidth</code> to <code>SidebarMetrics</code>. Delete the enum. Migrate ~30 call sites. Unify <code>compactFieldWidth = 50</code> → <code>55</code> (snapshot update expected).</p>
+            <div class="check-tests">Test · <code>SidebarMetricsTests.test_defaultMetrics_retiredTokens</code></div>
+          </div>
+          <span class="check-effort m">M · ~4h</span>
+        </div>
+
+        <div class="check-item">
+          <div class="check-num">02</div>
+          <div class="check-body">
+            <div class="check-title">Add <code>SidebarTrailingReadoutCluster</code></div>
+            <p class="check-desc">New file under <code>Sources/FramerApp/Sidebar/</code>. Same layout as <code>SidebarTrailingUnitCluster</code> but with a non-editable content slot. Migrate AspectRatio Offset X/Y and Canvas pixelSummary. Refresh snapshot hashes.</p>
+            <div class="check-tests">Test · <code>SidebarLayoutContainmentTests.test_readoutAlignsWithEditableRows</code></div>
+          </div>
+          <span class="check-effort s">S · ~2h</span>
+        </div>
+
+        <div class="check-item">
+          <div class="check-num">03</div>
+          <div class="check-body">
+            <div class="check-title">Thread <code>SidebarMetrics</code> via <code>@Environment</code></div>
+            <p class="check-desc">Add <code>EnvironmentKey</code>, write it in <code>SidebarShell</code>, read it in every primitive (<code>SidebarSection</code>, <code>SidebarControlRow</code>, <code>SidebarCompoundControlBlock</code>, <code>SidebarTrailingUnitCluster</code>, <code>SidebarTrailingReadoutCluster</code>, <code>OverlayFullWidthControlRow</code>, <code>DenseSliderControlRow</code>, <code>DenseSupplementaryControlRow</code>, <code>SimpleLayerEditorDivider</code>). Remove default args where they were previously used.</p>
+            <div class="check-tests">Test · <code>SidebarEnvironmentTests.test_shellMetricsReachDescendants</code></div>
+          </div>
+          <span class="check-effort m">M · ~4h</span>
+        </div>
+
+        <div class="check-item">
+          <div class="check-num">04</div>
+          <div class="check-body">
+            <div class="check-title">Migrate <code>LayerPanelRow</code> to metrics</div>
+            <p class="check-desc">Replace <code>LayerPanelRowLayout</code> raw tokens with <code>@Environment(\.sidebarMetrics)</code>-derived values. Expanded body leading padding becomes <code>metrics.outerInset</code>. Align chassis header paddings with <code>metrics.expandedBodyInset</code>.</p>
+            <div class="check-tests">Test · <code>LayerPanelRowLayoutTests.test_expandedBodyAlignsWithSectionGrid</code></div>
+          </div>
+          <span class="check-effort m">M · ~4h</span>
+        </div>
+
+        <div class="check-item">
+          <div class="check-num">05</div>
+          <div class="check-body">
+            <div class="check-title">Extract rich-affordance primitives</div>
+            <p class="check-desc">Create <code>SidebarFullWidthRow</code>, <code>SidebarPreviewStrip</code>, <code>SidebarPaletteEditor</code>, <code>SidebarChipFlow</code> in <code>Sources/FramerApp/Sidebar/</code>. Migrate Overlay library, LUT library, Dither palette, Caption tokens, Shader ASCII ramp. Containment tests cover all five.</p>
+            <div class="check-tests">Test · <code>SidebarLayoutContainmentTests.test_{overlay,lut,dither,caption,shader}_FitWithinSidebarShell</code></div>
+          </div>
+          <span class="check-effort l">L · ~8h</span>
+        </div>
+
+        <div class="check-item">
+          <div class="check-num">06</div>
+          <div class="check-body">
+            <div class="check-title">Promote <code>OverlayFullWidthControlRow</code></div>
+            <p class="check-desc">Rolled into step 05 — folded into <code>SidebarFullWidthRow</code>. Delete the private type from <code>LayerListSection.swift</code> once all Overlay call sites switch.</p>
+            <div class="check-tests">Test · <code>SidebarHarmonySnapshotTests.test_overlayEditorSurface</code> (hash refresh)</div>
+          </div>
+          <span class="check-effort s">S · 0h (bundled)</span>
+        </div>
+
+        <div class="check-item">
+          <div class="check-num">07</div>
+          <div class="check-body">
+            <div class="check-title">Rationalize <code>StyledSlider</code></div>
+            <p class="check-desc">Remove the <code>suffix</code> parameter and inline 20pt-width <code>Text</code> rendering. Remove <code>inputWidth</code> too — always use <code>metrics.controlValueFieldWidth</code>. Migrate all 2 call sites (<code>InspectorView</code>, <code>DenseSliderControlRow</code>) to compose with <code>SidebarTrailingUnitCluster</code>. Refresh output-row snapshots.</p>
+            <div class="check-tests">Test · <code>StyledSliderTests.test_sliderRendersNoInlineSuffix</code></div>
+          </div>
+          <span class="check-effort s">S · ~3h</span>
+        </div>
+
+      </div>
+
+      <h3 style="margin-top: var(--space-6); margin-bottom: var(--space-2);">Verification</h3>
+      <p class="section-intro">After all seven steps, these four test suites should be green on a clean derived-data build:</p>
+      <div class="matrix-wrap">
+        <table>
+          <thead>
+            <tr><th>Suite</th><th>Purpose</th><th>Size</th></tr>
+          </thead>
+          <tbody>
+            <tr><td><code>SidebarMetricsTests</code></td><td>Every retired token resolves; new tokens match retired values</td><td>~10 tests</td></tr>
+            <tr><td><code>SidebarLayoutPolicyTests</code></td><td>Width-band math (unchanged)</td><td>~11 tests</td></tr>
+            <tr><td><code>SidebarLayoutContainmentTests</code></td><td>Every editor + new primitive fits in 350pt shell</td><td>~8 tests</td></tr>
+            <tr><td><code>SidebarHarmonySnapshotTests</code></td><td>SHA-256 hashes of rendered <code>NSHostingView</code> output</td><td>~10 snapshots</td></tr>
+          </tbody>
+        </table>
+      </div>
+      <p style="margin-top: var(--space-4); color: var(--text-2); font-size: 0.88rem;">Snapshot hashes <strong>will</strong> change on steps 01, 02, 04, 05, 07 — that's the point. Bake fresh baselines on the reviewer's machine as part of each commit.</p>
+    </div>
+  </section>
+
+  <!-- ========== SHIPPED STATE ========== -->
+  <section id="shipped">
+    <div class="shell">
+      <div class="section-label">07 · Shipped state</div>
+      <h2>What actually landed</h2>
+      <p class="section-intro">Pass 2 executed in full. Pass 3 followed with smoke-test fixes, a correctness sweep from three parallel review agents, and two additional primitives. The contract is now enforced end-to-end. This section documents the delta between the planned target and the shipped branch.</p>
+
+      <h3 style="margin-top: var(--space-5); margin-bottom: var(--space-2);">Primitives inventory — final</h3>
+      <div class="matrix-wrap">
+        <table>
+          <thead>
+            <tr><th>Primitive</th><th>Pass</th><th>File</th><th>Why</th></tr>
+          </thead>
+          <tbody>
+            <tr><td><strong>SidebarShell</strong></td><td>pass 1</td><td><code>Sources/FramerApp/Sidebar/SidebarShell.swift</code></td><td>Bounded container + env injection point</td></tr>
+            <tr><td><strong>SidebarSection</strong></td><td>pass 1 · pass 3 adds header-less init</td><td><code>SidebarSection.swift</code></td><td>Eyebrow header + content group</td></tr>
+            <tr><td><strong>CollapsibleSidebarSection</strong></td><td><span class="pill success">new · pass 3</span></td><td><code>CollapsibleSidebarSection.swift</code></td><td>Presets section hides the grid when an active preset is applied; chevron + clipped transition + <code>@AppStorage</code> persistence</td></tr>
+            <tr><td><strong>SidebarControlRow</strong></td><td>pass 1 · pass 3 adds slider clip + 20pt trailing pad</td><td><code>SidebarControlRow.swift</code></td><td>Canonical label / content / trailing row. Result-builder trailing slot (not a generic) to distinguish "no closure" from "conditional empty branch"</td></tr>
+            <tr><td><strong>SidebarCompoundControlBlock</strong></td><td>pass 1</td><td><code>SidebarCompoundControlBlock.swift</code></td><td>Primary + optional secondary w/ divider</td></tr>
+            <tr><td><strong>SidebarTrailingUnitCluster</strong></td><td>pass 1</td><td><code>SidebarTrailingUnitCluster.swift</code></td><td>Editable <code>[value][unit]</code> at 55+6+24=85pt</td></tr>
+            <tr><td><strong>SidebarTrailingReadoutCluster</strong></td><td>pass 2</td><td><code>SidebarTrailingReadoutCluster.swift</code></td><td>Read-only variant; same widths so rows align</td></tr>
+            <tr><td><strong>SidebarFullWidthRow</strong></td><td>pass 2</td><td><code>SidebarFullWidthRow.swift</code></td><td>Title + free-form content bounded to containedPreviewMaxWidth</td></tr>
+            <tr><td><strong>SidebarPreviewStrip</strong></td><td>pass 2</td><td><code>SidebarPreviewStrip.swift</code></td><td>Horizontal tile picker (Overlay library, LUT library)</td></tr>
+            <tr><td><strong>SidebarPaletteEditor</strong></td><td>pass 2 · pass 3 stabilises identities</td><td><code>SidebarPaletteEditor.swift</code></td><td>Swatch + hex + delete rows w/ UUID identity; init-time population avoids first-frame flash</td></tr>
+            <tr><td><strong>SidebarChipFlow</strong></td><td>pass 2 · pass 3 adds Hashable constraint + layout cache</td><td><code>SidebarChipFlow.swift</code></td><td>Wrapping chip grid; key by <code>\.self</code> instead of <code>\.offset</code>; typed <code>Layout.Cache</code></td></tr>
+            <tr><td><strong>LayerPanelRow</strong></td><td>pass 1 · pass 2 adopts env metrics</td><td><code>LayerPanelRow.swift</code></td><td>Layer-row chassis; <code>LayerPanelRowChassis</code> exposes expanded body inset for tests</td></tr>
+            <tr><td><strong>PresetThumbnailCache</strong></td><td><span class="pill success">new · pass 3</span></td><td><code>Sources/FramerApp/Presets/PresetThumbnailCache.swift</code></td><td>Extracted from AppState so thumbnail writes don't invalidate unrelated views. <code>private(set)</code> backing with <code>store/remove/resetKey</code> API</td></tr>
+          </tbody>
+        </table>
+      </div>
+
+      <h3 style="margin-top: var(--space-5); margin-bottom: var(--space-2);">Pass-3 fixes beyond the plan</h3>
+      <div class="checklist">
+        <div class="check-item">
+          <div class="check-num">08</div>
+          <div class="check-body">
+            <div class="check-title">Color picker label chip</div>
+            <p class="check-desc"><code>ColorPickerWithHex</code> now applies <code>.labelsHidden()</code> to the inner <code>ColorPicker</code> and routes the label through <code>.accessibilityLabel</code>. 23 naked call sites across GPU variants / Padding Fill Color / Caption Font Color / Dither FG/BG / Shader colors migrated to a new <code>labeledColorPicker(_:selection:onHexCommit:)</code> helper that wraps the leaf in <code>denseControlRow(title)</code>.</p>
+          </div>
+          <span class="check-effort s">S · shipped</span>
+        </div>
+
+        <div class="check-item">
+          <div class="check-num">09</div>
+          <div class="check-body">
+            <div class="check-title">Min-width segmented picker overflow</div>
+            <p class="check-desc">At 300pt min sidebar width, multi-segment pickers with long labels exceeded the 162pt content budget. Orientation Target (3 segments) and Overlay Category (4 segments) converted to <code>.menu</code>. Short-labelled and fixed-width segmented pickers (Border px/%, Canvas cm/mm) stayed segmented.</p>
+          </div>
+          <span class="check-effort s">S · shipped</span>
+        </div>
+
+        <div class="check-item">
+          <div class="check-num">10</div>
+          <div class="check-body">
+            <div class="check-title">Slider ↔ trailing field overlap</div>
+            <p class="check-desc">macOS NSSlider rasterises its track/knob past SwiftUI's layout frame via AppKit's layer drawing path. Fix in <code>SidebarControlRow.body</code>: <code>.clipShape(Rectangle())</code> on content + bump trailing pad to <code>controlColumnSpacing</code> (10pt), totalling 20pt gap when <code>trailingValue.hasContent</code>. The clip is structural; the pad is belt + suspenders.</p>
+          </div>
+          <span class="check-effort s">S · shipped</span>
+        </div>
+
+        <div class="check-item">
+          <div class="check-num">11</div>
+          <div class="check-body">
+            <div class="check-title">DenseSliderControlRow contract drift</div>
+            <p class="check-desc">When <code>unit:</code> was passed, the row stuffed <code>slider + field + unit</code> into <code>SidebarControlRow</code>'s content slot. Refactored to split: <code>Slider</code> in content, <code>SidebarTrailingUnitCluster</code> in trailing. Shared snap-to-step binding via <code>StyledSliderValueResolver.constrain</code>. Fixed two inline callers (Overlay opacity, Inspector Quality) that duplicated the off-contract pattern.</p>
+          </div>
+          <span class="check-effort m">M · shipped</span>
+        </div>
+
+        <div class="check-item">
+          <div class="check-num">12</div>
+          <div class="check-body">
+            <div class="check-title">Collapsible Presets section</div>
+            <p class="check-desc">New <code>CollapsibleSidebarSection</code> primitive. When collapsed and an active preset exists, the collapsed body shows the preset summary banner. Persisted via <code>@AppStorage("sidebarPresetsSectionExpanded")</code>. Thumbnails extracted to <code>PresetThumbnailCache</code> so collapsing doesn't discard state.</p>
+          </div>
+          <span class="check-effort m">M · shipped</span>
+        </div>
+
+        <div class="check-item">
+          <div class="check-num">13</div>
+          <div class="check-body">
+            <div class="check-title">Caption None mode removed</div>
+            <p class="check-desc">Duplicated the layer-visibility toggle. Only Template / Custom remain in the picker. Legacy <code>.none</code> layers auto-migrate to <code>.template</code> via <code>.onAppear</code>. The enum case stays for preset-YAML back-compat.</p>
+          </div>
+          <span class="check-effort s">S · shipped</span>
+        </div>
+
+        <div class="check-item">
+          <div class="check-num">14</div>
+          <div class="check-body">
+            <div class="check-title">Dither Custom palette silent no-op</div>
+            <p class="check-desc">Picking "Custom" from the preset dropdown seeded with Game Boy colors, which <code>VintagePalette.Preset.matching()</code> immediately recognised and snapped the picker back. Fix: append a <code>#808080</code> neutral swatch so the palette shape doesn't match any preset. Trim base to <code>MAX-1</code> before appending so the neutral survives at max-palette edges. Guard against no-op preset re-selection.</p>
+          </div>
+          <span class="check-effort s">S · shipped</span>
+        </div>
+
+        <div class="check-item">
+          <div class="check-num">15</div>
+          <div class="check-body">
+            <div class="check-title">GPU pixelSort wired through PixelSort.metal</div>
+            <p class="check-desc">Pass-2 audit found <code>GPUEffectKind.pixelSort</code> hidden from <code>userFacingCases</code> because <code>GlitchGPURenderer</code> only implemented VHS. New <code>renderPixelSort</code> bridges <code>GlitchParameters</code> to the existing <code>pixelSortFragment</code> shader. <code>spanMode = 0</code>, <code>streakLength</code> maps to <code>spanCap</code> via quadratic curve. Re-exposed in menu. <code>.ascii</code> / <code>.halftone</code> / <code>.dithering</code> stay hidden (Shader layer + Dither layer are canonical).</p>
+          </div>
+          <span class="check-effort m">M · shipped</span>
+        </div>
+
+        <div class="check-item">
+          <div class="check-num">16</div>
+          <div class="check-body">
+            <div class="check-title">CPU/GPU pixel-sort parity</div>
+            <p class="check-desc"><code>GlitchRenderer.pixelScore(.brightness)</code> was returning Rec.709 luminance (identical to <code>.luminance</code>). <code>.hue</code> returned unnormalised HSV sectors in <code>[-1, 6)</code>; negative scores always fell below positive thresholds, leaving blue-dominant pixels unsorted on CPU. Fixed both to match <code>psSortValue</code> in <code>PixelSort.metal</code>.</p>
+          </div>
+          <span class="check-effort s">S · shipped</span>
+        </div>
+
+        <div class="check-item">
+          <div class="check-num">17</div>
+          <div class="check-body">
+            <div class="check-title">Dead Sharpness slider removed</div>
+            <p class="check-desc">Rendered in every GPU-effect editor but no shader read the <code>sharpness</code> uniform. <code>ShaderCommon.h:162</code> marks it "0 = identity; not consumed by helpers". Removed from UI; stale doc-comment updated. Stays in <code>GPUEffectCommonParameters</code> for YAML back-compat.</p>
+          </div>
+          <span class="check-effort s">S · shipped</span>
+        </div>
+      </div>
+
+      <h3 style="margin-top: var(--space-5); margin-bottom: var(--space-2);">Review-driven correctness sweep</h3>
+      <p class="section-intro">Three parallel review agents (feature-dev bug-hunter, swift-expert idiom, Codex architecture) ran at the end of pass 3. Each turned up real findings. Material fixes:</p>
+      <ul style="margin: 0; padding: 0 0 0 var(--space-4); color: var(--text-1); font-size: 0.92rem; line-height: 1.8;">
+        <li><code>PresetPreviewGrid.renderTasks</code> dictionary keyed by fresh UUIDs — orphaned prior task handles, race between <code>.onChange</code> and <code>.onAppear</code>. Replaced with single <code>Task?</code> plus <code>.onDisappear</code> cancellation.</li>
+        <li><code>SidebarPaletteEditor.resolvedIdentities</code> minted fresh UUIDs on every render until sync — flicker. Now pure; init populates identities at first mount.</li>
+        <li>Attempted generic <code>TrailingValue: View</code> refactor; reverted. <code>_ConditionalContent&lt;Row, EmptyView&gt;</code> type-escapes an <code>== EmptyView</code> check, so the divider rendered under empty conditional secondaries. Result-builder stays with a doc comment.</li>
+        <li><code>SidebarFlowLayout</code> gained typed <code>Cache</code>; <code>sizeThatFits</code> and <code>placeSubviews</code> share one layout computation instead of two.</li>
+        <li><code>SidebarChipFlow</code> constrained to <code>Hashable</code>, keys <code>ForEach</code> by <code>\.self</code>; insertion/removal no longer rebuilds downstream chips.</li>
+        <li><code>ExportBar.queueIndicator</code> reduced to a single <code>.reduce(into:)</code> over <code>exportQueue</code> instead of three independent <code>.filter</code> passes.</li>
+        <li><code>StyledToggle</code> accessibility value uses <code>Text</code> (localizable) not raw <code>String</code>.</li>
+        <li><code>ColorPickerWithHex.label</code> migrated from <code>String</code> to <code>LocalizedStringKey</code> matching every other sidebar primitive; hex-field a11y composes via <code>Text + Text</code> not runtime interpolation.</li>
+      </ul>
+
+      <h3 style="margin-top: var(--space-5); margin-bottom: var(--space-2);">Final test state</h3>
+      <div class="tokens-grid">
+        <div class="token"><div class="token-name">FramerAppTests</div><span class="token-value">63 / 63</span><div class="token-note">Layout + metrics + snapshots + env</div></div>
+        <div class="token"><div class="token-name">FramerCoreTests + CLI</div><span class="token-value">268 / 268</span><div class="token-note">Unchanged; no core model breakage</div></div>
+        <div class="token"><div class="token-name">macOS build</div><span class="token-value">✓</span><div class="token-note"><code>xcodebuild build -scheme Framer</code></div></div>
+        <div class="token"><div class="token-name">iOS simulator build</div><span class="token-value">✓</span><div class="token-note"><code>xcodebuild build -scheme FramerMobile</code></div></div>
+      </div>
+    </div>
+  </section>
+
+  <footer>
+    <div class="shell">
+      <div>
+        <div class="mono" style="letter-spacing: 0.1em; font-size: 0.72rem; color: var(--text-3);">framer · sidebar harmony · pass 2 + 3 — shipped</div>
+        <div style="font-family: var(--font-display); font-size: 1.1rem; color: var(--text-1); margin-top: 4px;">Drafted 2026-04-16 · pass-3 addendum 2026-04-16.</div>
+      </div>
+      <div style="text-align: right;">
+        <div class="mono" style="font-size: 0.72rem; color: var(--text-3); letter-spacing: 0.08em;">Companion documents</div>
+        <div style="font-size: 0.85rem; color: var(--text-1); margin-top: 4px;">
+          <a href="../sidebar-harmony-comparison/index.html" style="color: var(--accent); text-decoration: none;">↳ Pass 1 comparison brief</a><br>
+          <a href="../superpowers/plans/2026-04-15-sidebar-layout-consistency.md" style="color: var(--text-1); text-decoration: none;">↳ Pass 1 plan (markdown)</a>
+        </div>
+      </div>
+    </div>
+  </footer>
+</body>
+</html>
