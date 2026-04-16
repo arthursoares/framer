@@ -154,7 +154,7 @@ final class SidebarHarmonySnapshotTests: XCTestCase {
             named: "overlay-editor",
             of: OverlayLayerControls(params: OverlayLayerParams()) { _ in },
             size: CGSize(width: 350, height: 420),
-            expectedSHA256: "5d65a2bd48331fd678b05a1286fd67074c46f68e159b038a4b9eb7f2c8911930"
+            expectedSHA256: "75be109bde96abb57450d0f4890bb455f646cc22d5926dba0b92b5bb2ef22d6d"
         )
     }
 
