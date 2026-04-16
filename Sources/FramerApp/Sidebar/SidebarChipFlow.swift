@@ -3,8 +3,7 @@ import SwiftUI
 /// Wrapping grid of chips bounded to `metrics.containedPreviewMaxWidth`. Used
 /// for caption template tokens, ASCII ramp glyphs, tag-like pickers. Replaces
 /// inline ad-hoc `FlowLayout` implementations across the editor codebase.
-struct SidebarChipFlow<Data: RandomAccessCollection, Content: View>: View
-where Data.Element: Hashable {
+struct SidebarChipFlow<Data: RandomAccessCollection, Content: View>: View {
     @Environment(\.sidebarMetrics) private var metrics
     private let items: Data
     private let spacing: CGFloat
