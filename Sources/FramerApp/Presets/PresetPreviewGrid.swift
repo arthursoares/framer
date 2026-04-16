@@ -14,19 +14,20 @@ private enum PresetPreviewGridLayout {
 
 struct PresetPreviewGrid: View {
     @Environment(AppState.self) var appState
+    @Environment(\.sidebarMetrics) private var metrics
     @State private var presetPreviews: [UUID: NSImage] = [:]
     @State private var renderTasks: [UUID: Task<Void, Never>] = [:]
     @State private var renamingPreset: Preset?
     @State private var renameText = ""
 
-    private let metrics = SidebarMetrics()
     private let maxConcurrentPresetRenders = 4
 
     private var columns: [GridItem] {
-        [
-            GridItem(.flexible(), spacing: metrics.expandedBodyInset),
-            GridItem(.flexible(), spacing: metrics.expandedBodyInset),
-            GridItem(.flexible(), spacing: metrics.expandedBodyInset),
+        let inset = metrics.expandedBodyInset
+        return [
+            GridItem(.flexible(), spacing: inset),
+            GridItem(.flexible(), spacing: inset),
+            GridItem(.flexible(), spacing: inset),
         ]
     }
 

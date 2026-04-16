@@ -52,19 +52,22 @@ enum SidebarCompoundControlBlockSecondaryContentBuilder {
 }
 
 struct SidebarCompoundControlBlock<Primary: View>: View {
-    private let metrics: SidebarMetrics
+    @Environment(\.sidebarMetrics) private var envMetrics
+    private let overrideMetrics: SidebarMetrics?
     private let primary: Primary
     private let secondary: SidebarCompoundControlBlockSecondaryContent
 
     init(
-        metrics: SidebarMetrics = SidebarMetrics(),
+        metrics: SidebarMetrics? = nil,
         @ViewBuilder primary: () -> Primary,
         @SidebarCompoundControlBlockSecondaryContentBuilder secondary: () -> SidebarCompoundControlBlockSecondaryContent
     ) {
-        self.metrics = metrics
+        self.overrideMetrics = metrics
         self.primary = primary()
         self.secondary = secondary()
     }
+
+    private var metrics: SidebarMetrics { overrideMetrics ?? envMetrics }
 
     var body: some View {
         VStack(alignment: .leading, spacing: metrics.controlStackSpacing) {
