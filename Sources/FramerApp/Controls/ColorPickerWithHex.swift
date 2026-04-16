@@ -17,6 +17,8 @@ struct ColorPickerWithHex: View {
     var body: some View {
         HStack(spacing: 8) {
             ColorPicker(label, selection: $selection)
+                .labelsHidden()
+                .accessibilityLabel(Text(label))
             TextField("#HEX", text: $hexText)
                 .textFieldStyle(.plain)
                 .font(AppFont.hexValue)
@@ -30,6 +32,7 @@ struct ColorPickerWithHex: View {
                         .stroke(Color.borderDefault, lineWidth: 1)
                 )
                 .onSubmit { applyHex() }
+                .accessibilityLabel(Text("\(label) hex value"))
         }
         .onAppear { syncHexFromColor() }
         .onChange(of: selection) { _, _ in
