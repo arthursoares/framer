@@ -122,14 +122,14 @@ final class SidebarHarmonySnapshotTests: XCTestCase {
             named: "simple-canvas-editor",
             of: CanvasLayerControls(params: CanvasLayerParams()) { _ in },
             size: CGSize(width: 350, height: 420),
-            expectedSHA256: "052374cdc1e3c6438f6c0a584bdcaa4886e5a2baa26fe320b456169c6b8c5bad"
+            expectedSHA256: "aa3258aeb7debbacc77f9dd4cf80afc90ff66c8f59d6039e3ea1cc3d6d9cd460"
         )
 
         assertSnapshot(
             named: "simple-border-editor",
             of: BorderLayerControls(params: BorderLayerParams()) { _ in },
             size: CGSize(width: 350, height: 240),
-            expectedSHA256: "45fad6caed71969b0e4260b985a7531563fde76f6e3f5033ec9023c649b52d36"
+            expectedSHA256: "cf61b896a2419e566ad61b232d0b387fea983fec78d5209c5caabd5f50bb023b"
         )
     }
 
@@ -138,7 +138,7 @@ final class SidebarHarmonySnapshotTests: XCTestCase {
             named: "dense-caption-editor",
             of: CaptionLayerControls(params: CaptionLayerParams()) { _ in },
             size: CGSize(width: 350, height: 760),
-            expectedSHA256: "b6257238a6bc024fe4c9636e5853a19f3bd23fefe18e45585b8b8b33912781c7"
+            expectedSHA256: "ea1e552d1c1aca1557bc3a46b75b20c4d2c8f985f9311132e61e49568f64cb0b"
         )
 
         assertSnapshot(

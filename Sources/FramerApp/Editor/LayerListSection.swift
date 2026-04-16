@@ -2,6 +2,20 @@ import SwiftUI
 import AppKit
 import FramerCore
 
+/// Wraps a `ColorPickerWithHex` leaf in a `denseControlRow` so the visible
+/// label appears in the sidebar's 104pt label column instead of floating
+/// inline next to the color well. Introduced as part of sidebar harmony
+/// pass 3 to eliminate the stray "Color" / "Fill Color" / "Foreground" /
+/// etc. chips rendered by `ColorPicker`'s own label.
+fileprivate func labeledColorPicker(
+    _ label: String,
+    selection: Binding<Color>,
+    onHexCommit: ((CodableColor) -> Void)? = nil
+) -> some View {
+    ColorPickerWithHex(label, selection: selection, onHexCommit: onHexCommit)
+        .denseControlRow(LocalizedStringKey(label))
+}
+
 // MARK: - LayerListSection
 
 struct LayerListSection: View {
@@ -390,7 +404,7 @@ struct GPUEffectLayerControls: View {
 
                 adjustmentSlider(label: "Intensity", binding: textCellBinding(\.intensity), range: 0...1)
 
-                ColorPickerWithHex("Foreground", selection: Binding(
+                labeledColorPicker("Foreground", selection: Binding(
                     get: { nsColor(from: payload.foreground ?? CodableColor(unchecked: "#FFFFFF")) },
                     set: { newColor in
                         guard let hex = newColor.hexString, let codable = try? CodableColor(hex: hex) else { return }
@@ -400,7 +414,7 @@ struct GPUEffectLayerControls: View {
                     }
                 ))
 
-                ColorPickerWithHex("Background", selection: Binding(
+                labeledColorPicker("Background", selection: Binding(
                     get: { nsColor(from: payload.background ?? CodableColor(unchecked: "#101010")) },
                     set: { newColor in
                         guard let hex = newColor.hexString, let codable = try? CodableColor(hex: hex) else { return }
@@ -438,7 +452,7 @@ struct GPUEffectLayerControls: View {
                     StyledToggle(isOn: textInvertBinding)
                 }
 
-                ColorPickerWithHex("Foreground", selection: Binding(
+                labeledColorPicker("Foreground", selection: Binding(
                     get: { nsColor(from: payload.foreground ?? CodableColor(unchecked: "#FFFFFF")) },
                     set: { newColor in
                         guard let hex = newColor.hexString, let codable = try? CodableColor(hex: hex) else { return }
@@ -448,7 +462,7 @@ struct GPUEffectLayerControls: View {
                     }
                 ))
 
-                ColorPickerWithHex("Background", selection: Binding(
+                labeledColorPicker("Background", selection: Binding(
                     get: { nsColor(from: payload.background ?? CodableColor(unchecked: "#111111")) },
                     set: { newColor in
                         guard let hex = newColor.hexString, let codable = try? CodableColor(hex: hex) else { return }
@@ -475,7 +489,7 @@ struct GPUEffectLayerControls: View {
                 // mode still uses it as the inset thickness.
                 adjustmentSlider(label: "Border Width", binding: blockBorderWidthBinding, range: 0...1)
 
-                ColorPickerWithHex("Foreground", selection: Binding(
+                labeledColorPicker("Foreground", selection: Binding(
                     get: { nsColor(from: payload.foreground ?? CodableColor(unchecked: "#FFFFFF")) },
                     set: { newColor in
                         guard let hex = newColor.hexString, let codable = try? CodableColor(hex: hex) else { return }
@@ -485,7 +499,7 @@ struct GPUEffectLayerControls: View {
                     }
                 ))
 
-                ColorPickerWithHex("Background", selection: Binding(
+                labeledColorPicker("Background", selection: Binding(
                     get: { nsColor(from: payload.background ?? CodableColor(unchecked: "#111111")) },
                     set: { newColor in
                         guard let hex = newColor.hexString, let codable = try? CodableColor(hex: hex) else { return }
@@ -495,7 +509,7 @@ struct GPUEffectLayerControls: View {
                     }
                 ))
 
-                ColorPickerWithHex("Border Color", selection: Binding(
+                labeledColorPicker("Border Color", selection: Binding(
                     get: { nsColor(from: payload.borderColor ?? CodableColor(unchecked: "#00FFAA")) },
                     set: { newColor in
                         guard let hex = newColor.hexString, let codable = try? CodableColor(hex: hex) else { return }
@@ -531,7 +545,7 @@ struct GPUEffectLayerControls: View {
                 .labelsHidden()
                 .denseControlRow("Direction")
 
-                ColorPickerWithHex("Rain Color", selection: Binding(
+                labeledColorPicker("Rain Color", selection: Binding(
                     get: { nsColor(from: payload.rainColor ?? CodableColor(unchecked: "#00FF66")) },
                     set: { newColor in
                         guard let hex = newColor.hexString, let codable = try? CodableColor(hex: hex) else { return }
@@ -648,7 +662,7 @@ struct GPUEffectLayerControls: View {
                     StyledToggle(isOn: edgeInvertBinding)
                 }
 
-                ColorPickerWithHex("Edge Color", selection: Binding(
+                labeledColorPicker("Edge Color", selection: Binding(
                     get: { nsColor(from: payload.edgeColor ?? CodableColor(unchecked: "#FFFFFF")) },
                     set: { newColor in
                         guard let hex = newColor.hexString, let codable = try? CodableColor(hex: hex) else { return }
@@ -679,7 +693,7 @@ struct GPUEffectLayerControls: View {
                     StyledToggle(isOn: edgeInvertBinding)
                 }
 
-                ColorPickerWithHex("Contour Color", selection: Binding(
+                labeledColorPicker("Contour Color", selection: Binding(
                     get: { nsColor(from: payload.edgeColor ?? CodableColor(unchecked: "#FFFFFF")) },
                     set: { newColor in
                         guard let hex = newColor.hexString, let codable = try? CodableColor(hex: hex) else { return }
@@ -702,7 +716,7 @@ struct GPUEffectLayerControls: View {
                     StyledToggle(isOn: voronoiRandomizeBinding)
                 }
 
-                ColorPickerWithHex("Edge Color", selection: Binding(
+                labeledColorPicker("Edge Color", selection: Binding(
                     get: { nsColor(from: payload.edgeColor ?? CodableColor(unchecked: "#FFFFFF")) },
                     set: { newColor in
                         guard let hex = newColor.hexString, let codable = try? CodableColor(hex: hex) else { return }
@@ -767,7 +781,7 @@ struct GPUEffectLayerControls: View {
                     }
                 }
 
-                ColorPickerWithHex("Foreground", selection: Binding(
+                labeledColorPicker("Foreground", selection: Binding(
                     get: { nsColor(from: payload.foreground ?? CodableColor(unchecked: "#FFFFFF")) },
                     set: { newColor in
                         guard let hex = newColor.hexString, let codable = try? CodableColor(hex: hex) else { return }
@@ -777,7 +791,7 @@ struct GPUEffectLayerControls: View {
                     }
                 ))
 
-                ColorPickerWithHex("Background", selection: Binding(
+                labeledColorPicker("Background", selection: Binding(
                     get: { nsColor(from: payload.background ?? CodableColor(unchecked: "#000000")) },
                     set: { newColor in
                         guard let hex = newColor.hexString, let codable = try? CodableColor(hex: hex) else { return }
@@ -2525,7 +2539,7 @@ struct LayerFillPicker: View {
             if case .color(let c) = fill {
                 SimpleLayerEditorDivider()
 
-                ColorPickerWithHex("Fill Color", selection: Binding(
+                labeledColorPicker("Fill Color", selection: Binding(
                     get: { Color(nsColor: NSColor(cgColor: c.cgColor) ?? .white) },
                     set: { newColor in
                         guard let hex = newColor.hexString else { return }
@@ -2809,7 +2823,7 @@ struct CaptionLayerControls: View {
                 if case .fixed = params.fontColorMode {
                     SimpleLayerEditorDivider()
 
-                    ColorPickerWithHex("Color", selection: fontColorBinding)
+                    labeledColorPicker("Color", selection: fontColorBinding)
                 }
 
                 if case .dominant(let sat, let light) = params.fontColorMode {
@@ -3267,10 +3281,10 @@ struct DitherLayerControls: View {
 
             if case .twoTone(let fg, let bg) = params.colorMode {
                 SimpleLayerEditorDivider()
-                ColorPickerWithHex("Foreground", selection: foregroundBinding(fg: fg, bg: bg))
+                labeledColorPicker("Foreground", selection: foregroundBinding(fg: fg, bg: bg))
 
                 SimpleLayerEditorDivider()
-                ColorPickerWithHex("Background", selection: backgroundBinding(fg: fg, bg: bg))
+                labeledColorPicker("Background", selection: backgroundBinding(fg: fg, bg: bg))
             }
 
             if case .dominantTwoTone(let flipped, let sat, let light) = params.colorMode {
@@ -4121,7 +4135,7 @@ struct ShaderLayerControls: View {
 
         switch asciiParams.colorMode {
         case .manual(let foreground, let background):
-            ColorPickerWithHex("Foreground", selection: Binding(
+            labeledColorPicker("Foreground", selection: Binding(
                 get: { Color(cgColor: foreground.cgColor) },
                 set: { value in
                     guard let hex = value.hexString, let color = try? CodableColor(hex: hex) else { return }
@@ -4131,7 +4145,7 @@ struct ShaderLayerControls: View {
                 updateASCII(asciiParams, colorMode: .manual(foreground: color, background: background))
             })
 
-            ColorPickerWithHex("Background", selection: Binding(
+            labeledColorPicker("Background", selection: Binding(
                 get: { Color(cgColor: background.cgColor) },
                 set: { value in
                     guard let hex = value.hexString, let color = try? CodableColor(hex: hex) else { return }
@@ -4182,7 +4196,7 @@ struct ShaderLayerControls: View {
                 ))
             }
         case .source(let background):
-            ColorPickerWithHex("Background", selection: Binding(
+            labeledColorPicker("Background", selection: Binding(
                 get: { Color(cgColor: background.cgColor) },
                 set: { value in
                     guard let hex = value.hexString, let color = try? CodableColor(hex: hex) else { return }
@@ -4192,7 +4206,7 @@ struct ShaderLayerControls: View {
                 updateASCII(asciiParams, colorMode: .source(background: color))
             })
         case .gradient(let color1, let color2, let background):
-            ColorPickerWithHex("Dark Color", selection: Binding(
+            labeledColorPicker("Dark Color", selection: Binding(
                 get: { Color(cgColor: color1.cgColor) },
                 set: { value in
                     guard let hex = value.hexString, let color = try? CodableColor(hex: hex) else { return }
@@ -4202,7 +4216,7 @@ struct ShaderLayerControls: View {
                 updateASCII(asciiParams, colorMode: .gradient(color1: color, color2: color2, background: background))
             })
 
-            ColorPickerWithHex("Bright Color", selection: Binding(
+            labeledColorPicker("Bright Color", selection: Binding(
                 get: { Color(cgColor: color2.cgColor) },
                 set: { value in
                     guard let hex = value.hexString, let color = try? CodableColor(hex: hex) else { return }
@@ -4212,7 +4226,7 @@ struct ShaderLayerControls: View {
                 updateASCII(asciiParams, colorMode: .gradient(color1: color1, color2: color, background: background))
             })
 
-            ColorPickerWithHex("Background", selection: Binding(
+            labeledColorPicker("Background", selection: Binding(
                 get: { Color(cgColor: background.cgColor) },
                 set: { value in
                     guard let hex = value.hexString, let color = try? CodableColor(hex: hex) else { return }
