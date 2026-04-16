@@ -3077,10 +3077,11 @@ private struct TemplateToken: Identifiable {
 }
 
 struct TemplateTokenBar: View {
+    @Environment(\.sidebarMetrics) private var metrics
     @Binding var text: String
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 6) {
+        VStack(alignment: .leading, spacing: metrics.expandedBodyInset) {
             ForEach(TemplateToken.Category.allCases, id: \.rawValue) { category in
                 tokenRow(category)
             }
@@ -3088,20 +3089,20 @@ struct TemplateTokenBar: View {
     }
 
     private func tokenRow(_ category: TemplateToken.Category) -> some View {
-        HStack(spacing: 4) {
+        HStack(alignment: .top, spacing: metrics.expandedBodyInset) {
             Text(category.rawValue)
                 .font(AppFont.body(10))
                 .foregroundStyle(Color.text3)
                 .frame(width: 48, alignment: .trailing)
 
-            FlowLayout(spacing: 4) {
+            SidebarFlowLayout(horizontalSpacing: metrics.expandedBodyInset - 2, verticalSpacing: metrics.expandedBodyInset - 2) {
                 ForEach(TemplateToken.all.filter { $0.category == category }) { token in
                     Button {
                         text.append(token.token)
                     } label: {
                         Text(token.label)
                             .font(AppFont.controlLabel)
-                            .padding(.horizontal, 6)
+                            .padding(.horizontal, metrics.expandedBodyInset)
                             .padding(.vertical, 2)
                             .background(Color.surface4, in: Capsule())
                     }
@@ -3110,50 +3111,6 @@ struct TemplateTokenBar: View {
                 }
             }
         }
-    }
-}
-
-/// Simple horizontal flow layout for wrapping token chips.
-struct FlowLayout: Layout {
-    var spacing: CGFloat = 4
-
-    func sizeThatFits(proposal: ProposedViewSize, subviews: Subviews, cache: inout ()) -> CGSize {
-        let result = arrange(proposal: proposal, subviews: subviews)
-        return result.size
-    }
-
-    func placeSubviews(in bounds: CGRect, proposal: ProposedViewSize, subviews: Subviews, cache: inout ()) {
-        let result = arrange(proposal: proposal, subviews: subviews)
-        for (index, origin) in result.origins.enumerated() {
-            subviews[index].place(
-                at: CGPoint(x: bounds.minX + origin.x, y: bounds.minY + origin.y),
-                proposal: .unspecified
-            )
-        }
-    }
-
-    private func arrange(proposal: ProposedViewSize, subviews: Subviews) -> (size: CGSize, origins: [CGPoint]) {
-        let maxWidth = proposal.width ?? .infinity
-        var origins: [CGPoint] = []
-        var x: CGFloat = 0
-        var y: CGFloat = 0
-        var rowHeight: CGFloat = 0
-        var totalWidth: CGFloat = 0
-
-        for subview in subviews {
-            let size = subview.sizeThatFits(.unspecified)
-            if x + size.width > maxWidth, x > 0 {
-                x = 0
-                y += rowHeight + spacing
-                rowHeight = 0
-            }
-            origins.append(CGPoint(x: x, y: y))
-            rowHeight = max(rowHeight, size.height)
-            x += size.width + spacing
-            totalWidth = max(totalWidth, x - spacing)
-        }
-
-        return (CGSize(width: totalWidth, height: y + rowHeight), origins)
     }
 }
 
@@ -3226,6 +3183,7 @@ private extension View {
 // MARK: - DitherLayerControls
 
 struct DitherLayerControls: View {
+    @Environment(\.sidebarMetrics) private var metrics
     var params: DitherLayerParams
     var onChange: (DitherLayerParams) -> Void
 
@@ -3580,69 +3538,71 @@ struct DitherLayerControls: View {
     private func paletteEditor(colors: [CodableColor]) -> some View {
         let selectedPreset = VintagePalette.Preset.matching(colors)
 
-        VStack(alignment: .leading, spacing: 6) {
-            Picker("Preset", selection: Binding<VintagePalette.Preset>(
-                get: { selectedPreset },
-                set: { newValue in
-                    var p = params
-                    switch newValue {
-                    case .custom:
-                        // Seed Custom with the current colours if already
-                        // custom, else the classic Game Boy set as a starter.
-                        let seed = (selectedPreset == .custom) ? colors : VintagePalette.gameBoy
-                        p.colorMode = .palette(seed)
-                    default:
-                        p.colorMode = .palette(newValue.colors)
+        SidebarFullWidthRow("Palette") {
+            VStack(alignment: .leading, spacing: metrics.expandedBodyInset) {
+                Picker("Preset", selection: Binding<VintagePalette.Preset>(
+                    get: { selectedPreset },
+                    set: { newValue in
+                        var p = params
+                        switch newValue {
+                        case .custom:
+                            // Seed Custom with the current colours if already
+                            // custom, else the classic Game Boy set as a starter.
+                            let seed = (selectedPreset == .custom) ? colors : VintagePalette.gameBoy
+                            p.colorMode = .palette(seed)
+                        default:
+                            p.colorMode = .palette(newValue.colors)
+                        }
+                        onChange(p)
                     }
-                    onChange(p)
+                )) {
+                    ForEach(VintagePalette.Preset.allCases, id: \.self) { preset in
+                        Text(preset.rawValue).tag(preset)
+                    }
                 }
-            )) {
-                ForEach(VintagePalette.Preset.allCases, id: \.self) { preset in
-                    Text(preset.rawValue).tag(preset)
-                }
-            }
-            .pickerStyle(.menu)
+                .pickerStyle(.menu)
 
-            ForEach(Array(colors.enumerated()), id: \.offset) { idx, color in
-                HStack(spacing: 8) {
-                    ColorPickerWithHex("Colour \(idx + 1)", selection: Binding(
-                        get: { Color(nsColor: NSColor(cgColor: color.cgColor) ?? .white) },
-                        set: { newColor in
-                            guard let hex = newColor.hexString,
-                                  let codable = try? CodableColor(hex: hex) else { return }
+                ForEach(Array(colors.enumerated()), id: \.offset) { idx, color in
+                    HStack(spacing: metrics.controlColumnSpacing) {
+                        ColorPickerWithHex("Colour \(idx + 1)", selection: Binding(
+                            get: { Color(nsColor: NSColor(cgColor: color.cgColor) ?? .white) },
+                            set: { newColor in
+                                guard let hex = newColor.hexString,
+                                      let codable = try? CodableColor(hex: hex) else { return }
+                                var p = params
+                                var next = colors
+                                next[idx] = codable
+                                p.colorMode = .palette(next)
+                                onChange(p)
+                            }
+                        ))
+                        Button {
+                            guard colors.count > 2 else { return }
                             var p = params
                             var next = colors
-                            next[idx] = codable
+                            next.remove(at: idx)
                             p.colorMode = .palette(next)
                             onChange(p)
+                        } label: {
+                            Image(systemName: "minus.circle")
                         }
-                    ))
+                        .buttonStyle(.borderless)
+                        .disabled(colors.count <= 2)
+                    }
+                }
+
+                if colors.count < DitherColorMode.MAX_PALETTE_COLORS {
                     Button {
-                        guard colors.count > 2 else { return }
                         var p = params
                         var next = colors
-                        next.remove(at: idx)
+                        next.append(colors.last ?? CodableColor(unchecked: "#000000"))
                         p.colorMode = .palette(next)
                         onChange(p)
                     } label: {
-                        Image(systemName: "minus.circle")
+                        Label("Add Colour", systemImage: "plus.circle")
                     }
                     .buttonStyle(.borderless)
-                    .disabled(colors.count <= 2)
                 }
-            }
-
-            if colors.count < DitherColorMode.MAX_PALETTE_COLORS {
-                Button {
-                    var p = params
-                    var next = colors
-                    next.append(colors.last ?? CodableColor(unchecked: "#000000"))
-                    p.colorMode = .palette(next)
-                    onChange(p)
-                } label: {
-                    Label("Add Colour", systemImage: "plus.circle")
-                }
-                .buttonStyle(.borderless)
             }
         }
     }
