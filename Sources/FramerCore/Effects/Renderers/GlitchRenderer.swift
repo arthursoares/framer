@@ -12,14 +12,27 @@ public enum GlitchRenderer {
             return input
         }
 
-        // GPU fast path for VHS — see Effects/Metal/Glitch.metal::vhsVariant.
-        // Falls back to the CPU pixel loop below on MetalEffectError. PixelSort
-        // isn't dispatched here: it routes through `.shader` layer type via
-        // ShaderStyle.pixelSort + ShaderRenderer.apply, which already has a
-        // GPU path (PixelSortRenderer + PixelSort.metal).
+        // GPU fast paths. Each maps to its Metal shader; both fall back to
+        // the CPU pixel loop below on `MetalEffectError` (headless hosts,
+        // missing device, etc).
+        //
+        //   - VHS → Effects/Metal/Glitch.metal::glitchFragment (variant 0)
+        //   - PixelSort → Effects/Metal/PixelSort.metal::pixelSortFragment,
+        //     same shader the .shader layer's PixelSort style uses. The
+        //     bucket routes through a separate GlitchGPURenderer entry
+        //     point that maps the leaner GlitchParameters onto the shader's
+        //     uniforms (no Kim-Asendorf span modes, fixed intensity=amount).
         if effect == .vhs {
             do {
                 return try GlitchGPURenderer.renderVHS(
+                    input: input, common: common, geometry: geometry,
+                    color: color, params: payload, outputSize: outputSize)
+            } catch is MetalEffectError {
+                // fall through to CPU
+            }
+        } else if effect == .pixelSort {
+            do {
+                return try GlitchGPURenderer.renderPixelSort(
                     input: input, common: common, geometry: geometry,
                     color: color, params: payload, outputSize: outputSize)
             } catch is MetalEffectError {
