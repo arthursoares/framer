@@ -1,0 +1,7 @@
+{
+  "expectedOutputs": [
+    "sample-1_instagram.jpg",
+    "sample-2_instagram.jpg"
+  ],
+  "format": "jpeg"
+}
