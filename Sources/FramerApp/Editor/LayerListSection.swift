@@ -7,6 +7,7 @@ import FramerCore
 /// inline next to the color well. Introduced as part of sidebar harmony
 /// pass 3 to eliminate the stray "Color" / "Fill Color" / "Foreground" /
 /// etc. chips rendered by `ColorPicker`'s own label.
+@MainActor
 fileprivate func labeledColorPicker(
     _ label: String,
     selection: Binding<Color>,
@@ -74,9 +75,11 @@ struct LayerListSection: View {
                                 layers.move(fromOffsets: IndexSet(integer: fromIndex), toOffset: toOffset)
                             }
 
-                            undoManager?.registerUndo(withTarget: UndoProxy.shared) { @MainActor _ in
-                                withAnimation(.easeInOut(duration: 0.2)) {
-                                    layersBinding.wrappedValue = snapshot
+                            undoManager?.registerUndo(withTarget: UndoProxy.shared) { _ in
+                                MainActor.assumeIsolated {
+                                    withAnimation(.easeInOut(duration: 0.2)) {
+                                        layersBinding.wrappedValue = snapshot
+                                    }
                                 }
                             }
 
@@ -220,10 +223,12 @@ struct LayerListSection: View {
         _ = withAnimation(.easeInOut(duration: 0.2)) {
             layers.remove(at: index)
         }
-        undoManager?.registerUndo(withTarget: UndoProxy.shared) { @MainActor _ in
-            withAnimation(.easeInOut(duration: 0.2)) {
-                let insertAt = min(index, layersBinding.wrappedValue.count)
-                layersBinding.wrappedValue.insert(removed, at: insertAt)
+        undoManager?.registerUndo(withTarget: UndoProxy.shared) { _ in
+            MainActor.assumeIsolated {
+                withAnimation(.easeInOut(duration: 0.2)) {
+                    let insertAt = min(index, layersBinding.wrappedValue.count)
+                    layersBinding.wrappedValue.insert(removed, at: insertAt)
+                }
             }
         }
         undoManager?.setActionName("Delete Layer")
@@ -235,10 +240,12 @@ struct LayerListSection: View {
             layers.append(layer)
         }
         let addedIndex = layers.count - 1
-        undoManager?.registerUndo(withTarget: UndoProxy.shared) { @MainActor _ in
-            withAnimation(.easeInOut(duration: 0.2)) {
-                if addedIndex < layersBinding.wrappedValue.count {
-                    layersBinding.wrappedValue.remove(at: addedIndex)
+        undoManager?.registerUndo(withTarget: UndoProxy.shared) { _ in
+            MainActor.assumeIsolated {
+                withAnimation(.easeInOut(duration: 0.2)) {
+                    if addedIndex < layersBinding.wrappedValue.count {
+                        layersBinding.wrappedValue.remove(at: addedIndex)
+                    }
                 }
             }
         }
@@ -250,9 +257,11 @@ struct LayerListSection: View {
         withAnimation(.easeInOut(duration: 0.2)) {
             layers.swapAt(source, destination)
         }
-        undoManager?.registerUndo(withTarget: UndoProxy.shared) { @MainActor _ in
-            withAnimation(.easeInOut(duration: 0.2)) {
-                layersBinding.wrappedValue.swapAt(destination, source)
+        undoManager?.registerUndo(withTarget: UndoProxy.shared) { _ in
+            MainActor.assumeIsolated {
+                withAnimation(.easeInOut(duration: 0.2)) {
+                    layersBinding.wrappedValue.swapAt(destination, source)
+                }
             }
         }
         undoManager?.setActionName("Move Layer")

@@ -286,11 +286,15 @@ struct PresetPreviewGrid: View {
                             guard !Task.isCancelled else { return }
 
                             let scale = NSScreen.main?.backingScaleFactor ?? 2.0
-                            let preview = NSImage(cgImage: cgImage, size: NSSize(
-                                width: CGFloat(cgImage.width) / scale,
-                                height: CGFloat(cgImage.height) / scale
-                            ))
+                            // Build the NSImage on the main actor — NSImage is
+                            // not Sendable, so it must not be captured by the
+                            // MainActor.run closure from this background context.
+                            // The CGImage (Sendable) crosses the boundary instead.
                             await MainActor.run {
+                                let preview = NSImage(cgImage: cgImage, size: NSSize(
+                                    width: CGFloat(cgImage.width) / scale,
+                                    height: CGFloat(cgImage.height) / scale
+                                ))
                                 appState.presetThumbnailCache.store(preview, for: preset.id)
                             }
                         } catch {
