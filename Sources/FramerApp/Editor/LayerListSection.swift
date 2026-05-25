@@ -482,6 +482,9 @@ struct GPUEffectLayerControls: View {
                 // strength (0 = flat like solid, 1 = full bubble). Outlined
                 // mode still uses it as the inset thickness.
                 adjustmentSlider(label: "Border Width", binding: blockBorderWidthBinding, range: 0...1)
+                // Intensity blends the blockified output with the original
+                // (TextCell.metal: `mix(srcOrig, drawn, intensity)`); had no slider.
+                adjustmentSlider(label: "Intensity", binding: textCellBinding(\.intensity), range: 0...1)
 
                 labeledColorPicker("Foreground", selection: Binding(
                     get: { nsColor(from: payload.foreground ?? CodableColor(unchecked: "#FFFFFF")) },
@@ -520,6 +523,9 @@ struct GPUEffectLayerControls: View {
                 adjustmentSlider(label: "Trail", binding: matrixBinding(\.trailLength), range: 0...1)
                 adjustmentSlider(label: "Glow", binding: matrixBinding(\.glow), range: 0...1)
                 adjustmentSlider(label: "BG Opacity", binding: matrixBinding(\.backgroundOpacity), range: 0...1)
+                // Intensity blends the rain over the source (TextCell.metal:
+                // `mix(srcOrig, glyphColor, intensity)`); had no slider.
+                adjustmentSlider(label: "Intensity", binding: matrixBinding(\.intensity), range: 0...1)
                 // `threshold` slider removed — it was a dead control. The GPU
                 // encoder (TextCellRenderer.renderMatrixRain) overwrites the
                 // shader's `threshold` uniform with `params.trailLength`, so
@@ -569,6 +575,13 @@ struct GPUEffectLayerControls: View {
                 .labelsHidden()
                 .denseControlRow("Sort Mode")
 
+                // Threshold (luminance cutoff deciding which pixels get sorted)
+                // and Amount (blend of sorted vs. original) are both consumed by
+                // PixelSort.metal — threshold → uniforms.threshold, amount →
+                // uniforms.intensity (see GlitchGPURenderer) — but had no UI
+                // control, so the layer was stuck at their defaults (0.42 / 0.65).
+                adjustmentSlider(label: "Threshold", binding: glitchBinding(\.threshold), range: 0...1)
+                adjustmentSlider(label: "Amount", binding: glitchBinding(\.amount), range: 0...1)
                 adjustmentSlider(label: "Streak", binding: glitchBinding(\.streakLength), range: 0...1)
                 adjustmentSlider(label: "Random", binding: glitchBinding(\.randomness), range: 0...1)
                 SidebarControlRow("Reverse") {
@@ -580,13 +593,17 @@ struct GPUEffectLayerControls: View {
 
             if case .glitch(_, _, _, _) = params.params,
                params.kind == .vhs {
+                // Amount is the master VHS strength — it scales tracking,
+                // distortion and chroma in Glitch.metal (amount = 0 ⇒ no effect).
+                // Had no slider, so the layer was stuck at its 0.75 default.
+                adjustmentSlider(label: "Amount", binding: glitchBinding(\.amount), range: 0...1)
                 adjustmentSlider(label: "Distortion", binding: glitchBinding(\.distortion), range: 0...1)
                 adjustmentSlider(label: "Color Bleed", binding: glitchBinding(\.colorBleed), range: 0...1)
                 adjustmentSlider(label: "Scanlines", binding: glitchBinding(\.scanlines), range: 0...1)
                 adjustmentSlider(label: "Tracking", binding: glitchBinding(\.trackingError), range: 0...1)
             }
 
-            if case .edgeField = params.params,
+            if case .edgeField(let common, let geometry, let color, let payload) = params.params,
                params.kind == .waveLines {
                 // Line Strength drives the shader's threshold shaping — primary
                 // brightness knob, was missing from UI before.
@@ -608,9 +625,21 @@ struct GPUEffectLayerControls: View {
                 // boost" to "very dense bands" at typical spacing values.
                 adjustmentSlider(label: "Line Count", binding: edgeFieldBinding(\.lineCount), range: 1...40)
                 // Animate stays hidden — no time uniform yet.
+
+                // Line tint: shader multiplies the ink by edgeColor
+                // (EdgeField.metal: `ink *= u.edgeColor.rgb`); had no picker.
+                labeledColorPicker("Line Color", selection: Binding(
+                    get: { nsColor(from: payload.edgeColor ?? CodableColor(unchecked: "#FFFFFF")) },
+                    set: { newColor in
+                        guard let hex = newColor.hexString, let codable = try? CodableColor(hex: hex) else { return }
+                        var updatedPayload = payload
+                        updatedPayload.edgeColor = codable
+                        onChange(updated(layer: params, params: .edgeField(common: common, geometry: geometry, color: color, edgeField: updatedPayload)))
+                    }
+                ))
             }
 
-            if case .edgeField = params.params,
+            if case .edgeField(let common, let geometry, let color, let payload) = params.params,
                params.kind == .noiseField {
                 // Line Strength gates the noise contribution (shader:
                 // `noise * u.lineStrength + fieldWeight * 0.3`). Field Intensity
@@ -632,6 +661,18 @@ struct GPUEffectLayerControls: View {
                 } trailingValue: {
                     StyledToggle(isOn: edgeInvertBinding)
                 }
+
+                // Field tint: shader multiplies the ink by edgeColor
+                // (EdgeField.metal: `ink *= u.edgeColor.rgb`); had no picker.
+                labeledColorPicker("Field Color", selection: Binding(
+                    get: { nsColor(from: payload.edgeColor ?? CodableColor(unchecked: "#FFFFFF")) },
+                    set: { newColor in
+                        guard let hex = newColor.hexString, let codable = try? CodableColor(hex: hex) else { return }
+                        var updatedPayload = payload
+                        updatedPayload.edgeColor = codable
+                        onChange(updated(layer: params, params: .edgeField(common: common, geometry: geometry, color: color, edgeField: updatedPayload)))
+                    }
+                ))
                 // Speed + Animate stay hidden (no time uniform yet).
                 // Distort Only stays hidden (shader generates standalone,
                 // doesn't distort source UVs).

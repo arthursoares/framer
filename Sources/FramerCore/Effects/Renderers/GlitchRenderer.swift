@@ -118,6 +118,14 @@ public enum GlitchRenderer {
         }
     }
 
+    /// Pixel-sort segment size as a fraction of the sort-axis dimension, so it
+    /// is resolution-independent (mirrors the GPU `spanCap` mapping in
+    /// `GlitchGPURenderer.renderPixelSort`). Clamped to the same walk bound.
+    private static func pixelSortStep(streakLength: Double, dimension: Int) -> Int {
+        let proportional = streakLength * streakLength * Double(dimension)
+        return max(1, min(GlitchGPURenderer.maxSpanWalk, Int(proportional.rounded())))
+    }
+
     private static func applyPixelSortColumn(
         x: Int,
         width: Int,
@@ -127,7 +135,7 @@ public enum GlitchRenderer {
         span: Int,
         payload: GlitchParameters
     ) {
-        let step = max(1, Int((payload.streakLength * Double(span)).rounded()))
+        let step = pixelSortStep(streakLength: payload.streakLength, dimension: height)
         for start in stride(from: 0, to: height, by: step) {
             let end = min(height, start + step)
             applyPixelSortSegment(
@@ -150,7 +158,7 @@ public enum GlitchRenderer {
         payload: GlitchParameters
     ) {
         let rowStart = y * width * 4
-        let step = max(1, Int((payload.streakLength * Double(span)).rounded()))
+        let step = pixelSortStep(streakLength: payload.streakLength, dimension: width)
         for start in stride(from: 0, to: width, by: step) {
             let end = min(width, start + step)
             applyPixelSortSegment(
