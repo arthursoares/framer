@@ -29,70 +29,55 @@ struct LayerListSection: View {
         SidebarSection("LAYERS (\(layers.count))", metrics: SidebarMetrics(expandedBodyInset: 0)) {
             VStack(alignment: .leading, spacing: Spacing.xs) {
                 ForEach(Array(layers.enumerated()), id: \.element.id) { index, layer in
-                    VStack(spacing: 0) {
+                    LayerPanelRow(
+                        layer: binding(for: layer),
+                        isDragging: draggingLayerID == layer.id,
+                        isDropTarget: dropTargetIndex == index,
+                        onDelete: { removeLayer(at: index) },
+                        onMoveUp: index > 0 ? { moveLayer(from: index, to: index - 1) } : nil,
+                        onMoveDown: index < layers.count - 1 ? { moveLayer(from: index, to: index + 1) } : nil,
+                        onDragStart: { draggingLayerID = layer.id }
+                    )
+                    // Drop indicator is an overlay rather than a view inserted
+                    // into the layout flow: inserting it used to push the row
+                    // down on hover, sliding it out from under the cursor and
+                    // flipping `isTargeted` off — a flicker loop that made drops
+                    // hard to land. An overlay never reflows the list.
+                    .overlay(alignment: .top) {
                         if dropTargetIndex == index {
                             dropIndicator
+                                .offset(y: -Spacing.xs)
+                        }
+                    }
+                    .dropDestination(for: String.self) { items, _ in
+                        dropTargetIndex = nil
+                        draggingLayerID = nil
+                        guard let droppedIDString = items.first,
+                              let droppedID = UUID(uuidString: droppedIDString),
+                              let fromIndex = layers.firstIndex(where: { $0.id == droppedID }),
+                              fromIndex != index else { return false }
+
+                        let toOffset = index > fromIndex ? index + 1 : index
+                        let snapshot = layers
+                        let layersBinding = $layers
+
+                        withAnimation(.easeInOut(duration: 0.2)) {
+                            layers.move(fromOffsets: IndexSet(integer: fromIndex), toOffset: toOffset)
                         }
 
-                        LayerPanelRow(
-                            layer: binding(for: layer),
-                            isDragging: draggingLayerID == layer.id,
-                            isDropTarget: dropTargetIndex == index,
-                            onDelete: { removeLayer(at: index) },
-                            onMoveUp: index > 0 ? { moveLayer(from: index, to: index - 1) } : nil,
-                            onMoveDown: index < layers.count - 1 ? { moveLayer(from: index, to: index + 1) } : nil
-                        )
-                        .draggable(layer.id.uuidString) {
-                            let draggingStyle = SidebarStateStyle.dragging
-
-                            return Label(layer.label, systemImage: layer.iconName)
-                                .foregroundStyle(draggingStyle.foregroundColor)
-                                .padding(.horizontal, Spacing.md)
-                                .padding(.vertical, Spacing.sm)
-                                .background(
-                                    draggingStyle.backgroundColor,
-                                    in: RoundedRectangle(cornerRadius: CornerRadius.md)
-                                )
-                                .overlay(
-                                    RoundedRectangle(cornerRadius: CornerRadius.md)
-                                        .stroke(draggingStyle.borderColor, lineWidth: 1)
-                                )
-                                .onAppear { draggingLayerID = layer.id }
-                        }
-                        .dropDestination(for: String.self) { items, _ in
-                            dropTargetIndex = nil
-                            draggingLayerID = nil
-                            guard let droppedIDString = items.first,
-                                  let droppedID = UUID(uuidString: droppedIDString),
-                                  let fromIndex = layers.firstIndex(where: { $0.id == droppedID }),
-                                  fromIndex != index else { return false }
-
-                            let toOffset = index > fromIndex ? index + 1 : index
-                            let snapshot = layers
-                            let layersBinding = $layers
-
-                            withAnimation(.easeInOut(duration: 0.2)) {
-                                layers.move(fromOffsets: IndexSet(integer: fromIndex), toOffset: toOffset)
-                            }
-
-                            undoManager?.registerUndo(withTarget: UndoProxy.shared) { _ in
-                                MainActor.assumeIsolated {
-                                    withAnimation(.easeInOut(duration: 0.2)) {
-                                        layersBinding.wrappedValue = snapshot
-                                    }
+                        undoManager?.registerUndo(withTarget: UndoProxy.shared) { _ in
+                            MainActor.assumeIsolated {
+                                withAnimation(.easeInOut(duration: 0.2)) {
+                                    layersBinding.wrappedValue = snapshot
                                 }
                             }
-
-                            undoManager?.setActionName("Move Layer")
-                            return true
-                        } isTargeted: { targeted in
-                            withAnimation(.easeInOut(duration: 0.15)) {
-                                dropTargetIndex = targeted ? index : (dropTargetIndex == index ? nil : dropTargetIndex)
-                            }
                         }
 
-                        if index == layers.count - 1 && dropTargetIndex == layers.count {
-                            dropIndicator
+                        undoManager?.setActionName("Move Layer")
+                        return true
+                    } isTargeted: { targeted in
+                        withAnimation(.easeInOut(duration: 0.15)) {
+                            dropTargetIndex = targeted ? index : (dropTargetIndex == index ? nil : dropTargetIndex)
                         }
                     }
                 }

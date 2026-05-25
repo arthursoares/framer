@@ -42,6 +42,9 @@ struct LayerPanelRow: View {
     let onDelete: () -> Void
     var onMoveUp: (() -> Void)?
     var onMoveDown: (() -> Void)?
+    /// Invoked when a reorder drag begins from this row's grip handle, so the
+    /// owning list can mark the row as the active drag source.
+    var onDragStart: () -> Void = {}
 
     @State private var isHovering = false
     @State private var isExpanded = false
@@ -53,6 +56,8 @@ struct LayerPanelRow: View {
     var body: some View {
         VStack(spacing: 0) {
             HStack(spacing: LayerPanelRowLayout.headerSpacing) {
+                dragHandle
+
                 Button(action: toggleExpanded) {
                     HStack(spacing: LayerPanelRowLayout.headerSpacing) {
                         Image(systemName: "chevron.right")
@@ -60,12 +65,6 @@ struct LayerPanelRow: View {
                             .foregroundStyle(Color.text3)
                             .rotationEffect(.degrees(isExpanded ? 90 : 0))
                             .frame(width: LayerPanelRowLayout.disclosureSize, height: LayerPanelRowLayout.disclosureSize)
-
-                        Image(systemName: "line.3.horizontal")
-                            .font(.system(size: 11))
-                            .foregroundStyle(Color.text3)
-                            .frame(width: LayerPanelRowLayout.handleWidth)
-                            .opacity(0.6)
 
                         Image(systemName: layer.iconName)
                             .foregroundStyle(iconColor)
@@ -232,6 +231,40 @@ struct LayerPanelRow: View {
         }
     }
 
+    /// Standalone reorder grip. Kept OUT of the disclosure `Button` on purpose:
+    /// when `.draggable` was attached to the whole row (and the row body was a
+    /// button), the button's press gesture swallowed the drag, so reordering
+    /// barely worked — notably worse on macOS Sequoia. Isolating the drag on a
+    /// non-button handle lets the system drag gesture start cleanly.
+    private var dragHandle: some View {
+        Image(systemName: "line.3.horizontal")
+            .font(.system(size: 11))
+            .foregroundStyle(Color.text3)
+            .opacity(0.6)
+            .frame(width: LayerPanelRowLayout.handleWidth, height: LayerPanelRowLayout.handleHitHeight)
+            .contentShape(Rectangle())
+            .draggable(layer.id.uuidString) { dragPreview }
+            .help("Drag to reorder layer")
+            .accessibilityLabel("Reorder handle")
+            .accessibilityHint("Drag to reorder this layer")
+    }
+
+    private var dragPreview: some View {
+        Label(layer.label, systemImage: layer.iconName)
+            .foregroundStyle(SidebarStateStyle.dragging.foregroundColor)
+            .padding(.horizontal, Spacing.md)
+            .padding(.vertical, Spacing.sm)
+            .background(
+                SidebarStateStyle.dragging.backgroundColor,
+                in: RoundedRectangle(cornerRadius: CornerRadius.md)
+            )
+            .overlay(
+                RoundedRectangle(cornerRadius: CornerRadius.md)
+                    .stroke(SidebarStateStyle.dragging.borderColor, lineWidth: 1)
+            )
+            .onAppear { onDragStart() }
+    }
+
     @ViewBuilder
     private var layerControls: some View {
         switch layer {
@@ -336,6 +369,9 @@ private enum LayerPanelRowLayout {
     static let headerSpacing = Spacing.sm
     static let disclosureSize = Spacing.xl
     static let handleWidth = Spacing.xl + Spacing.xs
+    /// Vertical hit area for the drag grip — matched to the eye/delete controls
+    /// so the handle is comfortably grabbable without enlarging the row.
+    static let handleHitHeight = Spacing.xl + Spacing.xs
     static let iconWidth = Spacing.xl + Spacing.xs
     static let badgeHorizontalPadding = Spacing.sm
     static let badgeVerticalPadding = Spacing.xs / 2
