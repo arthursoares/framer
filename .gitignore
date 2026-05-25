@@ -21,6 +21,7 @@ test_results.txt
 
 # Build artifacts
 Framer.app/
+build/
 releases/
 framer
 

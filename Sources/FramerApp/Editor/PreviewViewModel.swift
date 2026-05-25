@@ -100,28 +100,33 @@ final class PreviewViewModel {
         let itemURL = item.url
         originalImageURL = itemURL
         originalLoadTask = Task {
-            let original = await Task.detached {
-                Self.loadOriginal(from: itemURL, maxDimension: 1200)
+            // The detached task returns a CGImage (Sendable) rather than an
+            // NSImage. NSImage's Sendable conformance is unavailable, so it
+            // cannot cross back to the main actor; we build it here instead.
+            let cgImage = await Task.detached {
+                Self.loadOriginalCGImage(from: itemURL, maxDimension: 1200)
             }.value
-            guard !Task.isCancelled, originalImageURL == itemURL else { return }
-            originalImage = original
+            guard !Task.isCancelled, originalImageURL == itemURL, let cgImage else { return }
+            let scale = NSScreen.main?.backingScaleFactor ?? 2.0
+            originalImage = NSImage(cgImage: cgImage, size: NSSize(
+                width: CGFloat(cgImage.width) / scale,
+                height: CGFloat(cgImage.height) / scale
+            ))
             originalLoadTask = nil
         }
     }
 
     /// Loads and downscales the source image for before/after comparison.
-    private nonisolated static func loadOriginal(from url: URL, maxDimension: Int) -> NSImage? {
+    /// Returns a `CGImage` (which is Sendable) so the result can be handed
+    /// back to the main actor, where the caller wraps it in an `NSImage`.
+    private nonisolated static func loadOriginalCGImage(from url: URL, maxDimension: Int) -> CGImage? {
         guard let source = CGImageSourceCreateWithURL(url as CFURL, nil),
               let cgImage = CGImageSourceCreateImageAtIndex(source, 0, nil) else {
             return nil
         }
         let w = cgImage.width, h = cgImage.height
-        // NSImage size must be in points (pixels / scale) for correct Retina rendering
-        let screenScale = 2.0 // safe default; nonisolated can't access NSScreen
         guard max(w, h) > maxDimension else {
-            return NSImage(cgImage: cgImage, size: NSSize(
-                width: Double(w) / screenScale, height: Double(h) / screenScale
-            ))
+            return cgImage
         }
         let scale = Double(maxDimension) / Double(max(w, h))
         let newW = Int(Double(w) * scale)
@@ -137,14 +142,10 @@ final class PreviewViewModel {
                                   bitsPerComponent: 8,
                                   bytesPerRow: newW * 4,
                                   space: CGColorSpaceCreateDeviceRGB(),
-                                  bitmapInfo: CGImageAlphaInfo.premultipliedLast.rawValue),
-              let scaled = (ctx.draw(cgImage, in: CGRect(x: 0, y: 0, width: newW, height: newH)), ctx.makeImage()).1 else {
-            return NSImage(cgImage: cgImage, size: NSSize(
-                width: Double(w) / screenScale, height: Double(h) / screenScale
-            ))
+                                  bitmapInfo: CGImageAlphaInfo.premultipliedLast.rawValue) else {
+            return cgImage
         }
-        return NSImage(cgImage: scaled, size: NSSize(
-            width: Double(newW) / screenScale, height: Double(newH) / screenScale
-        ))
+        ctx.draw(cgImage, in: CGRect(x: 0, y: 0, width: newW, height: newH))
+        return ctx.makeImage() ?? cgImage
     }
 }

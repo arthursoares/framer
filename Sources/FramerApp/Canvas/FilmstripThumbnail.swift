@@ -34,13 +34,26 @@ struct FilmstripThumbnail: View {
                     Label("Rotate Left", systemImage: "rotate.left")
                 }
                 Divider()
-                Button(role: .destructive) {
-                    withAnimation {
-                        appState.library.removeAll { $0.id == item.id }
-                        appState.selectedItems.remove(item.id)
+                // Acts on the whole selection when the right-clicked thumbnail
+                // is part of a multi-selection; otherwise just this one photo.
+                if appState.selectedItems.count > 1, appState.selectedItems.contains(item.id) {
+                    Button(role: .destructive) {
+                        withAnimation { appState.removeSelected() }
+                    } label: {
+                        Label("Remove \(appState.selectedItems.count) Photos", systemImage: "trash")
                     }
+                } else {
+                    Button(role: .destructive) {
+                        withAnimation { appState.removeItems([item.id]) }
+                    } label: {
+                        Label("Remove", systemImage: "trash")
+                    }
+                }
+                // Routes through the same confirmation alert as ⌘⌫.
+                Button(role: .destructive) {
+                    NotificationCenter.default.post(name: .framerDeleteAll, object: nil)
                 } label: {
-                    Label("Remove", systemImage: "trash")
+                    Label("Remove All", systemImage: "trash")
                 }
             }
     }
