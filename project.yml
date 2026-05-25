@@ -22,6 +22,7 @@ targets:
     platform: macOS
     sources:
       - path: Sources/FramerApp
+      - path: assets/Assets.xcassets
       - path: assets/textures
         type: folder
         buildPhase: resources
@@ -38,6 +39,7 @@ targets:
         CODE_SIGN_STYLE: Automatic
         MARKETING_VERSION: "2.0.0"
         CURRENT_PROJECT_VERSION: "1"
+        ASSETCATALOG_COMPILER_APPICON_NAME: AppIcon
         INFOPLIST_KEY_LSApplicationCategoryType: "public.app-category.photography"
         INFOPLIST_KEY_CFBundleDisplayName: "Framer"
         SWIFT_STRICT_CONCURRENCY: complete
@@ -70,6 +72,7 @@ targets:
     deploymentTarget: "17.0"
     sources:
       - path: Sources/FramerMobile
+      - path: assets/Assets.xcassets
       - path: assets/textures
         type: folder
         buildPhase: resources
@@ -86,6 +89,7 @@ targets:
         CODE_SIGN_STYLE: Automatic
         MARKETING_VERSION: "1.0.0"
         CURRENT_PROJECT_VERSION: "1"
+        ASSETCATALOG_COMPILER_APPICON_NAME: AppIcon
         INFOPLIST_KEY_CFBundleDisplayName: "Framer"
         INFOPLIST_KEY_UILaunchScreen_Generation: YES
         INFOPLIST_KEY_UISupportedInterfaceOrientations: "UIInterfaceOrientationPortrait"
