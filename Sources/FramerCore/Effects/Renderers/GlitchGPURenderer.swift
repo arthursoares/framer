@@ -16,6 +16,12 @@ import simd
 
 public enum GlitchGPURenderer {
 
+    /// Upper bound on the pixel-sort span walk. Must stay in sync with
+    /// `PIXEL_SORT_MAX_WALK` in PixelSort.metal and the CPU path in
+    /// `GlitchRenderer`. It bounds the shader's per-fragment O(span) walk, so it
+    /// also caps how long a resolution-relative Streak can get on large images.
+    static let maxSpanWalk = 1024
+
     // Mirrors GlitchUniforms in Glitch.metal.
     private struct Uniforms {
         var common   = FramerCommonUniformsLayout()
@@ -147,10 +153,16 @@ public enum GlitchGPURenderer {
             case .vertical:   return 1
             }
         }()
-        // Streak length is a 0..1 UI dial; the shader's spanCap is 1..256.
-        // Quadratic curve gives fine control in the 0..0.5 band where users
-        // spend most of the sliding time, then opens up to full span near 1.
-        uniforms.spanCap    = Int32(max(1, min(256, Int((params.streakLength * params.streakLength * 255.0 + 1).rounded()))))
+        // Streak is a 0..1 dial mapped to a fraction of the image's sort-axis
+        // dimension (width for horizontal sorting, height for vertical), so the
+        // streak length is resolution-independent: the preview and a full-res
+        // export show the same proportional streaks. The quadratic curve keeps
+        // fine control in the low band. Clamped to `maxSpanWalk` to bound the
+        // shader's per-fragment O(span) walk — extreme streaks on very large
+        // images clamp there for GPU performance.
+        let sortAxisDimension = params.direction == .horizontal ? width : height
+        let proportionalSpan = params.streakLength * params.streakLength * Double(sortAxisDimension)
+        uniforms.spanCap    = Int32(max(1, min(maxSpanWalk, Int(proportionalSpan.rounded()))))
         uniforms.widthPx    = Float(width)
         uniforms.heightPx   = Float(height)
         uniforms.spanMode   = 0

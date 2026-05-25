@@ -28,7 +28,7 @@
 #include "ShaderCommon.h"
 
 constant int PIXEL_SORT_SAMPLE_COUNT = 24;
-constant int PIXEL_SORT_MAX_WALK = 256;     // matches CPU `min(256, span)` cap
+constant int PIXEL_SORT_MAX_WALK = 1024;     // per-fragment span-walk bound; raised from 256 so the bucket's Streak can scale with image size (see GlitchGPURenderer.maxSpanWalk)
 
 struct PixelSortUniforms {
     FramerCommonUniforms common;
