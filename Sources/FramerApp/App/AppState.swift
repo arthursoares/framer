@@ -175,6 +175,39 @@ final class AppState {
         library[idx].rotation = (library[idx].rotation + delta + 360) % 360
     }
 
+    // MARK: - Photo Removal
+
+    /// Removes the given photos from the in-app library. Original files on
+    /// disk are left untouched — this only clears them from the session.
+    ///
+    /// If the removal empties the current selection, a neighbouring photo is
+    /// selected (the one that slid into the first removed slot, clamped to the
+    /// new bounds) so the editor keeps showing a photo instead of dropping to
+    /// the empty state.
+    func removeItems(_ ids: Set<PhotoItem.ID>) {
+        guard !ids.isEmpty else { return }
+        let firstRemovedIndex = library.firstIndex { ids.contains($0.id) }
+        let removedFromSelection = !selectedItems.isDisjoint(with: ids)
+        library.removeAll { ids.contains($0.id) }
+        selectedItems.subtract(ids)
+        if removedFromSelection, selectedItems.isEmpty, let anchor = firstRemovedIndex, !library.isEmpty {
+            let neighbour = min(anchor, library.count - 1)
+            selectedItems = [library[neighbour].id]
+        }
+    }
+
+    /// Removes every currently selected photo. See `removeItems(_:)`.
+    func removeSelected() {
+        removeItems(selectedItems)
+    }
+
+    /// Removes all photos from the library and clears the selection. Original
+    /// files on disk are left untouched.
+    func removeAllPhotos() {
+        library.removeAll()
+        selectedItems.removeAll()
+    }
+
     func retryJob(_ job: ExportJob) {
         guard case .failed = job.status else { return }
         exportQueue.removeAll { $0.id == job.id }

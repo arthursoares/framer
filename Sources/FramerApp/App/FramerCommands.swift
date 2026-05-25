@@ -29,8 +29,15 @@ struct FramerCommands: Commands {
             }
             .keyboardShortcut("a", modifiers: .command)
 
+            // Backspace (⌫) for "Delete Selected" is handled in CanvasView's
+            // onKeyPress, not as a menu key equivalent — a plain-⌫ menu
+            // shortcut is global and would steal Backspace from text fields.
             Button("Delete Selected") {
                 NotificationCenter.default.post(name: .framerDeleteSelected, object: nil)
+            }
+
+            Button("Delete All") {
+                NotificationCenter.default.post(name: .framerDeleteAll, object: nil)
             }
             .keyboardShortcut(.delete, modifiers: .command)
         }
@@ -68,6 +75,7 @@ extension Notification.Name {
     static let framerExportAll = Notification.Name("framer.exportAll")
     static let framerSelectAll = Notification.Name("framer.selectAll")
     static let framerDeleteSelected = Notification.Name("framer.deleteSelected")
+    static let framerDeleteAll = Notification.Name("framer.deleteAll")
     static let framerRotateCW = Notification.Name("framer.rotateCW")
     static let framerRotateCCW = Notification.Name("framer.rotateCCW")
     static let framerPreviousPhoto = Notification.Name("framer.previousPhoto")

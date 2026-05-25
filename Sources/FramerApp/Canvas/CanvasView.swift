@@ -15,6 +15,7 @@ struct CanvasView: View {
     @State private var isHoveringViewport = false
     @State private var panStartOffset: CGSize = .zero
     @State private var mouseLocationInViewport: CGPoint = .zero
+    @State private var showDeleteAllConfirm = false
 
     var body: some View {
         content
@@ -55,7 +56,13 @@ struct CanvasView: View {
         .onReceive(NotificationCenter.default.publisher(for: .framerSelectAll)) { _ in
             appState.selectedItems = Set(appState.library.map(\.id))
         }
-        .onReceive(NotificationCenter.default.publisher(for: .framerDeleteSelected)) { _ in removeSelected() }
+        .onReceive(NotificationCenter.default.publisher(for: .framerDeleteSelected)) { _ in
+            withAnimation { appState.removeSelected() }
+        }
+        .onReceive(NotificationCenter.default.publisher(for: .framerDeleteAll)) { _ in
+            guard !appState.library.isEmpty else { return }
+            showDeleteAllConfirm = true
+        }
         .onReceive(NotificationCenter.default.publisher(for: .framerRotateCW)) { _ in
             for id in appState.selectedItems { appState.rotateItem(id, clockwise: true) }
         }
@@ -65,11 +72,28 @@ struct CanvasView: View {
         .onReceive(NotificationCenter.default.publisher(for: .framerPreviousPhoto)) { _ in navigateFilmstrip(forward: false) }
         .onReceive(NotificationCenter.default.publisher(for: .framerNextPhoto)) { _ in navigateFilmstrip(forward: true) }
         .onKeyPress(phases: .down, action: handleKeyPress)
+        .alert("Remove All Photos?", isPresented: $showDeleteAllConfirm) {
+            Button("Cancel", role: .cancel) { }
+            Button("Remove All", role: .destructive) {
+                withAnimation { appState.removeAllPhotos() }
+            }
+        } message: {
+            Text("This removes all \(appState.library.count) photos from Framer. Your original files won't be deleted.")
+        }
     }
 
     private func handleKeyPress(_ press: KeyPress) -> KeyPress.Result {
         if press.key == .space {
             showOriginal.toggle()
+            return .handled
+        }
+        // Backspace removes the selected photo(s). Handled here (scoped to
+        // canvas focus) rather than as a menu key equivalent, so it never
+        // steals Backspace from text fields in the inspector. ⌘⌫ (Delete All)
+        // is a separate menu command routed through a confirmation alert.
+        if press.key == .delete, !press.modifiers.contains(.command) {
+            guard !appState.selectedItems.isEmpty else { return .ignored }
+            withAnimation { appState.removeSelected() }
             return .handled
         }
         guard press.modifiers.contains(.command) else { return .ignored }
@@ -171,13 +195,6 @@ struct CanvasView: View {
             nextIndex = 0
         }
         appState.selectedItems = [appState.library[nextIndex].id]
-    }
-
-    private func removeSelected() {
-        withAnimation {
-            appState.library.removeAll { appState.selectedItems.contains($0.id) }
-            appState.selectedItems.removeAll()
-        }
     }
 
     // MARK: - Viewport
