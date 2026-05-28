@@ -46,7 +46,14 @@ final class PreviewViewModel {
         renderGeneration &+= 1
         let generation = renderGeneration
 
-        renderTask = Task {
+        // `.utility` priority keeps this off the User-initiated QoS band. The
+        // render hops onto the `FrameProcessor` actor, which escalates to the
+        // caller's QoS; at User-initiated it would block on CoreGraphics'
+        // Default-QoS internal render threads (priority inversion flagged at
+        // BorderRenderer's `ctx.draw`). Utility sits at/below those workers, so
+        // no high-priority thread waits on a lower one. The 150ms debounce
+        // already makes this non-instant, so the QoS drop is imperceptible.
+        renderTask = Task(priority: .utility) {
             // Debounce: wait 150ms before rendering
             try? await Task.sleep(for: .milliseconds(150))
             guard generation == renderGeneration else { return }
