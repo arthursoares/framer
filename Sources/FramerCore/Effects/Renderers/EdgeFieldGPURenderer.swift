@@ -319,6 +319,10 @@ public enum EdgeFieldGPURenderer {
             }
         }()
         u.backgroundIntensity = Float(p.backgroundIntensity)
+        if p.mode == .palette {
+            let colors = (p.palette?.isEmpty == false ? p.palette! : VintagePalette.gameBoy)
+            u.setPalette(colors.map(simdColor))
+        }
     }
 
     @inline(__always)

@@ -182,10 +182,37 @@ struct FramerGeometryUniforms {
     float _pad;         // keep struct 16-byte aligned
 };
 
+// Hard cap on uploaded palette colours for `mode == 3`. Mirrors
+// FramerColorUniformsLayout.setPalette in SharedUniforms.swift and the
+// 16-colour cap DitherColorMode.palette already enforces.
+#define FRAMER_MAX_PALETTE 16
+
 struct FramerColorUniforms {
     uint  mode;               // 0 = source, 1 = fg/bg, 2 = monochrome, 3 = palette
     float backgroundIntensity;
-    float2 _pad;
+    uint  paletteCount;       // 1..FRAMER_MAX_PALETTE — only read when mode == 3
+    float _pad1;
     float4 foregroundRGBA;    // RGB in .xyz, unused in .w
     float4 backgroundRGBA;
+    // Quantization targets for mode == 3. Zero-filled past paletteCount.
+    float4 palette[FRAMER_MAX_PALETTE];
 };
+
+// Palette nearest-match (Euclidean distance in 0..1 RGB) — the same pick
+// DitherGPURenderer's palettePick performs, shared so every bucket effect
+// quantizes identically in palette colour mode.
+inline float3 framerPalettePick(float3 c, constant FramerColorUniforms &color) {
+    int n = clamp(int(color.paletteCount), 1, FRAMER_MAX_PALETTE);
+    float bestDist = 1e30;
+    float3 bestColor = color.palette[0].rgb;
+    for (int i = 0; i < n; i++) {
+        float3 p = color.palette[i].rgb;
+        float3 d = c - p;
+        float dist = dot(d, d);
+        if (dist < bestDist) {
+            bestDist = dist;
+            bestColor = p;
+        }
+    }
+    return bestColor;
+}

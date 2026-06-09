@@ -184,11 +184,14 @@ static float4 dotsVariant(
     //   0 = source color
     //   1 = fg/bg (custom colors × luma)
     //   2 = monochrome (grayscale)
+    //   3 = palette (source color quantized to the nearest palette entry)
     float3 dotColor;
     if (u.color.mode == 2) {
         dotColor = float3(luma);
     } else if (u.color.mode == 1) {
         dotColor = u.color.foregroundRGBA.rgb * luma;
+    } else if (u.color.mode == 3) {
+        dotColor = framerPalettePick(srcColor, u.color);
     } else {
         dotColor = srcColor;
     }
@@ -248,6 +251,9 @@ static float4 blockifyVariant(
     float3 fgColor;
     if (u.color.mode == 1u) {
         fgColor = cellColor;
+    } else if (u.color.mode == 3u) {
+        // Palette: per-cell sampled colour quantized to the nearest entry.
+        fgColor = framerPalettePick(cellColor, u.color);
     } else {
         fgColor = u.color.foregroundRGBA.rgb;
     }

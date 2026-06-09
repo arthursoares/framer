@@ -44,10 +44,21 @@ public struct GPUEffectGeometryParameters: Codable, Equatable, Sendable {
 public struct GPUEffectColorParameters: Codable, Equatable, Sendable {
     public var mode: GPUEffectColorMode
     public var backgroundIntensity: Double
+    /// Quantization targets for `.palette` mode, ordered as displayed in the
+    /// palette editor. `nil` (the default, and what every pre-palette file
+    /// decodes to) falls back to `VintagePalette.gameBoy` at render time.
+    /// Renderers upload at most `FramerColorUniformsLayout.maxPaletteColors`
+    /// (16) entries.
+    public var palette: [CodableColor]?
 
-    public init(mode: GPUEffectColorMode = .source, backgroundIntensity: Double = 0) {
+    public init(
+        mode: GPUEffectColorMode = .source,
+        backgroundIntensity: Double = 0,
+        palette: [CodableColor]? = nil
+    ) {
         self.mode = mode
         self.backgroundIntensity = backgroundIntensity
+        self.palette = palette
     }
 }
 

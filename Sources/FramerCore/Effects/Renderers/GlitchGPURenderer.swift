@@ -217,6 +217,10 @@ public enum GlitchGPURenderer {
             }
         }()
         u.backgroundIntensity = Float(p.backgroundIntensity)
+        if p.mode == .palette {
+            let colors = (p.palette?.isEmpty == false ? p.palette! : VintagePalette.gameBoy)
+            u.setPalette(colors.map { SIMD4(Float($0.red), Float($0.green), Float($0.blue), 1) })
+        }
     }
 
     @inline(__always)

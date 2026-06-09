@@ -94,6 +94,19 @@ public enum GPUEffectKind: String, Codable, Hashable, Sendable, CaseIterable {
         }
     }
 
+    /// Does the variant's shader implement `.palette` colour mode
+    /// (quantizing its output against `GPUEffectColorParameters.palette`
+    /// via `framerPalettePick` in ShaderCommon.h)? Drives whether the
+    /// colour-mode picker offers "Palette" and shows the palette editor.
+    /// MatrixRain is excluded — its glyph colour comes from `rainColor`,
+    /// not the shared colour block.
+    public var usesPalette: Bool {
+        switch self {
+        case .dots, .blockify, .threshold, .crosshatch, .edgeDetection: return true
+        default: return false
+        }
+    }
+
     /// Does the shader use `color.backgroundIntensity` as a general "paper
     /// level" (max'd against the computed ink)?
     public var usesBackgroundIntensity: Bool {

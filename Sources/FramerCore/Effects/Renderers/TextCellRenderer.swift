@@ -41,14 +41,11 @@ public enum TextCellRenderer {
         var _pad: Float = 0
     }
 
-    private struct FramerColorUniforms {
-        var mode: UInt32 = 0
-        var backgroundIntensity: Float = 1
-        var _pad0: Float = 0
-        var _pad1: Float = 0
-        var foregroundRGBA: SIMD4<Float> = SIMD4(1, 1, 1, 1)
-        var backgroundRGBA: SIMD4<Float> = SIMD4(0, 0, 0, 1)
-    }
+    // Private mirror of the shared color block. Kept in sync with
+    // FramerColorUniformsLayout (SharedUniforms.swift) and the MSL struct
+    // in ShaderCommon.h — reuse the shared layout type so the palette
+    // extension can't drift.
+    private typealias FramerColorUniforms = FramerColorUniformsLayout
 
     private struct TextCellUniforms {
         var common = FramerCommonUniforms()
@@ -340,6 +337,11 @@ public enum TextCellRenderer {
         }
         if let bg = params.background {
             u.color.backgroundRGBA = simdColor(bg)
+        }
+
+        if color.mode == .palette {
+            let colors = (color.palette?.isEmpty == false ? color.palette! : VintagePalette.gameBoy)
+            u.color.setPalette(colors.map(simdColor))
         }
 
         // Variant-specific.

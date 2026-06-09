@@ -123,6 +123,7 @@ public enum YAMLConfig {
         var gpu_output_width: Int?
         var gpu_color_mode: String?
         var gpu_background_intensity: Double?
+        var gpu_palette: [String]?
         var gpu_character_set: String?
         var gpu_text_variant: String?
         var gpu_text_speed: Double?
@@ -657,6 +658,7 @@ public enum YAMLConfig {
         func encodeColor(_ color: GPUEffectColorParameters) {
             schema.gpu_color_mode = color.mode.rawValue
             schema.gpu_background_intensity = color.backgroundIntensity
+            schema.gpu_palette = color.palette?.map(\.hex)
         }
 
         switch params {
@@ -760,7 +762,8 @@ public enum YAMLConfig {
         )
         let color = GPUEffectColorParameters(
             mode: schema.gpu_color_mode.flatMap(GPUEffectColorMode.init(rawValue:)) ?? .source,
-            backgroundIntensity: schema.gpu_background_intensity ?? 0
+            backgroundIntensity: schema.gpu_background_intensity ?? 0,
+            palette: schema.gpu_palette.map { $0.compactMap { try? CodableColor(hex: $0) } }
         )
 
         switch kind {
