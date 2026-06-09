@@ -142,6 +142,7 @@ public enum YAMLConfig {
         var gpu_block_style: String?
         var gpu_block_border_width: Double?
         var gpu_block_border_color: String?
+        var gpu_text_size_multiplier: Double?
         var gpu_sampling_variant: String?
         var gpu_sample_density: Double?
         var gpu_sampling_threshold: Double?
@@ -686,6 +687,7 @@ public enum YAMLConfig {
             schema.gpu_block_style = payload.blockStyle.rawValue
             schema.gpu_block_border_width = payload.borderWidth
             schema.gpu_block_border_color = payload.borderColor?.hex
+            schema.gpu_text_size_multiplier = payload.sizeMultiplier
         case .printSampling(let common, let geometry, let color, let payload):
             encodeCommon(common)
             encodeGeometry(geometry)
@@ -796,7 +798,8 @@ public enum YAMLConfig {
                     invert: schema.gpu_text_invert ?? false,
                     blockStyle: schema.gpu_block_style.flatMap(BlockStyle.init(rawValue:)) ?? .solid,
                     borderWidth: schema.gpu_block_border_width ?? 0,
-                    borderColor: schema.gpu_block_border_color.flatMap { try? CodableColor(hex: $0) }
+                    borderColor: schema.gpu_block_border_color.flatMap { try? CodableColor(hex: $0) },
+                    sizeMultiplier: schema.gpu_text_size_multiplier ?? 1
                 )
             )
         case .dithering, .halftone, .threshold, .crosshatch:

@@ -340,6 +340,17 @@ struct GPUEffectLayerControls: View {
                 }
             }
 
+            // Output Width is the effect's render resolution — consumed by
+            // every renderer family, so it stays visible for all kinds
+            // (mirrors the mobile inspector; previously the binding existed
+            // here but no control was wired to it).
+            DenseSliderControlRow(
+                title: "Output Width",
+                value: outputWidthBinding,
+                range: 120...640,
+                step: 1
+            )
+
             if params.kind.usesColorModeAndFgBg {
                 // Palette was dead on every variant that uses this picker
                 // (dots / blockify / matrixRain / threshold / crosshatch /
@@ -788,7 +799,9 @@ struct GPUEffectLayerControls: View {
                     // previously couldn't tune this — default was the only value.
                     adjustmentSlider(label: "Threshold", binding: printSamplingBinding(\.threshold), range: 0...1)
                     adjustmentSlider(label: "Density", binding: hatchDensityBinding, range: 0...1)
-                    adjustmentSlider(label: "Layers", binding: hatchLayersBinding, range: 1...4)
+                    // Max 3 matches the GPU clamp (PrintSamplingGPURenderer
+                    // caps hatchLayers at 3) — position 4 was a no-op.
+                    adjustmentSlider(label: "Layers", binding: hatchLayersBinding, range: 1...3)
                     adjustmentSlider(label: "Angle", binding: hatchAngleBinding, range: 0...90)
                     adjustmentSlider(label: "Line Width", binding: hatchLineWidthBinding, range: 0.05...1)
                     adjustmentSlider(label: "Random", binding: hatchRandomnessBinding, range: 0...1)
@@ -845,7 +858,7 @@ struct GPUEffectLayerControls: View {
             set: { newKind in
                 var copy = params
                 copy.kind = newKind
-                copy.params = Self.defaultParams(for: newKind)
+                copy.params = newKind.defaultParameters()
                 onChange(copy)
             }
         )
@@ -895,41 +908,6 @@ struct GPUEffectLayerControls: View {
             copy.params = .glitch(common: common, geometry: .init(scale: scale ?? geometry.scale, spacing: spacing ?? geometry.spacing, outputWidth: outputWidth ?? geometry.outputWidth), color: color, glitch: payload)
         }
         return copy
-    }
-
-    private static func defaultParams(for kind: GPUEffectKind) -> GPUEffectParameters {
-        switch kind {
-        case .ascii:
-            return .textCell(common: .init(), geometry: .init(scale: 1.0, spacing: 2.0, outputWidth: 240), color: .init(mode: .foregroundBackground, backgroundIntensity: 0.2), textCell: .init(characterSet: .classicASCII, variant: .ascii))
-        case .matrixRain:
-            return .textCell(common: .init(), geometry: .init(scale: 1.0, spacing: 2.0, outputWidth: 240), color: .init(mode: .foregroundBackground, backgroundIntensity: 0.2), textCell: .init(characterSet: .classicASCII, variant: .matrixRain))
-        case .blockify:
-            return .textCell(common: .init(), geometry: .init(scale: 1.0, spacing: 3.0, outputWidth: 240), color: .init(mode: .source, backgroundIntensity: 0.0), textCell: .init(characterSet: .classicASCII, variant: .blockify))
-        case .dots:
-            return .textCell(common: .init(), geometry: .init(scale: 0.9, spacing: 4.0, outputWidth: 240), color: .init(mode: .monochrome, backgroundIntensity: 0.1), textCell: .init(characterSet: .classicASCII, variant: .dots))
-        case .dithering:
-            return .printSampling(common: .init(), geometry: .init(scale: 1.0, spacing: 2.0, outputWidth: 240), color: .init(mode: .monochrome, backgroundIntensity: 0.1), printSampling: .init(variant: .dithering, sampleDensity: 0.5, threshold: 0.5))
-        case .halftone:
-            return .printSampling(common: .init(), geometry: .init(scale: 0.9, spacing: 3.0, outputWidth: 240), color: .init(mode: .source, backgroundIntensity: 0.0), printSampling: .init(variant: .halftone, sampleDensity: 0.7, threshold: 0.4))
-        case .threshold:
-            return .printSampling(common: .init(), geometry: .init(scale: 1.0, spacing: 2.0, outputWidth: 240), color: .init(mode: .monochrome, backgroundIntensity: 0.2), printSampling: .init(variant: .threshold, sampleDensity: 0.5, threshold: 0.6))
-        case .crosshatch:
-            return .printSampling(common: .init(), geometry: .init(scale: 0.8, spacing: 4.0, outputWidth: 240), color: .init(mode: .foregroundBackground, backgroundIntensity: 0.15), printSampling: .init(variant: .crosshatch, sampleDensity: 0.65, threshold: 0.45))
-        case .contour:
-            return .edgeField(common: .init(), geometry: .init(scale: 1.0, spacing: 2.0, outputWidth: 240), color: .init(mode: .monochrome, backgroundIntensity: 0.05), edgeField: .init(variant: .contour, lineStrength: 0.6, fieldIntensity: 0.7))
-        case .edgeDetection:
-            return .edgeField(common: .init(), geometry: .init(scale: 0.9, spacing: 2.0, outputWidth: 240), color: .init(mode: .foregroundBackground, backgroundIntensity: 0.1), edgeField: .init(variant: .edgeDetection, lineStrength: 0.8, fieldIntensity: 0.5))
-        case .waveLines:
-            return .edgeField(common: .init(), geometry: .init(scale: 1.2, spacing: 4.0, outputWidth: 240), color: .init(mode: .palette, backgroundIntensity: 0.2), edgeField: .init(variant: .waveLines, lineStrength: 0.5, fieldIntensity: 0.9))
-        case .voronoi:
-            return .edgeField(common: .init(), geometry: .init(scale: 1.1, spacing: 3.0, outputWidth: 240), color: .init(mode: .source, backgroundIntensity: 0.0), edgeField: .init(variant: .voronoi, lineStrength: 0.55, fieldIntensity: 0.85))
-        case .noiseField:
-            return .edgeField(common: .init(), geometry: .init(scale: 0.8, spacing: 5.0, outputWidth: 240), color: .init(mode: .monochrome, backgroundIntensity: 0.15), edgeField: .init(variant: .noiseField, lineStrength: 0.45, fieldIntensity: 0.95))
-        case .pixelSort:
-            return .glitch(common: .init(), geometry: .init(scale: 1.0, spacing: 1.0, outputWidth: 240), color: .init(mode: .source, backgroundIntensity: 0.0), glitch: .init(variant: .pixelSort, amount: 0.65, threshold: 0.42))
-        case .vhs:
-            return .glitch(common: .init(), geometry: .init(scale: 1.0, spacing: 2.0, outputWidth: 240), color: .init(mode: .foregroundBackground, backgroundIntensity: 0.08), glitch: .init(variant: .vhs, amount: 0.75, threshold: 0.5))
-        }
     }
 
     private func adjustmentSlider(label: String, binding: Binding<Double>, range: ClosedRange<Double>) -> some View {

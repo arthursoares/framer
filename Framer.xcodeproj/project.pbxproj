@@ -519,7 +519,6 @@
 				};
 			};
 			buildConfigurationList = 574C6649FA5221AF13B369DF /* Build configuration list for PBXProject "Framer" */;
-			compatibilityVersion = "Xcode 14.0";
 			developmentRegion = en;
 			hasScannedForEncodings = 0;
 			knownRegions = (
@@ -532,6 +531,7 @@
 				4B05723A617308862895A16A /* XCLocalSwiftPackageReference "." */,
 			);
 			preferredProjectObjectVersion = 77;
+			productRefGroup = B5A0391E294805ACCD5427AD /* Products */;
 			projectDirPath = "";
 			projectRoot = "";
 			targets = (

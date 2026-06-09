@@ -197,24 +197,31 @@ private struct GPUEffectControls: View {
                 )
             )
 
-            ControlRow(label: "Scale") {
-                HStack {
-                    Slider(value: scaleBinding, in: 0.5...2.0)
-                    Text(String(format: "%.2f", scaleBinding.wrappedValue))
-                        .font(AppFont.mono(12))
-                        .frame(width: 44, alignment: .trailing)
+            // Per-variant pruning mirrors the desktop sidebar: only show
+            // controls whose uniforms the variant's shader actually reads
+            // (see GPUEffectKind capability flags).
+            if params.kind.usesGeometry {
+                ControlRow(label: "Scale") {
+                    HStack {
+                        Slider(value: scaleBinding, in: 0.5...2.0)
+                        Text(String(format: "%.2f", scaleBinding.wrappedValue))
+                            .font(AppFont.mono(12))
+                            .frame(width: 44, alignment: .trailing)
+                    }
+                }
+
+                ControlRow(label: "Spacing") {
+                    HStack {
+                        Slider(value: spacingBinding, in: 1...8)
+                        Text(String(format: "%.1f", spacingBinding.wrappedValue))
+                            .font(AppFont.mono(12))
+                            .frame(width: 44, alignment: .trailing)
+                    }
                 }
             }
 
-            ControlRow(label: "Spacing") {
-                HStack {
-                    Slider(value: spacingBinding, in: 1...8)
-                    Text(String(format: "%.1f", spacingBinding.wrappedValue))
-                        .font(AppFont.mono(12))
-                        .frame(width: 44, alignment: .trailing)
-                }
-            }
-
+            // Output Width is the effect's render resolution — consumed by
+            // every renderer family, so it stays visible for all kinds.
             ControlRow(label: "Output Width") {
                 HStack {
                     Slider(value: outputWidthBinding, in: 120...640, step: 1)
@@ -224,24 +231,32 @@ private struct GPUEffectControls: View {
                 }
             }
 
-            ControlRow(label: "Color Mode") {
-                Picker("Color Mode", selection: colorModeBinding) {
-                    // Palette dropped — see LayerListSection.swift; none of
-                    // the GPU-effect bucket shaders read a palette uniform.
-                    Text("Source").tag(GPUEffectColorMode.source)
-                    Text("FG/BG").tag(GPUEffectColorMode.foregroundBackground)
-                    Text("Mono").tag(GPUEffectColorMode.monochrome)
+            if params.kind.usesColorModeAndFgBg {
+                ControlRow(label: "Color Mode") {
+                    Picker("Color Mode", selection: colorModeBinding) {
+                        // Palette dropped — see LayerListSection.swift; none of
+                        // the GPU-effect bucket shaders read a palette uniform.
+                        Text("Source").tag(GPUEffectColorMode.source)
+                        Text("FG/BG").tag(GPUEffectColorMode.foregroundBackground)
+                        Text("Mono").tag(GPUEffectColorMode.monochrome)
+                    }
+                    .pickerStyle(.menu)
                 }
-                .pickerStyle(.menu)
             }
 
-            SliderRow(label: "Background", value: backgroundIntensityBinding, range: 0...1)
-            SliderRow(label: "Brightness", value: commonBinding(\.brightness), range: -1...1)
-            SliderRow(label: "Contrast", value: commonBinding(\.contrast), range: 0...3)
-            SliderRow(label: "Saturation", value: commonBinding(\.saturation), range: 0...2)
-            SliderRow(label: "Hue", value: commonBinding(\.hueRotation), range: -1...1)
-            SliderRow(label: "Sharpness", value: commonBinding(\.sharpness), range: 0...2)
-            SliderRow(label: "Gamma", value: commonBinding(\.gamma), range: 0.2...2)
+            if params.kind.usesBackgroundIntensity || params.kind.usesColorModeAndFgBg {
+                SliderRow(label: "Background", value: backgroundIntensityBinding, range: 0...1)
+            }
+
+            if params.kind.usesCommonAdjustments {
+                SliderRow(label: "Brightness", value: commonBinding(\.brightness), range: -1...1)
+                SliderRow(label: "Contrast", value: commonBinding(\.contrast), range: 0...3)
+                SliderRow(label: "Saturation", value: commonBinding(\.saturation), range: 0...2)
+                SliderRow(label: "Hue", value: commonBinding(\.hueRotation), range: -1...1)
+                // Sharpness dropped — no bucket shader consumes it (matches
+                // the desktop sidebar).
+                SliderRow(label: "Gamma", value: commonBinding(\.gamma), range: 0.2...2)
+            }
 
             if case .textCell(let common, let geometry, let color, let payload) = params.params,
                params.kind == .ascii {
@@ -444,6 +459,11 @@ private struct GPUEffectControls: View {
                     .pickerStyle(.menu)
                 }
 
+                // Threshold (luminance cutoff for sortable pixels) and
+                // Amount (blend of sorted vs. original) mirror the desktop
+                // sidebar.
+                SliderRow(label: "Threshold", value: glitchBinding(\.threshold), range: 0...1)
+                SliderRow(label: "Amount", value: glitchBinding(\.amount), range: 0...1)
                 SliderRow(label: "Streak", value: glitchBinding(\.streakLength), range: 0...1)
                 SliderRow(label: "Random", value: glitchBinding(\.randomness), range: 0...1)
 
@@ -455,6 +475,9 @@ private struct GPUEffectControls: View {
 
             if case .glitch(_, _, _, _) = params.params,
                params.kind == .vhs {
+                // Amount is the master VHS strength — scales tracking,
+                // distortion, and chroma in Glitch.metal.
+                SliderRow(label: "Amount", value: glitchBinding(\.amount), range: 0...1)
                 SliderRow(label: "Distortion", value: glitchBinding(\.distortion), range: 0...1)
                 SliderRow(label: "Color Bleed", value: glitchBinding(\.colorBleed), range: 0...1)
                 SliderRow(label: "Scanlines", value: glitchBinding(\.scanlines), range: 0...1)
@@ -463,7 +486,9 @@ private struct GPUEffectControls: View {
 
             if case .edgeField(let common, let geometry, let color, let payload) = params.params,
                params.kind == .waveLines {
-                SliderRow(label: "Line Count", value: edgeFieldBinding(\.lineCount), range: 1...64)
+                // Line Strength drives the shader's threshold shaping —
+                // the primary brightness knob (mirrors desktop sidebar).
+                SliderRow(label: "Line Strength", value: edgeFieldBinding(\.lineStrength), range: 0...1)
                 SliderRow(label: "Amplitude", value: edgeFieldBinding(\.amplitude), range: 0...1)
                 SliderRow(label: "Frequency", value: edgeFieldBinding(\.frequency), range: 0.1...4)
                 SliderRow(label: "Thickness", value: edgeFieldBinding(\.thickness), range: 0.05...1)
@@ -476,14 +501,37 @@ private struct GPUEffectControls: View {
                     .pickerStyle(.menu)
                 }
 
-                ControlRow(label: "Animate") {
-                    Toggle("Animate", isOn: edgeAnimateBinding)
-                        .labelsHidden()
+                // Range matches the desktop sidebar: the shader computes
+                // countFactor = max(1, lineCount/spacing); 1...40 covers
+                // "no boost" through "very dense bands".
+                SliderRow(label: "Line Count", value: edgeFieldBinding(\.lineCount), range: 1...40)
+                // Animate stays hidden — no time uniform yet.
+
+                ControlRow(label: "Line Color") {
+                    ColorPicker("", selection: Binding(
+                        get: { Color(cgColor: (payload.edgeColor ?? CodableColor(unchecked: "#FFFFFF")).cgColor) },
+                        set: { newColor in
+                            guard let hex = newColor.hexString, let codable = try? CodableColor(hex: hex) else { return }
+                            var updatedPayload = payload
+                            updatedPayload.edgeColor = codable
+                            onChange(updated(layer: params, params: .edgeField(common: common, geometry: geometry, color: color, edgeField: updatedPayload)))
+                        }
+                    ))
+                    .labelsHidden()
                 }
             }
 
             if case .edgeField(let common, let geometry, let color, let payload) = params.params,
                params.kind == .noiseField {
+                // Line Strength gates the noise contribution; Field
+                // Intensity biases the baseline level (mirrors desktop).
+                SliderRow(label: "Line Strength", value: edgeFieldBinding(\.lineStrength), range: 0...1)
+                SliderRow(label: "Field Intensity", value: edgeFieldBinding(\.fieldIntensity), range: 0...1)
+                // Range matches the GPU clamp (EdgeFieldGPURenderer caps
+                // octaves at 6) — values above were silently ignored.
+                SliderRow(label: "Octaves", value: noiseOctavesBinding, range: 1...6)
+                SliderRow(label: "Scale", value: edgeFieldBinding(\.amplitude), range: 0.1...1)
+
                 ControlRow(label: "Noise Type") {
                     Picker("Noise Type", selection: noiseTypeBinding) {
                         Text("Value").tag(NoiseFieldType.value)
@@ -493,19 +541,26 @@ private struct GPUEffectControls: View {
                     .pickerStyle(.menu)
                 }
 
-                SliderRow(label: "Octaves", value: noiseOctavesBinding, range: 1...8)
-                SliderRow(label: "Scale", value: edgeFieldBinding(\.amplitude), range: 0.1...1)
-                SliderRow(label: "Speed", value: noiseSpeedBinding, range: 0...1)
-
-                ControlRow(label: "Animate") {
-                    Toggle("Animate", isOn: edgeAnimateBinding)
+                ControlRow(label: "Invert") {
+                    Toggle("Invert", isOn: edgeInvertBinding)
                         .labelsHidden()
                 }
 
-                ControlRow(label: "Distort Only") {
-                    Toggle("Distort Only", isOn: noiseDistortOnlyBinding)
-                        .labelsHidden()
+                ControlRow(label: "Field Color") {
+                    ColorPicker("", selection: Binding(
+                        get: { Color(cgColor: (payload.edgeColor ?? CodableColor(unchecked: "#FFFFFF")).cgColor) },
+                        set: { newColor in
+                            guard let hex = newColor.hexString, let codable = try? CodableColor(hex: hex) else { return }
+                            var updatedPayload = payload
+                            updatedPayload.edgeColor = codable
+                            onChange(updated(layer: params, params: .edgeField(common: common, geometry: geometry, color: color, edgeField: updatedPayload)))
+                        }
+                    ))
+                    .labelsHidden()
                 }
+                // Speed + Animate stay hidden (no time uniform yet).
+                // Distort Only stays hidden (shader generates standalone,
+                // doesn't distort source UVs).
             }
 
             if case .edgeField(let common, let geometry, let color, let payload) = params.params,
@@ -518,6 +573,7 @@ private struct GPUEffectControls: View {
                     .pickerStyle(.menu)
                 }
 
+                SliderRow(label: "Line Strength", value: edgeFieldBinding(\.lineStrength), range: 0...1)
                 SliderRow(label: "Threshold", value: edgeThresholdBinding, range: 0...1)
                 SliderRow(label: "Line Width", value: edgeFieldBinding(\.thickness), range: 0.05...1)
 
@@ -620,8 +676,13 @@ private struct GPUEffectControls: View {
                 }
 
                 if params.kind == .crosshatch {
+                    // Threshold is the luminance cutoff that decides which
+                    // pixels get inked (mirrors desktop sidebar).
+                    SliderRow(label: "Threshold", value: printSamplingBinding(\.threshold), range: 0...1)
                     SliderRow(label: "Density", value: hatchDensityBinding, range: 0...1)
-                    SliderRow(label: "Layers", value: hatchLayersBinding, range: 1...4)
+                    // Max 3 matches the GPU clamp (PrintSamplingGPURenderer
+                    // caps hatchLayers at 3) — position 4 was a no-op.
+                    SliderRow(label: "Layers", value: hatchLayersBinding, range: 1...3)
                     SliderRow(label: "Angle", value: hatchAngleBinding, range: 0...90)
                     SliderRow(label: "Line Width", value: hatchLineWidthBinding, range: 0.05...1)
                     SliderRow(label: "Random", value: hatchRandomnessBinding, range: 0...1)
@@ -633,6 +694,9 @@ private struct GPUEffectControls: View {
                 }
 
                 if params.kind == .threshold {
+                    // Core cutoff — shader decides ink vs paper by
+                    // `quantized < u.threshold` (mirrors desktop sidebar).
+                    SliderRow(label: "Threshold", value: printSamplingBinding(\.threshold), range: 0...1)
                     SliderRow(label: "Levels", value: thresholdLevelsBinding, range: 2...8)
 
                     ControlRow(label: "Dither") {
@@ -681,7 +745,7 @@ private struct GPUEffectControls: View {
             set: { newKind in
                 var copy = params
                 copy.kind = newKind
-                copy.params = Self.defaultParams(for: newKind)
+                copy.params = newKind.defaultParameters()
                 onChange(copy)
             }
         )
@@ -914,6 +978,20 @@ private struct GPUEffectControls: View {
         )
     }
 
+    private func printSamplingBinding(_ keyPath: WritableKeyPath<PrintSamplingParameters, Double>) -> Binding<Double> {
+        Binding(
+            get: {
+                if case .printSampling(_, _, _, let payload) = params.params { return payload[keyPath: keyPath] }
+                return 0.5
+            },
+            set: {
+                guard case .printSampling(let common, let geometry, let color, var payload) = params.params else { return }
+                payload[keyPath: keyPath] = $0
+                onChange(updated(layer: params, params: .printSampling(common: common, geometry: geometry, color: color, printSampling: payload)))
+            }
+        )
+    }
+
     private var hatchDensityBinding: Binding<Double> {
         Binding(
             get: {
@@ -1108,22 +1186,6 @@ private struct GPUEffectControls: View {
         )
     }
 
-    private var edgeAnimateBinding: Binding<Bool> {
-        Binding(
-            get: {
-                if case .edgeField(_, _, _, let payload) = params.params {
-                    return payload.animate
-                }
-                return false
-            },
-            set: {
-                guard case .edgeField(let common, let geometry, let color, var payload) = params.params else { return }
-                payload.animate = $0
-                onChange(updated(layer: params, params: .edgeField(common: common, geometry: geometry, color: color, edgeField: payload)))
-            }
-        )
-    }
-
     private var noiseTypeBinding: Binding<NoiseFieldType> {
         Binding(
             get: {
@@ -1151,38 +1213,6 @@ private struct GPUEffectControls: View {
             set: {
                 guard case .edgeField(let common, let geometry, let color, var payload) = params.params else { return }
                 payload.octaves = max(1, Int($0.rounded()))
-                onChange(updated(layer: params, params: .edgeField(common: common, geometry: geometry, color: color, edgeField: payload)))
-            }
-        )
-    }
-
-    private var noiseSpeedBinding: Binding<Double> {
-        Binding(
-            get: {
-                if case .edgeField(_, _, _, let payload) = params.params {
-                    return payload.speed
-                }
-                return 0
-            },
-            set: {
-                guard case .edgeField(let common, let geometry, let color, var payload) = params.params else { return }
-                payload.speed = $0
-                onChange(updated(layer: params, params: .edgeField(common: common, geometry: geometry, color: color, edgeField: payload)))
-            }
-        )
-    }
-
-    private var noiseDistortOnlyBinding: Binding<Bool> {
-        Binding(
-            get: {
-                if case .edgeField(_, _, _, let payload) = params.params {
-                    return payload.distortOnly
-                }
-                return false
-            },
-            set: {
-                guard case .edgeField(let common, let geometry, let color, var payload) = params.params else { return }
-                payload.distortOnly = $0
                 onChange(updated(layer: params, params: .edgeField(common: common, geometry: geometry, color: color, edgeField: payload)))
             }
         )
@@ -1378,40 +1408,6 @@ private struct GPUEffectControls: View {
         return copy
     }
 
-    private static func defaultParams(for kind: GPUEffectKind) -> GPUEffectParameters {
-        switch kind {
-        case .ascii:
-            return .textCell(common: .init(), geometry: .init(scale: 1.0, spacing: 2.0, outputWidth: 240), color: .init(mode: .foregroundBackground, backgroundIntensity: 0.2), textCell: .init(characterSet: .classicASCII, variant: .ascii))
-        case .matrixRain:
-            return .textCell(common: .init(), geometry: .init(scale: 1.0, spacing: 2.0, outputWidth: 240), color: .init(mode: .foregroundBackground, backgroundIntensity: 0.2), textCell: .init(characterSet: .classicASCII, variant: .matrixRain))
-        case .blockify:
-            return .textCell(common: .init(), geometry: .init(scale: 1.0, spacing: 3.0, outputWidth: 240), color: .init(mode: .source, backgroundIntensity: 0.0), textCell: .init(characterSet: .classicASCII, variant: .blockify))
-        case .dots:
-            return .textCell(common: .init(), geometry: .init(scale: 0.9, spacing: 4.0, outputWidth: 240), color: .init(mode: .monochrome, backgroundIntensity: 0.1), textCell: .init(characterSet: .classicASCII, variant: .dots))
-        case .dithering:
-            return .printSampling(common: .init(), geometry: .init(scale: 1.0, spacing: 2.0, outputWidth: 240), color: .init(mode: .monochrome, backgroundIntensity: 0.1), printSampling: .init(variant: .dithering, sampleDensity: 0.5, threshold: 0.5))
-        case .halftone:
-            return .printSampling(common: .init(), geometry: .init(scale: 0.9, spacing: 3.0, outputWidth: 240), color: .init(mode: .source, backgroundIntensity: 0.0), printSampling: .init(variant: .halftone, sampleDensity: 0.7, threshold: 0.4))
-        case .threshold:
-            return .printSampling(common: .init(), geometry: .init(scale: 1.0, spacing: 2.0, outputWidth: 240), color: .init(mode: .monochrome, backgroundIntensity: 0.2), printSampling: .init(variant: .threshold, sampleDensity: 0.5, threshold: 0.6))
-        case .crosshatch:
-            return .printSampling(common: .init(), geometry: .init(scale: 0.8, spacing: 4.0, outputWidth: 240), color: .init(mode: .foregroundBackground, backgroundIntensity: 0.15), printSampling: .init(variant: .crosshatch, sampleDensity: 0.65, threshold: 0.45))
-        case .contour:
-            return .edgeField(common: .init(), geometry: .init(scale: 1.0, spacing: 2.0, outputWidth: 240), color: .init(mode: .monochrome, backgroundIntensity: 0.05), edgeField: .init(variant: .contour, lineStrength: 0.6, fieldIntensity: 0.7))
-        case .edgeDetection:
-            return .edgeField(common: .init(), geometry: .init(scale: 0.9, spacing: 2.0, outputWidth: 240), color: .init(mode: .foregroundBackground, backgroundIntensity: 0.1), edgeField: .init(variant: .edgeDetection, lineStrength: 0.8, fieldIntensity: 0.5))
-        case .waveLines:
-            return .edgeField(common: .init(), geometry: .init(scale: 1.2, spacing: 4.0, outputWidth: 240), color: .init(mode: .palette, backgroundIntensity: 0.2), edgeField: .init(variant: .waveLines, lineStrength: 0.5, fieldIntensity: 0.9))
-        case .voronoi:
-            return .edgeField(common: .init(), geometry: .init(scale: 1.1, spacing: 3.0, outputWidth: 240), color: .init(mode: .source, backgroundIntensity: 0.0), edgeField: .init(variant: .voronoi, lineStrength: 0.55, fieldIntensity: 0.85))
-        case .noiseField:
-            return .edgeField(common: .init(), geometry: .init(scale: 0.8, spacing: 5.0, outputWidth: 240), color: .init(mode: .monochrome, backgroundIntensity: 0.15), edgeField: .init(variant: .noiseField, lineStrength: 0.45, fieldIntensity: 0.95))
-        case .pixelSort:
-            return .glitch(common: .init(), geometry: .init(scale: 1.0, spacing: 1.0, outputWidth: 240), color: .init(mode: .source, backgroundIntensity: 0.0), glitch: .init(variant: .pixelSort, amount: 0.65, threshold: 0.42))
-        case .vhs:
-            return .glitch(common: .init(), geometry: .init(scale: 1.0, spacing: 2.0, outputWidth: 240), color: .init(mode: .foregroundBackground, backgroundIntensity: 0.08), glitch: .init(variant: .vhs, amount: 0.75, threshold: 0.5))
-        }
-    }
 }
 
 // MARK: - Shared Helpers
@@ -1440,11 +1436,21 @@ private struct SliderRow: View {
     let range: ClosedRange<Double>
     var unit: String = ""
 
+    /// Narrow ranges (0...1, 0.2...2, …) are fractional parameters — an
+    /// integer readout would render every value as "0" or "1". Wide ranges
+    /// (angles, counts, sizes) read better as whole numbers.
+    private var formattedValue: String {
+        if range.upperBound - range.lowerBound <= 10 {
+            return String(format: "%.2f", value)
+        }
+        return "\(Int(value))"
+    }
+
     var body: some View {
         ControlRow(label: label) {
             HStack {
                 Slider(value: $value, in: range)
-                Text("\(Int(value))\(unit)")
+                Text("\(formattedValue)\(unit)")
                     .font(AppFont.mono(12))
                     .foregroundStyle(Color.text1)
                     .frame(width: 50, alignment: .trailing)
