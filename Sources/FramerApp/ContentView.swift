@@ -6,7 +6,9 @@ import AppKit
 
 struct ContentView: View {
     @Environment(AppState.self) var appState
+    @Environment(\.undoManager) private var undoManager
     @State private var showOriginal = false
+    @State private var undoCoalescer = ConfigUndoCoalescer()
 
     var body: some View {
         VStack(spacing: 0) {
@@ -17,6 +19,17 @@ struct ContentView: View {
             mainSplitView
         }
         .frame(minWidth: 900, minHeight: 650)
+        // Single undo hook for every config edit (sliders, pickers, layer
+        // add/move/delete, preset application) — see ConfigUndoCoalescer.
+        .onChange(of: appState.currentConfig) { old, new in
+            undoCoalescer.configChanged(
+                from: old,
+                to: new,
+                undoManager: undoManager,
+                current: { appState.currentConfig },
+                restore: { appState.currentConfig = $0 }
+            )
+        }
     }
 
     @ViewBuilder
