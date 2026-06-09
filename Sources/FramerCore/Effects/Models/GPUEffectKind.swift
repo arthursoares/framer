@@ -106,9 +106,10 @@ public enum GPUEffectKind: String, Codable, Hashable, Sendable, CaseIterable {
     /// Common adjustments (brightness / contrast / saturation / hueRotation /
     /// gamma). All bucket fragments EXCEPT pixelSort wrap their source sample
     /// in `applyCommonAdjustments` (see ShaderCommon.h); flipping this true
-    /// surfaces the standard adjustment controls in the sidebar. Sharpness
-    /// is not consumed (would require neighbour samples per-shader); the
-    /// uniform field stays for future use.
+    /// surfaces the standard adjustment controls in the sidebar. (A
+    /// `sharpness` field used to exist here but no shader ever consumed it;
+    /// the model field was retired — only the Metal uniform slot remains,
+    /// always written as 0, to preserve struct layout.)
     ///
     /// PixelSort returns false — Effects/Metal/PixelSort.metal marks its
     /// `colorBlock` uniform as unused and never calls

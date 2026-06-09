@@ -140,7 +140,7 @@ public enum PrintSamplingGPURenderer {
         u.contrast    = Float(p.contrast)
         u.saturation  = Float(p.saturation)
         u.hueRotation = Float(p.hueRotation)
-        u.sharpness   = Float(p.sharpness)
+        u.sharpness   = 0  // retired — no shader consumes it; slot kept for Metal layout
         u.gamma       = Float(p.gamma)
     }
 

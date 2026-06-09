@@ -256,8 +256,8 @@ private struct GPUEffectControls: View {
                 SliderRow(label: "Contrast", value: commonBinding(\.contrast), range: 0...3, step: 0.05, resetValue: defaultCommon.contrast)
                 SliderRow(label: "Saturation", value: commonBinding(\.saturation), range: 0...2, step: 0.05, resetValue: defaultCommon.saturation)
                 SliderRow(label: "Hue", value: commonBinding(\.hueRotation), range: -1...1, step: 0.05, resetValue: defaultCommon.hueRotation)
-                // Sharpness dropped — no bucket shader consumes it (matches
-                // the desktop sidebar).
+                // (No Sharpness slider — the field was retired from the
+                // model entirely; no bucket shader ever consumed it.)
                 SliderRow(label: "Gamma", value: commonBinding(\.gamma), range: 0.2...2, step: 0.05, resetValue: defaultCommon.gamma)
             }
 
@@ -508,7 +508,6 @@ private struct GPUEffectControls: View {
                 // countFactor = max(1, lineCount/spacing); 1...40 covers
                 // "no boost" through "very dense bands".
                 SliderRow(label: "Line Count", value: edgeFieldBinding(\.lineCount), range: 1...40, step: 0.05, resetValue: defaultEdgeField.lineCount)
-                // Animate stays hidden — no time uniform yet.
 
                 ControlRow(label: "Line Color") {
                     ColorPicker("", selection: Binding(
@@ -561,9 +560,6 @@ private struct GPUEffectControls: View {
                     ))
                     .labelsHidden()
                 }
-                // Speed + Animate stay hidden (no time uniform yet).
-                // Distort Only stays hidden (shader generates standalone,
-                // doesn't distort source UVs).
             }
 
             if case .edgeField(let common, let geometry, let color, let payload) = params.params,

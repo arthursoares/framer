@@ -12,7 +12,6 @@ public struct GPUEffectCommonParameters: Codable, Equatable, Sendable {
     public var contrast: Double
     public var saturation: Double
     public var hueRotation: Double
-    public var sharpness: Double
     public var gamma: Double
 
     public init(
@@ -20,14 +19,12 @@ public struct GPUEffectCommonParameters: Codable, Equatable, Sendable {
         contrast: Double = 1,
         saturation: Double = 1,
         hueRotation: Double = 0,
-        sharpness: Double = 0,
         gamma: Double = 1
     ) {
         self.brightness = brightness
         self.contrast = contrast
         self.saturation = saturation
         self.hueRotation = hueRotation
-        self.sharpness = sharpness
         self.gamma = gamma
     }
 }
@@ -333,11 +330,8 @@ public struct EdgeFieldParameters: Codable, Equatable, Sendable {
     public var frequency: Double
     public var thickness: Double
     public var direction: EdgeFieldDirection
-    public var animate: Bool
     public var noiseType: NoiseFieldType
     public var octaves: Int
-    public var speed: Double
-    public var distortOnly: Bool
     public var edgeAlgorithm: EdgeAlgorithm
     public var edgeThreshold: Double
     public var invert: Bool
@@ -357,11 +351,8 @@ public struct EdgeFieldParameters: Codable, Equatable, Sendable {
         frequency: Double = 1.0,
         thickness: Double = 0.3,
         direction: EdgeFieldDirection = .horizontal,
-        animate: Bool = false,
         noiseType: NoiseFieldType = .value,
         octaves: Int = 1,
-        speed: Double = 0,
-        distortOnly: Bool = false,
         edgeAlgorithm: EdgeAlgorithm = .sobel,
         edgeThreshold: Double = 0.5,
         invert: Bool = false,
@@ -380,11 +371,8 @@ public struct EdgeFieldParameters: Codable, Equatable, Sendable {
         self.frequency = frequency
         self.thickness = thickness
         self.direction = direction
-        self.animate = animate
         self.noiseType = noiseType
         self.octaves = octaves
-        self.speed = speed
-        self.distortOnly = distortOnly
         self.edgeAlgorithm = edgeAlgorithm
         self.edgeThreshold = edgeThreshold
         self.invert = invert
@@ -413,11 +401,8 @@ extension EdgeFieldParameters {
             frequency: try c.decodeIfPresent(Double.self, forKey: .frequency) ?? 1.0,
             thickness: try c.decodeIfPresent(Double.self, forKey: .thickness) ?? 0.3,
             direction: try c.decodeIfPresent(EdgeFieldDirection.self, forKey: .direction) ?? .horizontal,
-            animate: try c.decodeIfPresent(Bool.self, forKey: .animate) ?? false,
             noiseType: try c.decodeIfPresent(NoiseFieldType.self, forKey: .noiseType) ?? .value,
             octaves: try c.decodeIfPresent(Int.self, forKey: .octaves) ?? 1,
-            speed: try c.decodeIfPresent(Double.self, forKey: .speed) ?? 0,
-            distortOnly: try c.decodeIfPresent(Bool.self, forKey: .distortOnly) ?? false,
             edgeAlgorithm: try c.decodeIfPresent(EdgeAlgorithm.self, forKey: .edgeAlgorithm) ?? .sobel,
             edgeThreshold: try c.decodeIfPresent(Double.self, forKey: .edgeThreshold) ?? 0.5,
             invert: try c.decodeIfPresent(Bool.self, forKey: .invert) ?? false,

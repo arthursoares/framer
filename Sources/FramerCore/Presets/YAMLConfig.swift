@@ -117,7 +117,6 @@ public enum YAMLConfig {
         var gpu_common_contrast: Double?
         var gpu_common_saturation: Double?
         var gpu_common_hue_rotation: Double?
-        var gpu_common_sharpness: Double?
         var gpu_common_gamma: Double?
         var gpu_scale: Double?
         var gpu_spacing: Double?
@@ -167,11 +166,8 @@ public enum YAMLConfig {
         var gpu_edge_frequency: Double?
         var gpu_edge_thickness: Double?
         var gpu_edge_direction: String?
-        var gpu_edge_animate: Bool?
         var gpu_noise_type: String?
         var gpu_noise_octaves: Int?
-        var gpu_noise_speed: Double?
-        var gpu_noise_distort_only: Bool?
         var gpu_edge_algorithm: String?
         var gpu_edge_threshold: Double?
         var gpu_edge_invert: Bool?
@@ -649,7 +645,6 @@ public enum YAMLConfig {
             schema.gpu_common_contrast = common.contrast
             schema.gpu_common_saturation = common.saturation
             schema.gpu_common_hue_rotation = common.hueRotation
-            schema.gpu_common_sharpness = common.sharpness
             schema.gpu_common_gamma = common.gamma
         }
 
@@ -720,11 +715,8 @@ public enum YAMLConfig {
             schema.gpu_edge_frequency = payload.frequency
             schema.gpu_edge_thickness = payload.thickness
             schema.gpu_edge_direction = payload.direction.rawValue
-            schema.gpu_edge_animate = payload.animate
             schema.gpu_noise_type = payload.noiseType.rawValue
             schema.gpu_noise_octaves = payload.octaves
-            schema.gpu_noise_speed = payload.speed
-            schema.gpu_noise_distort_only = payload.distortOnly
             schema.gpu_edge_algorithm = payload.edgeAlgorithm.rawValue
             schema.gpu_edge_threshold = payload.edgeThreshold
             schema.gpu_edge_invert = payload.invert
@@ -759,7 +751,6 @@ public enum YAMLConfig {
             contrast: schema.gpu_common_contrast ?? 1,
             saturation: schema.gpu_common_saturation ?? 1,
             hueRotation: schema.gpu_common_hue_rotation ?? 0,
-            sharpness: schema.gpu_common_sharpness ?? 0,
             gamma: schema.gpu_common_gamma ?? 1
         )
         let geometry = GPUEffectGeometryParameters(
@@ -842,11 +833,8 @@ public enum YAMLConfig {
                     frequency: schema.gpu_edge_frequency ?? 1.0,
                     thickness: schema.gpu_edge_thickness ?? 0.3,
                     direction: schema.gpu_edge_direction.flatMap(EdgeFieldDirection.init(rawValue:)) ?? .horizontal,
-                    animate: schema.gpu_edge_animate ?? false,
                     noiseType: schema.gpu_noise_type.flatMap(NoiseFieldType.init(rawValue:)) ?? .value,
                     octaves: schema.gpu_noise_octaves ?? 1,
-                    speed: schema.gpu_noise_speed ?? 0,
-                    distortOnly: schema.gpu_noise_distort_only ?? false,
                     edgeAlgorithm: schema.gpu_edge_algorithm.flatMap(EdgeAlgorithm.init(rawValue:)) ?? .sobel,
                     edgeThreshold: schema.gpu_edge_threshold ?? 0.5,
                     invert: schema.gpu_edge_invert ?? false,

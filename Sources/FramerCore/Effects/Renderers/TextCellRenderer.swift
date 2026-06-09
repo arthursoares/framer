@@ -315,7 +315,7 @@ public enum TextCellRenderer {
         u.common.contrast    = Float(common.contrast)
         u.common.saturation  = Float(common.saturation)
         u.common.hueRotation = Float(common.hueRotation)
-        u.common.sharpness   = Float(common.sharpness)
+        u.common.sharpness   = 0  // retired — no shader consumes it; slot kept for Metal layout
         u.common.gamma       = Float(common.gamma)
 
         u.geometry.scale       = Float(geometry.scale)

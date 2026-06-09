@@ -21,6 +21,9 @@ public struct FramerCommonUniformsLayout {
     public var contrast: Float = 0
     public var saturation: Float = 1
     public var hueRotation: Float = 0
+    /// Retired — `GPUEffectCommonParameters.sharpness` was removed (no
+    /// shader ever consumed it). The slot stays, always 0, because the
+    /// Metal-side struct layout (ShaderCommon.h) still declares it.
     public var sharpness: Float = 0
     public var gamma: Float = 1
 

@@ -592,7 +592,6 @@ struct GPUEffectLayerControls: View {
                 // multiplies `frequency` by it. Range 1..40 covers from "no
                 // boost" to "very dense bands" at typical spacing values.
                 adjustmentSlider(label: "Line Count", binding: edgeFieldBinding(\.lineCount), range: 1...40, resetValue: defaultEdgeField.lineCount)
-                // Animate stays hidden — no time uniform yet.
 
                 // Line tint: shader multiplies the ink by edgeColor
                 // (EdgeField.metal: `ink *= u.edgeColor.rgb`); had no picker.
@@ -641,9 +640,6 @@ struct GPUEffectLayerControls: View {
                         onChange(updated(layer: params, params: .edgeField(common: common, geometry: geometry, color: color, edgeField: updatedPayload)))
                     }
                 ))
-                // Speed + Animate stay hidden (no time uniform yet).
-                // Distort Only stays hidden (shader generates standalone,
-                // doesn't distort source UVs).
             }
 
             if case .edgeField(let common, let geometry, let color, let payload) = params.params,
@@ -1332,22 +1328,6 @@ struct GPUEffectLayerControls: View {
         )
     }
 
-    private var edgeAnimateBinding: Binding<Bool> {
-        Binding(
-            get: {
-                if case .edgeField(_, _, _, let payload) = params.params {
-                    return payload.animate
-                }
-                return false
-            },
-            set: { newValue in
-                guard case .edgeField(let common, let geometry, let color, var payload) = params.params else { return }
-                payload.animate = newValue
-                onChange(updated(layer: params, params: .edgeField(common: common, geometry: geometry, color: color, edgeField: payload)))
-            }
-        )
-    }
-
     private var noiseTypeBinding: Binding<NoiseFieldType> {
         Binding(
             get: {
@@ -1364,22 +1344,6 @@ struct GPUEffectLayerControls: View {
         )
     }
 
-    private var noiseSpeedBinding: Binding<Double> {
-        Binding(
-            get: {
-                if case .edgeField(_, _, _, let payload) = params.params {
-                    return payload.speed
-                }
-                return 0
-            },
-            set: { newValue in
-                guard case .edgeField(let common, let geometry, let color, var payload) = params.params else { return }
-                payload.speed = newValue
-                onChange(updated(layer: params, params: .edgeField(common: common, geometry: geometry, color: color, edgeField: payload)))
-            }
-        )
-    }
-
     private var noiseOctavesBinding: Binding<Double> {
         Binding(
             get: {
@@ -1391,22 +1355,6 @@ struct GPUEffectLayerControls: View {
             set: { newValue in
                 guard case .edgeField(let common, let geometry, let color, var payload) = params.params else { return }
                 payload.octaves = max(1, Int(newValue.rounded()))
-                onChange(updated(layer: params, params: .edgeField(common: common, geometry: geometry, color: color, edgeField: payload)))
-            }
-        )
-    }
-
-    private var noiseDistortOnlyBinding: Binding<Bool> {
-        Binding(
-            get: {
-                if case .edgeField(_, _, _, let payload) = params.params {
-                    return payload.distortOnly
-                }
-                return false
-            },
-            set: { newValue in
-                guard case .edgeField(let common, let geometry, let color, var payload) = params.params else { return }
-                payload.distortOnly = newValue
                 onChange(updated(layer: params, params: .edgeField(common: common, geometry: geometry, color: color, edgeField: payload)))
             }
         )
