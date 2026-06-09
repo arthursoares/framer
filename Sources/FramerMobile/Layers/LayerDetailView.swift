@@ -237,13 +237,21 @@ private struct GPUEffectControls: View {
             if params.kind.usesColorModeAndFgBg {
                 ControlRow(label: "Color Mode") {
                     Picker("Color Mode", selection: colorModeBinding) {
-                        // Palette dropped — see LayerListSection.swift; none of
-                        // the GPU-effect bucket shaders read a palette uniform.
                         Text("Source").tag(GPUEffectColorMode.source)
                         Text("FG/BG").tag(GPUEffectColorMode.foregroundBackground)
                         Text("Mono").tag(GPUEffectColorMode.monochrome)
+                        // Offered only where the variant's shader quantizes
+                        // against the palette uniform (framerPalettePick).
+                        if params.kind.usesPalette {
+                            Text("Palette").tag(GPUEffectColorMode.palette)
+                        }
                     }
                     .pickerStyle(.menu)
+                }
+
+                if params.kind.usesPalette,
+                   Self.color(for: params.params).mode == .palette {
+                    gpuPaletteEditor
                 }
             }
 
@@ -786,6 +794,87 @@ private struct GPUEffectControls: View {
     private var defaultGlitch: GlitchParameters {
         if case .glitch(_, _, _, let p) = kindDefaults { return p }
         return GlitchParameters()
+    }
+
+    /// Preset picker + saved palettes + per-colour editor for `.palette`
+    /// colour mode. Mirrors the Dither layer's palette editor in this file.
+    @ViewBuilder
+    private var gpuPaletteEditor: some View {
+        let colors = Self.color(for: params.params).palette ?? VintagePalette.gameBoy
+        let selectedPreset = VintagePalette.Preset.matching(colors)
+
+        ControlRow(label: "Preset") {
+            Picker("", selection: Binding(
+                get: { selectedPreset },
+                set: { newValue in
+                    guard newValue != selectedPreset else { return }
+                    var c = Self.color(for: params.params)
+                    switch newValue {
+                    case .custom:
+                        let base = colors.isEmpty ? VintagePalette.gameBoy : colors
+                        let trimmed = Array(base.prefix(FramerColorUniformsLayout.maxPaletteColors - 1))
+                        c.palette = trimmed + [CodableColor(unchecked: "#808080")]
+                    default:
+                        c.palette = newValue.colors
+                    }
+                    onChange(Self.updatingColor(params, color: c))
+                }
+            )) {
+                ForEach(VintagePalette.Preset.allCases, id: \.self) { preset in
+                    Text(preset.rawValue).tag(preset)
+                }
+            }
+            .pickerStyle(.menu)
+        }
+
+        MobileUserPaletteRow(currentColors: colors) { applied in
+            var c = Self.color(for: params.params)
+            c.palette = applied
+            onChange(Self.updatingColor(params, color: c))
+        }
+
+        ForEach(Array(colors.enumerated()), id: \.offset) { idx, color in
+            ControlRow(label: "Colour \(idx + 1)") {
+                HStack(spacing: 8) {
+                    ColorPicker("", selection: Binding(
+                        get: { Color(cgColor: color.cgColor) },
+                        set: { newColor in
+                            guard let hex = newColor.hexString,
+                                  let codable = try? CodableColor(hex: hex) else { return }
+                            var c = Self.color(for: params.params)
+                            var next = colors
+                            next[idx] = codable
+                            c.palette = next
+                            onChange(Self.updatingColor(params, color: c))
+                        }
+                    ))
+                    .labelsHidden()
+                    if colors.count > 2 {
+                        Button {
+                            var c = Self.color(for: params.params)
+                            var next = colors
+                            next.remove(at: idx)
+                            c.palette = next
+                            onChange(Self.updatingColor(params, color: c))
+                        } label: {
+                            Image(systemName: "minus.circle")
+                        }
+                        .buttonStyle(.borderless)
+                    }
+                }
+            }
+        }
+
+        if colors.count < FramerColorUniformsLayout.maxPaletteColors {
+            Button {
+                var c = Self.color(for: params.params)
+                c.palette = colors + [colors.last ?? CodableColor(unchecked: "#000000")]
+                onChange(Self.updatingColor(params, color: c))
+            } label: {
+                Label("Add Colour", systemImage: "plus.circle")
+            }
+            .buttonStyle(.borderless)
+        }
     }
 
     private var kindBinding: Binding<GPUEffectKind> {
@@ -2278,6 +2367,12 @@ private struct DitherControls: View {
                     .pickerStyle(.menu)
                 }
 
+                MobileUserPaletteRow(currentColors: colors) { applied in
+                    var p = params
+                    p.colorMode = .palette(applied)
+                    onChange(p)
+                }
+
                 ForEach(Array(colors.enumerated()), id: \.offset) { idx, color in
                     ControlRow(label: "Colour \(idx + 1)") {
                         HStack(spacing: 8) {
@@ -3348,6 +3443,69 @@ private struct DocumentPickerView: UIViewControllerRepresentable {
             guard url.startAccessingSecurityScopedResource() else { return }
             defer { url.stopAccessingSecurityScopedResource() }
             onPick(url)
+        }
+    }
+}
+
+// MARK: - Saved palettes row
+
+/// "Saved" palettes row: apply a stored user palette, save the current
+/// colours under a name, or delete stored palettes. Backed by
+/// UserPaletteStore — the same file the desktop UserPaletteMenu reads, so
+/// palettes are shared across editors (and across devices if the container
+/// syncs). Used by the Dither palette editor and the GPU-effect palette
+/// colour mode above.
+private struct MobileUserPaletteRow: View {
+    var currentColors: [CodableColor]
+    var onApply: ([CodableColor]) -> Void
+
+    @State private var palettes: [UserPalette] = []
+    @State private var showingSavePrompt = false
+    @State private var saveName = ""
+
+    private let store = UserPaletteStore()
+
+    var body: some View {
+        ControlRow(label: "Saved") {
+            Menu {
+                if palettes.isEmpty {
+                    Text("No Saved Palettes")
+                } else {
+                    ForEach(palettes) { palette in
+                        Button(palette.name) { onApply(palette.colors) }
+                    }
+                }
+                Divider()
+                Button("Save Current Palette…") {
+                    saveName = ""
+                    showingSavePrompt = true
+                }
+                if !palettes.isEmpty {
+                    Menu("Delete Palette") {
+                        ForEach(palettes) { palette in
+                            Button(palette.name, role: .destructive) {
+                                try? store.delete(id: palette.id)
+                                palettes = store.list()
+                            }
+                        }
+                    }
+                }
+            } label: {
+                Label("Saved Palettes", systemImage: "swatchpalette")
+            }
+        }
+        .onAppear { palettes = store.list() }
+        .alert("Save Palette", isPresented: $showingSavePrompt) {
+            TextField("Name", text: $saveName)
+            Button("Save") {
+                let trimmed = saveName.trimmingCharacters(in: .whitespacesAndNewlines)
+                guard !trimmed.isEmpty else { return }
+                try? store.save(UserPalette(name: trimmed, colors: currentColors))
+                palettes = store.list()
+            }
+            Button("Cancel", role: .cancel) {}
+        } message: {
+            Text("Saves the current \(currentColors.count) colours for reuse in any palette editor.")
         }
     }
 }

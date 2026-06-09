@@ -308,20 +308,26 @@ struct GPUEffectLayerControls: View {
             )
 
             if params.kind.usesColorModeAndFgBg {
-                // Palette was dead on every variant that uses this picker
-                // (dots / blockify / matrixRain / threshold / crosshatch /
-                // edgeDetection): the bucket uniform struct has no palette
-                // array, so the shader had nothing to quantise against.
-                // Dropped from the menu until the bucket renderer grows a
-                // palette uniform the way DitherGPURenderer has.
                 Picker("", selection: colorModeBinding) {
                     Text("Source").tag(GPUEffectColorMode.source)
                     Text("FG/BG").tag(GPUEffectColorMode.foregroundBackground)
                     Text("Mono").tag(GPUEffectColorMode.monochrome)
+                    // Palette mode is offered only where the variant's
+                    // shader actually quantizes against the palette uniform
+                    // (framerPalettePick in ShaderCommon.h) — matrixRain
+                    // paints via rainColor and stays without it.
+                    if params.kind.usesPalette {
+                        Text("Palette").tag(GPUEffectColorMode.palette)
+                    }
                 }
                 .pickerStyle(.menu)
                 .labelsHidden()
                 .denseControlRow("Color Mode")
+
+                if params.kind.usesPalette,
+                   Self.color(for: params.params).mode == .palette {
+                    gpuPaletteEditor()
+                }
             }
 
             if params.kind.usesBackgroundIntensity || params.kind.usesColorModeAndFgBg {
@@ -901,6 +907,70 @@ struct GPUEffectLayerControls: View {
     private var defaultGlitch: GlitchParameters {
         if case .glitch(_, _, _, let payload) = kindDefaults { return payload }
         return GlitchParameters()
+    }
+
+    /// Preset dropdown + saved-palettes menu + per-colour editor for the
+    /// `.palette` colour mode. Mirrors DitherLayerControls.paletteEditor:
+    /// preset selection is derived from the current colours, so editing a
+    /// swatch that diverges from every preset flips the picker to Custom.
+    @ViewBuilder
+    private func gpuPaletteEditor() -> some View {
+        let colors = Self.color(for: params.params).palette ?? VintagePalette.gameBoy
+        let selectedPreset = VintagePalette.Preset.matching(colors)
+
+        SidebarFullWidthRow("Palette") {
+            VStack(alignment: .leading, spacing: 6) {
+                Picker("Preset", selection: Binding<VintagePalette.Preset>(
+                    get: { selectedPreset },
+                    set: { newValue in
+                        guard newValue != selectedPreset else { return }
+                        var c = Self.color(for: params.params)
+                        switch newValue {
+                        case .custom:
+                            // Seed Custom with the current colours plus a
+                            // neutral swatch so the result can't match a
+                            // preset and snap the picker back (same dance
+                            // as the Dither editor).
+                            let base = colors.isEmpty ? VintagePalette.gameBoy : colors
+                            let trimmed = Array(base.prefix(FramerColorUniformsLayout.maxPaletteColors - 1))
+                            c.palette = trimmed + [CodableColor(unchecked: "#808080")]
+                        default:
+                            c.palette = newValue.colors
+                        }
+                        onChange(Self.updatingColor(params, color: c))
+                    }
+                )) {
+                    ForEach(VintagePalette.Preset.allCases, id: \.self) { preset in
+                        Text(preset.rawValue).tag(preset)
+                    }
+                }
+                .pickerStyle(.menu)
+
+                UserPaletteMenu(currentColors: colors) { applied in
+                    var c = Self.color(for: params.params)
+                    c.palette = applied
+                    onChange(Self.updatingColor(params, color: c))
+                }
+
+                SidebarPaletteEditor(
+                    colors: gpuPaletteColorsBinding(currentColors: colors),
+                    maxColors: FramerColorUniformsLayout.maxPaletteColors,
+                    minColors: 2,
+                    defaultNewColor: colors.last ?? CodableColor(unchecked: "#000000")
+                )
+            }
+        }
+    }
+
+    private func gpuPaletteColorsBinding(currentColors colors: [CodableColor]) -> Binding<[CodableColor]> {
+        Binding(
+            get: { colors },
+            set: { newColors in
+                var c = Self.color(for: params.params)
+                c.palette = newColors
+                onChange(Self.updatingColor(params, color: c))
+            }
+        )
     }
 
     private var colorModeBinding: Binding<GPUEffectColorMode> {
@@ -3593,6 +3663,12 @@ struct DitherLayerControls: View {
                     }
                 }
                 .pickerStyle(.menu)
+
+                UserPaletteMenu(currentColors: colors) { applied in
+                    var p = params
+                    p.colorMode = .palette(applied)
+                    onChange(p)
+                }
 
                 SidebarPaletteEditor(
                     colors: paletteBinding(currentColors: colors),
