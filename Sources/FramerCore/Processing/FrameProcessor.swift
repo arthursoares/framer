@@ -37,14 +37,29 @@ public actor FrameProcessor {
         try Task.checkCancellation()
         let exif = exifData(for: url)
 
-        // When a `.gpuEffect` keeps preview at full resolution, scale-sensitive
-        // CPU layers (Dither, LUT, ShaderRenderer) must use `previewMax` as
-        // their `previewBaseDimension` so their pattern density matches export.
-        // Without this, dither/shader patterns sample at full-pixel rate during
-        // preview (fine grain, aliases on display downscale) but at coarse
-        // preview-equivalent rate during export — producing a WYSIWYG mismatch
-        // for any stack mixing `.gpuEffect` with a scale-sensitive layer.
-        let layerPreviewBase: Int? = containsGPUEffect ? previewMax : nil
+        // Scale-sensitive layers (GPU effects, Dither, LUT, ShaderRenderer)
+        // interpret `previewBaseDimension` as "the resolution this stack was
+        // tuned at" and scale their pattern/cell sizes by
+        // currentDimension / base. The canonical tuning base is `computedMax`
+        // — the size the main canvas preview renders at natively.
+        //
+        //   - `.gpuEffect` stacks keep the working image at full resolution,
+        //     so they ALWAYS need the base passed explicitly or patterns
+        //     sample at full-pixel rate (WYSIWYG mismatch vs. export).
+        //   - When the caller requests a different size than the canvas
+        //     base (preset thumbnails at 320), the base must still be
+        //     `computedMax`, not the requested size — otherwise effect
+        //     proportions in the thumbnail don't match the canvas (the
+        //     reported "thumbnail doesn't match the screen" bug: passing
+        //     `previewMax` here scaled GPU-effect cells by full/320 instead
+        //     of full/computedMax, and nil made CPU patterns render
+        //     native-pixel on a 320px image).
+        let layerPreviewBase: Int?
+        if containsGPUEffect || previewMax != computedMax {
+            layerPreviewBase = computedMax
+        } else {
+            layerPreviewBase = nil
+        }
 
         let borderResult: BorderResult
         if let layers = config.layers {
