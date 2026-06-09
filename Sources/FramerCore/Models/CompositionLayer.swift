@@ -681,28 +681,84 @@ public enum VintagePalette {
         CodableColor(unchecked: "#FFFFFF"),
     ]
 
+    /// PICO-8 fantasy console — the full fixed 16-colour palette.
+    /// Source: <https://pico-8.fandom.com/wiki/Palette>.
+    public static let pico8: [CodableColor] = [
+        CodableColor(unchecked: "#000000"), CodableColor(unchecked: "#1D2B53"),
+        CodableColor(unchecked: "#7E2553"), CodableColor(unchecked: "#008751"),
+        CodableColor(unchecked: "#AB5236"), CodableColor(unchecked: "#5F574F"),
+        CodableColor(unchecked: "#C2C3C7"), CodableColor(unchecked: "#FFF1E8"),
+        CodableColor(unchecked: "#FF004D"), CodableColor(unchecked: "#FFA300"),
+        CodableColor(unchecked: "#FFEC27"), CodableColor(unchecked: "#00E436"),
+        CodableColor(unchecked: "#29ADFF"), CodableColor(unchecked: "#83769C"),
+        CodableColor(unchecked: "#FF77A8"), CodableColor(unchecked: "#FFCCAA"),
+    ]
+
+    /// ZX Spectrum — 8 basic colours at normal (0xD7) and bright (0xFF)
+    /// levels; black has no bright variant, so 15 unique entries.
+    /// Source: <https://en.wikipedia.org/wiki/ZX_Spectrum_graphic_modes>.
+    public static let zxSpectrum: [CodableColor] = [
+        CodableColor(unchecked: "#000000"),
+        CodableColor(unchecked: "#0000D7"), CodableColor(unchecked: "#D70000"),
+        CodableColor(unchecked: "#D700D7"), CodableColor(unchecked: "#00D700"),
+        CodableColor(unchecked: "#00D7D7"), CodableColor(unchecked: "#D7D700"),
+        CodableColor(unchecked: "#D7D7D7"),
+        CodableColor(unchecked: "#0000FF"), CodableColor(unchecked: "#FF0000"),
+        CodableColor(unchecked: "#FF00FF"), CodableColor(unchecked: "#00FF00"),
+        CodableColor(unchecked: "#00FFFF"), CodableColor(unchecked: "#FFFF00"),
+        CodableColor(unchecked: "#FFFFFF"),
+    ]
+
+    /// IBM EGA — the canonical 16-colour default palette (6-bit RGB,
+    /// 0x55/0xAA component levels). Source: IBM Enhanced Graphics Adapter
+    /// manual.
+    public static let ega: [CodableColor] = [
+        CodableColor(unchecked: "#000000"), CodableColor(unchecked: "#0000AA"),
+        CodableColor(unchecked: "#00AA00"), CodableColor(unchecked: "#00AAAA"),
+        CodableColor(unchecked: "#AA0000"), CodableColor(unchecked: "#AA00AA"),
+        CodableColor(unchecked: "#AA5500"), CodableColor(unchecked: "#AAAAAA"),
+        CodableColor(unchecked: "#555555"), CodableColor(unchecked: "#5555FF"),
+        CodableColor(unchecked: "#55FF55"), CodableColor(unchecked: "#55FFFF"),
+        CodableColor(unchecked: "#FF5555"), CodableColor(unchecked: "#FF55FF"),
+        CodableColor(unchecked: "#FFFF55"), CodableColor(unchecked: "#FFFFFF"),
+    ]
+
+    /// Original Macintosh 1-bit black & white.
+    public static let mac1Bit: [CodableColor] = [
+        CodableColor(unchecked: "#000000"),
+        CodableColor(unchecked: "#FFFFFF"),
+    ]
+
     /// UI-facing preset selector. Not persisted directly — the UI translates
     /// presets to / from `DitherColorMode.palette([CodableColor])` by
     /// comparing colour arrays: if the stored palette matches one of the
     /// presets exactly, the picker selects that preset; otherwise it falls
     /// back to `.custom` and lets the user edit individual swatches.
     public enum Preset: String, CaseIterable, Hashable, Sendable {
-        case gameBoy = "Game Boy"
-        case nes     = "NES"
-        case c64     = "C64"
-        case cga     = "CGA"
-        case custom  = "Custom"
+        case gameBoy    = "Game Boy"
+        case nes        = "NES"
+        case c64        = "C64"
+        case cga        = "CGA"
+        case pico8      = "PICO-8"
+        case zxSpectrum = "ZX Spectrum"
+        case ega        = "EGA"
+        case mac1Bit    = "Mac 1-bit"
+        case custom     = "Custom"
 
         /// Concrete palette for the preset. `.custom` returns an empty list
         /// — callers preserve the user's current colours when switching TO
         /// custom rather than overwriting them.
         public var colors: [CodableColor] {
             switch self {
-            case .gameBoy: return VintagePalette.gameBoy
-            case .nes:     return VintagePalette.nes
-            case .c64:     return VintagePalette.c64
-            case .cga:     return VintagePalette.cga
-            case .custom:  return []
+            case .gameBoy:    return VintagePalette.gameBoy
+            case .nes:        return VintagePalette.nes
+            case .c64:        return VintagePalette.c64
+            case .cga:        return VintagePalette.cga
+            case .pico8:      return VintagePalette.pico8
+            case .zxSpectrum: return VintagePalette.zxSpectrum
+            case .ega:        return VintagePalette.ega
+            case .mac1Bit:    return VintagePalette.mac1Bit
+            case .custom:     return []
             }
         }
 
