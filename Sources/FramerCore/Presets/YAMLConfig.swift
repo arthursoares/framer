@@ -822,7 +822,11 @@ public enum YAMLConfig {
                 )
             )
         case .contour, .edgeDetection, .waveLines, .noiseField, .voronoi:
-            let variant = schema.gpu_edge_variant.flatMap(EdgeFieldVariant.init(rawValue:)) ?? edgeFieldVariant(for: kind)
+            // `kind` is authoritative: every edge variant has a 1:1 kind, so
+            // a `gpu_edge_variant` that disagrees (hand-edited / stale file)
+            // would render a different effect than the layer label shows.
+            // The key is still written on encode for older-app back-compat.
+            let variant = edgeFieldVariant(for: kind)
             return .edgeField(
                 common: common,
                 geometry: geometry,

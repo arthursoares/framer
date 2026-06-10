@@ -21,7 +21,11 @@ public enum EdgeFieldRenderer {
             return input
         }
 
-        switch payload.variant {
+        // Dispatch by the layer kind, not `payload.variant` — same contract
+        // as the TextCell / PrintSampling dispatchers. A stale
+        // `gpu_edge_variant` in a hand-edited YAML file would otherwise
+        // render a different effect than the layer label / inspector show.
+        switch effect {
         case .edgeDetection:
             return try EdgeFieldGPURenderer.renderEdgeDetection(
                 input: input, common: common, geometry: geometry,
@@ -42,6 +46,10 @@ public enum EdgeFieldRenderer {
             return try EdgeFieldGPURenderer.renderNoiseField(
                 input: input, common: common, geometry: geometry,
                 color: color, params: payload, outputSize: outputSize)
+        default:
+            // Non-edgeField kind with an edgeField payload — mismatched
+            // call; mirror the parameter-shape guard above.
+            return input
         }
     }
 }

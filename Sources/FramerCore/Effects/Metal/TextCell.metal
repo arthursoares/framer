@@ -241,21 +241,24 @@ static float4 blockifyVariant(
     // Average the cell's source colour by sampling at the centre with the
     // bilinear sampler — for a cell of ~8 px this blurs the cell contents
     // close to their true mean without the cost of an exhaustive loop.
-    float3 cellColor = source.sample(texSampler, cellCenterPx * invRes).rgb;
+    float3 cellColor = applyCommonAdjustments(
+        source.sample(texSampler, cellCenterPx * invRes).rgb, u.common);
 
-    // Foreground / background colour selection mirrors the ASCII variant's
-    // mode handling for consistency across the bucket: 0 = flat fg/bg from
-    // uniforms, 1 = use per-cell sampled colour, 2 = gradient by luminance.
-    // TextCellParameters.foreground/background already resolved into
-    // u.color.foregroundRGBA / backgroundRGBA Swift-side.
+    // Colour selection follows the bucket-wide FramerColorUniforms.mode
+    // convention set by the dots variant: 0 = source, 1 = fg/bg, 2 =
+    // monochrome, 3 = palette. (An earlier port borrowed the numbering of
+    // ASCII's separate `asciiColorMode` field — 0 = flat, 1 = sampled —
+    // which inverted "Source" and "Foreground/Background" in the picker.)
     float3 fgColor;
     if (u.color.mode == 1u) {
-        fgColor = cellColor;
+        fgColor = u.color.foregroundRGBA.rgb;
+    } else if (u.color.mode == 2u) {
+        fgColor = float3(luminance(cellColor));
     } else if (u.color.mode == 3u) {
         // Palette: per-cell sampled colour quantized to the nearest entry.
         fgColor = framerPalettePick(cellColor, u.color);
     } else {
-        fgColor = u.color.foregroundRGBA.rgb;
+        fgColor = cellColor;
     }
     float3 bgColor = u.color.backgroundRGBA.rgb;
 
