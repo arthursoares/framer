@@ -3,7 +3,7 @@ name: framer-diagnostics-and-proof
 description: >
   Load when you need to PROVE something about rendering or performance in the framer
   repo instead of eyeballing it — verifying a GPU effect matches CPU, interpreting
-  EffectGPUParityTests mean/max byte-delta failures, deciding whether to raise a parity
+  EffectGPUGoldenTests mean/max byte-delta failures, deciding whether to raise a golden
   tolerance, checking whether the GPU path is even running (CPU-fallback console logs),
   byte-comparing "suspiciously identical" effect variants, diagnosing grid/half-texel
   misalignment, backing performance claims with `swift run framer benchmark lut`, or
@@ -78,7 +78,7 @@ affected. See **framer-build-and-env** for fixes and
 ### scripts/parity-report.sh — did parity actually get verified?
 
 ```sh
-.claude/skills/framer-diagnostics-and-proof/scripts/parity-report.sh                      # default: EffectGPUParityTests
+.claude/skills/framer-diagnostics-and-proof/scripts/parity-report.sh                      # default: EffectGPUGoldenTests
 .claude/skills/framer-diagnostics-and-proof/scripts/parity-report.sh ShaderRendererTests  # any suite name
 ```
 
@@ -96,9 +96,9 @@ against XCTest output-format changes.
 Exit codes: `0` all executed and passed · `1` failures · `2` green **but
 skipped** — do NOT report "parity verified" · `3` suite not found.
 
-Verified 2026-07-09: reports 27/27 passed, 0 skipped for
-`EffectGPUParityTests` on the primary machine (Metal device present, atlases
-present).
+Verified 2026-07-09 (post CPU-path retirement): reports 13/13 passed, 0
+skipped for `EffectGPUGoldenTests` on the primary machine (Metal device
+present, atlases present).
 
 ### scripts/test-inventory.sh — is coverage drifting?
 
@@ -119,40 +119,40 @@ test-estate map itself is owned by **framer-validation-and-qa**.
 
 | Instrument | What it measures | Where |
 |---|---|---|
-| EffectGPUParityTests | CPU-vs-GPU mean/max per-channel byte delta | `Tests/FramerCoreTests/EffectGPUParityTests.swift` |
+| EffectGPUGoldenTests | GPU-vs-frozen-golden mean/max per-channel byte delta | `Tests/FramerCoreTests/EffectGPUGoldenTests.swift` |
+| EffectGPUBehaviorTests | GPU invariants (binary BW, palette, quantization grid) + routing | `Tests/FramerCoreTests/EffectGPUBehaviorTests.swift` |
 | ShaderRendererTests | Statistical properties of effect output | `Tests/FramerCoreTests/ShaderRendererTests.swift` |
 | DitherRendererTests | Per-pixel set-membership (binary BW, palette) | `Tests/FramerCoreTests/DitherRendererTests.swift` |
 | StyledSliderSuffixTests | Bitmap INEQUALITY between two renders | `Tests/FramerAppTests/StyledSliderSuffixTests.swift` |
 | SidebarLayoutContainmentTests | NSView frame overflow past sidebar width | `Tests/FramerAppTests/SidebarLayoutContainmentTests.swift` |
 | `swift run framer benchmark lut` | CPU vs Metal LUT timing + per-stage split | `Sources/FramerCLI/Commands/BenchmarkCommand.swift` |
-| `[ShaderRenderer]` console lines | Whether the GPU path actually ran | `Sources/FramerCore/Processing/ShaderRenderer.swift:84,87` |
 | EffectPreviewComparator | Preview-vs-export mean channel delta (currently unused) | `Sources/FramerCore/Effects/Utilities/EffectPreviewComparator.swift` |
 
-### 1. EffectGPUParityTests — the parity meter
+### 1. EffectGPUGoldenTests — the regression meter
 
-"Parity" here means: the CPU implementation and the Metal (GPU) implementation
-of the same effect produce near-identical pixels for the same parameters. Each
-test renders a deterministic 256×256 synthetic image — a gradient with a
-16-px checkerboard dimming pattern, built in `makeTestImage()`
-(EffectGPUParityTests.swift:34–64) so every effect has edges, gradients, and
-saturation to act on — through both paths, then computes:
+Since the CPU-path retirement (2026-07-09,
+docs/adr/2026-07-09-retire-cpu-effect-path.md) the meter compares each GPU
+render against a frozen golden PNG in
+Tests/FramerCoreTests/Resources/GoldenReferences/. Each test renders the same
+deterministic 256×256 synthetic image the parity suite used — a gradient with
+a 16-px checkerboard dimming pattern (`makeTestImage()`) — and computes:
 
 - **mean delta**: average absolute difference per RGB channel, in 0–255 byte
-  units (alpha ignored) — `compare()` at EffectGPUParityTests.swift:70–91.
+  units (alpha ignored) — `compare()` in EffectGPUGoldenTests.swift.
 - **max delta**: the single worst channel difference.
 
 Run it:
 ```sh
-swift test --filter EffectGPUParityTests        # or scripts/parity-report.sh
+swift test --filter EffectGPUGoldenTests        # or scripts/parity-report.sh
 ```
 
-**Tolerances are deliberately generous** (file header, lines 11–24) because
-four divergence sources are legitimate, not bugs: CPU uses Double while GPU
-uses Float/half; ASCII GPU samples 4×4 stratified per cell vs CPU's exhaustive
-cell average; readback does an sRGB roundtrip through CIContext; CGContext
-interpolates when GPU output is upscaled. Current mean-delta ceilings range
-from 2.0 (pixel-sort threshold-skip passthrough) through 6.0 (color grades) to
-25.0 (ASCII).
+**Tolerances are inherited from the retired parity suite** and are generous
+relative to the expected same-machine delta of exactly 0 — they exist as
+headroom for cross-machine GPU float/rounding drift (goldens were frozen on
+one machine). Current mean-delta ceilings range from 6.0 (color grades)
+through 12–15 (palette-snap/threshold effects) to 25.0 (ASCII). Regeneration
+is env-gated (`FRAMER_REGENERATE_GOLDENS=1`, command in the file header) and
+follows snapshot-hash discipline: never blind-refresh.
 
 **Interpretation bands** (from `docs/gpu-migration-mac-resume.md:285–301`,
 written for pixel-sort but the logic generalizes):
@@ -163,12 +163,9 @@ written for pixel-sort but the logic generalizes):
 | Slightly over, ~12–20 | Probably legitimate divergence amplified | Render both outputs, inspect the diff, and only then consider raising the tolerance — in the same commit, with the measured number in the commit message |
 | 50+ | Real bug | Work the checklist: sweep-direction invariant, ascending sort on both sides, blend-factor semantics (`mix(current, sorted, intensity)` must equal `params.intensity * amount` on both paths), uniform struct layout |
 
-**Maintainer ruling (2026-07-09):** CPU/GPU parity is current mechanical
-reality, not eternal doctrine. `ShaderRenderer.gpuOrCPU` falls back to CPU
-only on `MetalEffectError`, and these tests must stay green **while the CPU
-path exists** — but whether the CPU path should exist at all is an open
-architectural question owned by **framer-architecture-contract**. Don't treat
-parity as sacred; don't treat it as retired.
+**Status (2026-07-09):** the CPU effect path is RETIRED — errors propagate,
+there is no fallback to detect. The golden tests are the sole pixel-level
+regression guard; the contract lives in **framer-architecture-contract** I3.
 
 Skip behavior: `requireMetal()` (lines 115–119) throws XCTSkip without a Metal
 device; ASCII tests also skip when `MetalTextureSupport.loadLUTTexture` can't
@@ -252,28 +249,24 @@ README's noted next-optimization target.
 The methodology this command encodes IS the house benchmark discipline; see
 recipe (d) below.
 
-### 6. Console fallback logs — the "which path ran" tracer
+### 6. Thrown MetalEffectError — the "what failed" tracer
 
-`ShaderRenderer.gpuOrCPU` prints one line per effect invocation
-(`Sources/FramerCore/Processing/ShaderRenderer.swift:84,87`):
-
-```
-[ShaderRenderer] GPU path ✓  applyCrimewave(to:params:intensity:)
-[ShaderRenderer] CPU fallback (Metal error: ...) — applyCrimewave(...)
-```
-
-Only `MetalEffectError` triggers fallback; any other error propagates so real
-bugs surface. Interpretation: ONE effect falling back = that effect's pipeline
-or atlas is broken; MANY effects falling back simultaneously = the whole Metal
-library failed to build (classic cause: a typo in a single `.metal` file
-breaks the combined runtime source-compile — `docs/gpu-migration-mac-resume.md:303–307`).
+RETIRED TRACER, kept for orientation: `gpuOrCPU` and its
+`[ShaderRenderer] GPU path ✓ / CPU fallback` console lines were deleted with
+the CPU path (2026-07-09). The failure signal is now the thrown
+`MetalEffectError` itself, surfaced by the CLI/app. Interpretation is
+unchanged in spirit: ONE effect throwing = that effect's pipeline or atlas is
+broken; MANY effects throwing simultaneously = the whole Metal library failed
+to build (classic cause: a typo in a single `.metal` file breaks the combined
+runtime source-compile — `docs/gpu-migration-mac-resume.md:303–307`; look for
+`MetalEffectLibrary: makeLibrary failed:` on stdout).
 
 ### 7. EffectPreviewComparator — shipped but unwired
 
 `Sources/FramerCore/Effects/Utilities/EffectPreviewComparator.swift` computes
 a mean absolute channel delta between preview and export renders,
 **normalized to 0–1** (each per-channel delta divided by 255 — different units
-from EffectGPUParityTests' 0–255!). As of 2026-07-09 it has zero call sites
+from EffectGPUGoldenTests' 0–255!). As of 2026-07-09 it has zero call sites
 outside its own file, and its `previewExportDefault` tolerance of 0.6
 normalized (= mean 153/255 bytes) is too loose to discriminate anything —
 treat the constant as unvetted if you wire it up. Candidate harness only.
@@ -352,7 +345,7 @@ floyd `(7.31, 11.17)` × 0.85, stucki `(13.49, 17.83)` × 0.80 — the table and
 the explanatory comment live at
 `Sources/FramerCore/Effects/Metal/Dither.metal:241–260`. The regression fence
 is the existing inequality-style tests (e.g. reverse-flag and randomness tests
-in EffectGPUParityTests assert outputs DIFFER by mean delta > threshold).
+in EffectGPUBehaviorTests assert outputs DIFFER by mean delta > threshold).
 
 ### (c) Half-texel / grid-alignment analysis
 
@@ -455,7 +448,7 @@ Facts that may drift, with one-line re-verification commands:
 |---|---|
 | 273 SPM tests / suite sizes | `scripts/test-inventory.sh` |
 | 27 parity tests, 0 skips here | `scripts/parity-report.sh` |
-| Parity metric + tolerances | `grep -n 'XCTAssertLessThan(mean' Tests/FramerCoreTests/EffectGPUParityTests.swift` |
+| Golden metric + tolerances | `grep -n 'meanTolerance' Tests/FramerCoreTests/EffectGPUGoldenTests.swift` |
 | Interpretation bands 12–20 / 50+ | `sed -n '285,301p' docs/gpu-migration-mac-resume.md` |
 | Fallback log lines at :84/:87 | `grep -n 'CPU fallback' Sources/FramerCore/Processing/ShaderRenderer.swift` |
 | Benchmark flags/defaults | `swift run framer benchmark lut --help` |

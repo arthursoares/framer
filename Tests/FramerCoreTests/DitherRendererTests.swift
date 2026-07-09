@@ -4,6 +4,17 @@ import CoreGraphics
 @testable import FramerCore
 
 final class DitherRendererTests: XCTestCase {
+    // The dither path is GPU-only since the CPU implementations were retired
+    // (docs/adr/2026-07-09-retire-cpu-effect-path.md) — without Metal every
+    // non-Riemersma RENDER test here would throw MetalEffectError, so those
+    // tests guard with requireMetal(). Param/Codable tests and the Riemersma
+    // test (kept CPU capability) deliberately carry no guard and run on any
+    // host.
+    private func requireMetal() throws {
+        guard MetalEffectLibrary.shared != nil else {
+            throw XCTSkip("Metal device unavailable on this host (likely CI sandbox).")
+        }
+    }
 
     // MARK: - Test Helpers
 
@@ -100,6 +111,7 @@ final class DitherRendererTests: XCTestCase {
     // MARK: - B&W Algorithm Tests
 
     func test_bayer_bw_producesOnlyBlackWhite() throws {
+        try requireMetal()
         let image = makeGradientImage(width: 64, height: 64)
         let params = DitherLayerParams(algorithm: .bayer, colorMode: .bw, bayerLevel: 2)
         let result = try DitherRenderer.apply(to: image, params: params)
@@ -112,6 +124,7 @@ final class DitherRendererTests: XCTestCase {
     }
 
     func test_floydSteinberg_bw_producesOnlyBlackWhite() throws {
+        try requireMetal()
         let image = makeGradientImage(width: 64, height: 64)
         let params = DitherLayerParams(algorithm: .floydSteinberg, colorMode: .bw)
         let result = try DitherRenderer.apply(to: image, params: params)
@@ -124,6 +137,7 @@ final class DitherRendererTests: XCTestCase {
     }
 
     func test_atkinson_bw_producesOnlyBlackWhite() throws {
+        try requireMetal()
         let image = makeGradientImage(width: 64, height: 64)
         let params = DitherLayerParams(algorithm: .atkinson, colorMode: .bw)
         let result = try DitherRenderer.apply(to: image, params: params)
@@ -136,6 +150,7 @@ final class DitherRendererTests: XCTestCase {
     }
 
     func test_blueNoise_bw_producesOnlyBlackWhite() throws {
+        try requireMetal()
         let image = makeGradientImage(width: 64, height: 64)
         let params = DitherLayerParams(algorithm: .blueNoise, colorMode: .bw)
         let result = try DitherRenderer.apply(to: image, params: params)
@@ -148,6 +163,7 @@ final class DitherRendererTests: XCTestCase {
     }
 
     func test_artisticDrip_bw_producesOnlyBlackWhite() throws {
+        try requireMetal()
         let image = makeGradientImage(width: 64, height: 64)
         let params = DitherLayerParams(algorithm: .artisticDrip, colorMode: .bw)
         let result = try DitherRenderer.apply(to: image, params: params)
@@ -162,6 +178,7 @@ final class DitherRendererTests: XCTestCase {
     // MARK: - Two-Tone Tests
 
     func test_twoTone_producesOnlySpecifiedColors() throws {
+        try requireMetal()
         let image = makeGradientImage(width: 64, height: 64)
         let fg = try CodableColor(hex: "#FF0000")
         let bg = try CodableColor(hex: "#0000FF")
@@ -182,6 +199,7 @@ final class DitherRendererTests: XCTestCase {
     // MARK: - Color Mode Tests
 
     func test_colorMode_respectsLevelCount() throws {
+        try requireMetal()
         let image = makeGradientImage(width: 128, height: 32)
         let levels = 3
         let params = DitherLayerParams(
@@ -213,6 +231,7 @@ final class DitherRendererTests: XCTestCase {
     // MARK: - Bayer Level Tests
 
     func test_differentBayerLevels_produceDifferentOutput() throws {
+        try requireMetal()
         let image = makeGradientImage(width: 64, height: 64)
 
         let params1 = DitherLayerParams(algorithm: .bayer, colorMode: .bw, bayerLevel: 1)
@@ -236,6 +255,7 @@ final class DitherRendererTests: XCTestCase {
     // MARK: - Gamma Correction Test
 
     func test_gammaCorrection_midGrayDithersToApproxHalfWhite() throws {
+        try requireMetal()
         // sRGB 186/255 ≈ 0.5 in linear space
         // (0.729)^2.4 ≈ 0.5 for sRGB gamma
         let image = makeSolidImage(width: 128, height: 128, gray: 186)
@@ -257,6 +277,7 @@ final class DitherRendererTests: XCTestCase {
     // MARK: - Pixel Scale Tests
 
     func test_pixelScale_preservesDimensions() throws {
+        try requireMetal()
         let image = makeGradientImage(width: 128, height: 128)
         let params = DitherLayerParams(algorithm: .atkinson, colorMode: .bw, pixelScale: 4)
         let result = try DitherRenderer.apply(to: image, params: params)
@@ -266,6 +287,7 @@ final class DitherRendererTests: XCTestCase {
     }
 
     func test_pixelScale_producesBlockyOutput() throws {
+        try requireMetal()
         let image = makeGradientImage(width: 64, height: 64)
         let scale = 4
         let params = DitherLayerParams(algorithm: .bayer, colorMode: .bw, bayerLevel: 2, pixelScale: scale)
@@ -318,6 +340,7 @@ final class DitherRendererTests: XCTestCase {
     }
 
     func test_threshold_higherProducesBrighterOutput() throws {
+        try requireMetal()
         let image = makeSolidImage(width: 64, height: 64, gray: 128)
 
         let paramsBright = DitherLayerParams(algorithm: .bayer, colorMode: .bw, bayerLevel: 2, threshold: 0.8)
@@ -334,6 +357,7 @@ final class DitherRendererTests: XCTestCase {
     }
 
     func test_threshold_worksWithColorMode() throws {
+        try requireMetal()
         let image = makeSolidImage(width: 64, height: 64, gray: 128)
 
         let paramsBright = DitherLayerParams(algorithm: .bayer, colorMode: .color(levels: 2), bayerLevel: 2, threshold: 0.8)
@@ -388,6 +412,7 @@ final class DitherRendererTests: XCTestCase {
     // MARK: - New Algorithm Tests
 
     func test_halftone_bw_producesOnlyBlackWhite() throws {
+        try requireMetal()
         let image = makeGradientImage(width: 64, height: 64)
         let params = DitherLayerParams(algorithm: .halftone, colorMode: .bw)
         let result = try DitherRenderer.apply(to: image, params: params)
@@ -400,6 +425,7 @@ final class DitherRendererTests: XCTestCase {
     }
 
     func test_stucki_bw_producesOnlyBlackWhite() throws {
+        try requireMetal()
         let image = makeGradientImage(width: 64, height: 64)
         let params = DitherLayerParams(algorithm: .stucki, colorMode: .bw)
         let result = try DitherRenderer.apply(to: image, params: params)
@@ -412,6 +438,7 @@ final class DitherRendererTests: XCTestCase {
     }
 
     func test_whiteNoise_bw_producesOnlyBlackWhite() throws {
+        try requireMetal()
         let image = makeGradientImage(width: 64, height: 64)
         let params = DitherLayerParams(algorithm: .whiteNoise, colorMode: .bw)
         let result = try DitherRenderer.apply(to: image, params: params)
@@ -436,6 +463,7 @@ final class DitherRendererTests: XCTestCase {
     }
 
     func test_whiteNoise_isDeterministic() throws {
+        try requireMetal()
         let image = makeGradientImage(width: 64, height: 64)
         let params = DitherLayerParams(algorithm: .whiteNoise, colorMode: .bw)
         let result1 = try DitherRenderer.apply(to: image, params: params)
@@ -464,6 +492,7 @@ final class DitherRendererTests: XCTestCase {
     }
 
     func test_sharpen_changesOutput() throws {
+        try requireMetal()
         // Use a checkerboard pattern so unsharp mask has edges to enhance
         let image = makeCheckerboardImage(width: 64, height: 64, blockSize: 4)
         let paramsOff = DitherLayerParams(algorithm: .bayer, colorMode: .bw, bayerLevel: 2, sharpen: 0)
@@ -480,6 +509,7 @@ final class DitherRendererTests: XCTestCase {
     }
 
     func test_contrast_changesOutput() throws {
+        try requireMetal()
         let image = makeGradientImage(width: 64, height: 64)
         let paramsOff = DitherLayerParams(algorithm: .bayer, colorMode: .bw, bayerLevel: 2, contrast: 0)
         let paramsOn = DitherLayerParams(algorithm: .bayer, colorMode: .bw, bayerLevel: 2, contrast: 1)
@@ -497,6 +527,7 @@ final class DitherRendererTests: XCTestCase {
     // MARK: - All Algorithms Produce Different Output
 
     func test_allAlgorithms_produceDifferentOutput() throws {
+        try requireMetal()
         let image = makeGradientImage(width: 64, height: 64)
         let algorithms: [DitherAlgorithm] = DitherAlgorithm.allCases
 

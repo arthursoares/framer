@@ -1,10 +1,12 @@
 // DitherGPURenderer.swift
-// GPU dither implementation. Mirrors DitherRenderer.apply signature so
-// callers can swap in the GPU path transparently. Falls back to CPU for:
-//   - Riemersma (Hilbert-curve traversal — inherently serial, no GPU port)
-//   - dominantTwoTone colour mode for the colour extraction step (the dither
-//     itself runs GPU; the dominant-colour resolution happens CPU-side and
-//     the resolved colours are passed in as the foreground/background)
+// GPU dither implementation. Mirrors DitherRenderer.apply signature.
+// Not handled here:
+//   - Riemersma (Hilbert-curve traversal — inherently serial, no GPU port):
+//     `DitherRenderer.apply` dispatches it to the kept CPU implementation
+//     BEFORE this entry point is reached.
+//   - dominantTwoTone colour extraction (the dither itself runs GPU; the
+//     dominant-colour resolution happens CPU-side and the resolved colours
+//     are passed in as the foreground/background)
 //
 // Pixel-scale handling matches the CPU pipeline exactly:
 //   1. Downscale source to (work_width, work_height) with bilinear (.high
@@ -135,9 +137,11 @@ public enum DitherGPURenderer {
     // MARK: - Public entry
 
     /// GPU dither. Mirrors `DitherRenderer.apply` signature.
-    /// Throws `MetalEffectError` on any GPU failure or for algorithms the GPU
-    /// path doesn't implement (currently: Riemersma) — callers handle the
-    /// fallback.
+    /// Throws `MetalEffectError` on any GPU failure. Riemersma never reaches
+    /// this entry point — `DitherRenderer.apply` dispatches it to the kept
+    /// CPU implementation by algorithm (the CPU dither path was otherwise
+    /// retired: docs/adr/2026-07-09-retire-cpu-effect-path.md); the guard
+    /// below is defense-in-depth for direct callers.
     public static func apply(
         to image: CGImage,
         params: DitherLayerParams,
@@ -148,7 +152,7 @@ public enum DitherGPURenderer {
             throw MetalEffectError.metalUnavailable
         }
         guard let algoID = AlgorithmID(params.algorithm) else {
-            // Riemersma — force CPU fallback.
+            // Riemersma has no GPU port (serial Hilbert-curve error history).
             throw MetalEffectError.metalUnavailable
         }
 

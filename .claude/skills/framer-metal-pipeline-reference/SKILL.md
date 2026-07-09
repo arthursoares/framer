@@ -9,7 +9,7 @@ description: >
   HEIC/PNG upload, upside-down output, or CPU/GPU parity drift, and when
   working on the LUT compute path (LUTMetalRenderer). Keywords: Metal, metallib,
   fragment shader, uniforms, MTLTexture, MTKTextureLoader, threadgroup,
-  pixel sort span, parity test, gpuOrCPU, MetalEffectError.
+  pixel sort span, golden test, MetalEffectError.
 ---
 
 # Framer Metal Pipeline Reference
@@ -86,40 +86,38 @@ NOT applied), the IGN noise function, Bayer matrices, and the canonical
 ## Dispatch topology: who calls whom
 
 ```
-.shader layer      → ShaderRenderer.apply → gpuOrCPU(gpu:, cpu:)
-                       gpu: TextCellRenderer / PixelSortRenderer / ColorGradeRenderer /
-                            DistantPastRenderer / CRTRenderer / HalftoneRenderer / KuwaharaRenderer
-                       cpu: ShaderASCIIRenderer / ShaderPixelSortRenderer / ShaderRenderer.applyX
+.shader layer      → ShaderRenderer.apply → direct GPU dispatch:
+                       TextCellRenderer / PixelSortRenderer / ColorGradeRenderer /
+                       DistantPastRenderer / CRTRenderer / HalftoneRenderer / KuwaharaRenderer
 .gpuEffect layer   → FrameProcessor → GPUEffectsPlatform.dispatchRenderPreview
-                       .textCell      → TextCellBucketRenderer  ┐ GPU renderer; CPU loop kept ONLY
-                       .printSampling → PrintSamplingRenderer   ┘ for legacy hidden variants
-                       .edgeField     → EdgeFieldRenderer       ┐ GPU-only since PR #12 (merged
-                       .glitch        → GlitchRenderer          ┘ 2026-07-09): throws, no CPU loop
-.dither layer      → DitherRenderer → DitherGPURenderer (catch is MetalEffectError → CPU)
-.lut layer         → LUTRenderer → LUTMetalRenderer (nil return → applyCPU)
+                       .textCell      → TextCellBucketRenderer  (GPU; CPU loop ONLY for legacy .ascii)
+                       .printSampling → PrintSamplingRenderer   (GPU; CPU loop ONLY for legacy .halftone/.dithering)
+                       .edgeField     → EdgeFieldRenderer       (GPU-only, throws)
+                       .glitch        → GlitchRenderer          (GPU-only, throws)
+.dither layer      → DitherRenderer → .riemersma → kept CPU impl (by algorithm);
+                                       everything else → DitherGPURenderer (errors propagate)
+.lut layer         → LUTRenderer → LUTMetalRenderer (nil return → applyCPU — deliberate exception)
 ```
 
-**The fallback contract** (`Sources/FramerCore/Processing/ShaderRenderer.swift:76-90`):
-`gpuOrCPU` catches ONLY `MetalEffectError` (9 cases, declared in
-MetalEffectLibrary.swift) and runs the CPU implementation; any other error type
-propagates so genuine bugs are not masked. It prints
-`[ShaderRenderer] GPU path ✓` or `[ShaderRenderer] CPU fallback (Metal error: ...)`
-per call — several effects logging fallback simultaneously means the Metal
-library itself failed to load, not one broken effect.
+**The error contract** (CPU path retired 2026-07-09 —
+docs/adr/2026-07-09-retire-cpu-effect-path.md): effect renderers throw
+`MetalEffectError` (9 cases, declared in MetalEffectLibrary.swift) and it
+propagates to the caller — there is no silent CPU fallback. Several effects
+failing simultaneously means the Metal library itself failed to load, not one
+broken effect. The `[ShaderRenderer] GPU path ✓ / CPU fallback` log lines are
+gone with `gpuOrCPU`.
 
-Note maintainer ruling (2026-07-09): the CPU path is current mechanical reality,
-not sacred doctrine — whether to retire it entirely is an OPEN decision owned by
-framer-architecture-contract. While the CPU path exists, parity tests must stay
-green and new effects need matching CPU semantics.
+The new-effect verification rule (framer-change-control rule 5): keep
+EffectGPUGoldenTests + EffectGPUBehaviorTests green; new effects ship with a
+golden or invariant lock, not a CPU twin.
 
 **Naming trap** (deliberate, don't "fix"): `TextCellRenderer` = GPU front door
 for the `.shader` ASCII layer; `TextCellBucketRenderer` = the `.gpuEffect`
 bucket dispatcher (header comment explains the split). Same pattern:
 `PixelSortRenderer` (shader layer, full params) vs
 `GlitchGPURenderer.renderPixelSort` (bucket, leaner `GlitchParameters`,
-spanMode fixed to 0); `EdgeFieldRenderer` (dispatcher — GPU-only since PR #12
-merged 2026-07-09) vs `EdgeFieldGPURenderer`; `PrintSamplingRenderer` vs
-`PrintSamplingGPURenderer`.
+spanMode fixed to 0); `EdgeFieldRenderer` (GPU-only dispatcher) vs
+`EdgeFieldGPURenderer`; `PrintSamplingRenderer` vs `PrintSamplingGPURenderer`.
 
 ## Shader loading order (MetalEffectLibrary)
 
@@ -281,15 +279,13 @@ incident).
       catalog: framer-config-and-flags). Decide `userFacingCases` visibility.
 - [ ] Wrap your source sample in `applyCommonAdjustments(...)` from
       ShaderCommon.h if (and only if) you set `usesCommonAdjustments = true`.
-- [ ] While the CPU path exists (open decision — framer-architecture-contract):
-      implement the CPU counterpart with IDENTICAL semantics — same scoring
-      formulas, same blend interpretation, same constants. The pixel-sort
-      `amount` divergence (rank-scaling on CPU vs mix-blend on GPU, commit
-      f21a6fe) is the cautionary tale.
-- [ ] Add a parity test to `Tests/FramerCoreTests/EffectGPUParityTests.swift`
-      (27 tests as of 2026-07-09; mean/max per-channel delta tolerances,
-      self-skipping when Metal is unavailable). Run
-      `swift test --filter EffectGPUParityTests`.
+- [ ] Do NOT write a CPU counterpart — the CPU effect path was retired
+      2026-07-09 (docs/adr/2026-07-09-retire-cpu-effect-path.md).
+- [ ] Add a golden test to `Tests/FramerCoreTests/EffectGPUGoldenTests.swift`
+      (use `assertMatchesGolden`, generate the golden with the env-gated
+      command in the file header) or an invariant test in
+      `EffectGPUBehaviorTests.swift` for noise-like output. Run
+      `swift test --filter EffectGPUGoldenTests`.
 - [ ] Wire the UI: macOS controls in
       `Sources/FramerApp/Editor/LayerListSection.swift` (gates blocks on the
       capability flags, see lines ~278-353); iOS controls in
@@ -329,8 +325,8 @@ measuring output instead of eyeballing: framer-diagnostics-and-proof.
 ## Provenance and maintenance
 
 All facts verified 2026-07-09 against commit 48d85a5 by reading the cited files
-and running `swift test --filter EffectGPUParityTests` (27 tests, 0 failures,
-Apple Silicon).
+and running the effect test suites (Apple Silicon); dispatch topology updated
+same day for the CPU-path retirement (docs/adr/2026-07-09-retire-cpu-effect-path.md).
 
 Re-verification one-liners for facts that may drift:
 
@@ -355,8 +351,9 @@ grep -n "maxSpanWalk" Sources/FramerCore/Effects/Renderers/GlitchGPURenderer.swi
 grep -n "userFacingCases\|usesGeometry\|usesCommonAdjustments" Sources/FramerCore/Effects/Models/GPUEffectKind.swift
 # iOS flag-pruning intact (since PR #12 merged 2026-07-09; no output = regression)
 grep -rn "usesCommonAdjustments" Sources/FramerMobile/ || echo "iOS: flag pruning REGRESSED"
-# Parity suite health + count
-swift test --filter EffectGPUParityTests 2>&1 | tail -3
+# Golden + behavior suite health
+swift test --filter EffectGPUGoldenTests 2>&1 | tail -3
+swift test --filter EffectGPUBehaviorTests 2>&1 | tail -3
 # LUT compute stack (embedded source, formats, threadgroups)
 grep -n "makeLibrary(source\|rgba32Float\|rgba8Uint\|threadExecutionWidth" Sources/FramerCore/Processing/LUTMetalRenderer.swift
 ```

@@ -1,12 +1,11 @@
 // TextCellRenderer.swift
-// GPU front door for the TextCell effect bucket. Phase 1 only wires the ASCII
-// variant; Dots / Blockify / MatrixRain still take the existing CPU paths
-// elsewhere in FramerCore (and will move here in Phase 2 of the migration).
+// GPU front door for the TextCell effect bucket (ASCII shader-layer variant
+// plus the Dots / Blockify / MatrixRain bucket entry points below).
 //
-// The public API mirrors `ShaderASCIIRenderer.apply` so callers can swap in
-// the GPU path with no signature change. `ShaderRenderer.swift` dispatches
-// `.ascii` through here and falls back to the CPU renderer when Metal is
-// unavailable (e.g. headless CI without `MTLCreateSystemDefaultDevice()`).
+// `ShaderRenderer.swift` dispatches `.ascii` straight through here — the CPU
+// renderer (ShaderASCIIRenderer) was retired with the CPU effect path
+// (docs/adr/2026-07-09-retire-cpu-effect-path.md), so `MetalEffectError`
+// propagates to the caller instead of triggering a CPU fallback.
 //
 // See:
 //   - Sources/FramerCore/Effects/Metal/TextCell.metal           (asciiVariant)
@@ -85,12 +84,12 @@ public enum TextCellRenderer {
 
     // MARK: - ASCII entry point
 
-    /// Render the ASCII effect on the GPU. Mirrors `ShaderASCIIRenderer.apply`
-    /// signature so callers can swap implementations transparently.
+    /// Render the ASCII effect on the GPU.
     ///
-    /// - Returns: A new CGImage with the effect applied. Falls back to throwing
-    ///   if Metal is unavailable or the LUT atlases can't be loaded — the
-    ///   caller decides whether to retry on the CPU path.
+    /// - Returns: A new CGImage with the effect applied. Throws
+    ///   `MetalEffectError` if Metal is unavailable or the LUT atlases can't
+    ///   be loaded — the error propagates (no CPU retry; the CPU renderer was
+    ///   retired).
     public static func renderASCII(
         to image: CGImage,
         params: ShaderLayerParams,
@@ -198,9 +197,9 @@ public enum TextCellRenderer {
     /// Render the Dots variant on the GPU via the bucket-system parameter
     /// surface. Shares the same `textCellFragment` pipeline as ASCII; the
     /// variant=0 branch in TextCell.metal::dotsVariant handles the geometry.
-    /// Throws `MetalEffectError` on Metal failure so the caller's
-    /// `gpuOrCPU` helper can fall back to the CPU paintEllipse / paintRect /
-    /// paintDiamond path.
+    /// Throws `MetalEffectError` on Metal failure; the error propagates —
+    /// the bucket path is GPU-only for this variant (the legacy `.ascii`
+    /// bucket variant is the only one with a kept CPU loop).
     public static func renderDotsFromBucket(
         input: CGImage,
         common: GPUEffectCommonParameters,

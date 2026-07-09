@@ -82,9 +82,9 @@ public enum MetalRenderPass {
         commandBuffer.waitUntilCompleted()
 
         // Surface driver-level GPU runtime errors (texture bind violation, OOM,
-        // device removal, timeout) as MetalEffectError so gpuOrCPU() can fall
-        // back to CPU. Without this, an .error status returns garbage pixels
-        // silently and the caller treats the corrupt output as success.
+        // device removal, timeout) as MetalEffectError so the failure is loud.
+        // Without this, an .error status returns garbage pixels silently and
+        // the caller treats the corrupt output as success.
         if commandBuffer.status != .completed {
             throw MetalEffectError.commandEncodingFailed
         }

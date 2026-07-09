@@ -4,6 +4,15 @@ import CoreGraphics
 @testable import FramerCore
 
 final class ShaderRendererTests: XCTestCase {
+    // ShaderRenderer is GPU-only since the CPU path was retired
+    // (docs/adr/2026-07-09-retire-cpu-effect-path.md) — without Metal every
+    // render in this suite would throw MetalEffectError.
+    override func setUpWithError() throws {
+        guard MetalEffectLibrary.shared != nil else {
+            throw XCTSkip("Metal device unavailable on this host (likely CI sandbox).")
+        }
+    }
+
     func makeColorGridImage(width: Int, height: Int) -> CGImage {
         let colorSpace = CGColorSpaceCreateDeviceRGB()
         let bitmapInfo = CGImageAlphaInfo.premultipliedLast.rawValue

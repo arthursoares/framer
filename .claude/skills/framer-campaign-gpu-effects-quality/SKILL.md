@@ -1,6 +1,6 @@
 ---
 name: framer-campaign-gpu-effects-quality
-description: EXECUTABLE campaign plan for raising Framer's GPU effects (dither, pixel sort, halftone, textCell/edgeField/glitch buckets) to Grainrad-class quality verified by measurement. Load when asked to tune/improve/re-tune an effect's look, close CPU/GPU parity gaps, implement deferred Grainrad features (blue-noise mask, modulation overlays, JPEG-glitch, chromatic aberration), acquire reference renders, or decide what "effect quality" means here. Keywords - Grainrad, parity, EffectGPUParityTests, dither coefficients, pixel sort streak, cmykHalftone, benchmark lut, reference frames, tuning loop.
+description: EXECUTABLE campaign plan for raising Framer's GPU effects (dither, pixel sort, halftone, textCell/edgeField/glitch buckets) to Grainrad-class quality verified by measurement. Load when asked to tune/improve/re-tune an effect's look, close CPU/GPU parity gaps, implement deferred Grainrad features (blue-noise mask, modulation overlays, JPEG-glitch, chromatic aberration), acquire reference renders, or decide what "effect quality" means here. Keywords - Grainrad, golden references, EffectGPUGoldenTests, dither coefficients, pixel sort streak, cmykHalftone, benchmark lut, reference frames, tuning loop.
 ---
 
 # Campaign: Grainrad-class GPU effect quality, verified by measurement
@@ -38,17 +38,15 @@ Jargon used throughout:
 2. **Never blind-refresh snapshot or parity baselines.** When a number shifts
    unexpectedly, read the pixels and explain the shift before accepting; the
    refresh lands in the same commit as the change that caused it.
-3. **CPU/GPU parity is current mechanical reality, not eternal doctrine.**
-   `ShaderRenderer.gpuOrCPU` (Sources/FramerCore/Processing/ShaderRenderer.swift,
-   ~lines 72–90) falls back to CPU **only** on `MetalEffectError`; while the
-   CPU path exists, EffectGPUParityTests must stay green. But "retire the CPU
-   path entirely" is an OPEN architectural decision (the maintainer questions
-   whether CPU is needed at all — owned by framer-architecture-contract and
-   framer-research-frontier). Do not canonize parity as sacred; do not treat
-   it as retired. PR #12 (merged 2026-07-09, `f2c9521`) already deleted the
-   Glitch/EdgeField CPU pixel loops (−594 lines) — those buckets are GPU-only
-   on main now; TextCell/PrintSampling keep CPU loops only for legacy hidden
-   variants.
+3. **The effect path is GPU-only; regression anchors to frozen goldens.**
+   The CPU twins were retired 2026-07-09
+   (docs/adr/2026-07-09-retire-cpu-effect-path.md; PR #12 merged earlier the
+   same day had already deleted the Glitch/EdgeField CPU loops). Tuning work
+   keeps `EffectGPUGoldenTests` + `EffectGPUBehaviorTests` green; a deliberate
+   look change regenerates the affected goldens IN THE SAME COMMIT with the
+   measured before/after deltas and an explanation of the pixel shift (rule 2
+   applies to goldens exactly as to snapshot hashes). New effects ship with a
+   golden or invariant lock — CPU twins are no longer written.
 4. **Metric before change.** Every tuning change needs a metric defined and a
    baseline number recorded BEFORE the code changes. Before/after image grids
    are illustration, never acceptance evidence.
@@ -113,7 +111,7 @@ and the Blockify remap.
 ### 1. Parity suite
 
 ```sh
-swift test --filter EffectGPUParityTests
+swift test --filter EffectGPUGoldenTests
 ```
 
 Expect (measured 2026-07-09, commit 48d85a5, Apple Silicon Mac with Metal):
@@ -124,7 +122,7 @@ signal that the GPU path ran.
 The suite asserts mean/max per-channel byte deltas (0–255 scale) but does
 **not print** the measured values when passing — to capture actual deltas for
 the baseline table, temporarily instrument the `compare(_:_:)` helper in
-Tests/FramerCoreTests/EffectGPUParityTests.swift with a `print((mean, max))`,
+Tests/FramerCoreTests/EffectGPUGoldenTests.swift with a `print((mean, max))`,
 or use the recipe in **framer-diagnostics-and-proof**. That skill ships
 `.claude/skills/framer-diagnostics-and-proof/scripts/parity-report.sh` — use it
 to verify pass/fail/skip counts, but note it does NOT print mean/max deltas, so
@@ -132,7 +130,7 @@ instrumenting `compare(_:_:)` remains the only way to capture delta numbers for
 the baseline table. (The repo root itself has no `scripts/` directory.)
 
 Tolerance ceilings to record alongside measured values (verified in
-Tests/FramerCoreTests/EffectGPUParityTests.swift):
+Tests/FramerCoreTests/EffectGPUGoldenTests.swift):
 
 | Test(s) | Mean tolerance (0–255) | Notes |
 |---------|------------------------|-------|
@@ -401,8 +399,8 @@ with Metal, unless labeled otherwise. Volatile facts and how to re-verify:
 | Fact | Re-verify with |
 |------|----------------|
 | PRs #11/#12 MERGED 2026-07-09 (`b06601c`, `f2c9521`) | `gh pr view 11 --json state && gh pr view 12 --json state` (both expect MERGED) |
-| Parity suite: 27 tests, 0 failures | `swift test --filter EffectGPUParityTests` |
-| Parity tolerance ceilings | `grep -n XCTAssertLessThan Tests/FramerCoreTests/EffectGPUParityTests.swift` |
+| Golden suite: 13 tests, 0 failures | `swift test --filter EffectGPUGoldenTests` |
+| Golden tolerance ceilings | `grep -n meanTolerance Tests/FramerCoreTests/EffectGPUGoldenTests.swift` |
 | LUT benchmark numbers (16.5× on 3000×1987) | `swift run framer benchmark lut --input docs/sample.jpg --lut assets/luts/ANDP-Film-Fading.CUBE --iterations 10 --warmup 2` |
 | pixelSort excluded from common adjustments + pre-pass note | `grep -n 'usesCommonAdjustments' -A 6 Sources/FramerCore/Effects/Models/GPUEffectKind.swift` |
 | Dither coefficients "eyeballed" + coef/phase table | `grep -n 'eyeballed' Sources/FramerCore/Effects/Metal/Dither.metal` and lines ~251–305 |

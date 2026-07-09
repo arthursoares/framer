@@ -165,10 +165,13 @@ public actor FrameProcessor {
 
             switch layer {
             case .gpuEffect(let params):
-                // Stateless dispatch — no Metal device required upfront. Each
-                // bucket renderer attempts its GPU path and falls back to CPU
-                // on `MetalEffectError`, so headless / no-Metal hosts still
-                // get a valid image instead of a hard failure.
+                // Stateless dispatch — no Metal device required upfront. The
+                // bucket path is GPU-only (PR #12 + the CPU-path retirement,
+                // docs/adr/2026-07-09-retire-cpu-effect-path.md): on a
+                // Metal-less host this throws `MetalEffectError` rather than
+                // silently rendering something different. Only the hidden
+                // legacy variants (textCell `.ascii`, printSampling
+                // `.halftone`/`.dithering`) still route to kept CPU loops.
                 let rendered = try GPUEffectsPlatform.dispatchRenderPreview(
                     input: result.image,
                     effect: params.kind,

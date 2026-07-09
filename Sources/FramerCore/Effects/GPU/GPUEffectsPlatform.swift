@@ -36,10 +36,12 @@ public final class GPUEffectsPlatform {
     }
 
     /// Stateless dispatch entry point. Routes a `.gpuEffect` parameter set to
-    /// the corresponding bucket renderer. Each renderer attempts its GPU path
-    /// and falls back to CPU on `MetalEffectError`, so callers can dispatch
-    /// without first proving Metal is available — required to support headless
-    /// hosts where `MTLCreateSystemDefaultDevice()` returns nil.
+    /// the corresponding bucket renderer. The bucket path is GPU-only —
+    /// renderers throw `MetalEffectError` on Metal-less hosts instead of
+    /// falling back to CPU (PR #12 + docs/adr/2026-07-09-retire-cpu-effect-path.md).
+    /// The only CPU routes left are the hidden legacy variants with no GPU
+    /// entry: textCell `.ascii` and printSampling `.halftone`/`.dithering`,
+    /// selected by variant rather than by caught error.
     public static func dispatchRenderPreview(
         input: CGImage,
         effect: GPUEffectKind,

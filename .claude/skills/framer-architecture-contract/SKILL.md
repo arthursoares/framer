@@ -65,7 +65,7 @@ that guarantee — don't.
 ## Invariants (must hold; each has a WHY)
 
 ### I1 — Layer order IS render semantics
-`FrameProcessor.applyConfiguredLayers` (FrameProcessor.swift:139-187) iterates
+`FrameProcessor.applyConfiguredLayers` (FrameProcessor.swift:154-205) iterates
 `layers` in array order; each layer's output is the next layer's input. Disabled layers
 are skipped (`guard layer.isEnabled` in BorderRenderer.swift:64). Reordering the array
 reorders the render. There is no dependency graph, no z-index, no "smart" ordering.
@@ -97,57 +97,48 @@ FrameProcessor.swift:47) so their pattern density still matches export.
   and if it mutates canvas size it must be simulated in
   `FrameProcessor.previewMaxDimension` (FrameProcessor.swift:192 onward).
 
-### I3 — CPU/GPU parity is CURRENT MECHANICAL REALITY, not eternal doctrine
-Maintainer ruling, 2026-07-09, quoted: *"ShaderRenderer.gpuOrCPU falls back to CPU only
-on MetalEffectError, and EffectGPUParityTests enforce tolerances — keep those tests
-green while the CPU path exists — BUT [I] question whether the CPU path is needed at
-all ('we will always have Metal available'). 'Retire the CPU path' is an OPEN
-architectural decision."* Do not canonize parity as sacred; do not treat it as retired.
+### I3 — Effects are GPU-only; regression anchors to frozen goldens (CPU path RETIRED 2026-07-09)
+Decided and executed 2026-07-09 per docs/adr/2026-07-09-retire-cpu-effect-path.md
+(maintainer direction: "we will always have Metal available"; PR #12's bucket
+retirement was the first step). The redundant CPU twins (~2,900 lines) are gone;
+**a Metal failure now throws `MetalEffectError` to the caller — failing loudly is
+the contract; there is no silent visually-different fallback.**
 
-The contract as it stands today:
-- `ShaderRenderer.gpuOrCPU` (Sources/FramerCore/Processing/ShaderRenderer.swift:76-90)
-  runs the GPU path and falls back to CPU **only** when the thrown error is a
-  `MetalEffectError` (9 cases, defined at
-  Sources/FramerCore/Effects/GPU/MetalEffectLibrary.swift:25-34). Any other error
-  bubbles up. WHY: so genuine bugs surface instead of being masked by a silent CPU
-  render. Bucket renderers went further with PR #12 (merged 2026-07-09, commit
-  `20d5775`): they no longer catch `MetalEffectError` at all — Glitch/EdgeField are
-  GPU-only and throw; TextCell/PrintSampling route to their remaining CPU loops only
-  for legacy hidden variants (`.ascii`, `.halftone`, `.dithering` bucket forms) that
-  have no GPU entry, selected by variant, not by catch.
-- Exception: the LUT layer uses nil-return fallback instead — `LUTMetalRenderer.apply`
-  returns an optional and `LUTRenderer` falls through to `applyCPU` on nil
-  (Sources/FramerCore/Processing/LUTRenderer.swift:41-57).
-- Parity is enforced by Tests/FramerCoreTests/EffectGPUParityTests.swift — 27 tests
-  with per-effect mean/max channel-delta tolerances; they `XCTSkip` when Metal is
-  unavailable (line 117).
-- Each dispatch logs `[ShaderRenderer] GPU path ✓` or `[ShaderRenderer] CPU fallback
-  (Metal error: ...)` — the smoke signal for "metallib missing" is several effects
-  logging CPU fallback at once (triage: framer-debugging-playbook).
+The dispatch contract:
+- `ShaderRenderer.apply` (Sources/FramerCore/Processing/ShaderRenderer.swift) calls
+  the Metal renderers directly; `gpuOrCPU` and the CPU style implementations
+  (incl. ShaderASCIIRenderer, ShaderPixelSortRenderer) were deleted.
+- `DitherRenderer.apply` dispatches **by algorithm**: `.riemersma` → the kept CPU
+  implementation (inherently serial Hilbert-curve error history, no GPU port — a
+  CAPABILITY, not a fallback); every other algorithm → `DitherGPURenderer`, errors
+  propagating. The degraded mono cmykHalftone CPU fallback was deleted.
+- Bucket renderers (since PR #12): Glitch/EdgeField are GPU-only and throw;
+  TextCell/PrintSampling route to kept CPU loops only for legacy hidden variants
+  (`.ascii`, `.halftone`, `.dithering` bucket forms) with no GPU entry — selected by
+  variant, not by catch.
+- Exception, deliberately untouched: the LUT stack keeps nil-return fallback to
+  `applyCPU` (Sources/FramerCore/Processing/LUTRenderer.swift:41-57) — it is the
+  oracle for the LUT tests and the `benchmark lut` CPU baseline
+  (BENCHMARK-BASELINE in the ADR's classification).
 
-What the CPU path buys today (record this before arguing to delete it):
-1. Riemersma dither is CPU-ONLY — inherently serial Hilbert-curve traversal; the GPU
-   wrapper deliberately throws `metalUnavailable` to force CPU
-   (Sources/FramerCore/Effects/Renderers/DitherGPURenderer.swift:148-152).
-2. cmykHalftone's CPU fallback is a knowingly DEGRADED monochrome 6×6 clustered dot;
-   true rotated CMYK screens are GPU-only (comment at
-   Sources/FramerCore/Processing/DitherRenderer.swift:482-485). Accepted divergence,
-   no parity test by design.
-3. Headless/Metal-less hosts (CI sandboxes, some cloud runners) still render the
-   `.shader`/`.dither`/`.lut` paths — and there they also skip 25 of the 27 parity
-   tests (2 fallback-routing tests, e.g. Riemersma→CPU and CMYK fallback, still run
-   without Metal; skip arithmetic owned by framer-validation-and-qa), i.e. the parity
-   net has a hole exactly where the CPU path is exercised. NOTE this argument
-   weakened on 2026-07-09: PR #12 made the Glitch/EdgeField buckets GPU-only
-   (they throw on Metal-less hosts), a first concrete step toward the maintainer's
-   "Metal is always available" position.
+Verification contract (replaces CPU-vs-GPU parity):
+- Tests/FramerCoreTests/EffectGPUGoldenTests.swift — 13 tests compare GPU renders
+  against frozen PNGs in Tests/FramerCoreTests/Resources/GoldenReferences/ with the
+  per-effect tolerances inherited from the retired parity suite. Regeneration is
+  env-gated (command in the file header) and follows the snapshot-hash discipline:
+  never blind-refresh; land in the same commit as the cause; explain the pixel shift.
+- Tests/FramerCoreTests/EffectGPUBehaviorTests.swift (renamed from
+  EffectGPUParityTests) — GPU invariants (binary-BW, palette membership,
+  quantization grid), flag wiring, and the Riemersma explicit-dispatch routing test.
+- Metal-less hosts skip the effect render suites entirely (skip arithmetic owned by
+  framer-validation-and-qa) and cannot render `.shader`/`.dither`/`.gpuEffect`
+  layers — an accepted cost recorded in the ADR.
 
-RULE while both paths exist: CPU and GPU must share exact scoring/blend semantics —
-shared constants and formulas change in both paths in the same commit. The canonical
-incident is pixel-sort divergence (commit `f21a6fe`): CPU scored `.brightness` by
-luminance instead of max(r,g,b), `.hue` returned un-normalized values so blue pixels
-never sorted, and `amount` meant rank-scaling on CPU but mix-blend on GPU. Full story:
-framer-failure-archaeology.
+Historical context: while both paths existed, CPU/GPU divergence was the top
+recurring bug class (canonical incident: pixel-sort divergence, commit `f21a6fe` —
+full story in framer-failure-archaeology). The lockstep rule ("shared constants and
+formulas change in both paths in the same commit") died with the CPU path; its
+successor is the golden-refresh rule above.
 
 ### I4 — BOTH shader-loading paths must keep working
 `MetalEffectLibrary.init` (Sources/FramerCore/Effects/GPU/MetalEffectLibrary.swift:53-120):
@@ -255,7 +246,7 @@ tests do `@testable import Framer` (Tests/FramerAppTests/*.swift). Writing
 
 | Question | Current state | Where the decision work lives |
 |---|---|---|
-| Retire the CPU effect path? | Maintainer leans yes ("we will always have Metal available") but it is OPEN. Dependencies recorded in I3: Riemersma CPU-only, cmykHalftone degraded-mono fallback, Metal-less hosts render at all AND skip 25 of the 27 parity tests (framer-validation-and-qa owns the skip arithmetic) | framer-research-frontier for the investigation; a decision changes I3 here first |
+| ~~Retire the CPU effect path?~~ | **RESOLVED 2026-07-09: retired.** ADR at docs/adr/2026-07-09-retire-cpu-effect-path.md; new contract recorded in I3. Kept by design: Riemersma (capability), legacy hidden bucket variants (capability), LUT `applyCPU` (benchmark baseline + oracle) | Done — framer-research-frontier problem 5 closed by the ADR |
 | Video support someday? | Nothing in code; pipeline is single-CGImage in/out. Any move here would stress the actor model and the synchronous Metal render pass | framer-research-frontier |
 | Unify the two Metal stacks? | Isolation is deliberate today; unification unplanned. Would need to reconcile throw-vs-nil fallback styles and LUT preview caching | framer-metal-pipeline-reference owns the mechanics either way |
 | Snapshot baselines are single-machine | FramerAppTests SHA-256 baselines were recorded on one Mac; cross-machine font/AA rendering drift is untested. Never blind-refresh hashes (maintainer ruling — refresh mechanics owned by framer-validation-and-qa) | framer-campaign-restore-validation's P3 gate drives the decision; the resulting rule gets recorded in framer-validation-and-qa |
@@ -280,13 +271,14 @@ grep -n "public static func applyLayers" Sources/FramerCore/Processing/BorderRen
 # I2: WYSIWYG plumbing
 grep -n "layerPreviewBase\|containsGPUEffect" Sources/FramerCore/Processing/FrameProcessor.swift
 
-# I3: fallback contract + parity tests
-grep -n "catch let error as MetalEffectError" Sources/FramerCore/Processing/ShaderRenderer.swift
+# I3: GPU-only dispatch + golden anchoring
+grep -c "gpuOrCPU" Sources/FramerCore/Processing/ShaderRenderer.swift        # expect 0
 grep -n "enum MetalEffectError" Sources/FramerCore/Effects/GPU/MetalEffectLibrary.swift
-grep -c "func test" Tests/FramerCoreTests/EffectGPUParityTests.swift        # expect 27
-swift test --filter EffectGPUParityTests                                    # expect 0 failures (Metal host)
-grep -n "riemersma" Sources/FramerCore/Effects/Renderers/DitherGPURenderer.swift
-grep -n "CPU fallback: monochrome" Sources/FramerCore/Processing/DitherRenderer.swift
+grep -n "riemersma" Sources/FramerCore/Processing/DitherRenderer.swift | head -3   # algorithm dispatch
+ls Tests/FramerCoreTests/Resources/GoldenReferences | wc -l                 # expect 16
+swift test --filter EffectGPUGoldenTests                                    # expect 13 passed (Metal host)
+swift test --filter EffectGPUBehaviorTests                                  # expect 14 passed (Metal host)
+ls Sources/FramerCore/Processing/ShaderASCIIRenderer.swift 2>&1             # expect: no such file
 
 # I4/I5: dual loading + mirrored constants
 grep -n "makeDefaultLibrary\|makeLibrary(source" Sources/FramerCore/Effects/GPU/MetalEffectLibrary.swift

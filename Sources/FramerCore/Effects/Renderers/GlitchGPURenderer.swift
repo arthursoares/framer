@@ -1,7 +1,7 @@
 // GlitchGPURenderer.swift
 // GPU paths for the Glitch bucket (`.gpuEffect.glitch.*`). Each variant is
-// called from `GlitchRenderer.renderPreview` which falls back to the CPU path
-// in `GlitchRenderer` on `MetalEffectError`.
+// called from `GlitchRenderer.renderPreview`, which is GPU-only — a thrown
+// `MetalEffectError` propagates (the CPU loop was removed in PR #12).
 //
 // VHS dispatches to Glitch.metal's `glitchFragment`.
 // PixelSort dispatches to PixelSort.metal's `pixelSortFragment`, reusing the

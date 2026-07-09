@@ -135,27 +135,30 @@ launch. There is no undo.
 
 Adding a parameter end-to-end has its own checklist: framer-config-and-flags.
 
-### 5. Parity tests stay green while the CPU path exists
+### 5. Golden-reference tests stay green (CPU path retired 2026-07-09)
 
-**Rule:** Every GPU effect currently has a CPU twin. The dispatch contract is
-mechanical: `ShaderRenderer.gpuOrCPU` (`Sources/FramerCore/Processing/ShaderRenderer.swift`,
-~lines 72–90) falls back to CPU **only** on `MetalEffectError` — any other
-error bubbles up so real bugs surface. `Tests/FramerCoreTests/EffectGPUParityTests.swift`
-enforces CPU≈GPU tolerances (and self-skips via `XCTSkip` when no Metal device).
-While both paths exist, a shader change means **both paths get the same patch
-in the same commit**, and `swift test --filter EffectGPUParityTests` must pass.
+**Rule:** The effect render path is GPU-only
+(docs/adr/2026-07-09-retire-cpu-effect-path.md; new contract in
+framer-architecture-contract I3). Pixel-level regression anchors to frozen
+golden PNGs: `Tests/FramerCoreTests/EffectGPUGoldenTests.swift` compares GPU
+renders against `Tests/FramerCoreTests/Resources/GoldenReferences/` within
+per-effect tolerances, and `EffectGPUBehaviorTests` guards GPU invariants and
+routing. A shader change must keep both green. A **deliberate** look change
+regenerates the goldens (env-gated command in the test-file header) **in the
+same commit** with an explanation of the pixel shift — golden refresh follows
+exactly the snapshot-hash discipline of rule 2: never blind-refresh.
 
-**Rationale:** CPU/GPU divergence is the single most recurring bug class in
-this repo (pixel-sort sort-criteria math, amount blend-vs-rank semantics,
-gamma, Y-flips — see framer-failure-archaeology). The parity tests are the
-only automated guard.
+**Rationale:** while the CPU twins existed, CPU/GPU divergence was the single
+most recurring bug class in this repo (pixel-sort sort-criteria math, amount
+blend-vs-rank semantics, gamma, Y-flips — see framer-failure-archaeology).
+Retiring the twins eliminated the divergence class; the goldens replace the
+CPU path as the executable definition of "renders what it rendered yesterday".
 
-**Important nuance (maintainer, 2026-07-09):** parity is *current mechanical
-reality, not eternal doctrine*. The maintainer questions whether the CPU path
-is needed at all ("we will always have Metal available"). "Retire the CPU
-path" is an OPEN architectural decision — owned by framer-architecture-contract
-and framer-research-frontier. Do not treat parity as sacred forever; do not
-treat it as already retired either. Today: keep the tests green.
+**Still CPU, by design (do not "finish the job" by deleting these):**
+Riemersma dither (sole implementation, dispatched by algorithm), the hidden
+legacy bucket variants (textCell `.ascii`, printSampling
+`.halftone`/`.dithering`), and the LUT stack's `applyCPU`/`applyCPUReference`
+(LUT oracle tests + `benchmark lut` baseline).
 
 ### 6. Prefer true merges over cherry-picks
 
@@ -180,10 +183,10 @@ confirm its commits are patch-equivalent to main.
 
 | Change touches | Gate (in addition to `swift build && swift test`) | Why this bar |
 |---|---|---|
-| **Core render path** — `Sources/FramerCore/Processing/`, `Sources/FramerCore/Effects/` | Highest bar: `swift test --filter EffectGPUParityTests` green; both CPU+GPU patched together (rule 5); visual check of a real image through the CLI (framer-run-and-operate) | Pixel output is the product; parity divergence is the top historical bug class |
+| **Core render path** — `Sources/FramerCore/Processing/`, `Sources/FramerCore/Effects/` | Highest bar: `swift test --filter EffectGPUGoldenTests` and `--filter EffectGPUBehaviorTests` green; deliberate look changes regenerate goldens in the same commit with an explanation (rule 5); visual check of a real image through the CLI (framer-run-and-operate) | Pixel output is the product; silent render drift is the top historical bug class |
 | **Serialization / schema** — `CompositionLayer.swift`, `ProcessingConfig.swift`, `YAMLConfig.swift`, anything `Codable` in presets | Back-compat bar (rule 4): legacy keys keep decoding; round-trip tests (JSON + YAML) for new fields; NEVER remove a decode branch | `PresetStore.list()` deletes undecodable files — schema regressions destroy user data |
 | **macOS UI** — `Sources/FramerApp/`, especially `Sidebar/` | Snapshot-hash discipline (rule 2); `xcodegen generate` after adding files, then `xcodebuild test` (broken on some machines — see framer-build-and-env and framer-campaign-restore-validation); design rules in framer-ui-design-system | SHA-256 snapshots are the only layout regression guard |
-| **Metal shaders** — `Sources/FramerCore/Effects/Metal/*.metal` | Both-paths-same-patch while CPU path exists (rule 5); note `swift test` passing does NOT validate the Xcode-built Metal path (framer-metal-pipeline-reference) | Every new shader port has historically shipped 1–3 parity bugs |
+| **Metal shaders** — `Sources/FramerCore/Effects/Metal/*.metal` | Golden + behavior tests green; deliberate look changes regenerate goldens same-commit (rule 5); note `swift test` passing does NOT validate the Xcode-built Metal path (framer-metal-pipeline-reference) | Every new shader port has historically shipped 1–3 pixel bugs |
 | **Docs / skills** — `docs/`, `.claude/skills/` | Lowest gate: accuracy. Date-stamp volatile facts; never present unmerged work as shipped | Stale docs are an active hazard here (see staleness ledger in framer-docs-and-writing) |
 
 If a change spans classes, it clears the highest applicable bar.
@@ -285,8 +288,8 @@ read-only git/gh commands. Re-verify volatile facts with:
 | Kuwahara legacy sharpness mapping | `grep -n "sharpness" Sources/FramerCore/Models/CompositionLayer.swift` |
 | CaptionMode.none still present | `grep -n "case none" Sources/FramerCore/Models/ProcessingConfig.swift` |
 | Hidden GPUEffectKind cases | `grep -n "userFacingCases" Sources/FramerCore/Effects/Models/GPUEffectKind.swift` |
-| gpuOrCPU falls back only on MetalEffectError | `grep -n "MetalEffectError" Sources/FramerCore/Processing/ShaderRenderer.swift` |
-| Parity tests exist + self-skip | `grep -n "XCTSkip" Tests/FramerCoreTests/EffectGPUParityTests.swift` |
+| ShaderRenderer is GPU-only (no gpuOrCPU fallback) | `grep -c "gpuOrCPU" Sources/FramerCore/Processing/ShaderRenderer.swift` (expect 0) |
+| Golden tests exist + self-skip | `grep -n "XCTSkip" Tests/FramerCoreTests/EffectGPUGoldenTests.swift` ; `ls Tests/FramerCoreTests/Resources/GoldenReferences \| wc -l` (expect 16) |
 | Snapshot hashes are SHA-256 literals | `grep -c "expectedSHA256" Tests/FramerAppTests/SidebarHarmonySnapshotTests.swift` |
 | Cherry-pick incident commit | `git show -s ffeffe1` |
 | Build-break commit pair | `git show -s --oneline c515147 ae4b8ba` |
@@ -298,5 +301,6 @@ read-only git/gh commands. Re-verify volatile facts with:
 
 Facts most likely to drift: the danger-list PR table (rechecked 2026-07-09:
 #1 CLOSED, #11/#12 MERGED), the 21-file dead-command count,
-the xcodebuild-tier brokenness, and rule 5's CPU-path status (an open
-architectural decision — check framer-architecture-contract for updates).
+and the xcodebuild-tier brokenness. Rule 5's CPU-path question was RESOLVED
+2026-07-09 (retired — docs/adr/2026-07-09-retire-cpu-effect-path.md; contract
+in framer-architecture-contract I3).
