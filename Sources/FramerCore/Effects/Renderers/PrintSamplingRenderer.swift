@@ -12,25 +12,26 @@ public enum PrintSamplingRenderer {
             return input
         }
 
-        // GPU fast path — see Effects/Metal/PrintSampling.metal. Falls back
-        // to the CPU pixel loop below on any MetalEffectError.
+        // GPU path — see Effects/Metal/PrintSampling.metal. Metal is a hard
+        // requirement, so threshold/crosshatch no longer fall back to the
+        // CPU loop below — it applied variant-specific threshold biases and
+        // pixel-scaled hatch density the shaders don't, so a fallback
+        // render looked visibly different from the GPU output.
+        //
+        // The CPU cell loop below remains ONLY for the legacy `.halftone`
+        // and `.dithering` bucket variants: both are hidden from the
+        // layer-add picker (the `.shader` Halftone style and the `.dither`
+        // layer are the canonical paths) but old projects and YAML presets
+        // can still carry them, and no bucket GPU entry exists for them.
         switch effect {
         case .threshold:
-            do {
-                return try PrintSamplingGPURenderer.renderThreshold(
-                    input: input, common: common, geometry: geometry,
-                    color: color, params: payload, outputSize: outputSize)
-            } catch is MetalEffectError {
-                // fall through to CPU
-            }
+            return try PrintSamplingGPURenderer.renderThreshold(
+                input: input, common: common, geometry: geometry,
+                color: color, params: payload, outputSize: outputSize)
         case .crosshatch:
-            do {
-                return try PrintSamplingGPURenderer.renderCrosshatch(
-                    input: input, common: common, geometry: geometry,
-                    color: color, params: payload, outputSize: outputSize)
-            } catch is MetalEffectError {
-                // fall through to CPU
-            }
+            return try PrintSamplingGPURenderer.renderCrosshatch(
+                input: input, common: common, geometry: geometry,
+                color: color, params: payload, outputSize: outputSize)
         default:
             break
         }

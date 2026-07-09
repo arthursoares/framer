@@ -96,6 +96,17 @@ struct CanvasView: View {
             withAnimation { appState.removeSelected() }
             return .handled
         }
+        // Left/Right arrows step the filmstrip selection — same action as
+        // the ⌘[/⌘] menu commands, scoped to canvas focus so text fields in
+        // the inspector keep their caret movement.
+        if press.key == .leftArrow, press.modifiers.isEmpty {
+            navigateFilmstrip(forward: false)
+            return .handled
+        }
+        if press.key == .rightArrow, press.modifiers.isEmpty {
+            navigateFilmstrip(forward: true)
+            return .handled
+        }
         guard press.modifiers.contains(.command) else { return .ignored }
         switch press.characters {
         case "+", "=":

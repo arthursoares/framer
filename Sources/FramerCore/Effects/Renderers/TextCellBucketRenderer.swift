@@ -18,34 +18,31 @@ public enum TextCellBucketRenderer {
             return input
         }
 
-        // GPU fast path for variants whose Metal shader is fully implemented
-        // in TextCell.metal. Falls back to the CPU pixel loop below if Metal
-        // is unavailable (CI, no default device) or the pipeline fails.
+        // GPU path for variants whose Metal shader is fully implemented in
+        // TextCell.metal. Metal is a hard requirement, so these no longer
+        // fall back to the CPU loop below — it interpreted parameters
+        // differently (intensity scaled by contrast, `sizeMultiplier` and
+        // `invert` ignored, `trailLength` in pixels) and rendering a
+        // visibly different image beats failing loudly.
+        //
+        // The CPU pixel loop below remains ONLY for the legacy `.ascii`
+        // bucket variant: it is hidden from the layer-add picker (the
+        // `.shader` ASCII style is the canonical path) but old projects and
+        // YAML presets can still carry it, and no bucket GPU entry exists
+        // for it.
         switch effect {
         case .dots:
-            do {
-                return try TextCellRenderer.renderDotsFromBucket(
-                    input: input, common: common, geometry: geometry,
-                    color: color, params: textCell, outputSize: outputSize)
-            } catch is MetalEffectError {
-                // fall through to CPU
-            }
+            return try TextCellRenderer.renderDotsFromBucket(
+                input: input, common: common, geometry: geometry,
+                color: color, params: textCell, outputSize: outputSize)
         case .blockify:
-            do {
-                return try TextCellRenderer.renderBlockifyFromBucket(
-                    input: input, common: common, geometry: geometry,
-                    color: color, params: textCell, outputSize: outputSize)
-            } catch is MetalEffectError {
-                // fall through to CPU
-            }
+            return try TextCellRenderer.renderBlockifyFromBucket(
+                input: input, common: common, geometry: geometry,
+                color: color, params: textCell, outputSize: outputSize)
         case .matrixRain:
-            do {
-                return try TextCellRenderer.renderMatrixRainFromBucket(
-                    input: input, common: common, geometry: geometry,
-                    color: color, params: textCell, outputSize: outputSize)
-            } catch is MetalEffectError {
-                // fall through to CPU
-            }
+            return try TextCellRenderer.renderMatrixRainFromBucket(
+                input: input, common: common, geometry: geometry,
+                color: color, params: textCell, outputSize: outputSize)
         default:
             break
         }

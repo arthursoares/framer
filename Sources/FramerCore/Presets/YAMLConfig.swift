@@ -117,13 +117,13 @@ public enum YAMLConfig {
         var gpu_common_contrast: Double?
         var gpu_common_saturation: Double?
         var gpu_common_hue_rotation: Double?
-        var gpu_common_sharpness: Double?
         var gpu_common_gamma: Double?
         var gpu_scale: Double?
         var gpu_spacing: Double?
         var gpu_output_width: Int?
         var gpu_color_mode: String?
         var gpu_background_intensity: Double?
+        var gpu_palette: [String]?
         var gpu_character_set: String?
         var gpu_text_variant: String?
         var gpu_text_speed: Double?
@@ -142,6 +142,7 @@ public enum YAMLConfig {
         var gpu_block_style: String?
         var gpu_block_border_width: Double?
         var gpu_block_border_color: String?
+        var gpu_text_size_multiplier: Double?
         var gpu_sampling_variant: String?
         var gpu_sample_density: Double?
         var gpu_sampling_threshold: Double?
@@ -166,11 +167,8 @@ public enum YAMLConfig {
         var gpu_edge_frequency: Double?
         var gpu_edge_thickness: Double?
         var gpu_edge_direction: String?
-        var gpu_edge_animate: Bool?
         var gpu_noise_type: String?
         var gpu_noise_octaves: Int?
-        var gpu_noise_speed: Double?
-        var gpu_noise_distort_only: Bool?
         var gpu_edge_algorithm: String?
         var gpu_edge_threshold: Double?
         var gpu_edge_invert: Bool?
@@ -648,7 +646,6 @@ public enum YAMLConfig {
             schema.gpu_common_contrast = common.contrast
             schema.gpu_common_saturation = common.saturation
             schema.gpu_common_hue_rotation = common.hueRotation
-            schema.gpu_common_sharpness = common.sharpness
             schema.gpu_common_gamma = common.gamma
         }
 
@@ -661,6 +658,7 @@ public enum YAMLConfig {
         func encodeColor(_ color: GPUEffectColorParameters) {
             schema.gpu_color_mode = color.mode.rawValue
             schema.gpu_background_intensity = color.backgroundIntensity
+            schema.gpu_palette = color.palette?.map(\.hex)
         }
 
         switch params {
@@ -686,6 +684,7 @@ public enum YAMLConfig {
             schema.gpu_block_style = payload.blockStyle.rawValue
             schema.gpu_block_border_width = payload.borderWidth
             schema.gpu_block_border_color = payload.borderColor?.hex
+            schema.gpu_text_size_multiplier = payload.sizeMultiplier
         case .printSampling(let common, let geometry, let color, let payload):
             encodeCommon(common)
             encodeGeometry(geometry)
@@ -718,11 +717,8 @@ public enum YAMLConfig {
             schema.gpu_edge_frequency = payload.frequency
             schema.gpu_edge_thickness = payload.thickness
             schema.gpu_edge_direction = payload.direction.rawValue
-            schema.gpu_edge_animate = payload.animate
             schema.gpu_noise_type = payload.noiseType.rawValue
             schema.gpu_noise_octaves = payload.octaves
-            schema.gpu_noise_speed = payload.speed
-            schema.gpu_noise_distort_only = payload.distortOnly
             schema.gpu_edge_algorithm = payload.edgeAlgorithm.rawValue
             schema.gpu_edge_threshold = payload.edgeThreshold
             schema.gpu_edge_invert = payload.invert
@@ -757,7 +753,6 @@ public enum YAMLConfig {
             contrast: schema.gpu_common_contrast ?? 1,
             saturation: schema.gpu_common_saturation ?? 1,
             hueRotation: schema.gpu_common_hue_rotation ?? 0,
-            sharpness: schema.gpu_common_sharpness ?? 0,
             gamma: schema.gpu_common_gamma ?? 1
         )
         let geometry = GPUEffectGeometryParameters(
@@ -767,7 +762,8 @@ public enum YAMLConfig {
         )
         let color = GPUEffectColorParameters(
             mode: schema.gpu_color_mode.flatMap(GPUEffectColorMode.init(rawValue:)) ?? .source,
-            backgroundIntensity: schema.gpu_background_intensity ?? 0
+            backgroundIntensity: schema.gpu_background_intensity ?? 0,
+            palette: schema.gpu_palette.map { $0.compactMap { try? CodableColor(hex: $0) } }
         )
 
         switch kind {
@@ -796,7 +792,8 @@ public enum YAMLConfig {
                     invert: schema.gpu_text_invert ?? false,
                     blockStyle: schema.gpu_block_style.flatMap(BlockStyle.init(rawValue:)) ?? .solid,
                     borderWidth: schema.gpu_block_border_width ?? 0,
-                    borderColor: schema.gpu_block_border_color.flatMap { try? CodableColor(hex: $0) }
+                    borderColor: schema.gpu_block_border_color.flatMap { try? CodableColor(hex: $0) },
+                    sizeMultiplier: schema.gpu_text_size_multiplier ?? 1
                 )
             )
         case .dithering, .halftone, .threshold, .crosshatch:
@@ -825,7 +822,11 @@ public enum YAMLConfig {
                 )
             )
         case .contour, .edgeDetection, .waveLines, .noiseField, .voronoi:
-            let variant = schema.gpu_edge_variant.flatMap(EdgeFieldVariant.init(rawValue:)) ?? edgeFieldVariant(for: kind)
+            // `kind` is authoritative: every edge variant has a 1:1 kind, so
+            // a `gpu_edge_variant` that disagrees (hand-edited / stale file)
+            // would render a different effect than the layer label shows.
+            // The key is still written on encode for older-app back-compat.
+            let variant = edgeFieldVariant(for: kind)
             return .edgeField(
                 common: common,
                 geometry: geometry,
@@ -839,11 +840,8 @@ public enum YAMLConfig {
                     frequency: schema.gpu_edge_frequency ?? 1.0,
                     thickness: schema.gpu_edge_thickness ?? 0.3,
                     direction: schema.gpu_edge_direction.flatMap(EdgeFieldDirection.init(rawValue:)) ?? .horizontal,
-                    animate: schema.gpu_edge_animate ?? false,
                     noiseType: schema.gpu_noise_type.flatMap(NoiseFieldType.init(rawValue:)) ?? .value,
                     octaves: schema.gpu_noise_octaves ?? 1,
-                    speed: schema.gpu_noise_speed ?? 0,
-                    distortOnly: schema.gpu_noise_distort_only ?? false,
                     edgeAlgorithm: schema.gpu_edge_algorithm.flatMap(EdgeAlgorithm.init(rawValue:)) ?? .sobel,
                     edgeThreshold: schema.gpu_edge_threshold ?? 0.5,
                     invert: schema.gpu_edge_invert ?? false,

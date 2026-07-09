@@ -12,7 +12,6 @@ public struct GPUEffectCommonParameters: Codable, Equatable, Sendable {
     public var contrast: Double
     public var saturation: Double
     public var hueRotation: Double
-    public var sharpness: Double
     public var gamma: Double
 
     public init(
@@ -20,14 +19,12 @@ public struct GPUEffectCommonParameters: Codable, Equatable, Sendable {
         contrast: Double = 1,
         saturation: Double = 1,
         hueRotation: Double = 0,
-        sharpness: Double = 0,
         gamma: Double = 1
     ) {
         self.brightness = brightness
         self.contrast = contrast
         self.saturation = saturation
         self.hueRotation = hueRotation
-        self.sharpness = sharpness
         self.gamma = gamma
     }
 }
@@ -47,10 +44,21 @@ public struct GPUEffectGeometryParameters: Codable, Equatable, Sendable {
 public struct GPUEffectColorParameters: Codable, Equatable, Sendable {
     public var mode: GPUEffectColorMode
     public var backgroundIntensity: Double
+    /// Quantization targets for `.palette` mode, ordered as displayed in the
+    /// palette editor. `nil` (the default, and what every pre-palette file
+    /// decodes to) falls back to `VintagePalette.gameBoy` at render time.
+    /// Renderers upload at most `FramerColorUniformsLayout.maxPaletteColors`
+    /// (16) entries.
+    public var palette: [CodableColor]?
 
-    public init(mode: GPUEffectColorMode = .source, backgroundIntensity: Double = 0) {
+    public init(
+        mode: GPUEffectColorMode = .source,
+        backgroundIntensity: Double = 0,
+        palette: [CodableColor]? = nil
+    ) {
         self.mode = mode
         self.backgroundIntensity = backgroundIntensity
+        self.palette = palette
     }
 }
 
@@ -267,6 +275,34 @@ public struct PrintSamplingParameters: Codable, Equatable, Sendable {
     }
 }
 
+extension PrintSamplingParameters {
+    // Same back-compat strategy as TextCellParameters: every field decodes
+    // via `decodeIfPresent` with the init default so saved projects from
+    // builds that predate a field round-trip cleanly instead of failing
+    // with `keyNotFound`.
+    public init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        self.init(
+            variant: try c.decodeIfPresent(PrintSamplingVariant.self, forKey: .variant) ?? .dithering,
+            sampleDensity: try c.decodeIfPresent(Double.self, forKey: .sampleDensity) ?? 0.5,
+            threshold: try c.decodeIfPresent(Double.self, forKey: .threshold) ?? 0.5,
+            algorithm: try c.decodeIfPresent(GPUDitherAlgorithm.self, forKey: .algorithm) ?? .bayer8x8,
+            foreground: try c.decodeIfPresent(CodableColor.self, forKey: .foreground),
+            background: try c.decodeIfPresent(CodableColor.self, forKey: .background),
+            halftoneShape: try c.decodeIfPresent(HalftoneShape.self, forKey: .halftoneShape) ?? .circle,
+            halftoneAngle: try c.decodeIfPresent(Double.self, forKey: .halftoneAngle) ?? 0,
+            invert: try c.decodeIfPresent(Bool.self, forKey: .invert) ?? false,
+            hatchDensity: try c.decodeIfPresent(Double.self, forKey: .hatchDensity) ?? 0.5,
+            hatchLayers: try c.decodeIfPresent(Int.self, forKey: .hatchLayers) ?? 2,
+            hatchAngle: try c.decodeIfPresent(Double.self, forKey: .hatchAngle) ?? 45,
+            hatchLineWidth: try c.decodeIfPresent(Double.self, forKey: .hatchLineWidth) ?? 0.25,
+            hatchRandomness: try c.decodeIfPresent(Double.self, forKey: .hatchRandomness) ?? 0,
+            thresholdLevels: try c.decodeIfPresent(Int.self, forKey: .thresholdLevels) ?? 2,
+            thresholdDither: try c.decodeIfPresent(Bool.self, forKey: .thresholdDither) ?? false
+        )
+    }
+}
+
 public enum EdgeFieldVariant: String, Codable, Hashable, Sendable, CaseIterable {
     case contour
     case edgeDetection
@@ -305,11 +341,8 @@ public struct EdgeFieldParameters: Codable, Equatable, Sendable {
     public var frequency: Double
     public var thickness: Double
     public var direction: EdgeFieldDirection
-    public var animate: Bool
     public var noiseType: NoiseFieldType
     public var octaves: Int
-    public var speed: Double
-    public var distortOnly: Bool
     public var edgeAlgorithm: EdgeAlgorithm
     public var edgeThreshold: Double
     public var invert: Bool
@@ -329,11 +362,8 @@ public struct EdgeFieldParameters: Codable, Equatable, Sendable {
         frequency: Double = 1.0,
         thickness: Double = 0.3,
         direction: EdgeFieldDirection = .horizontal,
-        animate: Bool = false,
         noiseType: NoiseFieldType = .value,
         octaves: Int = 1,
-        speed: Double = 0,
-        distortOnly: Bool = false,
         edgeAlgorithm: EdgeAlgorithm = .sobel,
         edgeThreshold: Double = 0.5,
         invert: Bool = false,
@@ -352,11 +382,8 @@ public struct EdgeFieldParameters: Codable, Equatable, Sendable {
         self.frequency = frequency
         self.thickness = thickness
         self.direction = direction
-        self.animate = animate
         self.noiseType = noiseType
         self.octaves = octaves
-        self.speed = speed
-        self.distortOnly = distortOnly
         self.edgeAlgorithm = edgeAlgorithm
         self.edgeThreshold = edgeThreshold
         self.invert = invert
@@ -366,6 +393,37 @@ public struct EdgeFieldParameters: Codable, Equatable, Sendable {
         self.cellSize = cellSize
         self.edgeWidth = edgeWidth
         self.randomize = randomize
+    }
+}
+
+extension EdgeFieldParameters {
+    // Same back-compat strategy as TextCellParameters: every field decodes
+    // via `decodeIfPresent` with the init default so saved projects from
+    // builds that predate a field round-trip cleanly instead of failing
+    // with `keyNotFound`.
+    public init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        self.init(
+            variant: try c.decodeIfPresent(EdgeFieldVariant.self, forKey: .variant) ?? .contour,
+            lineStrength: try c.decodeIfPresent(Double.self, forKey: .lineStrength) ?? 0.5,
+            fieldIntensity: try c.decodeIfPresent(Double.self, forKey: .fieldIntensity) ?? 0.5,
+            lineCount: try c.decodeIfPresent(Double.self, forKey: .lineCount) ?? 12,
+            amplitude: try c.decodeIfPresent(Double.self, forKey: .amplitude) ?? 0.5,
+            frequency: try c.decodeIfPresent(Double.self, forKey: .frequency) ?? 1.0,
+            thickness: try c.decodeIfPresent(Double.self, forKey: .thickness) ?? 0.3,
+            direction: try c.decodeIfPresent(EdgeFieldDirection.self, forKey: .direction) ?? .horizontal,
+            noiseType: try c.decodeIfPresent(NoiseFieldType.self, forKey: .noiseType) ?? .value,
+            octaves: try c.decodeIfPresent(Int.self, forKey: .octaves) ?? 1,
+            edgeAlgorithm: try c.decodeIfPresent(EdgeAlgorithm.self, forKey: .edgeAlgorithm) ?? .sobel,
+            edgeThreshold: try c.decodeIfPresent(Double.self, forKey: .edgeThreshold) ?? 0.5,
+            invert: try c.decodeIfPresent(Bool.self, forKey: .invert) ?? false,
+            edgeColor: try c.decodeIfPresent(CodableColor.self, forKey: .edgeColor),
+            contourFillMode: try c.decodeIfPresent(ContourFillMode.self, forKey: .contourFillMode) ?? .linesOnly,
+            contourLevels: try c.decodeIfPresent(Int.self, forKey: .contourLevels) ?? 8,
+            cellSize: try c.decodeIfPresent(Double.self, forKey: .cellSize) ?? 16,
+            edgeWidth: try c.decodeIfPresent(Double.self, forKey: .edgeWidth) ?? 0.25,
+            randomize: try c.decodeIfPresent(Bool.self, forKey: .randomize) ?? false
+        )
     }
 }
 
@@ -425,6 +483,30 @@ public struct GlitchParameters: Codable, Equatable, Sendable {
         self.colorBleed = colorBleed
         self.scanlines = scanlines
         self.trackingError = trackingError
+    }
+}
+
+extension GlitchParameters {
+    // Same back-compat strategy as TextCellParameters: every field decodes
+    // via `decodeIfPresent` with the init default so saved projects from
+    // builds that predate a field round-trip cleanly instead of failing
+    // with `keyNotFound`.
+    public init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        self.init(
+            variant: try c.decodeIfPresent(GlitchVariant.self, forKey: .variant) ?? .pixelSort,
+            amount: try c.decodeIfPresent(Double.self, forKey: .amount) ?? 0.5,
+            threshold: try c.decodeIfPresent(Double.self, forKey: .threshold) ?? 0.5,
+            direction: try c.decodeIfPresent(GlitchDirection.self, forKey: .direction) ?? .horizontal,
+            sortMode: try c.decodeIfPresent(PixelSortMode.self, forKey: .sortMode) ?? .brightness,
+            streakLength: try c.decodeIfPresent(Double.self, forKey: .streakLength) ?? 0.5,
+            randomness: try c.decodeIfPresent(Double.self, forKey: .randomness) ?? 0,
+            reverse: try c.decodeIfPresent(Bool.self, forKey: .reverse) ?? false,
+            distortion: try c.decodeIfPresent(Double.self, forKey: .distortion) ?? 0,
+            colorBleed: try c.decodeIfPresent(Double.self, forKey: .colorBleed) ?? 0,
+            scanlines: try c.decodeIfPresent(Double.self, forKey: .scanlines) ?? 0,
+            trackingError: try c.decodeIfPresent(Double.self, forKey: .trackingError) ?? 0
+        )
     }
 }
 

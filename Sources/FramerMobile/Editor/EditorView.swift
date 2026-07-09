@@ -5,6 +5,8 @@ import FramerCore
 
 struct EditorView: View {
     @Environment(AppState.self) var appState
+    @Environment(\.undoManager) private var undoManager
+    @State private var undoCoalescer = ConfigUndoCoalescer()
     @State private var viewModel = PreviewViewModel()
     @State private var presetCache = PresetPreviewCache()
     @State private var showingOriginal = false
@@ -163,7 +165,18 @@ struct EditorView: View {
             updatePreview()
             regeneratePresetPreviews()
         }
-        .onChange(of: appState.currentConfig) { _, _ in updatePreview() }
+        .onChange(of: appState.currentConfig) { old, new in
+            updatePreview()
+            // Single undo hook for every config edit (shake / three-finger
+            // swipe / ⌘Z on iPad) — see ConfigUndoCoalescer.
+            undoCoalescer.configChanged(
+                from: old,
+                to: new,
+                undoManager: undoManager,
+                current: { appState.currentConfig },
+                restore: { appState.currentConfig = $0 }
+            )
+        }
         .onChange(of: appState.selectedPhoto?.rotation) { _, _ in updatePreview() }
         .onChange(of: appState.library.count) { _, _ in
             updatePreview()

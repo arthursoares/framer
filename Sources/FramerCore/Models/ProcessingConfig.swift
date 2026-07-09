@@ -113,12 +113,18 @@ public struct CodableColor: Codable, Equatable, Sendable {
     public let hex: String
 
     public init(hex: String) throws {
-        let cleaned = hex.hasPrefix("#") ? hex : "#" + hex
-        guard cleaned.count == 7,
-              cleaned.dropFirst().allSatisfy({ $0.isHexDigit }) else {
+        var cleaned = hex.hasPrefix("#") ? String(hex.dropFirst()) : hex
+        guard cleaned.allSatisfy({ $0.isHexDigit }) else {
             throw FramerError.invalidColor(hex)
         }
-        self.hex = cleaned.uppercased()
+        // CSS-style 3-digit shorthand: #F0A → #FF00AA.
+        if cleaned.count == 3 {
+            cleaned = cleaned.map { "\($0)\($0)" }.joined()
+        }
+        guard cleaned.count == 6 else {
+            throw FramerError.invalidColor(hex)
+        }
+        self.hex = "#" + cleaned.uppercased()
     }
 
     public var red: Double { Double(UInt8(hex.dropFirst(1).prefix(2), radix: 16) ?? 0) / 255 }
@@ -126,7 +132,12 @@ public struct CodableColor: Codable, Equatable, Sendable {
     public var blue: Double { Double(UInt8(hex.dropFirst(5).prefix(2), radix: 16) ?? 0) / 255 }
 
     public var cgColor: CGColor {
-        CGColor(red: red, green: green, blue: blue, alpha: 1.0)
+        // Tagged sRGB. The untagged CGColor(red:green:blue:alpha:)
+        // convenience creates a Generic RGB color, which CoreGraphics and
+        // AppKit/SwiftUI shift when drawing into or displaying in sRGB —
+        // hex values rendered visibly off, and color-picker round-trips
+        // drifted so parts of the gamut were effectively unreachable.
+        CGColor(srgbRed: red, green: green, blue: blue, alpha: 1.0)
     }
 }
 

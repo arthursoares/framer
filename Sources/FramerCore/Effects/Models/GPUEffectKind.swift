@@ -94,6 +94,19 @@ public enum GPUEffectKind: String, Codable, Hashable, Sendable, CaseIterable {
         }
     }
 
+    /// Does the variant's shader implement `.palette` colour mode
+    /// (quantizing its output against `GPUEffectColorParameters.palette`
+    /// via `framerPalettePick` in ShaderCommon.h)? Drives whether the
+    /// colour-mode picker offers "Palette" and shows the palette editor.
+    /// MatrixRain is excluded — its glyph colour comes from `rainColor`,
+    /// not the shared colour block.
+    public var usesPalette: Bool {
+        switch self {
+        case .dots, .blockify, .threshold, .crosshatch, .edgeDetection: return true
+        default: return false
+        }
+    }
+
     /// Does the shader use `color.backgroundIntensity` as a general "paper
     /// level" (max'd against the computed ink)?
     public var usesBackgroundIntensity: Bool {
@@ -106,9 +119,10 @@ public enum GPUEffectKind: String, Codable, Hashable, Sendable, CaseIterable {
     /// Common adjustments (brightness / contrast / saturation / hueRotation /
     /// gamma). All bucket fragments EXCEPT pixelSort wrap their source sample
     /// in `applyCommonAdjustments` (see ShaderCommon.h); flipping this true
-    /// surfaces the standard adjustment controls in the sidebar. Sharpness
-    /// is not consumed (would require neighbour samples per-shader); the
-    /// uniform field stays for future use.
+    /// surfaces the standard adjustment controls in the sidebar. (A
+    /// `sharpness` field used to exist here but no shader ever consumed it;
+    /// the model field was retired — only the Metal uniform slot remains,
+    /// always written as 0, to preserve struct layout.)
     ///
     /// PixelSort returns false — Effects/Metal/PixelSort.metal marks its
     /// `colorBlock` uniform as unused and never calls
@@ -144,110 +158,144 @@ public enum GPUEffectKind: String, Codable, Hashable, Sendable, CaseIterable {
         }
     }
 
+    /// Canonical per-kind default parameters. Single source of truth for
+    /// BOTH the add-layer path (`makeDefaultLayer`) and the kind-switch
+    /// path in the macOS / iOS inspectors — previously each UI carried its
+    /// own duplicated `defaultParams(for:)` with values that had drifted
+    /// from this file (e.g. pixelSort amount 0.65 vs 0.5, vhs scanlines 0
+    /// vs 0.5, and a waveLines `.palette` color mode that no bucket shader
+    /// reads and no picker offers).
+    ///
+    /// Geometry/color are tuned per kind (dots reads best monochrome,
+    /// halftone over source colour, etc.); payload values keep the
+    /// add-layer tuning from the per-variant add-menu pass.
+    public func defaultParameters() -> GPUEffectParameters {
+        let common = GPUEffectCommonParameters()
+
+        switch self {
+        // TextCell bucket
+        case .ascii:
+            return .textCell(
+                common: common,
+                geometry: .init(scale: 1.0, spacing: 2.0, outputWidth: 240),
+                color: .init(mode: .foregroundBackground, backgroundIntensity: 0.2),
+                textCell: .init(variant: .ascii)
+            )
+        case .dots:
+            return .textCell(
+                common: common,
+                geometry: .init(scale: 0.9, spacing: 4.0, outputWidth: 240),
+                color: .init(mode: .monochrome, backgroundIntensity: 0.1),
+                textCell: .init(variant: .dots)
+            )
+        case .blockify:
+            return .textCell(
+                common: common,
+                geometry: .init(scale: 1.0, spacing: 3.0, outputWidth: 240),
+                color: .init(mode: .source, backgroundIntensity: 0.0),
+                textCell: .init(variant: .blockify)
+            )
+        case .matrixRain:
+            return .textCell(
+                common: common,
+                geometry: .init(scale: 1.0, spacing: 2.0, outputWidth: 240),
+                color: .init(mode: .foregroundBackground, backgroundIntensity: 0.2),
+                textCell: .init(variant: .matrixRain, trailLength: 0.5, direction: .down, glow: 0.5)
+            )
+
+        // PrintSampling bucket
+        case .threshold:
+            return .printSampling(
+                common: common,
+                geometry: .init(scale: 1.0, spacing: 2.0, outputWidth: 240),
+                color: .init(mode: .monochrome, backgroundIntensity: 0.2),
+                printSampling: .init(variant: .threshold, threshold: 0.5, thresholdLevels: 2)
+            )
+        case .crosshatch:
+            return .printSampling(
+                common: common,
+                geometry: .init(scale: 0.8, spacing: 4.0, outputWidth: 240),
+                color: .init(mode: .foregroundBackground, backgroundIntensity: 0.15),
+                printSampling: .init(variant: .crosshatch, threshold: 0.5, hatchDensity: 0.5, hatchLayers: 2)
+            )
+        case .halftone:
+            return .printSampling(
+                common: common,
+                geometry: .init(scale: 0.9, spacing: 3.0, outputWidth: 240),
+                color: .init(mode: .source, backgroundIntensity: 0.0),
+                printSampling: .init(variant: .halftone, sampleDensity: 0.7, threshold: 0.4)
+            )
+        case .dithering:
+            return .printSampling(
+                common: common,
+                geometry: .init(scale: 1.0, spacing: 2.0, outputWidth: 240),
+                color: .init(mode: .monochrome, backgroundIntensity: 0.1),
+                printSampling: .init(variant: .dithering)
+            )
+
+        // EdgeField bucket
+        case .edgeDetection:
+            return .edgeField(
+                common: common,
+                geometry: .init(scale: 0.9, spacing: 2.0, outputWidth: 240),
+                color: .init(mode: .foregroundBackground, backgroundIntensity: 0.1),
+                edgeField: .init(variant: .edgeDetection, lineStrength: 0.7, thickness: 0.3, edgeAlgorithm: .sobel, edgeThreshold: 0.2)
+            )
+        case .contour:
+            return .edgeField(
+                common: common,
+                geometry: .init(scale: 1.0, spacing: 2.0, outputWidth: 240),
+                color: .init(mode: .monochrome, backgroundIntensity: 0.05),
+                edgeField: .init(variant: .contour, lineStrength: 0.5, fieldIntensity: 0.7, thickness: 0.3, contourFillMode: .linesOnly, contourLevels: 8)
+            )
+        case .waveLines:
+            return .edgeField(
+                common: common,
+                geometry: .init(scale: 1.2, spacing: 4.0, outputWidth: 240),
+                // Was `.palette` in the old UI-side defaults — dead value:
+                // no bucket shader reads a palette uniform and the color
+                // mode picker no longer offers it.
+                color: .init(mode: .monochrome, backgroundIntensity: 0.2),
+                edgeField: .init(variant: .waveLines, lineStrength: 0.5, fieldIntensity: 0.9, amplitude: 0.5, frequency: 1.0, thickness: 0.3, direction: .horizontal)
+            )
+        case .voronoi:
+            return .edgeField(
+                common: common,
+                geometry: .init(scale: 1.1, spacing: 3.0, outputWidth: 240),
+                color: .init(mode: .source, backgroundIntensity: 0.0),
+                edgeField: .init(variant: .voronoi, lineStrength: 0.5, fieldIntensity: 0.85, cellSize: 16.0, edgeWidth: 0.25)
+            )
+        case .noiseField:
+            return .edgeField(
+                common: common,
+                geometry: .init(scale: 0.8, spacing: 5.0, outputWidth: 240),
+                color: .init(mode: .monochrome, backgroundIntensity: 0.15),
+                edgeField: .init(variant: .noiseField, fieldIntensity: 0.5, amplitude: 0.5)
+            )
+
+        // Glitch bucket
+        case .pixelSort:
+            return .glitch(
+                common: common,
+                geometry: .init(scale: 1.0, spacing: 1.0, outputWidth: 240),
+                color: .init(mode: .source, backgroundIntensity: 0.0),
+                glitch: .init(variant: .pixelSort)
+            )
+        case .vhs:
+            return .glitch(
+                common: common,
+                geometry: .init(scale: 1.0, spacing: 2.0, outputWidth: 240),
+                color: .init(mode: .foregroundBackground, backgroundIntensity: 0.08),
+                glitch: .init(variant: .vhs, amount: 0.5, colorBleed: 0.5, scanlines: 0.5, trackingError: 0.3)
+            )
+        }
+    }
+
     /// Build a fresh `.gpuEffect` layer pre-scoped to this kind with sensible
     /// default parameters. Used by the per-variant add-layer menu entries so
     /// each effect is a first-class layer type in the UI while sharing the
     /// same underlying data model.
     public func makeDefaultLayer() -> CompositionLayer {
-        let common   = GPUEffectCommonParameters()
-        let geometry = GPUEffectGeometryParameters(scale: 1.0, spacing: 2.0, outputWidth: 240)
-        let color    = GPUEffectColorParameters(mode: .foregroundBackground, backgroundIntensity: 0.2)
-
-        let params: GPUEffectParameters
-        switch self {
-        // TextCell bucket
-        case .ascii:
-            var p = TextCellParameters(); p.variant = .ascii
-            params = .textCell(common: common, geometry: geometry, color: color, textCell: p)
-        case .dots:
-            var p = TextCellParameters(); p.variant = .dots
-            params = .textCell(common: common, geometry: geometry, color: color, textCell: p)
-        case .blockify:
-            var p = TextCellParameters(); p.variant = .blockify
-            params = .textCell(common: common, geometry: geometry, color: color, textCell: p)
-        case .matrixRain:
-            var p = TextCellParameters()
-            p.variant = .matrixRain
-            p.direction = .down
-            p.trailLength = 0.5
-            p.glow = 0.5
-            params = .textCell(common: common, geometry: geometry, color: color, textCell: p)
-
-        // PrintSampling bucket
-        case .threshold:
-            var p = PrintSamplingParameters()
-            p.variant = .threshold
-            p.threshold = 0.5
-            p.thresholdLevels = 2
-            params = .printSampling(common: common, geometry: geometry, color: color, printSampling: p)
-        case .crosshatch:
-            var p = PrintSamplingParameters()
-            p.variant = .crosshatch
-            p.threshold = 0.5
-            p.hatchDensity = 0.5
-            p.hatchLayers = 2
-            params = .printSampling(common: common, geometry: geometry, color: color, printSampling: p)
-        case .halftone:
-            var p = PrintSamplingParameters(); p.variant = .halftone
-            params = .printSampling(common: common, geometry: geometry, color: color, printSampling: p)
-        case .dithering:
-            var p = PrintSamplingParameters(); p.variant = .dithering
-            params = .printSampling(common: common, geometry: geometry, color: color, printSampling: p)
-
-        // EdgeField bucket
-        case .edgeDetection:
-            var p = EdgeFieldParameters()
-            p.variant = .edgeDetection
-            p.lineStrength = 0.7
-            p.thickness = 0.3
-            p.edgeAlgorithm = .sobel
-            p.edgeThreshold = 0.2
-            params = .edgeField(common: common, geometry: geometry, color: color, edgeField: p)
-        case .contour:
-            var p = EdgeFieldParameters()
-            p.variant = .contour
-            p.lineStrength = 0.5
-            p.thickness = 0.3
-            p.contourLevels = 8
-            p.contourFillMode = .linesOnly
-            params = .edgeField(common: common, geometry: geometry, color: color, edgeField: p)
-        case .waveLines:
-            var p = EdgeFieldParameters()
-            p.variant = .waveLines
-            p.lineStrength = 0.5
-            p.thickness = 0.3
-            p.amplitude = 0.5
-            p.frequency = 1.0
-            p.direction = .horizontal
-            params = .edgeField(common: common, geometry: geometry, color: color, edgeField: p)
-        case .voronoi:
-            var p = EdgeFieldParameters()
-            p.variant = .voronoi
-            p.cellSize = 16.0
-            p.edgeWidth = 0.25
-            p.lineStrength = 0.5
-            params = .edgeField(common: common, geometry: geometry, color: color, edgeField: p)
-        case .noiseField:
-            var p = EdgeFieldParameters()
-            p.variant = .noiseField
-            p.amplitude = 0.5
-            p.fieldIntensity = 0.5
-            params = .edgeField(common: common, geometry: geometry, color: color, edgeField: p)
-
-        // Glitch bucket
-        case .pixelSort:
-            var p = GlitchParameters(); p.variant = .pixelSort
-            params = .glitch(common: common, geometry: geometry, color: color, glitch: p)
-        case .vhs:
-            var p = GlitchParameters()
-            p.variant = .vhs
-            p.amount = 0.5
-            p.scanlines = 0.5
-            p.colorBleed = 0.5
-            p.trackingError = 0.3
-            params = .glitch(common: common, geometry: geometry, color: color, glitch: p)
-        }
-
-        return .gpuEffect(GPUEffectLayerParams(kind: self, params: params))
+        .gpuEffect(GPUEffectLayerParams(kind: self, params: defaultParameters()))
     }
 }

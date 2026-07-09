@@ -73,13 +73,15 @@ static float4 thresholdVariant(
     //   0 = source  — ink shows the source pixel, paper is the bg colour
     //   1 = fg/bg   — ink = foreground, paper = background (legacy default)
     //   2 = mono    — binary black/white (ignores user-picked fg/bg)
-    //   3 = palette — treated as fg/bg for now; palette quantisation for
-    //                 the threshold variant isn't encoded into uniforms yet.
+    //   3 = palette — ink and paper both quantized to the nearest
+    //                 palette entry (framerPalettePick, ShaderCommon.h)
     float3 painted;
     if (u.color.mode == 0u) {
         painted = inked ? src : u.backgroundRGBA.rgb;
     } else if (u.color.mode == 2u) {
         painted = inked ? float3(0.0) : float3(1.0);
+    } else if (u.color.mode == 3u) {
+        painted = framerPalettePick(inked ? src : u.backgroundRGBA.rgb, u.color);
     } else {
         painted = inked ? u.foregroundRGBA.rgb : u.backgroundRGBA.rgb;
     }
@@ -132,7 +134,18 @@ static float4 crosshatchVariant(
     bool inked = dark && (lineA || lineB || lineC || noiseToggle);
     if (u.invert == 1u) { inked = !inked; }
 
-    float3 painted = inked ? u.foregroundRGBA.rgb : u.backgroundRGBA.rgb;
+    // Same colour-mode wiring as the threshold fragment above; crosshatch
+    // previously painted flat fg/bg regardless of mode.
+    float3 painted;
+    if (u.color.mode == 0u) {
+        painted = inked ? src : u.backgroundRGBA.rgb;
+    } else if (u.color.mode == 2u) {
+        painted = inked ? float3(0.0) : float3(1.0);
+    } else if (u.color.mode == 3u) {
+        painted = framerPalettePick(inked ? src : u.backgroundRGBA.rgb, u.color);
+    } else {
+        painted = inked ? u.foregroundRGBA.rgb : u.backgroundRGBA.rgb;
+    }
     float3 final   = mix(src, painted, saturate(u.intensity));
     return float4(final, 1.0);
 }

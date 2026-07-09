@@ -21,7 +21,6 @@ fileprivate func labeledColorPicker(
 
 struct LayerListSection: View {
     @Binding var layers: [CompositionLayer]
-    @Environment(\.undoManager) private var undoManager
     @State private var draggingLayerID: UUID?
     @State private var dropTargetIndex: Int?
 
@@ -58,22 +57,10 @@ struct LayerListSection: View {
                               fromIndex != index else { return false }
 
                         let toOffset = index > fromIndex ? index + 1 : index
-                        let snapshot = layers
-                        let layersBinding = $layers
 
                         withAnimation(.easeInOut(duration: 0.2)) {
                             layers.move(fromOffsets: IndexSet(integer: fromIndex), toOffset: toOffset)
                         }
-
-                        undoManager?.registerUndo(withTarget: UndoProxy.shared) { _ in
-                            MainActor.assumeIsolated {
-                                withAnimation(.easeInOut(duration: 0.2)) {
-                                    layersBinding.wrappedValue = snapshot
-                                }
-                            }
-                        }
-
-                        undoManager?.setActionName("Move Layer")
                         return true
                     } isTargeted: { targeted in
                         withAnimation(.easeInOut(duration: 0.15)) {
@@ -202,54 +189,26 @@ struct LayerListSection: View {
         }
     }
 
+    // Layer mutations no longer register undo here — every config edit
+    // (including these) is captured by the ConfigUndoCoalescer hook in
+    // ContentView, which coalesces slider bursts and covers controls this
+    // per-call plumbing never reached.
     private func removeLayer(at index: Int) {
-        let removed = layers[index]
-        let layersBinding = $layers
         _ = withAnimation(.easeInOut(duration: 0.2)) {
             layers.remove(at: index)
         }
-        undoManager?.registerUndo(withTarget: UndoProxy.shared) { _ in
-            MainActor.assumeIsolated {
-                withAnimation(.easeInOut(duration: 0.2)) {
-                    let insertAt = min(index, layersBinding.wrappedValue.count)
-                    layersBinding.wrappedValue.insert(removed, at: insertAt)
-                }
-            }
-        }
-        undoManager?.setActionName("Delete Layer")
     }
 
     private func addLayer(_ layer: CompositionLayer) {
-        let layersBinding = $layers
         withAnimation(.easeInOut(duration: 0.2)) {
             layers.append(layer)
         }
-        let addedIndex = layers.count - 1
-        undoManager?.registerUndo(withTarget: UndoProxy.shared) { _ in
-            MainActor.assumeIsolated {
-                withAnimation(.easeInOut(duration: 0.2)) {
-                    if addedIndex < layersBinding.wrappedValue.count {
-                        layersBinding.wrappedValue.remove(at: addedIndex)
-                    }
-                }
-            }
-        }
-        undoManager?.setActionName("Add Layer")
     }
 
     private func moveLayer(from source: Int, to destination: Int) {
-        let layersBinding = $layers
         withAnimation(.easeInOut(duration: 0.2)) {
             layers.swapAt(source, destination)
         }
-        undoManager?.registerUndo(withTarget: UndoProxy.shared) { _ in
-            MainActor.assumeIsolated {
-                withAnimation(.easeInOut(duration: 0.2)) {
-                    layersBinding.wrappedValue.swapAt(destination, source)
-                }
-            }
-        }
-        undoManager?.setActionName("Move Layer")
     }
 
     /// ID-keyed binding. Previously this was indexed by `Int`, which captured
@@ -275,12 +234,6 @@ struct LayerListSection: View {
             }
         )
     }
-}
-
-/// Proxy target for UndoManager since it requires NSObject.
-@MainActor
-private final class UndoProxy: NSObject, Sendable {
-    static let shared = UndoProxy()
 }
 
 struct GPUEffectLayerControls: View {
@@ -328,33 +281,53 @@ struct GPUEffectLayerControls: View {
                         title: "Scale",
                         value: scaleBinding,
                         range: 0.5...2.0,
-                        step: 0.05
+                        step: 0.05,
+                        resetValue: defaultGeometry.scale
                     )
                 } secondary: {
                     DenseSliderControlRow(
                         title: "Spacing",
                         value: spacingBinding,
                         range: 1...8,
-                        step: 0.1
+                        step: 0.1,
+                        resetValue: defaultGeometry.spacing
                     )
                 }
             }
 
+            // Output Width is the effect's render resolution — consumed by
+            // every renderer family, so it stays visible for all kinds
+            // (mirrors the mobile inspector; previously the binding existed
+            // here but no control was wired to it).
+            DenseSliderControlRow(
+                title: "Output Width",
+                value: outputWidthBinding,
+                range: 120...640,
+                step: 1,
+                resetValue: Double(defaultGeometry.outputWidth)
+            )
+
             if params.kind.usesColorModeAndFgBg {
-                // Palette was dead on every variant that uses this picker
-                // (dots / blockify / matrixRain / threshold / crosshatch /
-                // edgeDetection): the bucket uniform struct has no palette
-                // array, so the shader had nothing to quantise against.
-                // Dropped from the menu until the bucket renderer grows a
-                // palette uniform the way DitherGPURenderer has.
                 Picker("", selection: colorModeBinding) {
                     Text("Source").tag(GPUEffectColorMode.source)
                     Text("FG/BG").tag(GPUEffectColorMode.foregroundBackground)
                     Text("Mono").tag(GPUEffectColorMode.monochrome)
+                    // Palette mode is offered only where the variant's
+                    // shader actually quantizes against the palette uniform
+                    // (framerPalettePick in ShaderCommon.h) — matrixRain
+                    // paints via rainColor and stays without it.
+                    if params.kind.usesPalette {
+                        Text("Palette").tag(GPUEffectColorMode.palette)
+                    }
                 }
                 .pickerStyle(.menu)
                 .labelsHidden()
                 .denseControlRow("Color Mode")
+
+                if params.kind.usesPalette,
+                   Self.color(for: params.params).mode == .palette {
+                    gpuPaletteEditor()
+                }
             }
 
             if params.kind.usesBackgroundIntensity || params.kind.usesColorModeAndFgBg {
@@ -362,7 +335,8 @@ struct GPUEffectLayerControls: View {
                     title: "Background",
                     value: backgroundIntensityBinding,
                     range: 0...1,
-                    step: 0.05
+                    step: 0.05,
+                    resetValue: defaultColor.backgroundIntensity
                 )
             }
 
@@ -377,11 +351,11 @@ struct GPUEffectLayerControls: View {
             // Shiba, CRT, etc.) for sharpening until a sharpen kernel lands in
             // the bucket family.
             if params.kind.usesCommonAdjustments {
-                adjustmentSlider(label: "Brightness", binding: commonBinding(\.brightness), range: -1...1)
-                adjustmentSlider(label: "Contrast", binding: commonBinding(\.contrast), range: 0...3)
-                adjustmentSlider(label: "Saturation", binding: commonBinding(\.saturation), range: 0...2)
-                adjustmentSlider(label: "Hue", binding: commonBinding(\.hueRotation), range: -1...1)
-                adjustmentSlider(label: "Gamma", binding: commonBinding(\.gamma), range: 0.2...2)
+                adjustmentSlider(label: "Brightness", binding: commonBinding(\.brightness), range: -1...1, resetValue: defaultCommon.brightness)
+                adjustmentSlider(label: "Contrast", binding: commonBinding(\.contrast), range: 0...3, resetValue: defaultCommon.contrast)
+                adjustmentSlider(label: "Saturation", binding: commonBinding(\.saturation), range: 0...2, resetValue: defaultCommon.saturation)
+                adjustmentSlider(label: "Hue", binding: commonBinding(\.hueRotation), range: -1...1, resetValue: defaultCommon.hueRotation)
+                adjustmentSlider(label: "Gamma", binding: commonBinding(\.gamma), range: 0.2...2, resetValue: defaultCommon.gamma)
             }
 
             if case .textCell(let common, let geometry, let color, let payload) = params.params,
@@ -396,7 +370,7 @@ struct GPUEffectLayerControls: View {
                 .labelsHidden()
                 .denseControlRow("Character Set")
 
-                adjustmentSlider(label: "Intensity", binding: textCellBinding(\.intensity), range: 0...1)
+                adjustmentSlider(label: "Intensity", binding: textCellBinding(\.intensity), range: 0...1, resetValue: defaultTextCell.intensity)
 
                 labeledColorPicker("Foreground", selection: Binding(
                     get: { nsColor(from: payload.foreground ?? CodableColor(unchecked: "#FFFFFF")) },
@@ -438,8 +412,8 @@ struct GPUEffectLayerControls: View {
                 .labelsHidden()
                 .denseControlRow("Grid")
 
-                adjustmentSlider(label: "Dot Size", binding: textCellBinding(\.sizeMultiplier), range: 0.1...2.0)
-                adjustmentSlider(label: "Intensity", binding: textCellBinding(\.intensity), range: 0...1)
+                adjustmentSlider(label: "Dot Size", binding: textCellBinding(\.sizeMultiplier), range: 0.1...2.0, resetValue: defaultTextCell.sizeMultiplier)
+                adjustmentSlider(label: "Intensity", binding: textCellBinding(\.intensity), range: 0...1, resetValue: defaultTextCell.intensity)
                 SidebarControlRow("Invert") {
                     EmptyView()
                 } trailingValue: {
@@ -481,10 +455,10 @@ struct GPUEffectLayerControls: View {
                 // Shaded mode reuses `borderWidth` as the radial-falloff
                 // strength (0 = flat like solid, 1 = full bubble). Outlined
                 // mode still uses it as the inset thickness.
-                adjustmentSlider(label: "Border Width", binding: blockBorderWidthBinding, range: 0...1)
+                adjustmentSlider(label: "Border Width", binding: blockBorderWidthBinding, range: 0...1, resetValue: defaultTextCell.borderWidth)
                 // Intensity blends the blockified output with the original
                 // (TextCell.metal: `mix(srcOrig, drawn, intensity)`); had no slider.
-                adjustmentSlider(label: "Intensity", binding: textCellBinding(\.intensity), range: 0...1)
+                adjustmentSlider(label: "Intensity", binding: textCellBinding(\.intensity), range: 0...1, resetValue: defaultTextCell.intensity)
 
                 labeledColorPicker("Foreground", selection: Binding(
                     get: { nsColor(from: payload.foreground ?? CodableColor(unchecked: "#FFFFFF")) },
@@ -519,13 +493,13 @@ struct GPUEffectLayerControls: View {
 
             if case .textCell(let common, let geometry, let color, let payload) = params.params,
                params.kind == .matrixRain {
-                adjustmentSlider(label: "Speed", binding: matrixBinding(\.speed), range: 0...1)
-                adjustmentSlider(label: "Trail", binding: matrixBinding(\.trailLength), range: 0...1)
-                adjustmentSlider(label: "Glow", binding: matrixBinding(\.glow), range: 0...1)
-                adjustmentSlider(label: "BG Opacity", binding: matrixBinding(\.backgroundOpacity), range: 0...1)
+                adjustmentSlider(label: "Speed", binding: matrixBinding(\.speed), range: 0...1, resetValue: defaultTextCell.speed)
+                adjustmentSlider(label: "Trail", binding: matrixBinding(\.trailLength), range: 0...1, resetValue: defaultTextCell.trailLength)
+                adjustmentSlider(label: "Glow", binding: matrixBinding(\.glow), range: 0...1, resetValue: defaultTextCell.glow)
+                adjustmentSlider(label: "BG Opacity", binding: matrixBinding(\.backgroundOpacity), range: 0...1, resetValue: defaultTextCell.backgroundOpacity)
                 // Intensity blends the rain over the source (TextCell.metal:
                 // `mix(srcOrig, glyphColor, intensity)`); had no slider.
-                adjustmentSlider(label: "Intensity", binding: matrixBinding(\.intensity), range: 0...1)
+                adjustmentSlider(label: "Intensity", binding: matrixBinding(\.intensity), range: 0...1, resetValue: defaultTextCell.intensity)
                 // `threshold` slider removed — it was a dead control. The GPU
                 // encoder (TextCellRenderer.renderMatrixRain) overwrites the
                 // shader's `threshold` uniform with `params.trailLength`, so
@@ -580,10 +554,10 @@ struct GPUEffectLayerControls: View {
                 // PixelSort.metal — threshold → uniforms.threshold, amount →
                 // uniforms.intensity (see GlitchGPURenderer) — but had no UI
                 // control, so the layer was stuck at their defaults (0.42 / 0.65).
-                adjustmentSlider(label: "Threshold", binding: glitchBinding(\.threshold), range: 0...1)
-                adjustmentSlider(label: "Amount", binding: glitchBinding(\.amount), range: 0...1)
-                adjustmentSlider(label: "Streak", binding: glitchBinding(\.streakLength), range: 0...1)
-                adjustmentSlider(label: "Random", binding: glitchBinding(\.randomness), range: 0...1)
+                adjustmentSlider(label: "Threshold", binding: glitchBinding(\.threshold), range: 0...1, resetValue: defaultGlitch.threshold)
+                adjustmentSlider(label: "Amount", binding: glitchBinding(\.amount), range: 0...1, resetValue: defaultGlitch.amount)
+                adjustmentSlider(label: "Streak", binding: glitchBinding(\.streakLength), range: 0...1, resetValue: defaultGlitch.streakLength)
+                adjustmentSlider(label: "Random", binding: glitchBinding(\.randomness), range: 0...1, resetValue: defaultGlitch.randomness)
                 SidebarControlRow("Reverse") {
                     EmptyView()
                 } trailingValue: {
@@ -596,21 +570,21 @@ struct GPUEffectLayerControls: View {
                 // Amount is the master VHS strength — it scales tracking,
                 // distortion and chroma in Glitch.metal (amount = 0 ⇒ no effect).
                 // Had no slider, so the layer was stuck at its 0.75 default.
-                adjustmentSlider(label: "Amount", binding: glitchBinding(\.amount), range: 0...1)
-                adjustmentSlider(label: "Distortion", binding: glitchBinding(\.distortion), range: 0...1)
-                adjustmentSlider(label: "Color Bleed", binding: glitchBinding(\.colorBleed), range: 0...1)
-                adjustmentSlider(label: "Scanlines", binding: glitchBinding(\.scanlines), range: 0...1)
-                adjustmentSlider(label: "Tracking", binding: glitchBinding(\.trackingError), range: 0...1)
+                adjustmentSlider(label: "Amount", binding: glitchBinding(\.amount), range: 0...1, resetValue: defaultGlitch.amount)
+                adjustmentSlider(label: "Distortion", binding: glitchBinding(\.distortion), range: 0...1, resetValue: defaultGlitch.distortion)
+                adjustmentSlider(label: "Color Bleed", binding: glitchBinding(\.colorBleed), range: 0...1, resetValue: defaultGlitch.colorBleed)
+                adjustmentSlider(label: "Scanlines", binding: glitchBinding(\.scanlines), range: 0...1, resetValue: defaultGlitch.scanlines)
+                adjustmentSlider(label: "Tracking", binding: glitchBinding(\.trackingError), range: 0...1, resetValue: defaultGlitch.trackingError)
             }
 
             if case .edgeField(let common, let geometry, let color, let payload) = params.params,
                params.kind == .waveLines {
                 // Line Strength drives the shader's threshold shaping — primary
                 // brightness knob, was missing from UI before.
-                adjustmentSlider(label: "Line Strength", binding: edgeFieldBinding(\.lineStrength), range: 0...1)
-                adjustmentSlider(label: "Amplitude", binding: edgeFieldBinding(\.amplitude), range: 0...1)
-                adjustmentSlider(label: "Frequency", binding: edgeFieldBinding(\.frequency), range: 0.1...4)
-                adjustmentSlider(label: "Thickness", binding: edgeFieldBinding(\.thickness), range: 0.05...1)
+                adjustmentSlider(label: "Line Strength", binding: edgeFieldBinding(\.lineStrength), range: 0...1, resetValue: defaultEdgeField.lineStrength)
+                adjustmentSlider(label: "Amplitude", binding: edgeFieldBinding(\.amplitude), range: 0...1, resetValue: defaultEdgeField.amplitude)
+                adjustmentSlider(label: "Frequency", binding: edgeFieldBinding(\.frequency), range: 0.1...4, resetValue: defaultEdgeField.frequency)
+                adjustmentSlider(label: "Thickness", binding: edgeFieldBinding(\.thickness), range: 0.05...1, resetValue: defaultEdgeField.thickness)
 
                 Picker("", selection: edgeDirectionBinding) {
                     Text("Horizontal").tag(EdgeFieldDirection.horizontal)
@@ -623,8 +597,7 @@ struct GPUEffectLayerControls: View {
                 // computes countFactor = max(1, lineCount/spacing) and
                 // multiplies `frequency` by it. Range 1..40 covers from "no
                 // boost" to "very dense bands" at typical spacing values.
-                adjustmentSlider(label: "Line Count", binding: edgeFieldBinding(\.lineCount), range: 1...40)
-                // Animate stays hidden — no time uniform yet.
+                adjustmentSlider(label: "Line Count", binding: edgeFieldBinding(\.lineCount), range: 1...40, resetValue: defaultEdgeField.lineCount)
 
                 // Line tint: shader multiplies the ink by edgeColor
                 // (EdgeField.metal: `ink *= u.edgeColor.rgb`); had no picker.
@@ -644,10 +617,10 @@ struct GPUEffectLayerControls: View {
                 // Line Strength gates the noise contribution (shader:
                 // `noise * u.lineStrength + fieldWeight * 0.3`). Field Intensity
                 // biases the baseline level. Both were missing from UI.
-                adjustmentSlider(label: "Line Strength", binding: edgeFieldBinding(\.lineStrength), range: 0...1)
-                adjustmentSlider(label: "Field Intensity", binding: edgeFieldBinding(\.fieldIntensity), range: 0...1)
-                adjustmentSlider(label: "Octaves", binding: noiseOctavesBinding, range: 1...6)
-                adjustmentSlider(label: "Scale", binding: edgeFieldBinding(\.amplitude), range: 0.1...1)
+                adjustmentSlider(label: "Line Strength", binding: edgeFieldBinding(\.lineStrength), range: 0...1, resetValue: defaultEdgeField.lineStrength)
+                adjustmentSlider(label: "Field Intensity", binding: edgeFieldBinding(\.fieldIntensity), range: 0...1, resetValue: defaultEdgeField.fieldIntensity)
+                adjustmentSlider(label: "Octaves", binding: noiseOctavesBinding, range: 1...6, resetValue: Double(defaultEdgeField.octaves))
+                adjustmentSlider(label: "Scale", binding: edgeFieldBinding(\.amplitude), range: 0.1...1, resetValue: defaultEdgeField.amplitude)
                 Picker("", selection: noiseTypeBinding) {
                     Text("Value (IGN)").tag(NoiseFieldType.value)
                     Text("Simplex").tag(NoiseFieldType.simplex)
@@ -673,9 +646,6 @@ struct GPUEffectLayerControls: View {
                         onChange(updated(layer: params, params: .edgeField(common: common, geometry: geometry, color: color, edgeField: updatedPayload)))
                     }
                 ))
-                // Speed + Animate stay hidden (no time uniform yet).
-                // Distort Only stays hidden (shader generates standalone,
-                // doesn't distort source UVs).
             }
 
             if case .edgeField(let common, let geometry, let color, let payload) = params.params,
@@ -688,9 +658,9 @@ struct GPUEffectLayerControls: View {
                 .labelsHidden()
                 .denseControlRow("Algorithm")
 
-                adjustmentSlider(label: "Line Strength", binding: edgeFieldBinding(\.lineStrength), range: 0...1)
-                adjustmentSlider(label: "Threshold", binding: edgeThresholdBinding, range: 0...1)
-                adjustmentSlider(label: "Line Width", binding: edgeFieldBinding(\.thickness), range: 0.05...1)
+                adjustmentSlider(label: "Line Strength", binding: edgeFieldBinding(\.lineStrength), range: 0...1, resetValue: defaultEdgeField.lineStrength)
+                adjustmentSlider(label: "Threshold", binding: edgeThresholdBinding, range: 0...1, resetValue: defaultEdgeField.edgeThreshold)
+                adjustmentSlider(label: "Line Width", binding: edgeFieldBinding(\.thickness), range: 0.05...1, resetValue: defaultEdgeField.thickness)
                 SidebarControlRow("Invert") {
                     EmptyView()
                 } trailingValue: {
@@ -718,10 +688,10 @@ struct GPUEffectLayerControls: View {
                 .labelsHidden()
                 .denseControlRow("Fill Mode")
 
-                adjustmentSlider(label: "Line Strength", binding: edgeFieldBinding(\.lineStrength), range: 0...1)
-                adjustmentSlider(label: "Field Intensity", binding: edgeFieldBinding(\.fieldIntensity), range: 0.01...1)
-                adjustmentSlider(label: "Levels", binding: contourLevelsBinding, range: 2...24)
-                adjustmentSlider(label: "Line Width", binding: edgeFieldBinding(\.thickness), range: 0.05...1)
+                adjustmentSlider(label: "Line Strength", binding: edgeFieldBinding(\.lineStrength), range: 0...1, resetValue: defaultEdgeField.lineStrength)
+                adjustmentSlider(label: "Field Intensity", binding: edgeFieldBinding(\.fieldIntensity), range: 0.01...1, resetValue: defaultEdgeField.fieldIntensity)
+                adjustmentSlider(label: "Levels", binding: contourLevelsBinding, range: 2...24, resetValue: Double(defaultEdgeField.contourLevels))
+                adjustmentSlider(label: "Line Width", binding: edgeFieldBinding(\.thickness), range: 0.05...1, resetValue: defaultEdgeField.thickness)
                 SidebarControlRow("Invert") {
                     EmptyView()
                 } trailingValue: {
@@ -741,10 +711,10 @@ struct GPUEffectLayerControls: View {
 
             if case .edgeField(let common, let geometry, let color, let payload) = params.params,
                params.kind == .voronoi {
-                adjustmentSlider(label: "Cell Size", binding: voronoiCellSizeBinding, range: 2...64)
-                adjustmentSlider(label: "Wall Strength", binding: edgeFieldBinding(\.lineStrength), range: 0...1)
-                adjustmentSlider(label: "Cell Fill", binding: edgeFieldBinding(\.fieldIntensity), range: 0...1)
-                adjustmentSlider(label: "Edge Width", binding: voronoiEdgeWidthBinding, range: 0.05...1)
+                adjustmentSlider(label: "Cell Size", binding: voronoiCellSizeBinding, range: 2...64, resetValue: defaultEdgeField.cellSize)
+                adjustmentSlider(label: "Wall Strength", binding: edgeFieldBinding(\.lineStrength), range: 0...1, resetValue: defaultEdgeField.lineStrength)
+                adjustmentSlider(label: "Cell Fill", binding: edgeFieldBinding(\.fieldIntensity), range: 0...1, resetValue: defaultEdgeField.fieldIntensity)
+                adjustmentSlider(label: "Edge Width", binding: voronoiEdgeWidthBinding, range: 0.05...1, resetValue: defaultEdgeField.edgeWidth)
                 SidebarControlRow("Randomize") {
                     EmptyView()
                 } trailingValue: {
@@ -773,7 +743,7 @@ struct GPUEffectLayerControls: View {
                     .labelsHidden()
                     .denseControlRow("Shape")
 
-                    adjustmentSlider(label: "Angle", binding: halftoneAngleBinding, range: 0...90)
+                    adjustmentSlider(label: "Angle", binding: halftoneAngleBinding, range: 0...90, resetValue: defaultPrintSampling.halftoneAngle)
 
                     SidebarControlRow("Invert") {
                         EmptyView()
@@ -786,12 +756,14 @@ struct GPUEffectLayerControls: View {
                     // Threshold is the luminance cutoff that decides which pixels
                     // get inked (shader: `bool dark = lum < u.threshold`). Users
                     // previously couldn't tune this — default was the only value.
-                    adjustmentSlider(label: "Threshold", binding: printSamplingBinding(\.threshold), range: 0...1)
-                    adjustmentSlider(label: "Density", binding: hatchDensityBinding, range: 0...1)
-                    adjustmentSlider(label: "Layers", binding: hatchLayersBinding, range: 1...4)
-                    adjustmentSlider(label: "Angle", binding: hatchAngleBinding, range: 0...90)
-                    adjustmentSlider(label: "Line Width", binding: hatchLineWidthBinding, range: 0.05...1)
-                    adjustmentSlider(label: "Random", binding: hatchRandomnessBinding, range: 0...1)
+                    adjustmentSlider(label: "Threshold", binding: printSamplingBinding(\.threshold), range: 0...1, resetValue: defaultPrintSampling.threshold)
+                    adjustmentSlider(label: "Density", binding: hatchDensityBinding, range: 0...1, resetValue: defaultPrintSampling.hatchDensity)
+                    // Max 3 matches the GPU clamp (PrintSamplingGPURenderer
+                    // caps hatchLayers at 3) — position 4 was a no-op.
+                    adjustmentSlider(label: "Layers", binding: hatchLayersBinding, range: 1...3, resetValue: Double(defaultPrintSampling.hatchLayers))
+                    adjustmentSlider(label: "Angle", binding: hatchAngleBinding, range: 0...90, resetValue: defaultPrintSampling.hatchAngle)
+                    adjustmentSlider(label: "Line Width", binding: hatchLineWidthBinding, range: 0.05...1, resetValue: defaultPrintSampling.hatchLineWidth)
+                    adjustmentSlider(label: "Random", binding: hatchRandomnessBinding, range: 0...1, resetValue: defaultPrintSampling.hatchRandomness)
                     SidebarControlRow("Invert") {
                         EmptyView()
                     } trailingValue: {
@@ -802,8 +774,8 @@ struct GPUEffectLayerControls: View {
                 if params.kind == .threshold {
                     // Core cutoff — shader decides ink vs paper by `quantized < u.threshold`.
                     // Not exposed before so users were stuck at the default.
-                    adjustmentSlider(label: "Threshold", binding: printSamplingBinding(\.threshold), range: 0...1)
-                    adjustmentSlider(label: "Levels", binding: thresholdLevelsBinding, range: 2...8)
+                    adjustmentSlider(label: "Threshold", binding: printSamplingBinding(\.threshold), range: 0...1, resetValue: defaultPrintSampling.threshold)
+                    adjustmentSlider(label: "Levels", binding: thresholdLevelsBinding, range: 2...8, resetValue: Double(defaultPrintSampling.thresholdLevels))
                     SidebarControlRow("Dither") {
                         EmptyView()
                     } trailingValue: {
@@ -845,7 +817,7 @@ struct GPUEffectLayerControls: View {
             set: { newKind in
                 var copy = params
                 copy.kind = newKind
-                copy.params = Self.defaultParams(for: newKind)
+                copy.params = newKind.defaultParameters()
                 onChange(copy)
             }
         )
@@ -897,47 +869,107 @@ struct GPUEffectLayerControls: View {
         return copy
     }
 
-    private static func defaultParams(for kind: GPUEffectKind) -> GPUEffectParameters {
-        switch kind {
-        case .ascii:
-            return .textCell(common: .init(), geometry: .init(scale: 1.0, spacing: 2.0, outputWidth: 240), color: .init(mode: .foregroundBackground, backgroundIntensity: 0.2), textCell: .init(characterSet: .classicASCII, variant: .ascii))
-        case .matrixRain:
-            return .textCell(common: .init(), geometry: .init(scale: 1.0, spacing: 2.0, outputWidth: 240), color: .init(mode: .foregroundBackground, backgroundIntensity: 0.2), textCell: .init(characterSet: .classicASCII, variant: .matrixRain))
-        case .blockify:
-            return .textCell(common: .init(), geometry: .init(scale: 1.0, spacing: 3.0, outputWidth: 240), color: .init(mode: .source, backgroundIntensity: 0.0), textCell: .init(characterSet: .classicASCII, variant: .blockify))
-        case .dots:
-            return .textCell(common: .init(), geometry: .init(scale: 0.9, spacing: 4.0, outputWidth: 240), color: .init(mode: .monochrome, backgroundIntensity: 0.1), textCell: .init(characterSet: .classicASCII, variant: .dots))
-        case .dithering:
-            return .printSampling(common: .init(), geometry: .init(scale: 1.0, spacing: 2.0, outputWidth: 240), color: .init(mode: .monochrome, backgroundIntensity: 0.1), printSampling: .init(variant: .dithering, sampleDensity: 0.5, threshold: 0.5))
-        case .halftone:
-            return .printSampling(common: .init(), geometry: .init(scale: 0.9, spacing: 3.0, outputWidth: 240), color: .init(mode: .source, backgroundIntensity: 0.0), printSampling: .init(variant: .halftone, sampleDensity: 0.7, threshold: 0.4))
-        case .threshold:
-            return .printSampling(common: .init(), geometry: .init(scale: 1.0, spacing: 2.0, outputWidth: 240), color: .init(mode: .monochrome, backgroundIntensity: 0.2), printSampling: .init(variant: .threshold, sampleDensity: 0.5, threshold: 0.6))
-        case .crosshatch:
-            return .printSampling(common: .init(), geometry: .init(scale: 0.8, spacing: 4.0, outputWidth: 240), color: .init(mode: .foregroundBackground, backgroundIntensity: 0.15), printSampling: .init(variant: .crosshatch, sampleDensity: 0.65, threshold: 0.45))
-        case .contour:
-            return .edgeField(common: .init(), geometry: .init(scale: 1.0, spacing: 2.0, outputWidth: 240), color: .init(mode: .monochrome, backgroundIntensity: 0.05), edgeField: .init(variant: .contour, lineStrength: 0.6, fieldIntensity: 0.7))
-        case .edgeDetection:
-            return .edgeField(common: .init(), geometry: .init(scale: 0.9, spacing: 2.0, outputWidth: 240), color: .init(mode: .foregroundBackground, backgroundIntensity: 0.1), edgeField: .init(variant: .edgeDetection, lineStrength: 0.8, fieldIntensity: 0.5))
-        case .waveLines:
-            return .edgeField(common: .init(), geometry: .init(scale: 1.2, spacing: 4.0, outputWidth: 240), color: .init(mode: .palette, backgroundIntensity: 0.2), edgeField: .init(variant: .waveLines, lineStrength: 0.5, fieldIntensity: 0.9))
-        case .voronoi:
-            return .edgeField(common: .init(), geometry: .init(scale: 1.1, spacing: 3.0, outputWidth: 240), color: .init(mode: .source, backgroundIntensity: 0.0), edgeField: .init(variant: .voronoi, lineStrength: 0.55, fieldIntensity: 0.85))
-        case .noiseField:
-            return .edgeField(common: .init(), geometry: .init(scale: 0.8, spacing: 5.0, outputWidth: 240), color: .init(mode: .monochrome, backgroundIntensity: 0.15), edgeField: .init(variant: .noiseField, lineStrength: 0.45, fieldIntensity: 0.95))
-        case .pixelSort:
-            return .glitch(common: .init(), geometry: .init(scale: 1.0, spacing: 1.0, outputWidth: 240), color: .init(mode: .source, backgroundIntensity: 0.0), glitch: .init(variant: .pixelSort, amount: 0.65, threshold: 0.42))
-        case .vhs:
-            return .glitch(common: .init(), geometry: .init(scale: 1.0, spacing: 2.0, outputWidth: 240), color: .init(mode: .foregroundBackground, backgroundIntensity: 0.08), glitch: .init(variant: .vhs, amount: 0.75, threshold: 0.5))
-        }
-    }
-
-    private func adjustmentSlider(label: String, binding: Binding<Double>, range: ClosedRange<Double>) -> some View {
+    private func adjustmentSlider(label: String, binding: Binding<Double>, range: ClosedRange<Double>, resetValue: Double? = nil) -> some View {
         DenseSliderControlRow(
             title: LocalizedStringKey(label),
             value: binding,
             range: range,
-            step: 0.05
+            step: 0.05,
+            resetValue: resetValue
+        )
+    }
+
+    // MARK: Canonical per-kind defaults (double-click-to-reset targets).
+    // Derived from GPUEffectKind.defaultParameters() so reset values can
+    // never drift from the values a fresh layer starts with.
+
+    private var kindDefaults: GPUEffectParameters { params.kind.defaultParameters() }
+
+    private var defaultCommon: GPUEffectCommonParameters { Self.common(for: kindDefaults) }
+    private var defaultGeometry: GPUEffectGeometryParameters { Self.geometry(for: kindDefaults) }
+    private var defaultColor: GPUEffectColorParameters { Self.color(for: kindDefaults) }
+
+    private var defaultTextCell: TextCellParameters {
+        if case .textCell(_, _, _, let payload) = kindDefaults { return payload }
+        return TextCellParameters()
+    }
+
+    private var defaultPrintSampling: PrintSamplingParameters {
+        if case .printSampling(_, _, _, let payload) = kindDefaults { return payload }
+        return PrintSamplingParameters()
+    }
+
+    private var defaultEdgeField: EdgeFieldParameters {
+        if case .edgeField(_, _, _, let payload) = kindDefaults { return payload }
+        return EdgeFieldParameters()
+    }
+
+    private var defaultGlitch: GlitchParameters {
+        if case .glitch(_, _, _, let payload) = kindDefaults { return payload }
+        return GlitchParameters()
+    }
+
+    /// Preset dropdown + saved-palettes menu + per-colour editor for the
+    /// `.palette` colour mode. Mirrors DitherLayerControls.paletteEditor:
+    /// preset selection is derived from the current colours, so editing a
+    /// swatch that diverges from every preset flips the picker to Custom.
+    @ViewBuilder
+    private func gpuPaletteEditor() -> some View {
+        let colors = Self.color(for: params.params).palette ?? VintagePalette.gameBoy
+        let selectedPreset = VintagePalette.Preset.matching(colors)
+
+        SidebarFullWidthRow("Palette") {
+            VStack(alignment: .leading, spacing: 6) {
+                Picker("Preset", selection: Binding<VintagePalette.Preset>(
+                    get: { selectedPreset },
+                    set: { newValue in
+                        guard newValue != selectedPreset else { return }
+                        var c = Self.color(for: params.params)
+                        switch newValue {
+                        case .custom:
+                            // Seed Custom with the current colours plus a
+                            // neutral swatch so the result can't match a
+                            // preset and snap the picker back (same dance
+                            // as the Dither editor).
+                            let base = colors.isEmpty ? VintagePalette.gameBoy : colors
+                            let trimmed = Array(base.prefix(FramerColorUniformsLayout.maxPaletteColors - 1))
+                            c.palette = trimmed + [CodableColor(unchecked: "#808080")]
+                        default:
+                            c.palette = newValue.colors
+                        }
+                        onChange(Self.updatingColor(params, color: c))
+                    }
+                )) {
+                    ForEach(VintagePalette.Preset.allCases, id: \.self) { preset in
+                        Text(preset.rawValue).tag(preset)
+                    }
+                }
+                .pickerStyle(.menu)
+
+                UserPaletteMenu(currentColors: colors) { applied in
+                    var c = Self.color(for: params.params)
+                    c.palette = applied
+                    onChange(Self.updatingColor(params, color: c))
+                }
+
+                SidebarPaletteEditor(
+                    colors: gpuPaletteColorsBinding(currentColors: colors),
+                    maxColors: FramerColorUniformsLayout.maxPaletteColors,
+                    minColors: 2,
+                    defaultNewColor: colors.last ?? CodableColor(unchecked: "#000000")
+                )
+            }
+        }
+    }
+
+    private func gpuPaletteColorsBinding(currentColors colors: [CodableColor]) -> Binding<[CodableColor]> {
+        Binding(
+            get: { colors },
+            set: { newColors in
+                var c = Self.color(for: params.params)
+                c.palette = newColors
+                onChange(Self.updatingColor(params, color: c))
+            }
         )
     }
 
@@ -1366,22 +1398,6 @@ struct GPUEffectLayerControls: View {
         )
     }
 
-    private var edgeAnimateBinding: Binding<Bool> {
-        Binding(
-            get: {
-                if case .edgeField(_, _, _, let payload) = params.params {
-                    return payload.animate
-                }
-                return false
-            },
-            set: { newValue in
-                guard case .edgeField(let common, let geometry, let color, var payload) = params.params else { return }
-                payload.animate = newValue
-                onChange(updated(layer: params, params: .edgeField(common: common, geometry: geometry, color: color, edgeField: payload)))
-            }
-        )
-    }
-
     private var noiseTypeBinding: Binding<NoiseFieldType> {
         Binding(
             get: {
@@ -1398,22 +1414,6 @@ struct GPUEffectLayerControls: View {
         )
     }
 
-    private var noiseSpeedBinding: Binding<Double> {
-        Binding(
-            get: {
-                if case .edgeField(_, _, _, let payload) = params.params {
-                    return payload.speed
-                }
-                return 0
-            },
-            set: { newValue in
-                guard case .edgeField(let common, let geometry, let color, var payload) = params.params else { return }
-                payload.speed = newValue
-                onChange(updated(layer: params, params: .edgeField(common: common, geometry: geometry, color: color, edgeField: payload)))
-            }
-        )
-    }
-
     private var noiseOctavesBinding: Binding<Double> {
         Binding(
             get: {
@@ -1425,22 +1425,6 @@ struct GPUEffectLayerControls: View {
             set: { newValue in
                 guard case .edgeField(let common, let geometry, let color, var payload) = params.params else { return }
                 payload.octaves = max(1, Int(newValue.rounded()))
-                onChange(updated(layer: params, params: .edgeField(common: common, geometry: geometry, color: color, edgeField: payload)))
-            }
-        )
-    }
-
-    private var noiseDistortOnlyBinding: Binding<Bool> {
-        Binding(
-            get: {
-                if case .edgeField(_, _, _, let payload) = params.params {
-                    return payload.distortOnly
-                }
-                return false
-            },
-            set: { newValue in
-                guard case .edgeField(let common, let geometry, let color, var payload) = params.params else { return }
-                payload.distortOnly = newValue
                 onChange(updated(layer: params, params: .edgeField(common: common, geometry: geometry, color: color, edgeField: payload)))
             }
         )
@@ -3198,6 +3182,10 @@ struct DenseSliderControlRow: View {
     var accessibilityLabel: LocalizedStringKey? = nil
     let step: Double
     var unit: LocalizedStringKey? = nil
+    /// Double-clicking the row's label area resets to this value (the
+    /// parameter's canonical default). The slider and text field consume
+    /// their own clicks, so the gesture effectively targets the label.
+    var resetValue: Double? = nil
 
     var body: some View {
         SidebarControlRow(title) {
@@ -3210,6 +3198,11 @@ struct DenseSliderControlRow: View {
                     .simpleLayerEditorInputStyle()
                     .monospacedDigit()
                     .accessibilityLabel(Text(accessibilityLabel ?? title))
+            }
+        }
+        .onTapGesture(count: 2) {
+            if let resetValue {
+                value = StyledSliderValueResolver.constrain(resetValue, range: range, step: step)
             }
         }
     }
@@ -3671,6 +3664,12 @@ struct DitherLayerControls: View {
                 }
                 .pickerStyle(.menu)
 
+                UserPaletteMenu(currentColors: colors) { applied in
+                    var p = params
+                    p.colorMode = .palette(applied)
+                    onChange(p)
+                }
+
                 SidebarPaletteEditor(
                     colors: paletteBinding(currentColors: colors),
                     maxColors: DitherColorMode.MAX_PALETTE_COLORS,
@@ -4096,7 +4095,8 @@ struct ShaderLayerControls: View {
                 title: "Intensity",
                 value: params.intensity,
                 range: 0...1,
-                step: 0.05
+                step: 0.05,
+                resetValue: 1.0
             ) { value in
                 var updated = params
                 updated.intensity = value
@@ -4134,7 +4134,8 @@ struct ShaderLayerControls: View {
             title: "Cell Size",
             value: Double(asciiParams.cellSize),
             range: expandedRange(4...24, including: Double(asciiParams.cellSize)),
-            step: 1
+            step: 1,
+            resetValue: Double(ASCIIShaderParams().cellSize)
         ) { value in
             updateASCII(asciiParams, cellSize: Int(value.rounded()))
         }
@@ -4143,7 +4144,8 @@ struct ShaderLayerControls: View {
             title: "Edge Bias",
             value: asciiParams.edgeBias,
             range: expandedRange(0...1, including: asciiParams.edgeBias),
-            step: 0.05
+            step: 0.05,
+            resetValue: ASCIIShaderParams().edgeBias
         ) { value in
             updateASCII(asciiParams, edgeBias: value)
         }
@@ -4152,7 +4154,8 @@ struct ShaderLayerControls: View {
             title: "Exposure",
             value: asciiParams.exposure,
             range: expandedRange(0...5, including: asciiParams.exposure),
-            step: 0.1
+            step: 0.1,
+            resetValue: ASCIIShaderParams().exposure
         ) { value in
             updateASCII(asciiParams, exposure: value)
         }
@@ -4161,7 +4164,8 @@ struct ShaderLayerControls: View {
             title: "Attenuation",
             value: asciiParams.attenuation,
             range: expandedRange(0...5, including: asciiParams.attenuation),
-            step: 0.1
+            step: 0.1,
+            resetValue: ASCIIShaderParams().attenuation
         ) { value in
             updateASCII(asciiParams, attenuation: value)
         }
@@ -4170,7 +4174,8 @@ struct ShaderLayerControls: View {
             title: "Black Level",
             value: asciiParams.blackLevel,
             range: 0...1,
-            step: 0.05
+            step: 0.05,
+            resetValue: ASCIIShaderParams().blackLevel
         ) { value in
             updateASCII(asciiParams, blackLevel: value)
         }
@@ -4261,7 +4266,8 @@ struct ShaderLayerControls: View {
                 title: "Saturation",
                 value: saturationShift,
                 range: expandedRange(-50...50, including: saturationShift),
-                step: 1
+                step: 1,
+                resetValue: 0
             ) { value in
                 updateASCII(asciiParams, colorMode: .dominantTwoTone(
                     flipped: flipped,
@@ -4274,7 +4280,8 @@ struct ShaderLayerControls: View {
                 title: "Brightness",
                 value: lightnessShift,
                 range: expandedRange(-50...50, including: lightnessShift),
-                step: 1
+                step: 1,
+                resetValue: 0
             ) { value in
                 updateASCII(asciiParams, colorMode: .dominantTwoTone(
                     flipped: flipped,
@@ -4478,10 +4485,10 @@ struct ShaderLayerControls: View {
     @ViewBuilder
     private func crimewaveControls(_ crimewaveParams: CrimewaveShaderParams) -> some View {
         styleSliderRows(
-            [("Neon", crimewaveParams.neon, 0...2, 0.05),
-             ("Softness", crimewaveParams.softness, 0...1, 0.05),
-             ("Contrast", crimewaveParams.contrast, 0.5...3, 0.05),
-             ("Grain", crimewaveParams.grain, 0...1, 0.05)]
+            [("Neon", crimewaveParams.neon, 0...2, 0.05, CrimewaveShaderParams().neon),
+             ("Softness", crimewaveParams.softness, 0...1, 0.05, CrimewaveShaderParams().softness),
+             ("Contrast", crimewaveParams.contrast, 0.5...3, 0.05, CrimewaveShaderParams().contrast),
+             ("Grain", crimewaveParams.grain, 0...1, 0.05, CrimewaveShaderParams().grain)]
         ) { label, value in
             var updated = crimewaveParams
             switch label {
@@ -4497,10 +4504,10 @@ struct ShaderLayerControls: View {
     @ViewBuilder
     private func narcControls(_ narcParams: NarcShaderParams) -> some View {
         styleSliderRows(
-            [("Contrast", narcParams.contrast, 0.5...3, 0.05),
-             ("Crush", narcParams.crush, 0...1, 0.05),
-             ("Temperature", narcParams.temperature, -1...1, 0.05),
-             ("Grain", narcParams.grain, 0...1, 0.05)]
+            [("Contrast", narcParams.contrast, 0.5...3, 0.05, NarcShaderParams().contrast),
+             ("Crush", narcParams.crush, 0...1, 0.05, NarcShaderParams().crush),
+             ("Temperature", narcParams.temperature, -1...1, 0.05, NarcShaderParams().temperature),
+             ("Grain", narcParams.grain, 0...1, 0.05, NarcShaderParams().grain)]
         ) { label, value in
             var updated = narcParams
             switch label {
@@ -4516,10 +4523,10 @@ struct ShaderLayerControls: View {
     @ViewBuilder
     private func shibaControls(_ shibaParams: ShibaShaderParams) -> some View {
         styleSliderRows(
-            [("Warmth", shibaParams.warmth, -1...1, 0.05),
-             ("Softness", shibaParams.softness, 0...1, 0.05),
-             ("Saturation", shibaParams.saturation, 0...2, 0.05),
-             ("Grain", shibaParams.grain, 0...1, 0.05)]
+            [("Warmth", shibaParams.warmth, -1...1, 0.05, ShibaShaderParams().warmth),
+             ("Softness", shibaParams.softness, 0...1, 0.05, ShibaShaderParams().softness),
+             ("Saturation", shibaParams.saturation, 0...2, 0.05, ShibaShaderParams().saturation),
+             ("Grain", shibaParams.grain, 0...1, 0.05, ShibaShaderParams().grain)]
         ) { label, value in
             var updated = shibaParams
             switch label {
@@ -4596,7 +4603,8 @@ struct ShaderLayerControls: View {
             title: "Threshold",
             value: pixelSortParams.threshold,
             range: expandedRange(0...1, including: pixelSortParams.threshold),
-            step: 0.05
+            step: 0.05,
+            resetValue: PixelSortShaderParams().threshold
         ) { value in
             var updated = pixelSortParams
             updated.threshold = value
@@ -4606,7 +4614,8 @@ struct ShaderLayerControls: View {
             title: "Span",
             value: Double(pixelSortParams.span),
             range: expandedRange(4...256, including: Double(pixelSortParams.span)),
-            step: 1
+            step: 1,
+            resetValue: Double(PixelSortShaderParams().span)
         ) { value in
             var updated = pixelSortParams
             updated.span = Int(value.rounded())
@@ -4620,8 +4629,9 @@ struct ShaderLayerControls: View {
         sliderRow(
             title: "Randomness",
             value: pixelSortParams.randomness,
-            range: 0...1,
-            step: 0.05
+            range: expandedRange(0...1, including: pixelSortParams.randomness),
+            step: 0.05,
+            resetValue: PixelSortShaderParams().randomness
         ) { value in
             var updated = pixelSortParams; updated.randomness = value
             onChange(params.withParams(.pixelSort(updated)))
@@ -4630,7 +4640,8 @@ struct ShaderLayerControls: View {
             title: "Amount",
             value: pixelSortParams.amount,
             range: expandedRange(0...1, including: pixelSortParams.amount),
-            step: 0.05
+            step: 0.05,
+            resetValue: PixelSortShaderParams().amount
         ) { value in
             var updated = pixelSortParams
             updated.amount = value
@@ -4657,7 +4668,8 @@ struct ShaderLayerControls: View {
             title: "Curvature",
             value: crtParams.curvature,
             range: expandedRange(1...10, including: crtParams.curvature),
-            step: 0.5
+            step: 0.5,
+            resetValue: CRTShaderParams().curvature
         ) { value in
             var updated = crtParams; updated.curvature = value
             onChange(params.withParams(.crt(updated)))
@@ -4665,8 +4677,9 @@ struct ShaderLayerControls: View {
         sliderRow(
             title: "Line Size",
             value: Double(crtParams.lineSize),
-            range: 0...4,
-            step: 1
+            range: expandedRange(0...4, including: Double(crtParams.lineSize)),
+            step: 1,
+            resetValue: Double(CRTShaderParams().lineSize)
         ) { value in
             var updated = crtParams; updated.lineSize = Int(value.rounded())
             onChange(params.withParams(.crt(updated)))
@@ -4675,7 +4688,8 @@ struct ShaderLayerControls: View {
             title: "Line Strength",
             value: crtParams.lineStrength,
             range: expandedRange(0...5, including: crtParams.lineStrength),
-            step: 0.1
+            step: 0.1,
+            resetValue: CRTShaderParams().lineStrength
         ) { value in
             var updated = crtParams; updated.lineStrength = value
             onChange(params.withParams(.crt(updated)))
@@ -4684,7 +4698,8 @@ struct ShaderLayerControls: View {
             title: "Brightness",
             value: crtParams.brightness,
             range: expandedRange(-1...1, including: crtParams.brightness),
-            step: 0.05
+            step: 0.05,
+            resetValue: CRTShaderParams().brightness
         ) { value in
             var updated = crtParams; updated.brightness = value
             onChange(params.withParams(.crt(updated)))
@@ -4693,7 +4708,8 @@ struct ShaderLayerControls: View {
             title: "Vignette",
             value: crtParams.vignette,
             range: expandedRange(1...100, including: crtParams.vignette),
-            step: 1
+            step: 1,
+            resetValue: CRTShaderParams().vignette
         ) { value in
             var updated = crtParams; updated.vignette = value
             onChange(params.withParams(.crt(updated)))
@@ -4706,7 +4722,8 @@ struct ShaderLayerControls: View {
             title: "Dot Size",
             value: halftoneParams.dotSize,
             range: expandedRange(0.1...3, including: halftoneParams.dotSize),
-            step: 0.1
+            step: 0.1,
+            resetValue: HalftoneShaderParams().dotSize
         ) { value in
             var updated = halftoneParams; updated.dotSize = value
             onChange(params.withParams(.halftone(updated)))
@@ -4715,7 +4732,8 @@ struct ShaderLayerControls: View {
             title: "Contrast",
             value: halftoneParams.contrast,
             range: expandedRange(0.1...3, including: halftoneParams.contrast),
-            step: 0.1
+            step: 0.1,
+            resetValue: HalftoneShaderParams().contrast
         ) { value in
             var updated = halftoneParams; updated.contrast = value
             onChange(params.withParams(.halftone(updated)))
@@ -4739,7 +4757,8 @@ struct ShaderLayerControls: View {
             title: "Kernel Size",
             value: Double(kuwaharaParams.kernelSize),
             range: expandedRange(1...15, including: Double(kuwaharaParams.kernelSize)),
-            step: 1
+            step: 1,
+            resetValue: Double(KuwaharaShaderParams().kernelSize)
         ) { value in
             var updated = kuwaharaParams; updated.kernelSize = Int(value.rounded())
             onChange(params.withParams(.kuwahara(updated)))
@@ -4748,7 +4767,8 @@ struct ShaderLayerControls: View {
             title: "Softness",
             value: kuwaharaParams.softness,
             range: expandedRange(0...1, including: kuwaharaParams.softness),
-            step: 0.05
+            step: 0.05,
+            resetValue: KuwaharaShaderParams().softness
         ) { value in
             var updated = kuwaharaParams; updated.softness = value
             onChange(params.withParams(.kuwahara(updated)))
@@ -4758,10 +4778,10 @@ struct ShaderLayerControls: View {
     @ViewBuilder
     private func distantPastControls(_ distantPastParams: DistantPastShaderParams) -> some View {
         styleSliderRows(
-            [("Palette Depth", Double(distantPastParams.paletteDepth), 2...6, 1),
-             ("Fade", distantPastParams.fade, 0...1, 0.05),
-             ("Softness", distantPastParams.softness, 0...1, 0.05),
-             ("Grain", distantPastParams.grain, 0...1, 0.05)]
+            [("Palette Depth", Double(distantPastParams.paletteDepth), 2...6, 1, Double(DistantPastShaderParams().paletteDepth)),
+             ("Fade", distantPastParams.fade, 0...1, 0.05, DistantPastShaderParams().fade),
+             ("Softness", distantPastParams.softness, 0...1, 0.05, DistantPastShaderParams().softness),
+             ("Grain", distantPastParams.grain, 0...1, 0.05, DistantPastShaderParams().grain)]
         ) { label, value in
             var updated = distantPastParams
             switch label {
@@ -4776,7 +4796,7 @@ struct ShaderLayerControls: View {
 
     @ViewBuilder
     private func styleSliderRows(
-        _ rows: [(String, Double, ClosedRange<Double>, Double)],
+        _ rows: [(String, Double, ClosedRange<Double>, Double, Double)],
         onSet: @escaping @MainActor @Sendable (String, Double) -> Void
     ) -> some View {
         ForEach(rows, id: \.0) { row in
@@ -4784,7 +4804,8 @@ struct ShaderLayerControls: View {
                 title: row.0,
                 value: row.1,
                 range: expandedRange(row.2, including: row.1),
-                step: row.3
+                step: row.3,
+                resetValue: row.4
             ) { onSet(row.0, $0) }
         }
     }
@@ -4798,13 +4819,15 @@ struct ShaderLayerControls: View {
         value: Double,
         range: ClosedRange<Double>,
         step: Double,
+        resetValue: Double? = nil,
         onSet: @escaping @MainActor @Sendable (Double) -> Void
     ) -> some View {
         DenseSliderControlRow(
             title: LocalizedStringKey(title),
             value: Binding(get: { value }, set: onSet),
             range: range,
-            step: step
+            step: step,
+            resetValue: resetValue
         )
     }
 }

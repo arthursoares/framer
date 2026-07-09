@@ -96,6 +96,11 @@ static float4 edgeDetectionVariant(
     float3 ink;
     if (u.color.mode == 1u) {
         ink = float3(value, value, u.color.backgroundIntensity);
+    } else if (u.color.mode == 3u) {
+        // Palette: quantize the edge-intensity ramp to the nearest
+        // palette entries (posterized edge bands).
+        float bg = u.color.backgroundIntensity;
+        ink = framerPalettePick(float3(max(bg, value)), u.color);
     } else {
         float bg = u.color.backgroundIntensity;
         ink = float3(max(bg, value));

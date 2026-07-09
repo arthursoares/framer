@@ -299,7 +299,7 @@ public enum EdgeFieldGPURenderer {
         u.contrast    = Float(p.contrast)
         u.saturation  = Float(p.saturation)
         u.hueRotation = Float(p.hueRotation)
-        u.sharpness   = Float(p.sharpness)
+        u.sharpness   = 0  // retired — no shader consumes it; slot kept for Metal layout
         u.gamma       = Float(p.gamma)
     }
 
@@ -319,6 +319,10 @@ public enum EdgeFieldGPURenderer {
             }
         }()
         u.backgroundIntensity = Float(p.backgroundIntensity)
+        if p.mode == .palette {
+            let colors = (p.palette?.isEmpty == false ? p.palette! : VintagePalette.gameBoy)
+            u.setPalette(colors.map(simdColor))
+        }
     }
 
     @inline(__always)

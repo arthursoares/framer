@@ -197,7 +197,7 @@ public enum GlitchGPURenderer {
         u.contrast    = Float(p.contrast)
         u.saturation  = Float(p.saturation)
         u.hueRotation = Float(p.hueRotation)
-        u.sharpness   = Float(p.sharpness)
+        u.sharpness   = 0  // retired — no shader consumes it; slot kept for Metal layout
         u.gamma       = Float(p.gamma)
     }
 
@@ -217,6 +217,10 @@ public enum GlitchGPURenderer {
             }
         }()
         u.backgroundIntensity = Float(p.backgroundIntensity)
+        if p.mode == .palette {
+            let colors = (p.palette?.isEmpty == false ? p.palette! : VintagePalette.gameBoy)
+            u.setPalette(colors.map { SIMD4(Float($0.red), Float($0.green), Float($0.blue), 1) })
+        }
     }
 
     @inline(__always)
