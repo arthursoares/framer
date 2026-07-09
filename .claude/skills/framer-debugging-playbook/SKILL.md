@@ -27,7 +27,7 @@ Facts verified against main @ 48d85a5 on 2026-07-09 unless labeled otherwise.
 
 Jargon used below, defined once:
 - **Bucket / `.gpuEffect` layer**: one of 4 GPU effect families (textCell, printSampling, edgeField, glitch) dispatched via `GPUEffectsPlatform`; distinct from the older `.shader` layer effects dispatched via `ShaderRenderer`.
-- **CPU fallback**: every GPU effect has a CPU implementation; the GPU path is tried first and CPU runs only when the GPU path throws `MetalEffectError` (any other error propagates). See `Sources/FramerCore/Processing/ShaderRenderer.swift:76-90`.
+- **CPU fallback**: `.shader`-layer effects have a CPU implementation; the GPU path is tried first and CPU runs only when the GPU path throws `MetalEffectError` (any other error propagates). See `Sources/FramerCore/Processing/ShaderRenderer.swift:76-90`. Bucket coverage shrank with PR #12 (merged 2026-07-09): Glitch/EdgeField buckets are GPU-only and throw; TextCell/PrintSampling keep CPU loops only for legacy hidden variants.
 - **metallib**: a precompiled Metal shader library. Under Xcode builds SPM compiles the `.metal` files into `default.metallib`; under plain `swift build`/`swift test` it does NOT — `MetalEffectLibrary` concatenates the `.metal` sources and compiles them at runtime instead (`Sources/FramerCore/Effects/GPU/MetalEffectLibrary.swift:54-120`).
 - **Uniforms**: the parameter struct passed from Swift to a Metal shader; Swift and MSL (Metal Shading Language) struct layouts are mirrored by hand.
 
@@ -58,7 +58,7 @@ Jargon used below, defined once:
 
 **Experiment.** Run `swift test --filter EffectGPUGoldenTests` (self-skips with `XCTSkip("Metal device unavailable…")` when there's no GPU library) and check stdout for `MetalEffectLibrary` load errors.
 
-**Discriminator for scope.** ONE effect falling back = that effect's pipeline/function failed. MANY effects falling back simultaneously = the whole shader library failed to build — either `default.metallib` missing from the bundle, or one bad `.metal` file breaking the *concatenated* runtime source compile (all `.metal` files compile as one translation unit under `swift build`; a typo in any one kills all of them). `docs/gpu-migration-mac-resume.md` calls this out: "multiple effects 'look like CPU' simultaneously is the signature." Look for `MetalEffectLibrary: makeLibrary failed: <compile error>` on stdout (`MetalEffectLibrary.swift:113`).
+**Discriminator for scope.** ONE effect throwing = that effect's pipeline/function failed. MANY effects throwing simultaneously = the whole shader library failed to build — either `default.metallib` missing from the bundle, or one bad `.metal` file breaking the *concatenated* runtime source compile (all `.metal` files compile as one translation unit under `swift build`; a typo in any one kills all of them). `docs/gpu-migration-mac-resume.md` calls this out: "multiple effects 'look like CPU' simultaneously is the signature." Look for `MetalEffectLibrary: makeLibrary failed: <compile error>` on stdout (`MetalEffectLibrary.swift:113`).
 
 **Also note:** a GPU command buffer finishing with error status *throws* `commandEncodingFailed` rather than returning garbage (`Sources/FramerCore/Effects/GPU/MetalRenderPass.swift:88-90`) — so corrupt pixels from a successful render point elsewhere (usually entry #2). Loader mechanics live in **framer-metal-pipeline-reference**; the SPM-doesn't-compile-metal saga in **framer-failure-archaeology**.
 
@@ -117,7 +117,7 @@ Both steps are documented from experience in `.sisyphus/notepads/sidebar-harmony
 
 ### 6. "Signing certificate … is not valid for code signing" → environment, not code
 
-`xcodebuild test -scheme Framer -destination 'platform=macOS'` fails with `Signing certificate "Apple Development: …" … is not valid for code signing` (observed 2026-07-09 on the primary dev machine — the cert is revoked, `CSSMERR_TP_CERT_REVOKED`, not merely expired, so waiting won't help). Nothing you changed caused this; do NOT start reverting code. Repairing this tier is an executable campaign: **framer-campaign-restore-validation**. Environment setup generally: **framer-build-and-env**. Meanwhile, `swift build && swift test` (268 tests, FramerCore + FramerCLI) still works and needs no signing.
+`xcodebuild test -scheme Framer -destination 'platform=macOS'` fails with `Signing certificate "Apple Development: …" … is not valid for code signing` (observed 2026-07-09 on the primary dev machine — the cert is revoked, `CSSMERR_TP_CERT_REVOKED`, not merely expired, so waiting won't help). Nothing you changed caused this; do NOT start reverting code. Repairing this tier is an executable campaign: **framer-campaign-restore-validation**. Environment setup generally: **framer-build-and-env**. Meanwhile, `swift build && swift test` (273 tests as of f2c9521, FramerCore + FramerCLI) still works and needs no signing.
 
 ### 7. Metal Toolchain errors from xcodebuild → missing Xcode component
 
@@ -156,7 +156,7 @@ head -c 60 assets/textures/<file>     # pointers start "version https://git-lfs.
 
 ### 10. A slider does nothing → capability-flag / encoder wiring drift
 
-**Mechanism.** GPU bucket effects share common/geometry/color parameter blocks, but each shader variant reads only some fields. Historically the UI rendered every control for every variant, shipping dead sliders. Ground truth for what a variant consumes is the capability flags on `GPUEffectKind` — `usesGeometry`, `usesColorModeAndFgBg`, `usesBackgroundIntensity`, `usesCommonAdjustments` (`Sources/FramerCore/Effects/Models/GPUEffectKind.swift:81-124`) — which the macOS sidebar gates on (`LayerListSection.swift:325-379`). Notably `usesCommonAdjustments == false` for `.pixelSort` only: its shader never calls `applyCommonAdjustments`.
+**Mechanism.** GPU bucket effects share common/geometry/color parameter blocks, but each shader variant reads only some fields. Historically the UI rendered every control for every variant, shipping dead sliders. Ground truth for what a variant consumes is the capability flags on `GPUEffectKind` — `usesGeometry`, `usesColorModeAndFgBg`, `usesPalette` (added by PR #12, merged 2026-07-09), `usesBackgroundIntensity`, `usesCommonAdjustments` (`Sources/FramerCore/Effects/Models/GPUEffectKind.swift`) — which both platforms gate on (macOS `LayerListSection.swift:278-353`; iOS `LayerDetailView.swift:203-262` since PR #12 merged 2026-07-09). Notably `usesCommonAdjustments == false` for `.pixelSort` only: its shader never calls `applyCommonAdjustments`.
 
 **Warning:** `docs/gpu-effects-parameter-matrix.md` is a STALE snapshot of this information (predates the common-adjustments wiring and the vhs/matrixRain GPU paths). Trust the flags and the `.metal` sources, not the doc. (Staleness ledger: **framer-docs-and-writing**.)
 
@@ -183,9 +183,9 @@ head -c 60 assets/textures/<file>     # pointers start "version https://git-lfs.
 
 ### 13. Thread Performance Checker: priority inversion → QoS at Task spawn
 
-**Mechanism (fully diagnosed in open PR #11, unmerged as of 2026-07-09).** `FrameProcessor` is an actor; actors inherit the awaiting task's QoS via priority escalation. `Task {}` spawned from `@MainActor` inherits **User-initiated** QoS, so the actor's synchronous CoreGraphics draws (`BorderRenderer.swift:519` per the checker) block on CG's **Default**-QoS internal threads — user-initiated waiting on default = the inversion Xcode flags.
+**Mechanism (fully diagnosed in PR #11, merged 2026-07-09 as `b06601c`).** `FrameProcessor` is an actor; actors inherit the awaiting task's QoS via priority escalation. `Task {}` spawned from `@MainActor` inherits **User-initiated** QoS, so the actor's synchronous CoreGraphics draws (`BorderRenderer.swift:519` per the checker) block on CG's **Default**-QoS internal threads — user-initiated waiting on default = the inversion Xcode flags.
 
-**Status check.** Main still spawns with plain `Task {` at `Sources/FramerApp/Editor/PreviewViewModel.swift:49` (verified 2026-07-09) — the warning is expected until PR #11 (`Task(priority: .utility)` in `PreviewViewModel.updatePreview` and `AppState.exportItems`) merges. Read `gh pr view 11` for the full analysis before re-deriving it. This is a diagnostic warning, not a crash — don't panic-fix it in an unrelated PR; merging is a human decision (**framer-change-control**).
+**Status check.** FIXED on main: both known spawn sites now use `Task(priority: .utility)` — `Sources/FramerApp/Editor/PreviewViewModel.swift:56` and `Sources/FramerApp/App/AppState.swift:69` (verified 2026-07-09 post-merge). If you see this warning on current main it is a **NEW regression** — some other call site spawning plain `Task {}` into the actor — not the 2026-05/07 instance, which PR #11 (merged 2026-07-09) resolved. Read `gh pr view 11` for the full original analysis before re-deriving it; this is a diagnostic warning, not a crash.
 
 ### 14. Same preset renders differently on two machines → CPU-vs-GPU path
 
@@ -224,14 +224,14 @@ Verified 2026-07-09 against main @ 48d85a5 on the primary dev Mac (Apple Silicon
 |---|---|
 | Fallback log strings | `grep -n 'ShaderRenderer]' Sources/FramerCore/Processing/ShaderRenderer.swift` |
 | Uniform length validation error text | `sed -n '5,17p' Sources/FramerCore/Effects/GPU/MetalUniformEncoding.swift` |
-| Silent bucket fallback (no log) | `grep -n 'fall through to CPU' Sources/FramerCore/Effects/Renderers/GlitchRenderer.swift` |
+| Glitch bucket GPU-only (no silent fallback since PR #12) | `grep -n 'GPU-only' Sources/FramerCore/Effects/Renderers/GlitchRenderer.swift` (expect the header comment; a reappearing `fall through to CPU` = regression) |
 | premultipliedLast normalization | `grep -n 'normalizedForTextureUpload' Sources/FramerCore/Effects/GPU/MetalTextureSupport.swift` |
 | matching()-derived pickers | `grep -n 'Preset.matching' Sources/FramerApp/Editor/LayerListSection.swift` |
 | Capability flags (incl. pixelSort exception) | `grep -n 'usesCommonAdjustments' Sources/FramerCore/Effects/Models/GPUEffectKind.swift` |
 | UI gates on flags | `grep -n 'params.kind.uses' Sources/FramerApp/Editor/LayerListSection.swift` |
 | previewBaseDimension plumbing | `grep -n 'previewBaseDimension' Sources/FramerCore/Processing/FrameProcessor.swift` |
 | id-based layer binding | `sed -n '266,275p' Sources/FramerApp/Editor/LayerListSection.swift` |
-| PR #11 merged yet? (entry 13 stale once merged) | `gh pr view 11 --json state` and `grep -n 'Task(priority' Sources/FramerApp/Editor/PreviewViewModel.swift` |
+| Entry 13 fix still in place (PR #11 MERGED 2026-07-09) | `gh pr view 11 --json state` (expect MERGED) and `grep -n 'Task(priority' Sources/FramerApp/Editor/PreviewViewModel.swift Sources/FramerApp/App/AppState.swift` (expect `.utility` at both) |
 | Golden/behavior suites passing (13/14) | `swift test --filter EffectGPUGoldenTests` ; `swift test --filter EffectGPUBehaviorTests` |
 | Metal Toolchain installed yet? (entries 6–7 stale once env repaired) | `xcodebuild -showComponent metalToolchain` |
 | LFS pointer size (132 bytes) | `git cat-file blob HEAD:$(git lfs ls-files -n \| head -1) \| wc -c` |

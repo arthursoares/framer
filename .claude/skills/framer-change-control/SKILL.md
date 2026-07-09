@@ -257,7 +257,8 @@ treats every ❌ as its first task, in order.
   CLAUDE.md delegated to `.ai-assistant/` and `.ai-project/` — directories
   that never existed in git on any branch. CLAUDE.md was rewritten
   (2026-07-09) to route to this skill library. If you encounter the old
-  CLAUDE.md — on a stale branch, or via PR #1 — do not follow it.
+  CLAUDE.md — on a stale branch, or in the diff of PR #1 (CLOSED unmerged
+  2026-07-09) — do not follow it, and never resurrect it.
 - **The 21 dead files in `.claude/commands/` (including `/validate`,
   `/implement`, `/wrap`, `/cover`, `/commit`, `/pr`) were REMOVED on
   2026-07-09.** Each began by delegating to a nonexistent
@@ -271,9 +272,9 @@ treats every ❌ as its first task, in order.
 
 | Item | State | Ruling |
 |---|---|---|
-| **PR #1** `chore/cleanup-legacy-configs` | Open since 2026-03-14; 3 ahead / **295 behind** main; rewrites CLAUDE.md (85 lines changed) | Do NOT merge or rebase-and-merge as-is — it would clobber the rewritten CLAUDE.md with a 295-commit-stale version and resurrect the dead instruction chain. Human decision whether to close. |
-| **PR #11** `fix/preview-priority-inversion` | Open, 1 commit, 0 behind; fully-diagnosed QoS priority-inversion fix | Merge is the maintainer's call (rule 1). Do not present its content as shipped. |
-| **PR #12** `fix/effect-params-and-editor-bugs` | Open, 11 commits, 0 behind; Codex review findings addressed in `12c42a9` | Same: human-decision merge. Its parameter-defaults work is UNMERGED — don't cite it as current behavior. |
+| **PR #1** `chore/cleanup-legacy-configs` | **CLOSED unmerged 2026-07-09** (was open since 2026-03-14, 295 commits stale, conflicted; rewrote CLAUDE.md) | Historical warning stands: its 295-commit-stale CLAUDE.md and the dead `.ai-assistant/` instruction chain must NEVER be resurrected — not via reopen, cherry-pick, or stale-branch merge. |
+| **PR #11** `fix/preview-priority-inversion` | **MERGED 2026-07-09** (merge commit `b06601c`) — QoS priority-inversion fix is on main | Its content is now shipped behavior; cite freely. |
+| **PR #12** `fix/effect-params-and-editor-bugs` | **MERGED 2026-07-09** (merge commit `f2c9521`); Codex review findings were addressed in `12c42a9` before merge | Its parameter-defaults single source of truth, sRGB CodableColor, config-level undo, user palettes, and iOS flag parity are now current behavior on main. |
 | `xcodebuild` test tier | Broken on the primary dev machine (revoked signing cert — `CSSMERR_TP_CERT_REVOKED`, not merely expired — + missing Metal Toolchain) | Repair campaign: framer-campaign-restore-validation (P1 owns cert state and remediation). Don't gate commits on it until repaired; `swift build && swift test` is the working gate. |
 
 ## Provenance and maintenance
@@ -293,12 +294,13 @@ read-only git/gh commands. Re-verify volatile facts with:
 | Cherry-pick incident commit | `git show -s ffeffe1` |
 | Build-break commit pair | `git show -s --oneline c515147 ae4b8ba` |
 | PRs merge as true merges | `git rev-list --parents -n1 48d85a5` (expect 2 parents) |
-| Open PR set + staleness | `gh pr list --state open` ; `git rev-list --count origin/chore/cleanup-legacy-configs..origin/main` |
+| Open PR set (as of 2026-07-09: empty — #1 closed, #11/#12 merged) | `gh pr list --state open` ; `gh pr view 11 --json state` and `gh pr view 12 --json state` (both expect `MERGED`) |
 | Dead command files stay dead | `grep -rl ".ai-assistant" .claude/commands/ \| wc -l` (expect 0 — the 21 dead files were removed 2026-07-09) ; `ls .ai-assistant` (expect: no such directory) |
 | Handoff checklist doc | `grep -n "not run" docs/gpu-migration-mac-resume.md` (expect the ✅/❌ block) |
 | Review-culture source | `grep -n "Three parallel review agents" .sisyphus/notepads/sidebar-harmony/learnings.md` |
 
-Facts most likely to drift: the open-PR table, the 21-file dead-command count,
+Facts most likely to drift: the danger-list PR table (rechecked 2026-07-09:
+#1 CLOSED, #11/#12 MERGED), the 21-file dead-command count,
 and the xcodebuild-tier brokenness. Rule 5's CPU-path question was RESOLVED
 2026-07-09 (retired — docs/adr/2026-07-09-retire-cpu-effect-path.md; contract
 in framer-architecture-contract I3).

@@ -19,7 +19,7 @@ This is an **executable, decision-gated campaign**, not a reference. Work the ph
 
 | Tier | What | Command | Status |
 |---|---|---|---|
-| 1 | 268 SPM tests (FramerCoreTests + FramerCLITests) | `swift test` | **GREEN** — 0 failures, ~4 s |
+| 1 | 273 SPM tests (FramerCoreTests + FramerCLITests, as of f2c9521) | `swift test` | **GREEN** — 0 failures, ~4 s |
 | 2 | 63 test methods / 12 files in `Tests/FramerAppTests` (incl. all SwiftUI snapshot tests) | `xcodebuild test -project Framer.xcodeproj -scheme Framer -destination 'platform=macOS'` | **BROKEN** — two independent blockers (P1: revoked signing cert; P2: missing Metal Toolchain) |
 | 3 | E2E (CLI process-spawn tests, macOS/iOS UI tests) | none | **DOES NOT EXIST on main** — scaffolding parked on `origin/salvage/e2e-test-scaffolding` (aa60b94); full original attempt preserved on `origin/pr6-check` (PR #6, CLOSED unmerged) |
 
@@ -67,10 +67,10 @@ cd /path/to/framer
 swift test 2>&1 | grep -E "Executed .* tests"
 ```
 
-**Expect** (verified 2026-07-09, commit 48d85a5, Xcode 26.6 / Swift 6.3.3, Apple-silicon Mac):
+**Expect** (verified 2026-07-09, commit f2c9521, Xcode 26.6 / Swift 6.3.3, Apple-silicon Mac):
 
 ```
-Executed 268 tests, with 0 failures (0 unexpected) in 3.676 (3.691) seconds
+Executed 273 tests, with 0 failures (0 unexpected) in 3.747 (3.763) seconds
 ```
 
 The test count drifts as tests are added — record the actual number you see; what matters is `0 failures`. Wall clock is ~9 s warm. The tail of the raw output also shows a Swift Testing pass of "`0 tests in 0 suites`" — that is normal; everything in this repo is XCTest.

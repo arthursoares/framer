@@ -255,7 +255,9 @@ tests do `@testable import Framer` (Tests/FramerAppTests/*.swift). Writing
 ## Provenance and maintenance
 
 Everything above was verified 2026-07-09 against the working tree at commit `48d85a5`
-(`swift test` run same day: "Executed 268 tests, with 0 failures"). Re-verify before
+(`swift test` run same day: "Executed 268 tests, with 0 failures"; re-run after the
+2026-07-09 PR #11/#12 merges at `f2c9521`: "Executed 273 tests, with 0 failures").
+Re-verify before
 trusting, especially after refactors:
 
 ```bash

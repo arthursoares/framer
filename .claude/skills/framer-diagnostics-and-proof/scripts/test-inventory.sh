@@ -5,8 +5,9 @@
 #   .claude/skills/framer-diagnostics-and-proof/scripts/test-inventory.sh
 #
 # Output: per-suite test counts (descending), per-module subtotals, and the
-# grand total. Baseline as of 2026-07-09 (commit 48d85a5): 268 tests total —
-# 259 FramerCoreTests + 9 FramerCLITests. If today's total is LOWER than the
+# grand total. Baseline as of 2026-07-09 (commit f2c9521, post PR #12 merge):
+# 273 tests total — 264 FramerCoreTests + 9 FramerCLITests (was 268 at
+# 48d85a5). If today's total is LOWER than the
 # last recorded baseline, tests were deleted or a target dropped out of
 # Package.swift — investigate before celebrating a green run.
 #
@@ -44,7 +45,7 @@ echo "---"
 echo "per module:"
 awk -F'[./]' '{print $1}' "$TMP" | sort | uniq -c | sort -rn | awk '{printf "  %4d  %s\n", $1, $2}'
 echo "---"
-echo "TOTAL: $TOTAL SPM tests (baseline 2026-07-09: 268)"
+echo "TOTAL: $TOTAL SPM tests (baseline 2026-07-09 @ f2c9521: 273)"
 
 # Xcode-only tier, counted statically since swift test cannot see it.
 if [ -d Tests/FramerAppTests ]; then

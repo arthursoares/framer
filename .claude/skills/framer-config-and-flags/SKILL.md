@@ -73,14 +73,15 @@ Hidden from the layer-add picker: **`.ascii`, `.halftone`, `.dithering`** — be
 | `usesGeometry` | `dots, blockify, matrixRain, ascii` (TextCell family) | shader reads `geometry.scale`/`spacing` as cell pitch |
 | `usesColorModeAndFgBg` | `dots, blockify, matrixRain, threshold, crosshatch, edgeDetection` | shader consumes color mode + fg/bg colors |
 | `usesBackgroundIntensity` | `edgeDetection, contour, waveLines, voronoi, noiseField` (EdgeField family) | shader uses backgroundIntensity as "paper level" |
+| `usesPalette` (new in PR #12, merged 2026-07-09) | `dots, blockify, threshold, crosshatch, edgeDetection` | shader implements `.palette` color mode (`framerPalettePick` in ShaderCommon.h); drives whether the color-mode picker offers "Palette" + shows the palette editor (both platforms; saved user palettes live in `UserPaletteStore`) |
 | `usesCommonAdjustments` | everything EXCEPT `pixelSort` | shader wraps its source sample in `applyCommonAdjustments` (brightness/contrast/saturation/hueRotation/gamma; sharpness field exists but is never consumed by any bucket shader) |
 
 **`docs/gpu-effects-parameter-matrix.md` is a STALE snapshot — do not trust it.** Verified stale on three load-bearing points (as of 2026-07-09): line 15 says pixelSort is hidden (it is user-facing); line 18 says vhs is CPU-only (`GlitchGPURenderer.renderVHS` dispatches to `glitchFragment` in Glitch.metal — Effects/Renderers/GlitchGPURenderer.swift:67-82); line 28 says no bucket shader applies the common block (`applyCommonAdjustments` appears in EdgeField.metal, Glitch.metal, TextCell.metal, PrintSampling.metal). Ground truth = GPUEffectKind flags + the .metal sources. Full staleness ledger: framer-docs-and-writing.
 
-### Who consults the flags (as of 48d85a5)
+### Who consults the flags (as of f2c9521)
 
-- macOS: `Sources/FramerApp/Editor/LayerListSection.swift:325-379` gates the geometry/color/common control blocks on the flags.
-- iOS: `Sources/FramerMobile/Layers/LayerDetailView.swift` does NOT reference any capability flag (verified by grep — zero hits in Sources/FramerMobile/). Dead controls can therefore still ship on iOS. Open PR #12 describes "iOS/macOS control parity" work — in-flight, unmerged (see Defaults below).
+- macOS: `Sources/FramerApp/Editor/LayerListSection.swift:278-353` gates the geometry/color/common control blocks on the flags.
+- iOS: `Sources/FramerMobile/Layers/LayerDetailView.swift` now gates on all five flags too — `usesGeometry` (:203), `usesColorModeAndFgBg` (:237), `usesPalette` (:245), `usesBackgroundIntensity` (:258), `usesCommonAdjustments` (:262). This parity landed with PR #12 (**merged 2026-07-09**, `f2c9521`); before that, iOS was flag-blind and dead controls could ship there.
 
 ## Defaults — where they live (and the known drift)
 
@@ -92,9 +93,9 @@ Hidden from the layer-add picker: **`.ascii`, `.halftone`, `.dithering`** — be
 | Fresh `.gpuEffect` layer per kind | `GPUEffectKind.makeDefaultLayer()` (GPUEffectKind.swift:151-252) |
 | CLI caption default | `.template(" - {{mon}} '{{year2}} -")` (ProcessCommand.swift:82) |
 
-**Known drift (verified on main):** GPU-effect defaults exist in THREE places that disagree. `GPUEffectKind.makeDefaultLayer()` gives pixelSort `amount: 0.5, threshold: 0.5` (via `GlitchParameters()` defaults), while the kind-SWITCH path uses duplicated private `defaultParams(for:)` copies — `LayerListSection.swift:900` (macOS, pixelSort `amount: 0.65, threshold: 0.42`) and `LayerDetailView.swift:1381` (iOS). So adding a layer vs switching an existing layer's kind produces different defaults.
+**Single source of truth (since PR #12, merged 2026-07-09, `f2c9521`):** `GPUEffectKind.defaultParameters()` (GPUEffectKind.swift:172) is THE per-kind default-params function; `makeDefaultLayer()` calls it, and the duplicated private `defaultParams(for:)` copies in the macOS and iOS inspectors were deleted (verified: zero `defaultParams(for` hits in Sources/FramerApp or Sources/FramerMobile). A default change now goes in exactly one place.
 
-**In-flight fix — open PR #12** ("GPU-effects parameter consistency, editor UX...", branch `fix/effect-params-and-editor-bugs`, unmerged as of 2026-07-09): introduces `GPUEffectKind.defaultParameters()` as the single source of truth and deletes the duplicated inspector copies. Until it merges, any default change must be made in all three places. Re-check with `gh pr view 12 --json state`.
+**Historical drift (pre-merge state, for archaeology):** before 2026-07-09, defaults lived in THREE disagreeing places — `makeDefaultLayer()` plus duplicated `defaultParams(for:)` in LayerListSection.swift and LayerDetailView.swift — so adding a layer vs switching an existing layer's kind produced different defaults (e.g. pixelSort `0.5/0.5` vs `0.65/0.42`). Do not reintroduce inspector-local default tables.
 
 ## Preset and config file formats
 
@@ -173,17 +174,17 @@ The recurring audit finding in this repo is **dead-slider drift**: a control ren
 2. **Encoder actually writes it.** The renderer's uniform construction must populate the new field; encode with `uniformBytes(_:)` (`Effects/GPU/MetalUniformEncoding.swift:24`) — never `withUnsafeBytes`. Shared common/geometry packing helpers: `Effects/GPU/GPUParameterEncoder.swift`.
 3. **Model field with back-compat Codable.** Add to the params struct (GPUEffectParameters.swift for buckets, CompositionLayer.swift for `.shader` styles) following the back-compat rules above.
 4. **Capability flag if variant-specific.** If only some `GPUEffectKind`s read it, gate the UI via a flag on GPUEffectKind.swift (extend an existing flag or add one) — otherwise you ship inert controls on other variants.
-5. **UI row on BOTH platforms.** macOS: `Sources/FramerApp/Editor/LayerListSection.swift` (4833 lines — GPU-effect controls around lines 325-379 consult the flags). iOS: `Sources/FramerMobile/Layers/LayerDetailView.swift` (3273 lines; currently flag-blind — don't make it worse). Sidebar row grammar: framer-ui-design-system.
+5. **UI row on BOTH platforms.** macOS: `Sources/FramerApp/Editor/LayerListSection.swift` (4856 lines — GPU-effect controls around lines 278-353 consult the flags). iOS: `Sources/FramerMobile/Layers/LayerDetailView.swift` (3532 lines; flag-gated since PR #12 merged 2026-07-09 — keep it that way). Sidebar row grammar: framer-ui-design-system.
 6. **YAML key.** New `gpu_*`/`shader_*` optional field in `YAMLLayerSchema` + encode in `encodeLayers` + tolerant decode (`?? default`) in `decodeLayer` (YAMLConfig.swift).
 7. **Golden/behavior tests.** The effect path is GPU-only (CPU twins retired 2026-07-09 — docs/adr/2026-07-09-retire-cpu-effect-path.md; do NOT write a CPU twin for the new parameter). `swift test --filter EffectGPUGoldenTests` and `--filter EffectGPUBehaviorTests` must stay green; if the parameter deliberately changes a default look, regenerate the affected goldens in the same commit with an explanation. Exception: a parameter consumed by Riemersma dither or the legacy bucket CPU loops must be wired in those kept CPU paths.
-8. **Defaults, everywhere they live.** `makeDefaultLayer()` in GPUEffectKind.swift AND — until PR #12 merges — the duplicated `defaultParams(for:)` in LayerListSection.swift:900 and LayerDetailView.swift:1381.
+8. **Defaults live in ONE place.** `GPUEffectKind.defaultParameters()` in GPUEffectKind.swift (single source of truth since PR #12 merged 2026-07-09). Do not add per-inspector default tables — that duplication was the pre-2026-07-09 drift bug.
 9. **Dead-slider self-audit before PR:** for the new control, trace value → model field → encoder → MSL field → actual read in shader code. If any hop is missing, you've recreated the incident. Measurement-based verification recipes: framer-diagnostics-and-proof.
 
 For a parameter on a NON-GPU layer, use steps 3, 5, 6 plus a `BorderRenderer.applyLayers` / renderer change and a roundtrip test in `Tests/FramerCoreTests/CompositionLayerTests.swift` — and remember the PresetStore fixture rule.
 
 ## Provenance and maintenance
 
-All claims verified 2026-07-09 against commit `48d85a5` by reading the cited files, running `swift run framer --help` / `swift run framer process --help` (build succeeded, output captured), and `gh pr view 12` (OPEN). Line numbers WILL drift — trust the greps below over the numbers above.
+All claims verified 2026-07-09 against commit `48d85a5` by reading the cited files, running `swift run framer --help` / `swift run framer process --help` (build succeeded, output captured); flag-parity and defaults claims re-verified 2026-07-09 against `f2c9521` (PR #12 MERGED). Line numbers WILL drift — trust the greps below over the numbers above.
 
 Re-verification one-liners (run from repo root):
 
@@ -192,10 +193,10 @@ Re-verification one-liners (run from repo root):
 | 12 layer cases | `grep -n "case .*LayerParams)" Sources/FramerCore/Models/CompositionLayer.swift \| tail -12` |
 | Params struct locations | `grep -rn "struct .*LayerParams: Identifiable" Sources/FramerCore/` |
 | Hidden GPU kinds | `grep -n -A 6 "userFacingCases" Sources/FramerCore/Effects/Models/GPUEffectKind.swift` |
-| Capability flags | `grep -n "usesGeometry\|usesColorModeAndFgBg\|usesBackgroundIntensity\|usesCommonAdjustments" Sources/FramerCore/Effects/Models/GPUEffectKind.swift` |
+| Capability flags | `grep -n "usesGeometry\|usesColorModeAndFgBg\|usesPalette\|usesBackgroundIntensity\|usesCommonAdjustments" Sources/FramerCore/Effects/Models/GPUEffectKind.swift` |
 | Which shaders apply common block | `grep -ln "applyCommonAdjustments" Sources/FramerCore/Effects/Metal/*.metal` |
-| iOS still flag-blind? | `grep -rn "usesCommonAdjustments\|usesGeometry" Sources/FramerMobile/` (hits = PR #12-era fix landed; update this skill) |
-| Defaults drift / PR #12 landed? | `grep -rn "defaultParams(for" Sources/FramerApp Sources/FramerMobile` and `grep -rn "defaultParameters" Sources/FramerCore/Effects/Models/GPUEffectKind.swift`; `gh pr view 12 --json state` |
+| iOS flag parity still holds? | `grep -rn "usesCommonAdjustments\|usesGeometry" Sources/FramerMobile/` (expect hits in LayerDetailView.swift; zero hits = regression, update this skill) |
+| Defaults single source of truth intact? | `grep -rn "defaultParams(for" Sources/FramerApp Sources/FramerMobile` (expect ZERO hits) and `grep -n "defaultParameters" Sources/FramerCore/Effects/Models/GPUEffectKind.swift` (expect the func); `gh pr view 12 --json state` (expect MERGED) |
 | Preset directory | `grep -n "Framer/presets" Sources/FramerCore/Presets/PresetStore.swift` |
 | Delete-on-decode-failure hazard | `grep -n -B2 "removeItem(at: url)" Sources/FramerCore/Presets/PresetStore.swift` |
 | Fixture test still missing? | `grep -rn "corrupt\|fixture" Tests/FramerCoreTests/PresetStoreTests.swift` |

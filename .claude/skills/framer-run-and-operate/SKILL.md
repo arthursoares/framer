@@ -258,6 +258,7 @@ Every path verified in code, 2026-07-09:
 | YAML presets (CLI `--preset`, seeded defaults) | same directory, `<name>.yaml` | `PresetStore.swift`, `YAMLConfig.loadDefault` |
 | User LUTs (imported `.cube`) | `~/Library/Application Support/Framer/luts/` | `Sources/FramerCore/Processing/LUTProvider.swift` (`userLUTDirectory`) |
 | User overlays | `~/Library/Application Support/Framer/overlays/` | `Sources/FramerCore/Processing/TextureFrameProvider.swift` (`searchPaths`) |
+| Saved user palettes (since PR #12, merged 2026-07-09) | `~/Library/Application Support/Framer/palettes.json` (single file) | `Sources/FramerCore/Presets/UserPaletteStore.swift` |
 | Bundled overlays (app) | `Framer.app` Resources `textures/` (folder ref of `assets/textures/`) | `TextureFrameProvider.searchPaths` path 1 |
 | Bundled overlays (CLI/tests) | FramerCore `Bundle.module` `textures/` — only the two ASCII atlas PNGs | `TextureFrameProvider.searchPaths` path 2 |
 | YAML config chain | `--config` → preset dir → `./.framer.yaml` → `~/.config/framer/default.yaml` | `YAMLConfig.swift` 281-305 |

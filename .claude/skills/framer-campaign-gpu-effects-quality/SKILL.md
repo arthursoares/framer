@@ -60,7 +60,7 @@ Jargon used throughout:
 
 | Phase | Goal | Gate to pass |
 |-------|------|--------------|
-| P0 | Preserve knowledge in open PRs #11/#12 | RCAs archived; merge recommendation recorded (human merges) |
+| P0 | Preserve knowledge from PRs #11/#12 | **SATISFIED 2026-07-09** — both PRs merged; RCAs archived in framer-failure-archaeology §13/§14 |
 | P1 | Dated measurement baseline | Baseline table exists with real numbers |
 | P2 | Reference targets acquired | Every effect to be tuned has a checked-in reference target — **DECISION GATE, biggest blocker** |
 | P3 | Ranked gap menu worked | Each item: theory note → change → measured proof |
@@ -69,45 +69,38 @@ Jargon used throughout:
 
 ---
 
-## P0 — Knowledge preservation gate (do FIRST, cheap)
+## P0 — Knowledge preservation gate — **SATISFIED 2026-07-09**
 
-Two open PRs contain fully-written root-cause analyses that evaporate from
-easy reach once merged (or go stale if abandoned). Verified state as of
-2026-07-09: **both OPEN and MERGEABLE, 0 behind main**.
-
-```sh
-gh pr view 11 --json state,title,mergeable   # QoS priority-inversion fix
-gh pr view 12 --json state,title,mergeable   # GPU-effects parameter consistency
-```
+This gate existed because two open PRs contained fully-written root-cause
+analyses that evaporate from easy reach once merged. Both PRs MERGED on
+2026-07-09 (**PR #11** → `b06601c`, **PR #12** → `f2c9521`), and the RCA
+essentials are archived in **framer-failure-archaeology** (§13 priority
+inversion; §14 the three PR #12 root causes). Nothing further to do; the
+substance, now shipped on main:
 
 - **PR #11** (`fix/preview-priority-inversion`, 1 commit): full RCA of a
   CoreGraphics priority inversion — `FrameProcessor` is an actor; `Task {}`
   from `@MainActor` inherits User-initiated QoS; actor escalation made
   `ctx.draw` block on CG's Default-QoS threads. Fix: `Task(priority: .utility)`
-  in `PreviewViewModel.updatePreview` and `AppState.exportItems`.
+  in `PreviewViewModel.updatePreview` and `AppState.exportItems` (on main at
+  PreviewViewModel.swift:56 and AppState.swift:69).
 - **PR #12** (`fix/effect-params-and-editor-bugs`, 11 commits): directly
   load-bearing for THIS campaign —
-  - single source of truth for per-kind defaults (`GPUEffectKind.defaultParameters()`),
+  - single source of truth for per-kind defaults (`GPUEffectKind.defaultParameters()`,
+    GPUEffectKind.swift:172 — the duplicated inspector copies are deleted),
   - sRGB tagging for `CodableColor.cgColor` (was untagged Generic RGB — every
     swatch and CPU-rendered color was shifted),
-  - Blockify color-mode enum remap (had borrowed ASCII's inverted numbering),
-  - iOS adoption of capability-flag gating (on main, only
-    `Sources/FramerApp/Editor/LayerListSection.swift` consumes the flags — verified by grep),
-  - **deletion of Glitch/EdgeField CPU pixel-loop fallbacks (−594 lines)**,
-  - `usesPalette` flag + saved user palettes.
+  - Blockify color-mode enum remap (had borrowed ASCII's inverted numbering;
+    regression-tested in `Tests/FramerCoreTests/GPUEffectRegressionTests.swift`),
+  - iOS adoption of capability-flag gating (both `LayerListSection.swift` and
+    `Sources/FramerMobile/Layers/LayerDetailView.swift` now consume the flags — verified by grep),
+  - **deletion of Glitch/EdgeField CPU pixel-loop fallbacks (−594 lines,
+    commit `20d5775`)** — those buckets are GPU-only and throw,
+  - `usesPalette` flag + saved user palettes (`UserPaletteStore.swift`).
 
-**Actions:**
-
-1. Confirm the RCA essentials are archived in **framer-failure-archaeology**
-   (that skill owns incident histories). If they are missing there, that is a
-   gap — archive `gh pr view 11 --json body -q .body` and the same for #12
-   into that skill before doing anything else. (unverified at write time —
-   the sibling skill was authored in parallel; check it.)
-2. Record the recommendation: merging #12 first is strongly preferred before
-   any P3 work, because it moves parameter defaults, deletes two CPU paths,
-   and remaps an enum — any effect-tuning branch cut before #12 merges will
-   conflict. **The merge itself is the human's decision; the campaign only
-   records the recommendation.**
+Cut any effect-tuning branch from post-merge main (`f2c9521` or later) —
+branches cut from before it will conflict on defaults, CPU-path deletions,
+and the Blockify remap.
 
 ---
 
@@ -241,9 +234,10 @@ that proves it. Every item lands via P4's loop and P5's promotion.
   Does brightness/contrast adjustment happen BEFORE span detection (adjusted
   luminance changes which pixels form sortable spans — visually different
   effect) or only on the output color? Document the choice in
-  framer-image-processing-reference. Note PR #12 deletes the Glitch CPU loop;
-  after it merges "both paths" may reduce to shader + `ShaderPixelSortRenderer`
-  (the `.shader`-layer CPU path) — re-check what still exists.
+  framer-image-processing-reference. Note PR #12 (merged 2026-07-09) deleted
+  the Glitch bucket CPU loop, so "both paths" now means the PixelSort.metal
+  shader + `ShaderPixelSortRenderer` (the `.shader`-layer CPU path, still
+  present on main) — re-check what still exists before extending parity.
 - **Measurement:** parity test extension with a pre-declared tolerance, plus
   a property test: with brightness raised, span coverage must change
   identically on both paths. Only then flip the flag and surface the sliders.
@@ -363,10 +357,11 @@ For ONE effect at a time:
   - [ ] **No dead sliders** — the recurring audit finding. Every exposed
         control must be read by the shader; every read uniform should have a
         control or a documented reason not to. Capability flags on
-        `GPUEffectKind` are the gate; as of 2026-07-09 (commit 48d85a5) only
-        `Sources/FramerApp/Editor/LayerListSection.swift` consumes them —
-        iOS gating arrives with PR #12, so verify both platforms at the time
-        you work.
+        `GPUEffectKind` are the gate; since PR #12 merged (2026-07-09,
+        `f2c9521`) BOTH platforms consume them —
+        `Sources/FramerApp/Editor/LayerListSection.swift` and
+        `Sources/FramerMobile/Layers/LayerDetailView.swift` — so wire and
+        verify both when adding controls.
   - [ ] Parity tolerance changes justified in-comment, same commit.
   - [ ] Reference comparison result recorded in the PR body (or explicitly
         labeled mode-(c) self-referential if P2 is still blocked).
@@ -380,7 +375,7 @@ For ONE effect at a time:
 |------------|----------------|----------|
 | Trusting docs/gpu-effects-parameter-matrix.md | STALE snapshot: its line 28 claims "**No** — none of the bucket shaders apply these" about common adjustments, but `applyCommonAdjustments` is present in EdgeField/Glitch/PrintSampling/TextCell.metal (verified by grep). Truth = `GPUEffectKind` capability flags + the .metal sources. Staleness ledger: framer-docs-and-writing. | grep vs doc, 2026-07-09 |
 | Changing one path's semantics | Produced the pixel-sort amount blend-vs-rank divergence and the .hue/.brightness sort-criterion bugs | commits f21a6fe, 761fae6; framer-failure-archaeology |
-| Adding params without capability flags + both UIs | Dead sliders / live params with no UI are the top recurring audit finding | commits 17f8111, f21a6fe; PR #12 extends gating to iOS |
+| Adding params without capability flags + both UIs | Dead sliders / live params with no UI are the top recurring audit finding | commits 17f8111, f21a6fe; PR #12 (merged 2026-07-09) extended gating to iOS |
 | Seeding preset pickers with canonical-matching values | Derived-selection pickers snap "Custom" back to a preset — happened twice in two days | commits 9ad0f2c, 9a5857f; framer-failure-archaeology |
 | Tuning by eye without a recorded metric | Directly violates the 2026-07-09 maintainer ruling; the Dither.metal header's side-by-side advice is superseded for this campaign | ruling; Dither.metal:19–23 |
 | Vendoring Grainrad WGSL into this repo | Default copyright; the study repo's CREDITS.md restricts extracts to read-only study; Framer's shader headers promise "No Grainrad code is copied" | grainrad CREDITS.md (machine-local), PixelSort.metal:9–10 |
@@ -403,7 +398,7 @@ with Metal, unless labeled otherwise. Volatile facts and how to re-verify:
 
 | Fact | Re-verify with |
 |------|----------------|
-| PRs #11/#12 open + mergeable | `gh pr view 11 --json state,mergeable && gh pr view 12 --json state,mergeable` |
+| PRs #11/#12 MERGED 2026-07-09 (`b06601c`, `f2c9521`) | `gh pr view 11 --json state && gh pr view 12 --json state` (both expect MERGED) |
 | Golden suite: 13 tests, 0 failures | `swift test --filter EffectGPUGoldenTests` |
 | Golden tolerance ceilings | `grep -n meanTolerance Tests/FramerCoreTests/EffectGPUGoldenTests.swift` |
 | LUT benchmark numbers (16.5× on 3000×1987) | `swift run framer benchmark lut --input docs/sample.jpg --lut assets/luts/ANDP-Film-Fading.CUBE --iterations 10 --warmup 2` |

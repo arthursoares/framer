@@ -108,8 +108,9 @@ present, atlases present).
 
 Counts SPM tests per suite and per module via `swift test --list-tests`, plus
 a static grep count of the xcodebuild-only `FramerAppTests` tier (invisible to
-SPM). Baseline as of 2026-07-09, commit 48d85a5: **268 SPM tests** (259
-FramerCoreTests + 9 FramerCLITests) plus **63 FramerAppTests methods**. If
+SPM). Baseline as of 2026-07-09, commit f2c9521 (post PR #12 merge): **273 SPM
+tests** (264 FramerCoreTests + 9 FramerCLITests; was 268 at 48d85a5 before
+GPUEffectRegressionTests landed) plus **63 FramerAppTests methods**. If
 today's total is lower than the baseline, tests were deleted or a target fell
 out of the manifest — investigate before celebrating a green run. The
 test-estate map itself is owned by **framer-validation-and-qa**.
@@ -304,11 +305,13 @@ and CLI, or after touching any effect's CPU or GPU implementation.
    territory.
 5. Fix, re-run, record before/after deltas in the commit message.
 
-**Worked example — the pixel-sort `.hue` bug (fixed in 761fae6, 2026-04-16):**
+**Worked example — the pixel-sort `.hue` bug (fixed in 761fae6, 2026-04-16;
+the CPU loop involved was later deleted outright by PR #12, merged 2026-07-09,
+so read this as method, not as current file contents):**
 CPU pixel-sorting left blue-dominant regions untouched while GPU sorted them.
 Reading `GlitchRenderer.pixelScore` next to `psSortValue` in `PixelSort.metal`
-pinpointed two term-level divergences, documented in the doc comment at
-`Sources/FramerCore/Effects/Renderers/GlitchRenderer.swift:258–265`:
+pinpointed two term-level divergences, documented at the time in a doc comment
+in `GlitchRenderer.swift`:
 `.brightness` returned Rec.709 luminance (identical to `.luminance`) instead
 of `max(r,g,b)`, and `.hue` returned the raw HSV sector value in **[-1, 6)**
 instead of a normalized [0, 1] hue — negative scores always fell below any
@@ -443,7 +446,7 @@ Facts that may drift, with one-line re-verification commands:
 
 | Claim | Re-verify with |
 |---|---|
-| 268 SPM tests / suite sizes | `scripts/test-inventory.sh` |
+| 273 SPM tests / suite sizes | `scripts/test-inventory.sh` |
 | 27 parity tests, 0 skips here | `scripts/parity-report.sh` |
 | Golden metric + tolerances | `grep -n 'meanTolerance' Tests/FramerCoreTests/EffectGPUGoldenTests.swift` |
 | Interpretation bands 12–20 / 50+ | `sed -n '285,301p' docs/gpu-migration-mac-resume.md` |
@@ -452,7 +455,7 @@ Facts that may drift, with one-line re-verification commands:
 | README benchmark template | `sed -n '137,166p' README.md` |
 | Halftone 32/255 comment | `grep -n '32/255' Sources/FramerCore/Effects/Metal/Halftone.metal` |
 | Dither phase table | `sed -n '241,260p' Sources/FramerCore/Effects/Metal/Dither.metal` |
-| pixelScore hue/brightness doc | `grep -n 'HSV sector' Sources/FramerCore/Effects/Renderers/GlitchRenderer.swift` |
+| pixelScore CPU loop stays deleted (PR #12, 2026-07-09) | `grep -n 'pixelScore' Sources/FramerCore/Effects/Renderers/GlitchRenderer.swift` (expect NO hits — worked example above is historical) |
 | EffectPreviewComparator still unused | `grep -rn EffectPreviewComparator Sources Tests \| grep -v Utilities/EffectPreviewComparator` |
 | Metal Toolchain status | `xcodebuild -showComponent metalToolchain` |
 | Signing cert status | `security find-identity -v -p codesigning` |

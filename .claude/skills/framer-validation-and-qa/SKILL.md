@@ -34,7 +34,7 @@ locally. That makes the evidence bar below load-bearing, not bureaucratic.
 
 A change is "validated" only when you can quote the command AND its output:
 
-1. Run the command. Copy the summary line (e.g. `Executed 268 tests, with 0 failures
+1. Run the command. Copy the summary line (e.g. `Executed 273 tests, with 0 failures
    (0 unexpected)`), not a paraphrase.
 2. **Report skip counts.** "Green" without a skip-check is not evidence — see the
    XCTSkip section below. If the output contains `skipped`, say how many and why.
@@ -59,7 +59,8 @@ A change is "validated" only when you can quote the command AND its output:
 | Status | GREEN (verified 2026-07-09 post-retirement: `Executed 273 tests, with 0 failures (0 unexpected)`, zero skips on this host) | **BROKEN on the primary dev Mac** as of 2026-07-09 |
 | Contains | All FramerCore rendering/config/preset logic, GPU golden-reference + behavior tests, CLI helper units | All SwiftUI snapshot/containment/resolver tests for the sidebar + inspector |
 
-Counts date-stamped 2026-07-09, commit 48d85a5.
+Counts date-stamped 2026-07-09, commit f2c9521 (was 268 at 48d85a5; PR #12's merge
+added the 5-test `GPUEffectRegressionTests.swift`).
 
 ### Tier 1: run it
 
@@ -207,10 +208,10 @@ machine without a maintainer decision.
 - Imports: `@testable import FramerCore` / `@testable import FramerCLI`; for app tests
   it is `@testable import Framer` — **the macOS app module is named `Framer`, not
   `FramerApp`** (a documented gotcha).
-- Naming: dominant style is `test_subject_condition` (majority of test files). Older
+- Naming: dominant style is `test_subject_condition` (29 of 36 test files). Seven
   files use legacy `testCamelCase` (ASCIIAtlasGeneratorTests, EffectGPUBehaviorTests,
-  EffectGPUGoldenTests, GPUEffectBucketDispatchTests, LayerCompositorTests,
-  MetalTextureSupportTests). Write
+  EffectGPUGoldenTests, GPUEffectBucketDispatchTests, GPUEffectRegressionTests,
+  LayerCompositorTests, MetalTextureSupportTests). Write
   new tests in `test_subject_condition`; match the local file's style when appending.
 - `@MainActor` on any test class that hosts AppKit/SwiftUI views (all snapshot,
   containment, and bitmap tests carry it).
@@ -307,7 +308,8 @@ Assume NO safety net in these areas (as of 2026-07-09, commit 48d85a5):
 ## Provenance and maintenance
 
 All facts verified 2026-07-09 against commit 48d85a5 on the primary dev Mac
-(arm64, Swift 6.3.3, Xcode 26.6) by running the commands below — except the two
+(arm64, Swift 6.3.3, Xcode 26.6) by running the commands below; test counts
+re-verified same day against f2c9521 (post PR #11/#12 merge: 273 tests) — except the two
 Tier-2 failure strings (signing cert, Metal Toolchain), which reproduce the state
 recorded the same day; re-running full `xcodebuild test` is expensive and was not
 repeated for this document.
@@ -326,7 +328,7 @@ Re-verification one-liners:
 | Snapshot harness + failure message | `grep -n 'Actual SHA256' Tests/FramerAppTests/SidebarHarmonySnapshotTests.swift` |
 | 10 snapshot surfaces | `grep -c 'expectedSHA256: "' Tests/FramerAppTests/SidebarHarmonySnapshotTests.swift` |
 | No Swift Testing | `grep -rln 'import Testing' Sources/ Tests/` (expect empty) |
-| Naming split (29 vs 5 files) | `grep -rl 'func test_' Tests --include='*.swift' \| wc -l` |
+| Naming split (29 vs 7 files) | `grep -rl 'func test_' Tests --include='*.swift' \| wc -l` |
 | ShaderRenderer is GPU-only (no gpuOrCPU) | `grep -c 'gpuOrCPU\|catch let error as MetalEffectError' Sources/FramerCore/Processing/ShaderRenderer.swift` (expect 0) |
 | Riemersma dispatched by algorithm | `grep -n 'riemersma' Sources/FramerCore/Processing/DitherRenderer.swift \| head -3` |
 | Example tolerances | `grep -n 'meanTolerance' Tests/FramerCoreTests/EffectGPUGoldenTests.swift` |
