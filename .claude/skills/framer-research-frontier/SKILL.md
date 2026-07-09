@@ -199,7 +199,7 @@ The decision itself is owned by framer-architecture-contract; this skill owns th
 |---|---|
 | Riemersma (Hilbert-curve) dither — inherently serial, no GPU port | DitherGPURenderer.swift:148-152 throws `metalUnavailable` to force CPU; test `testDitherRiemersmaRoutesToCPU` |
 | The reference implementation parity tests measure against | EffectGPUParityTests compares GPU output to CPU output — retire CPU and the current definition of "correct" goes with it |
-| Headless/Metal-less operation (CI sandboxes) | `requireMetal()` skips parity tests when `MetalEffectLibrary.shared == nil` ("likely CI sandbox"); pixelSort bucket keeps "the CPU loop in GlitchRenderer as a headless-host fallback" (GPUEffectKind.swift doc comment) |
+| Headless/Metal-less operation (CI sandboxes) | `requireMetal()` skips parity tests when `MetalEffectLibrary.shared == nil` ("likely CI sandbox"). NOTE: GPUEffectKind.swift's doc comment still claims "the CPU loop in GlitchRenderer as a headless-host fallback", but PR #12 (merged 2026-07-09) deleted that loop — the Glitch/EdgeField buckets are GPU-only and throw; the comment is stale in code |
 | LUT CPU reference used by the benchmark | LUTRenderer.applyCPU / applyCPUReference; BenchmarkCommand measures CPU as the baseline |
 | Known intentional divergence to resolve either way | cmykHalftone CPU fallback is deliberately degraded (mono 6×6 clustered dot; docs/gpu-migration-plan.md) |
 
@@ -243,8 +243,8 @@ shipped.
    first two explanations didn't cover every failing input (full story in
    framer-failure-archaeology). If your root cause doesn't explain why the thing
    *sometimes worked*, you don't have the root cause. The gold-standard worked example is
-   open PR #11's writeup: complete QoS priority-inversion mechanism (actor escalation →
-   CoreGraphics Default-QoS workers) before a one-line fix.
+   PR #11's writeup (merged 2026-07-09): complete QoS priority-inversion mechanism (actor
+   escalation → CoreGraphics Default-QoS workers) before a one-line fix.
 2. **State predicted numbers BEFORE running.** Parity work predicts a mean-delta bound
    per effect (the committed tolerances — 6/255 for color grades, 25/255 for ASCII — are
    calibrated predictions, with per-test comments justifying looseness). Performance work
@@ -322,8 +322,9 @@ its generation command.
 - Video support: parked branch, 255 behind — **not a feature**.
 - Blue-noise dither: the UI says "Blue Noise" but the shader is IGN — do not describe it
   as true blue noise externally until problem 3 lands.
-- Open PRs #11 (QoS fix) and #12 (parameter consistency) are unmerged — their fixes are
-  not shipped behavior. PR #1 is 295 commits stale.
+- PRs #11 (QoS fix) and #12 (parameter consistency) MERGED 2026-07-09 (`b06601c`,
+  `f2c9521`) — their fixes are now shipped behavior on main. PR #1 was CLOSED unmerged
+  2026-07-09 (was 295 commits stale).
 - E2E/UI tests: none exist on main (revival is framer-campaign-restore-validation).
 - Versioning is inconsistent (CHANGELOG says 2.0.0, git tags stop at v1.2.0) — do not
   cite a version number publicly without checking `git tag` (ledger in
@@ -354,6 +355,6 @@ Volatile facts and their re-verification one-liners:
 | README benchmark numbers + "next step" text | `grep -n "Next LUT performance step" -B 20 README.md` |
 | video-support branch state | `git rev-list --count origin/main..origin/feature/video-support` (19) and `git log -1 --oneline origin/feature/video-support` (tip 2df2fa4 "wip: …") |
 | Riemersma forces CPU | `grep -n "riemersma\|metalUnavailable" Sources/FramerCore/Effects/Renderers/DitherGPURenderer.swift` |
-| Open PR set | `gh pr list --state open` (was: #1 stale, #11, #12) |
+| Open PR set | `gh pr list --state open` (as of 2026-07-09: empty — #1 CLOSED, #11/#12 MERGED) |
 | Retired-plan example still unexecuted | `ls Sources/FramerCore/Processing/Metal` (should not exist) |
 | Review-agents lesson source | `grep -n "Three parallel review agents" .sisyphus/notepads/sidebar-harmony/learnings.md` |

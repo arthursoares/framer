@@ -317,9 +317,10 @@ The iOS app has its own control surfaces — `Sources/FramerMobile/Layers/LayerD
 and `LayerStrip.swift` — and its own design brief (`assets/design/ios/IOS_DESIGN_BRIEFING.md`;
 its mockup path is likewise wrong — actual file is `assets/design/ios/framer-ios-concept.html`).
 The macOS sidebar grammar does NOT apply there. Capability-flag gating of effect controls was
-extended to iOS in **open PR #12** (`fix/effect-params-and-editor-bugs`, in-flight as of
-2026-07-09 — verify merge state before relying on it). Parameter/capability-flag details:
-**framer-config-and-flags**.
+extended to iOS by **PR #12** (`fix/effect-params-and-editor-bugs`, **merged 2026-07-09**,
+`f2c9521`): LayerDetailView.swift now gates on all five `uses*` flags, including the new
+`usesPalette` (verified post-merge — lines 203/237/245/258/262). Parameter/capability-flag
+details: **framer-config-and-flags**.
 
 ## Checklist: adding a new sidebar control
 
@@ -360,4 +361,4 @@ Re-verification one-liners (run from repo root):
 | Thumbnail cache class | `grep -n 'final class PresetThumbnailCache' Sources/FramerApp/Presets/PresetThumbnailCache.swift` |
 | Snapshot baseline count | `grep -c 'expectedSHA256: "' Tests/FramerAppTests/SidebarHarmonySnapshotTests.swift` |
 | LayerListSection size / fix churn | `wc -l Sources/FramerApp/Editor/LayerListSection.swift` and `git log --format= --name-only -i --grep=fix -- Sources/FramerApp/Editor/LayerListSection.swift \| grep -c LayerListSection` |
-| PR #12 state (iOS capability flags) | `gh pr view 12 --json state,title` |
+| iOS capability-flag gating intact (PR #12 MERGED 2026-07-09) | `gh pr view 12 --json state` (expect MERGED) and `grep -c 'params.kind.uses' Sources/FramerMobile/Layers/LayerDetailView.swift` (expect ≥5) |

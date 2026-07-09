@@ -91,10 +91,10 @@ NOT applied), the IGN noise function, Bayer matrices, and the canonical
                             DistantPastRenderer / CRTRenderer / HalftoneRenderer / KuwaharaRenderer
                        cpu: ShaderASCIIRenderer / ShaderPixelSortRenderer / ShaderRenderer.applyX
 .gpuEffect layer   → FrameProcessor → GPUEffectsPlatform.dispatchRenderPreview
-                       .textCell      → TextCellBucketRenderer  ┐ each tries its GPU renderer,
-                       .printSampling → PrintSamplingRenderer   │ catches MetalEffectError inline,
-                       .edgeField     → EdgeFieldRenderer       │ runs its own CPU pixel loop
-                       .glitch        → GlitchRenderer          ┘
+                       .textCell      → TextCellBucketRenderer  ┐ GPU renderer; CPU loop kept ONLY
+                       .printSampling → PrintSamplingRenderer   ┘ for legacy hidden variants
+                       .edgeField     → EdgeFieldRenderer       ┐ GPU-only since PR #12 (merged
+                       .glitch        → GlitchRenderer          ┘ 2026-07-09): throws, no CPU loop
 .dither layer      → DitherRenderer → DitherGPURenderer (catch is MetalEffectError → CPU)
 .lut layer         → LUTRenderer → LUTMetalRenderer (nil return → applyCPU)
 ```
@@ -117,8 +117,9 @@ for the `.shader` ASCII layer; `TextCellBucketRenderer` = the `.gpuEffect`
 bucket dispatcher (header comment explains the split). Same pattern:
 `PixelSortRenderer` (shader layer, full params) vs
 `GlitchGPURenderer.renderPixelSort` (bucket, leaner `GlitchParameters`,
-spanMode fixed to 0); `EdgeFieldRenderer` (dispatcher + CPU) vs
-`EdgeFieldGPURenderer`; `PrintSamplingRenderer` vs `PrintSamplingGPURenderer`.
+spanMode fixed to 0); `EdgeFieldRenderer` (dispatcher — GPU-only since PR #12
+merged 2026-07-09) vs `EdgeFieldGPURenderer`; `PrintSamplingRenderer` vs
+`PrintSamplingGPURenderer`.
 
 ## Shader loading order (MetalEffectLibrary)
 
@@ -177,7 +178,8 @@ Swift and MSL layouts must be identical.
 3. **Shared numeric constants duplicated Swift/MSL must change together.**
    Canonical example: `GlitchGPURenderer.maxSpanWalk = 1024`
    (GlitchGPURenderer.swift:23) ↔ `PIXEL_SORT_MAX_WALK = 1024`
-   (PixelSort.metal:31) — also consumed by the CPU path in GlitchRenderer.
+   (PixelSort.metal:31). (GlitchRenderer's CPU copy of this walk was deleted
+   with the CPU loop in PR #12, merged 2026-07-09.)
    Another: the dither palette cap is duplicated across `Dither.metal`
    (`DITHER_MAX_PALETTE`), `DitherGPURenderer`, and the model type.
 
@@ -290,11 +292,11 @@ incident).
       `swift test --filter EffectGPUParityTests`.
 - [ ] Wire the UI: macOS controls in
       `Sources/FramerApp/Editor/LayerListSection.swift` (gates blocks on the
-      capability flags, see lines ~325-380); iOS controls in
+      capability flags, see lines ~278-353); iOS controls in
       `Sources/FramerMobile/Layers/LayerDetailView.swift` (`GPUEffectControls`)
       and the add-picker in `Sources/FramerMobile/Layers/LayerStrip.swift`.
-      As of 2026-07-09 the iOS controls do NOT consult capability flags —
-      only macOS prunes; check before assuming parity.
+      Since PR #12 merged (2026-07-09) BOTH platforms consult the capability
+      flags — keep the new control gated on both.
 - [ ] `swift build && swift test`, then remember the metallib caveat below.
 
 ## Validation caveat: what `swift test` does NOT prove
@@ -351,8 +353,8 @@ grep -n "status != .completed" Sources/FramerCore/Effects/GPU/MetalRenderPass.sw
 grep -n "maxSpanWalk" Sources/FramerCore/Effects/Renderers/GlitchGPURenderer.swift Sources/FramerCore/Effects/Renderers/GlitchRenderer.swift && grep -n "PIXEL_SORT_MAX_WALK" Sources/FramerCore/Effects/Metal/PixelSort.metal
 # Capability flags + hidden picker cases
 grep -n "userFacingCases\|usesGeometry\|usesCommonAdjustments" Sources/FramerCore/Effects/Models/GPUEffectKind.swift
-# iOS still not flag-pruning?
-grep -rn "usesCommonAdjustments" Sources/FramerMobile/ || echo "iOS: still no flag pruning"
+# iOS flag-pruning intact (since PR #12 merged 2026-07-09; no output = regression)
+grep -rn "usesCommonAdjustments" Sources/FramerMobile/ || echo "iOS: flag pruning REGRESSED"
 # Parity suite health + count
 swift test --filter EffectGPUParityTests 2>&1 | tail -3
 # LUT compute stack (embedded source, formats, threadgroups)
