@@ -1,72 +1,60 @@
 # AI Assistant Instructions
 
-**Read and follow:** [.ai-assistant/.instructions.md](.ai-assistant/.instructions.md)
+**Source of truth for process and project knowledge: the skill library in [.claude/skills/](.claude/skills/).**
 
-This file is an entry point for AI coding assistants. All guidelines, workflows, and domain-specific instructions are centralized in the `.ai-assistant/` directory.
+Skills load automatically by description. When in doubt about *how to work here*, start with `framer-change-control`; when in doubt about *what you're looking at*, start with `framer-architecture-contract`.
 
-## Quick Start
-
-1. Read [.ai-assistant/.instructions.md](.ai-assistant/.instructions.md) for global execution protocol
-2. Check [.ai-assistant/INDEX.md](.ai-assistant/INDEX.md) for topic navigation
-3. Project-specific configuration is in [.ai-project/](.ai-project/)
+(Rewritten 2026-07-09. This file previously pointed at `.ai-assistant/` / `.ai-project/` — directories that never existed in git.)
 
 ## Project Overview
 
-**framer** - Swift macOS/iOS app and CLI for adding frames, borders, captions, and texture overlays to photos
+**framer** — Swift photo post-processing: frames, borders, EXIF captions, texture overlays, dithering, LUTs, and GPU effects. macOS app + CLI, iOS app in progress.
 
 | Aspect | Value |
 |--------|-------|
-| Language | Swift 5.10 |
+| Targets | FramerCore (library), FramerCLI (`framer` executable), FramerApp (macOS SwiftUI — module name is `Framer`), FramerMobile (iOS SwiftUI) |
 | Platforms | macOS 14+, iOS 17+ |
-| Package Manager | Swift Package Manager |
-| Xcode Project | XcodeGen (`project.yml`) |
-| Targets | FramerCore (library), FramerCLI (executable), FramerApp (macOS SwiftUI), FramerMobile (iOS SwiftUI) |
-| Test Framework | XCTest |
-| Git LFS | Texture overlays in `assets/textures/` are stored with Git LFS |
+| Build | Swift Package Manager + XcodeGen (`project.yml` → committed `Framer.xcodeproj`) |
+| Test framework | XCTest, two tiers (SPM + Xcode) |
+| Large assets | Texture overlays in `assets/textures/` via Git LFS |
+
+## Setup
+
+```bash
+git lfs install && git lfs pull   # without this, overlays are 132-byte pointer files and render as garbage
+swift build && swift test         # tier-1 gate; expect all tests green in seconds
+xcodegen generate                 # regenerate Framer.xcodeproj — REQUIRED after adding any file under Sources/FramerApp/ or Tests/FramerAppTests/
+```
 
 ## Quick Commands
 
 | Task | Command |
 |------|---------|
-| Build (macOS) | `swift build` |
-| Build (iOS) | `xcodebuild build -scheme FramerMobile -destination 'generic/platform=iOS Simulator'` |
-| Test | `swift test` |
-| Xcode Project | `xcodegen generate` |
-| Validate | `swift build && swift test` |
+| Build | `swift build` |
+| Test (tier 1: FramerCore + FramerCLI) | `swift test` |
+| App tests (tier 2: FramerAppTests) | `xcodegen generate && xcodebuild test -project Framer.xcodeproj -scheme Framer -destination 'platform=macOS'` — see `framer-campaign-restore-validation` for current blockers |
+| GPU/CPU parity check | `swift test --filter EffectGPUParityTests` |
+| Run CLI | `swift run framer --help` |
+| Environment health | `.claude/skills/framer-diagnostics-and-proof/scripts/env-doctor.sh` |
 
-## Setup
+## House Rules
 
-After cloning, fetch Git LFS files (texture overlays are ~150 files stored via LFS):
-```
-git lfs install
-git lfs pull
-```
-Without this, overlay textures will be 132-byte pointer files and overlays won't render.
+Details, rationale, and the incidents behind each: `framer-change-control` skill.
 
-## Commit Style
+1. **No autonomous merges or pushes to main.** AI sessions branch, commit, and open PRs when asked; a human decides every merge.
+2. **Never blind-refresh snapshot SHA-256 hashes.** Read the rendered pixels and explain the shift; land the refresh in the same commit as its cause.
+3. **Schema/preset changes must keep legacy decoding.** `PresetStore` deletes undecodable preset files — a decode regression silently destroys user data.
+4. **Shader changes patch CPU and GPU paths in the same commit** and keep `EffectGPUParityTests` green while the CPU path exists (its retirement is an open decision — `framer-architecture-contract`).
+5. **Conventional commits with scopes**: `fix(sidebar): …`, `feat(gpu-effects): …`, one task per commit, buildable at every commit.
 
-Use conventional commits:
-```
-feat: add new feature
-fix: resolve bug
-refactor: restructure code
-test: add/update tests
-docs: documentation changes
-chore: maintenance tasks
-```
+## Skill Library Map
 
-## Project Context
+- **Process & gates** — framer-change-control · framer-validation-and-qa · framer-docs-and-writing
+- **Understanding the system** — framer-architecture-contract · framer-metal-pipeline-reference · framer-image-processing-reference · framer-config-and-flags
+- **Doing the work** — framer-build-and-env · framer-run-and-operate · framer-ui-design-system · framer-debugging-playbook · framer-diagnostics-and-proof
+- **History & direction** — framer-failure-archaeology · framer-campaign-restore-validation · framer-campaign-gpu-effects-quality · framer-research-frontier
 
-- [assets/design/DESIGN_BRIEFING.md](assets/design/DESIGN_BRIEFING.md) - macOS UI design spec ("Darkroom Editorial")
-- [assets/design/ios/IOS_DESIGN_BRIEFING.md](assets/design/ios/IOS_DESIGN_BRIEFING.md) - iOS UI design spec
+## Design Briefs
 
-## Available Commands
-
-| Command | Purpose |
-|---------|---------|
-| `/implement` | Full workflow: explore, plan, code, commit |
-| `/debug` | Find and fix bugs |
-| `/refactor` | Multi-file changes with tracking |
-| `/validate` | Run type check, lint, tests |
-| `/commit` | Review and commit changes |
-| `/pr` | Create pull request |
+- [assets/design/DESIGN_BRIEFING.md](assets/design/DESIGN_BRIEFING.md) — macOS "Darkroom Editorial" (inspector width is now governed by `SidebarLayoutPolicy`, not the briefing's 280pt — see `framer-ui-design-system`)
+- [assets/design/ios/IOS_DESIGN_BRIEFING.md](assets/design/ios/IOS_DESIGN_BRIEFING.md) — iOS
