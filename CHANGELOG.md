@@ -7,100 +7,99 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
-### Removed (2026-07-09 — CPU effect path retired)
+## [2.0.0] - 2026-07-09
 
-- **CPU effect implementations (~2,900 lines)** per `docs/adr/2026-07-09-retire-cpu-effect-path.md`: `ShaderRenderer`'s `gpuOrCPU` fallback and 7 CPU style renderers, `ShaderASCIIRenderer`, `ShaderPixelSortRenderer`, 15 GPU-covered CPU dither algorithms, and the degraded monochrome cmykHalftone CPU fallback. Metal is now a hard requirement for effect rendering; a Metal failure throws `MetalEffectError` instead of silently rendering a visually different CPU image. Kept by design: Riemersma dither (sole implementation, dispatched by algorithm), the hidden legacy bucket variants, and the LUT CPU path (oracle + `benchmark lut` baseline).
-- The CPU-vs-GPU parity suite is superseded: `EffectGPUParityTests` → `EffectGPUBehaviorTests` (GPU invariants + routing), with pixel-level regression re-anchored to frozen golden references in the new `EffectGPUGoldenTests` (same per-effect tolerances; env-gated regeneration; snapshot-grade refresh discipline). Pre/post CLI renders verified byte-identical on Metal hosts.
-
-### Earlier unreleased work — GPU effects migration (PR #7)
-
-Work on `claude/gpu-effects-migration-MbMMo` refining the GPU-effects bucket system against Grainrad WGSL references.
+Complete rewrite from Go CLI to Swift, and everything built on top of it since.
+This entry was first drafted on 2026-02-24 for the rewrite itself but v2.0.0 was
+never tagged; this release finally ships it, covering all work since v1.2.0
+(356 commits, PRs #2–#15).
 
 ### Added
 
-- **ASCII font picker**: full `NSFontManager.availableFontFamilies` / `UIFont.familyNames` list bound to `ASCIIShaderParams.fontName`. "System Default" keeps the baked pixel-art atlas; any other font routes through `ASCIIAtlasGenerator` with Core Text rasterisation.
-- **ASCII High Detail toggle** (`ASCIIShaderParams.highDetail`): 16×16 atlas cell (up from 8×8) for sharper glyph edges. Orthogonal to the font/characters axes — the toggle only changes resolution when you've already customised chars or font. Shader + CPU `sampleLUT` derive cell size from the atlas height, so both paths coexist without a shader branch.
-- **Blockify `.shaded` style**: per-cell radial falloff (matches Grainrad reference), picker option alongside Solid / Outlined. Reuses Border Width slider as the falloff strength.
-- **Dots `sizeMultiplier` slider** (0.1 – 2.0): the shader uniform existed but was hard-coded to 1.0 on the encoder side. Now wired through.
-- **Mobile parity for Voronoi + Contour**: added `Wall Strength` / `Cell Fill` to Voronoi, `Line Strength` / `Field Intensity` to Contour.
+#### Swift Rewrite (2026-02)
+- **FramerCore library**: standalone image-processing library on CoreGraphics/CoreImage
+- **FramerCLI** (`framer`): command-line interface using Swift Argument Parser, with
+  `process`, `presets`, `fonts`, and `benchmark` subcommands and `--version`
+- **Framer** (macOS app): SwiftUI application with photo library, live preview,
+  filmstrip, export queue, and the "Darkroom Editorial" visual design (PR #2)
+- **FramerMobile** (iOS app): in progress, shares FramerCore
+
+#### Layer-Based Composition System (12 layer types)
+- **Border / Padding / Canvas / Resize / Aspect Ratio**: framing and geometry, with
+  solid, dominant-color, and gradient fills; Instagram and print (10x15) formats
+- **Orientation**: force landscape/portrait via 90° rotation
+- **Caption**: EXIF-based captions with `{{field}}` template tokens, positioning,
+  color modes, and font styling (bold/italic, any installed family)
+- **Overlay**: 168 bundled textures (dirt, film dust, light leaks, wet plate, frames)
+  with per-kind blend modes, tracked via Git LFS
+- **Dither**: 17 algorithms (Bayer, Floyd–Steinberg, Atkinson, Sierra family,
+  Jarvis–Judice–Ninke, Burkes, Stucki, Riemersma, blue noise, IGN, white noise,
+  artistic drip, halftone, CMYK halftone, …) with B&W, two-tone,
+  dominant-two-tone, per-channel color, and vintage-palette color modes
+- **LUT**: `.cube` LUT parsing with Metal-compute rendering and CPU reference,
+  user-imported LUT library, staged `benchmark lut` CLI (PR #4)
+- **Shader**: 9 stylized looks (ASCII, pixel sort, crimewave, narc, shiba,
+  distant past, CRT, halftone, Kuwahara) (PR #5)
+- **GPU Effects bucket**: 12 user-facing Metal effects across four families —
+  textCell (dots, blockify, matrixRain), printSampling (threshold, crosshatch),
+  edgeField (edgeDetection, contour, waveLines, voronoi, noiseField), glitch
+  (pixelSort, vhs) — ported against Grainrad WGSL references (PRs #7, #10, #12)
+
+#### Editor & App UX
+- Sidebar "harmony" system: shared layout contract, reusable control primitives,
+  SHA-256 snapshot tests locking every inspector surface (PR #8)
+- Config-level undo, parameter reset buttons, user-defined dither palettes,
+  preset thumbnails, photo deletion from the filmstrip, app icons (PRs #9, #12)
+- Presets: JSON presets in `~/Library/Application Support/Framer/presets/`,
+  YAML preset/config compatibility with the v1 Go CLI schema, config discovery
+  chain (`--config` → `--preset` → `./.framer.yaml` → `~/.config/framer/default.yaml`)
+
+#### Verification
+- **Golden-reference effect tests**: GPU renders locked against committed
+  reference PNGs with per-effect tolerances (`EffectGPUGoldenTests`), plus GPU
+  invariant/behavior tests — the successor to CPU/GPU parity testing
+- WYSIWYG contract: scale-sensitive layers honor `previewBaseDimension` so the
+  preview provably matches the export
+- 273 SPM tests + 63 app-tier test methods; AI-agent skill library documenting
+  process and architecture (PRs #13, #14)
 
 ### Fixed
-
-- **Voronoi rewrite (`voronoiVariant` in EdgeField.metal)**: full port of the Grainrad `colorMode=1` path. Samples source at each seed's pixel position, so the classic polygonal mosaic renders with image colour instead of the earlier grayscale wall/interior falloff. Default edge colour flipped to black for voronoi specifically.
-- **Contour neighbour-sampling**: rewrote detection to sample 4 neighbours at `thickness`-pixel offsets and compare quantised levels. Invert now applies symmetrically to centre + neighbours.
-- **Threshold shader color modes**: `u.color.mode` was ignored — Source / Mono / FG-BG now behave distinctly. Palette option removed from the bucket-level color picker (no palette uniform is encoded into the bucket structs yet — Dither's path is separate).
-- **matrixRain "Threshold" dead slider**: UI bound to `params.threshold` but the encoder wrote `params.trailLength` to the shader's `threshold` uniform. Removed the slider; Trail remains.
-- **Shader style picker inside detail panel**: a legacy dropdown that silently rewrote layer params without changing the kind label. Removed from desktop + mobile.
-- **Stale-index crash in layer bindings**: `binding(for index: Int)` captured the index by value and crashed when a layer was deleted while its detail view was still in the view tree. Rewritten to look up by `layer.id` with a captured fallback.
-- **`CGBitmapContextCreate` failures on alpha-last CGImages**: `MetalTextureSupport.normalizedForTextureUpload` now uses a strict exact-match fast-path check (all of `bitsPerComponent`, `bitsPerPixel`, `bitmapInfo.rawValue`, colour-space model) before redrawing; previews no longer fall back to the incorrect colour path for HEIC / some sRGB PNGs.
+- CoreGraphics QoS priority inversion on preview/export render tasks (PR #11)
+- GPU-effects parameter consistency: single source of truth for defaults, sRGB
+  color round-tripping, dead-slider and encoder-wiring fixes (PRs #3, #10, #12)
+- HEIC/PNG color correctness on Metal texture upload; stale-index crash on
+  layer deletion; preset picker and palette-selection stickiness (PRs #3, #12)
 
 ### Changed
-
-- Atlas-cell addressing in TextCell.metal + ShaderASCIIRenderer now derives cell size from the bound atlas's height, not a hard-coded `8`. Lets 8×8 baked PNGs and 16×16 runtime atlases share the same code path.
-
-## [2.0.0] - 2026-02-24
-
-Complete rewrite from Go CLI to Swift macOS app + CLI.
-
-### Added
-
-#### Swift Rewrite
-- **FramerCore library**: Standalone image processing library using CoreGraphics/CoreImage
-- **FramerCLI**: Command-line interface using Swift Argument Parser
-- **FramerApp**: SwiftUI macOS application with photo library integration and live preview
-- **102 unit tests** across 10 test classes
-
-#### Layer-Based Composition System
-- **Canvas Layer**: Set physical canvas dimensions (width/height)
-- **Border Layer**: Configurable thickness, color, padding, and fill modes (solid, dominant, gradient)
-- **Orientation Layer**: Force landscape or portrait via 90-degree rotation
-- **Caption Layer**: EXIF-based captions with template tokens and positioning
-- **Overlay Layer**: Texture overlays with blend modes and opacity control
-- **Resize Layer**: Output dimension constraints
-
-#### Texture Overlay System
-- **168 bundled textures**: Dirt, film dust, light leaks, wet plate, and frame textures
-- **Blend modes**: Screen, multiply, overlay, softLight per texture kind
-- **Git LFS**: Large texture files tracked via Git LFS
-
-#### Font Styling
-- **Bold/Italic support**: FontStyle OptionSet with `--font-bold`/`--font-italic` CLI flags
-- **System fonts**: Uses macOS system fonts via CoreText
-
-#### Border Styles
-- **Solid**: Clean colored border with customizable padding
-- **Instagram**: Fixed 4:5 ratio frame
-- **Print**: Physical print format (10x15cm default) with custom dimensions and DPI
-
-#### Processing Features
-- **EXIF preservation**: Metadata carried through to output via MetadataWriter
-- **IPTC keywords**: "framer" keyword added to processed images
-- **Color extraction**: Dominant color and gradient generation for dynamic backgrounds
-- **Concurrent processing**: Batch processing with configurable worker count
-
-#### Preset System
-- **YAML presets**: Save/load from `~/.config/framer/presets/`
-- **Built-in presets**: Vintage, Instagram, Minimal, Print 10x15
-- **JSON preset support**: In-app preset management
+- **BREAKING — Metal is now a hard requirement for effect rendering.** The CPU
+  effect path was retired (PR #15, ADR:
+  `docs/adr/2026-07-09-retire-cpu-effect-path.md`): a Metal failure throws
+  instead of silently rendering a visually different CPU fallback. Kept by
+  design: Riemersma dither (sole implementation), legacy hidden bucket
+  variants, and the LUT CPU reference (test oracle + benchmark baseline).
+  Hosts without a Metal device can no longer render `.shader`/`.dither`/
+  `.gpuEffect` layers.
+- Architecture: single-file Go → multi-target Swift Package + XcodeGen;
+  imaging → CoreGraphics/CoreImage; FreeType → CoreText; goexif → ImageIO;
+  flag → Swift Argument Parser
 
 ### Removed
-- Go source code and all Go dependencies
+- Go source code, dependencies, CI/CD workflows, and embedded font binaries
 - Legacy iOS companion app (Framer-iOS/)
-- Embedded font binaries (fonts.go, fonts_data/)
-- Go CI/CD workflows
-- Cross-platform support (now macOS-only)
-
-### Changed
-- Architecture: single-file Go to multi-target Swift Package
-- Image processing: Go imaging library to CoreGraphics/CoreImage
-- Font rendering: FreeType to CoreText
-- EXIF reading: goexif to ImageIO
-- Configuration: flag package to Swift Argument Parser
-- Project build: `go build` to `swift build` / `xcodegen generate`
+- Cross-platform builds (now macOS 14+ / iOS 17+ only)
+- The CPU effect implementations (~2,900 lines) superseded by the GPU path
 
 ---
 
-## [1.0.0] - 2025
+## [1.2.0] - 2026-01-22 *(Go era)*
+
+- Metadata tagging improvements and default background color fix.
+
+## [1.1.0] - 2025-10-19 *(Go era)*
+
+- print10x15 preset for Canon Selphy printers.
+
+## [1.0.0] - 2025 *(Go era)*
 
 Original Go CLI implementation.
 
@@ -117,5 +116,3 @@ Original Go CLI implementation.
 - Homebrew installation support
 
 ---
-
-**Note**: All development was done using [Claude Code](https://docs.anthropic.com/en/docs/agents-and-tools/claude-code/overview) as an experiment in AI-assisted development.
