@@ -467,5 +467,5 @@ Facts that may drift, with one-line re-verification commands:
 | Incident commits exist | `git show -s --oneline 2a2ecba f21a6fe 761fae6 a757e67 4cf8ec2` |
 
 If a re-verification command fails, fix THIS file in the same change that
-moved the fact — this skill library is the source of truth (CLAUDE.md's
-`.ai-assistant/` chain is dead; see **framer-docs-and-writing**).
+moved the fact — this skill library is the source of truth (CLAUDE.md routes
+here since its 2026-07-09 rewrite; see **framer-docs-and-writing**).

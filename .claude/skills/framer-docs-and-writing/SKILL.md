@@ -40,8 +40,11 @@ When two sources disagree, trust the higher tier. **Code always beats docs.**
 4. **Code doc-comments** — e.g. the long rationale comment on
    `userFacingCases` in `Sources/FramerCore/Effects/Models/GPUEffectKind.swift`.
    These are maintained with the code and are the freshest prose in the repo.
-5. **README.md / CLAUDE.md / docs/index.html** — stale entry points. Useful for
-   flavor, unreliable for facts. Details in the ledger.
+5. **CLAUDE.md** — rewritten 2026-07-09 to route to this skill library; its
+   quick-command and house-rule summaries are current, everything deep lives
+   in the skills.
+6. **README.md / docs/index.html** — stale entry points. Useful for flavor,
+   unreliable for facts. Details in the ledger.
 
 Special mention: **`.sisyphus/notepads/sidebar-harmony/learnings.md`** (107 lines,
 checked into main) is the richest operational-lessons document in the repo despite
@@ -57,8 +60,8 @@ update this ledger whenever you resolve or discover a doc-vs-code contradiction.
 
 | Doc | What's wrong | What to trust instead |
 |---|---|---|
-| `CLAUDE.md` | Tells assistants to read `.ai-assistant/.instructions.md` and `.ai-assistant/INDEX.md`, and points project config at `.ai-project/` — **neither directory exists** (verified: `ls` returns os error 2). Its "Available Commands" table (/implement … /pr) points at command files whose own instruction targets are dead (next row). | This skill library. The Quick Commands table in CLAUDE.md (swift build/test, xcodegen generate) is still accurate; see framer-build-and-env for the authoritative version. |
-| `.claude/commands/*.md` (21 of 29 top-level files) | Each begins "Follow **[x.prompt.md](../../.ai-assistant/workflows/x.prompt.md)**" — all targets nonexistent. `validate.md` is a JS-project template ("npm audit", bundle size), and `.claude/settings.json` allowlists `npm run typecheck/lint/test/build` — this is a Swift repo with no npm. | framer-change-control for workflow; framer-validation-and-qa for what validation means here. The commands' inline text (phase gates, conventional commits) survives as de-facto convention only. |
+| `CLAUDE.md` | **RESOLVED 2026-07-09** — rewritten to route to this skill library. Historical defect: it delegated to `.ai-assistant/.instructions.md` and `.ai-project/`, directories that never existed in git on any branch. Old copies survive on stale branches; merging PR #1 would resurrect one (framer-change-control danger list). | The current CLAUDE.md + this library. framer-build-and-env owns the authoritative command table. |
+| `.claude/commands/*.md` (21 of 29 top-level files) | **RESOLVED 2026-07-09** — the 21 dead files were removed. Historical defect: each began "Follow **[x.prompt.md](../../.ai-assistant/workflows/x.prompt.md)**" — all targets nonexistent; `validate.md` was a JS-project template ("npm audit", bundle size). STILL OPEN: `.claude/settings.json` allowlists `npm run typecheck/lint/test/build` — this is a Swift repo with no npm. | framer-change-control for workflow; framer-validation-and-qa for what validation means here. |
 | `README.md` | (a) Line 56: "Swift Package with three targets" listing FramerCore/FramerCLI/FramerApp — `Package.swift` actually declares only **FramerCore + FramerCLI** (plus two test targets); FramerApp (macOS, product name "Framer") and **FramerMobile (iOS, omitted entirely)** are XcodeGen targets in `project.yml`. (b) Line 52: presets "save and load from `~/.config/framer/presets/`" — wrong; `PresetStore.swift` uses `~/Library/Application Support/Framer/presets/`, and `~/.config/framer/` only holds `default.yaml` as the last-resort config fallback (`YAMLConfig.loadDefault`, priority: `--config` → App Support preset → `./.framer.yaml` → `~/.config/framer/default.yaml`). (c) Layer list (lines 28–34) stops at Dither — omits aspectRatio, LUT, shader, and gpuEffect layers, zoom, and the Darkroom Editorial UI. The LUT *benchmark* section (lines 137–166) is accurate and dated 2026-04-01. | `Package.swift` + `project.yml` for targets; `Sources/FramerCore/Presets/PresetStore.swift` and `YAMLConfig.swift` for paths; framer-config-and-flags for the layer catalog. |
 | `docs/gpu-effects-parameter-matrix.md` | Line 15 lists `pixelSort` among variants "hidden from picker". Stale: sidebar-harmony pass 4 re-exposed it. `GPUEffectKind.userFacingCases` now hides only `.ascii`, `.halftone`, `.dithering` (with a long doc comment explaining why, including the "Dithering doesn't have the presets" user report). Common-adjustments wiring also changed after the doc's snapshot. | `Sources/FramerCore/Effects/Models/GPUEffectKind.swift` (the `userFacingCases` doc comment is the record). framer-config-and-flags owns the parameter catalog. |
 | `docs/plans/2026-04-01-metal-dither-plan.md` | Header says "Status: Planned / Branch: feat/metal-dither (not yet created)" and lays out a `MetalDitherPipeline` under a Processing/Metal layout. **Superseded, never executed as written**: GPU dithering shipped via the Effects bucket (`Sources/FramerCore/Effects/Metal/Dither.metal` + DitherGPURenderer); `Sources/FramerCore/Processing/Metal/` does not exist. | `docs/gpu-migration-plan.md` and `docs/gpu-migration-mac-resume.md`; framer-metal-pipeline-reference. |
@@ -292,8 +295,8 @@ the docs/examples goldens' Go provenance is inferred from their last-touch date
 (2026-01-23, pre-Swift-rewrite) and index.html's "Requires Go 1.22+".
 
 Re-verification one-liners:
-- Dead instruction chain: `ls .ai-assistant .ai-project` (expect: No such file or directory)
-- Stale command files count: `grep -l 'ai-assistant' .claude/commands/*.md | wc -l` (was 21)
+- Dead instruction chain stays dead: `ls .ai-assistant .ai-project` (expect: No such file or directory)
+- Dead command files stay removed: `grep -l 'ai-assistant' .claude/commands/*.md | wc -l` (expect 0; the 21 dead files were removed 2026-07-09)
 - npm-flavored settings: `grep -n 'npm' .claude/settings.json`
 - README target table: `sed -n '56,63p' README.md` vs `grep -n 'name:' Package.swift`
 - README preset path: `grep -n 'config/framer' README.md` vs `sed -n '1,15p' Sources/FramerCore/Presets/PresetStore.swift`

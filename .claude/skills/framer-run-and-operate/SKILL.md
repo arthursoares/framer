@@ -321,8 +321,8 @@ that bite operators:
   (commit 1087d41, "add GitHub Pages documentation website") and there is no
   generation script anywhere in the repo — treat them as non-regenerable
   goldens; if you regenerate them by hand, expect pixel differences.
-- CLAUDE.md's instruction chain (`.ai-assistant/`, `.ai-project/`) is dead —
-  those directories do not exist. This skill library is the source of truth.
+- CLAUDE.md was rewritten 2026-07-09 to route to this skill library (its old
+  `.ai-assistant/` chain pointed at directories that never existed in git).
 
 ## Provenance and maintenance
 

@@ -146,11 +146,12 @@ tier" below. Steps 1–4 are fully green today.
 | Metal Toolchain | **uninstalled** (`xcodebuild -showComponent metalToolchain` → `Status: uninstalled`) | assumed present by any xcodebuild flow | BROKEN — see below. |
 | CI | none (`.github/` does not exist) | — | Local `swift build && swift test` is the only gate. See framer-change-control. |
 
-CLAUDE.md's instruction chain (`.ai-assistant/`, `.ai-project/`) is **dead** —
-those directories do not exist, and 21 files under `.claude/commands/` point
-into them. Also, `.claude/settings.json` allowlists `npm run ...` commands that
-have no meaning in this Swift repo. Do not follow those; this skill library is
-the source of truth. Full staleness ledger: framer-docs-and-writing.
+CLAUDE.md routes to this skill library since its 2026-07-09 rewrite; the old
+`.ai-assistant/`/`.ai-project/` chain it once pointed at never existed in git,
+and the 21 dead `.claude/commands/` files were removed the same day. Note
+`.claude/settings.json` still allowlists `npm run ...` commands that have no
+meaning in this Swift repo — don't take those as guidance. Full staleness
+ledger: framer-docs-and-writing.
 
 ---
 
@@ -314,7 +315,7 @@ update workflow: framer-validation-and-qa.
 | `build/` | Old xcodebuild output, gitignored. | Safe to delete. |
 | `Framer-iOS/` | Empty legacy directory (only a `.DS_Store`); the legacy iOS companion app was removed in 2.0.0 (`CHANGELOG.md:81`). Git tracks nothing under it. | Ignore; FramerMobile in `Sources/FramerMobile/` is the live iOS target. |
 | `.claude/settings.json` allowlist | npm-flavored legacy (`npm run typecheck/lint/test/build`) — inapplicable to this Swift repo. | Don't take it as guidance. `settings.local.json` has the real swift/xcodegen entries. |
-| `.ai-assistant/`, `.ai-project/` references | Dead directories referenced by CLAUDE.md and 21 `.claude/commands/*.md` files. | Dead ends — see framer-docs-and-writing. |
+| `.ai-assistant/`, `.ai-project/` references | Dead directories that never existed in git; CLAUDE.md was rewritten and the 21 referencing command files removed on 2026-07-09. | Historical only — see framer-docs-and-writing. |
 
 ---
 
@@ -379,8 +380,8 @@ grep -A5 'argument-parser' Package.resolved Framer.xcodeproj/project.xcworkspace
 # Stale artifacts still present / still ignored
 ls -la framer Binary build Framer-iOS 2>/dev/null; grep -n 'framer\|^build/\|Framer.app' .gitignore
 
-# Dead docs chain (was: dirs missing, 21 command files referencing them)
-ls .ai-assistant .ai-project 2>&1; grep -l 'ai-assistant' .claude/commands/*.md | wc -l
+# Dead docs chain stays dead (dirs absent; referencing command files removed 2026-07-09 — expect 0)
+ls .ai-assistant .ai-project 2>&1; grep -l 'ai-assistant' .claude/commands/*.md 2>/dev/null | wc -l
 
 # CI still absent
 ls .github 2>&1

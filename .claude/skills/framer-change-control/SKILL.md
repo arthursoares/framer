@@ -14,8 +14,9 @@ description: >
 # framer — change control
 
 How changes are classified, gated, committed, reviewed, and merged in this repo.
-This skill library is the source of truth for process; the older instruction
-chain (CLAUDE.md → `.ai-assistant/`) is dead — see "Stale doctrine" below.
+This skill library is the source of truth for process; CLAUDE.md routes here
+since its 2026-07-09 rewrite. The older instruction chain it once pointed at
+(`.ai-assistant/`) is dead — see "Stale doctrine" below.
 
 ## When NOT to use this skill
 
@@ -249,14 +250,17 @@ treats every ❌ as its first task, in order.
 
 (As of 2026-07-09, commit 48d85a5.)
 
-- **CLAUDE.md's instruction chain is dead.** It points to `.ai-assistant/`
-  and `.ai-project/` — neither directory exists.
-- **21 of the files in `.claude/commands/` (including `/validate`,
-  `/implement`, `/wrap`, `/cover`, `/commit`, `/pr`) begin by telling you to
-  follow a `../../.ai-assistant/workflows/*.prompt.md` file that does not
-  exist.** Some also carry JS-project residue (npm audit, bundle size).
-  Do not follow them. This skill library supersedes them; the full staleness
-  ledger lives in framer-docs-and-writing.
+- **The old `.ai-assistant/` instruction chain is dead.** Until 2026-07-09,
+  CLAUDE.md delegated to `.ai-assistant/` and `.ai-project/` — directories
+  that never existed in git on any branch. CLAUDE.md was rewritten
+  (2026-07-09) to route to this skill library. If you encounter the old
+  CLAUDE.md — on a stale branch, or via PR #1 — do not follow it.
+- **The 21 dead files in `.claude/commands/` (including `/validate`,
+  `/implement`, `/wrap`, `/cover`, `/commit`, `/pr`) were REMOVED on
+  2026-07-09.** Each began by delegating to a nonexistent
+  `../../.ai-assistant/workflows/*.prompt.md`; some carried JS-project
+  residue (npm audit, bundle size). If they reappear via a stale-branch
+  merge, delete them again. Full staleness ledger: framer-docs-and-writing.
 - `README.md` has materially stale facts (target list, preset paths) — details
   in framer-docs-and-writing.
 
@@ -264,7 +268,7 @@ treats every ❌ as its first task, in order.
 
 | Item | State | Ruling |
 |---|---|---|
-| **PR #1** `chore/cleanup-legacy-configs` | Open since 2026-03-14; 3 ahead / **295 behind** main; rewrites CLAUDE.md (85 lines changed) | Do NOT merge or rebase-and-merge as-is — it would clobber CLAUDE.md with a 295-commit-stale version. Human decision whether to close. |
+| **PR #1** `chore/cleanup-legacy-configs` | Open since 2026-03-14; 3 ahead / **295 behind** main; rewrites CLAUDE.md (85 lines changed) | Do NOT merge or rebase-and-merge as-is — it would clobber the rewritten CLAUDE.md with a 295-commit-stale version and resurrect the dead instruction chain. Human decision whether to close. |
 | **PR #11** `fix/preview-priority-inversion` | Open, 1 commit, 0 behind; fully-diagnosed QoS priority-inversion fix | Merge is the maintainer's call (rule 1). Do not present its content as shipped. |
 | **PR #12** `fix/effect-params-and-editor-bugs` | Open, 11 commits, 0 behind; Codex review findings addressed in `12c42a9` | Same: human-decision merge. Its parameter-defaults work is UNMERGED — don't cite it as current behavior. |
 | `xcodebuild` test tier | Broken on the primary dev machine (revoked signing cert — `CSSMERR_TP_CERT_REVOKED`, not merely expired — + missing Metal Toolchain) | Repair campaign: framer-campaign-restore-validation (P1 owns cert state and remediation). Don't gate commits on it until repaired; `swift build && swift test` is the working gate. |
@@ -287,7 +291,7 @@ read-only git/gh commands. Re-verify volatile facts with:
 | Build-break commit pair | `git show -s --oneline c515147 ae4b8ba` |
 | PRs merge as true merges | `git rev-list --parents -n1 48d85a5` (expect 2 parents) |
 | Open PR set + staleness | `gh pr list --state open` ; `git rev-list --count origin/chore/cleanup-legacy-configs..origin/main` |
-| Dead command files | `grep -rl ".ai-assistant" .claude/commands/ \| wc -l` (21 as of writing) ; `ls .ai-assistant` (expect: no such directory) |
+| Dead command files stay dead | `grep -rl ".ai-assistant" .claude/commands/ \| wc -l` (expect 0 — the 21 dead files were removed 2026-07-09) ; `ls .ai-assistant` (expect: no such directory) |
 | Handoff checklist doc | `grep -n "not run" docs/gpu-migration-mac-resume.md` (expect the ✅/❌ block) |
 | Review-culture source | `grep -n "Three parallel review agents" .sisyphus/notepads/sidebar-harmony/learnings.md` |
 

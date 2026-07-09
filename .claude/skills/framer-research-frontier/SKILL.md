@@ -328,8 +328,8 @@ its generation command.
 - Versioning is inconsistent (CHANGELOG says 2.0.0, git tags stop at v1.2.0) — do not
   cite a version number publicly without checking `git tag` (ledger in
   framer-docs-and-writing).
-- README.md and CLAUDE.md's instruction chain (.ai-assistant/, .ai-project/) are stale;
-  this skill library is the source of truth (staleness ledger: framer-docs-and-writing).
+- README.md is stale; CLAUDE.md was rewritten 2026-07-09 to route to this skill
+  library, which is the source of truth (staleness ledger: framer-docs-and-writing).
 - House rule (framer-change-control): no autonomous merges or pushes — research results
   become "accepted" only when a human merges them.
 
