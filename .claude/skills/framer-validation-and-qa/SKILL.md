@@ -34,7 +34,7 @@ locally. That makes the evidence bar below load-bearing, not bureaucratic.
 
 A change is "validated" only when you can quote the command AND its output:
 
-1. Run the command. Copy the summary line (e.g. `Executed 268 tests, with 0 failures
+1. Run the command. Copy the summary line (e.g. `Executed 273 tests, with 0 failures
    (0 unexpected)`), not a paraphrase.
 2. **Report skip counts.** "Green" without a skip-check is not evidence — see the
    XCTSkip section below. If the output contains `skipped`, say how many and why.
@@ -51,26 +51,27 @@ A change is "validated" only when you can quote the command AND its output:
 
 | | Tier 1: SPM | Tier 2: Xcode app tests |
 |---|---|---|
-| Targets | FramerCoreTests (259 tests) + FramerCLITests (9 tests) | FramerAppTests (12 files, 63 test methods) |
-| Total | 268 tests, ~4s execution | 63 methods |
+| Targets | FramerCoreTests (264 tests) + FramerCLITests (9 tests) | FramerAppTests (12 files, 63 test methods) |
+| Total | 273 tests, ~4s execution | 63 methods |
 | Declared in | Package.swift (`.testTarget`) | project.yml ONLY — **not** in Package.swift |
 | Run with | `swift test` | `xcodegen generate` then `xcodebuild test -project Framer.xcodeproj -scheme Framer -destination 'platform=macOS'` |
 | Needs | Swift toolchain; Metal device for full coverage (see skips) | Xcode, valid signing, Metal Toolchain component |
-| Status | GREEN (verified 2026-07-09: `Executed 268 tests, with 0 failures (0 unexpected) in 3.7s`, zero skips on this host) | **BROKEN on the primary dev Mac** as of 2026-07-09 |
+| Status | GREEN (verified 2026-07-09 post-PR-#12-merge: `Executed 273 tests, with 0 failures (0 unexpected) in 3.7s`, zero skips on this host) | **BROKEN on the primary dev Mac** as of 2026-07-09 |
 | Contains | All FramerCore rendering/config/preset logic, GPU parity, CLI helper units | All SwiftUI snapshot/containment/resolver tests for the sidebar + inspector |
 
-Counts date-stamped 2026-07-09, commit 48d85a5.
+Counts date-stamped 2026-07-09, commit f2c9521 (was 268 at 48d85a5; PR #12's merge
+added the 5-test `GPUEffectRegressionTests.swift`).
 
 ### Tier 1: run it
 
 ```bash
 swift test                                   # full suite, ~4s test execution
 swift test --filter EffectGPUParityTests     # one suite
-swift test --list-tests | wc -l              # expect 268
+swift test --list-tests | wc -l              # expect 273
 ```
 
-Expect: `Executed 268 tests, with 0 failures (0 unexpected)`. If you see fewer tests
-than 268 executed or any `skipped` lines, read the XCTSkip section before declaring green.
+Expect: `Executed 273 tests, with 0 failures (0 unexpected)`. If you see fewer tests
+than 273 executed or any `skipped` lines, read the XCTSkip section before declaring green.
 
 ### Tier 1: the XCTSkip trap (silent coverage loss)
 
@@ -202,9 +203,10 @@ machine without a maintainer decision.
 - Imports: `@testable import FramerCore` / `@testable import FramerCLI`; for app tests
   it is `@testable import Framer` — **the macOS app module is named `Framer`, not
   `FramerApp`** (a documented gotcha).
-- Naming: dominant style is `test_subject_condition` (29 of 34 test files). Five older
-  files use legacy `testCamelCase` (ASCIIAtlasGeneratorTests, EffectGPUParityTests,
-  GPUEffectBucketDispatchTests, LayerCompositorTests, MetalTextureSupportTests). Write
+- Naming: dominant style is `test_subject_condition` (29 of 35 test files). Six files
+  use `testCamelCase` (ASCIIAtlasGeneratorTests, EffectGPUParityTests,
+  GPUEffectBucketDispatchTests, LayerCompositorTests, MetalTextureSupportTests, plus
+  GPUEffectRegressionTests from the PR #12 merge). Write
   new tests in `test_subject_condition`; match the local file's style when appending.
 - `@MainActor` on any test class that hosts AppKit/SwiftUI views (all snapshot,
   containment, and bitmap tests carry it).
@@ -290,7 +292,8 @@ Assume NO safety net in these areas (as of 2026-07-09, commit 48d85a5):
 ## Provenance and maintenance
 
 All facts verified 2026-07-09 against commit 48d85a5 on the primary dev Mac
-(arm64, Swift 6.3.3, Xcode 26.6) by running the commands below — except the two
+(arm64, Swift 6.3.3, Xcode 26.6) by running the commands below; test counts
+re-verified same day against f2c9521 (post PR #11/#12 merge: 273 tests) — except the two
 Tier-2 failure strings (signing cert, Metal Toolchain), which reproduce the state
 recorded the same day; re-running full `xcodebuild test` is expensive and was not
 repeated for this document.
@@ -299,7 +302,7 @@ Re-verification one-liners:
 
 | Fact | Command |
 |---|---|
-| 268 SPM tests (259 Core + 9 CLI) | `swift test --list-tests \| cut -d. -f1 \| sort \| uniq -c` |
+| 273 SPM tests (264 Core + 9 CLI) | `swift test --list-tests \| cut -d. -f1 \| sort \| uniq -c` |
 | Suite green, ~4s | `swift test 2>&1 \| grep Executed \| tail -1` |
 | Zero skips on this host | `swift test 2>&1 \| grep -c skipped` (expect 0) |
 | 12 app-test files / 63 methods | `ls Tests/FramerAppTests \| wc -l` ; `grep -rc 'func test' Tests/FramerAppTests/*.swift \| awk -F: '{s+=$2} END{print s}'` |
@@ -309,7 +312,7 @@ Re-verification one-liners:
 | Snapshot harness + failure message | `grep -n 'Actual SHA256' Tests/FramerAppTests/SidebarHarmonySnapshotTests.swift` |
 | 10 snapshot surfaces | `grep -c 'expectedSHA256: "' Tests/FramerAppTests/SidebarHarmonySnapshotTests.swift` |
 | No Swift Testing | `grep -rln 'import Testing' Sources/ Tests/` (expect empty) |
-| Naming split (29 vs 5 files) | `grep -rl 'func test_' Tests --include='*.swift' \| wc -l` |
+| Naming split (29 vs 6 files as of f2c9521) | `grep -rl 'func test_' Tests --include='*.swift' \| wc -l` |
 | gpuOrCPU catches only MetalEffectError | `grep -n 'catch let error as MetalEffectError' Sources/FramerCore/Processing/ShaderRenderer.swift` |
 | Example tolerances | `grep -n 'XCTAssertLessThan(mean' Tests/FramerCoreTests/EffectGPUParityTests.swift` |
 | Stale "Authored on Linux" header | `sed -n '20,24p' Tests/FramerCoreTests/EffectGPUParityTests.swift` |

@@ -110,8 +110,11 @@ The contract as it stands today:
   `MetalEffectError` (9 cases, defined at
   Sources/FramerCore/Effects/GPU/MetalEffectLibrary.swift:25-34). Any other error
   bubbles up. WHY: so genuine bugs surface instead of being masked by a silent CPU
-  render. Bucket renderers follow the same rule (`catch is MetalEffectError` in e.g.
-  Sources/FramerCore/Effects/Renderers/TextCellBucketRenderer.swift:30).
+  render. Bucket renderers went further with PR #12 (merged 2026-07-09, commit
+  `20d5775`): they no longer catch `MetalEffectError` at all — Glitch/EdgeField are
+  GPU-only and throw; TextCell/PrintSampling route to their remaining CPU loops only
+  for legacy hidden variants (`.ascii`, `.halftone`, `.dithering` bucket forms) that
+  have no GPU entry, selected by variant, not by catch.
 - Exception: the LUT layer uses nil-return fallback instead — `LUTMetalRenderer.apply`
   returns an optional and `LUTRenderer` falls through to `applyCPU` on nil
   (Sources/FramerCore/Processing/LUTRenderer.swift:41-57).
@@ -130,11 +133,14 @@ What the CPU path buys today (record this before arguing to delete it):
    true rotated CMYK screens are GPU-only (comment at
    Sources/FramerCore/Processing/DitherRenderer.swift:482-485). Accepted divergence,
    no parity test by design.
-3. Headless/Metal-less hosts (CI sandboxes, some cloud runners) still render — and
-   there they also skip 25 of the 27 parity tests (2 fallback-routing tests, e.g.
-   Riemersma→CPU and CMYK fallback, still run without Metal; skip arithmetic owned
-   by framer-validation-and-qa), i.e. the parity net has a hole exactly
-   where the CPU path is exercised.
+3. Headless/Metal-less hosts (CI sandboxes, some cloud runners) still render the
+   `.shader`/`.dither`/`.lut` paths — and there they also skip 25 of the 27 parity
+   tests (2 fallback-routing tests, e.g. Riemersma→CPU and CMYK fallback, still run
+   without Metal; skip arithmetic owned by framer-validation-and-qa), i.e. the parity
+   net has a hole exactly where the CPU path is exercised. NOTE this argument
+   weakened on 2026-07-09: PR #12 made the Glitch/EdgeField buckets GPU-only
+   (they throw on Metal-less hosts), a first concrete step toward the maintainer's
+   "Metal is always available" position.
 
 RULE while both paths exist: CPU and GPU must share exact scoring/blend semantics —
 shared constants and formulas change in both paths in the same commit. The canonical
@@ -258,7 +264,9 @@ tests do `@testable import Framer` (Tests/FramerAppTests/*.swift). Writing
 ## Provenance and maintenance
 
 Everything above was verified 2026-07-09 against the working tree at commit `48d85a5`
-(`swift test` run same day: "Executed 268 tests, with 0 failures"). Re-verify before
+(`swift test` run same day: "Executed 268 tests, with 0 failures"; re-run after the
+2026-07-09 PR #11/#12 merges at `f2c9521`: "Executed 273 tests, with 0 failures").
+Re-verify before
 trusting, especially after refactors:
 
 ```bash

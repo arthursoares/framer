@@ -48,8 +48,8 @@ If your symptom matches a saga, read it — the losing moves are already documen
 | 10 | Stale-index crash in layer bindings | Bindings must capture `layer.id`, never an index | FIXED | [§10](#10-stale-index-crash) |
 | 11 | Dead-controls saga | UI ↔ shader-uniform drift in both directions; capability flags are the guard | MANAGED | [§11](#11-the-dead-controls-saga) |
 | 12 | Frame-overlay darkening | JPEG mid-gray deadband + real-alpha gating in the luminance mask | FIXED | [§12](#12-frame-overlay-darkening) |
-| 13 | Priority inversion (PR #11) | `Task {}` from @MainActor escalates actors to User-initiated QoS over CG's Default workers | OPEN PR | [§13](#13-priority-inversion) |
-| 14 | Color-space + serialization bugs (PR #12) | Untagged CGColor shifted every color; enum-convention collisions; missing YAML keys | OPEN PR | [§14](#14-pr-12-color-and-serialization-bugs) |
+| 13 | Priority inversion (PR #11) | `Task {}` from @MainActor escalates actors to User-initiated QoS over CG's Default workers | FIXED (merged 2026-07-09) | [§13](#13-priority-inversion) |
+| 14 | Color-space + serialization bugs (PR #12) | Untagged CGColor shifted every color; enum-convention collisions; missing YAML keys | FIXED (merged 2026-07-09) | [§14](#14-pr-12-color-and-serialization-bugs) |
 | 15 | feature/video-support parked | 19-commit AVAssetWriter pipeline ends at a `wip:` commit; start there, not from scratch | PARKED | [§15](#15-parked-video-support) |
 | 16 | Bucket history destroyed by cherry-pick | `feat/grainrad-gpu-effects` deleted after ffeffe1; matrix doc survives but is stale | ACCEPTED LOSS | [§16](#16-destroyed-history-and-dead-paper) |
 | 17 | Build broken on main (c515147) | Commits were not always build-verified | FIXED (cautionary) | [§17](#17-the-build-break-pair) |
@@ -326,7 +326,8 @@ program.
 
 **STATUS: MANAGED** via capability flags on `GPUEffectKind`
 (`Sources/FramerCore/Effects/Models/GPUEffectKind.swift` — note the path: `Effects/Models/`,
-not `Models/`). Open PR #12 extends the flag gating to iOS. The flag catalog and the
+not `Models/`). PR #12 (merged 2026-07-09, `f2c9521`) extended the flag gating to iOS
+(`Sources/FramerMobile/Layers/LayerDetailView.swift`). The flag catalog and the
 add-a-parameter checklist are owned by `framer-config-and-flags`. Rule when adding any
 shader parameter: wire shader + uniforms + UI + capability flag **in the same change**,
 and audit the variant against its shader, not against the parameter struct.
@@ -370,20 +371,23 @@ worker threads: User-initiated waiting on Default = priority inversion. (The
 preset-thumbnail and original-image paths use `Task.detached` and suspend rather than
 block, so they were never flagged.)
 
-**FIX (on the branch).** `Task(priority: .utility)` at both call sites — at/below CG's
+**FIX.** `Task(priority: .utility)` at both call sites — at/below CG's
 Default workers so no high-priority thread waits on a lower one. The preview's 150 ms
 debounce makes the QoS drop imperceptible; export has its own progress UI.
 
-**EVIDENCE.** PR #11 (`fix/preview-priority-inversion`, 1 commit).
+**EVIDENCE.** PR #11 (`fix/preview-priority-inversion`, 1 commit); on main at
+`Sources/FramerApp/Editor/PreviewViewModel.swift:56` and
+`Sources/FramerApp/App/AppState.swift:69`.
 
-**STATUS: OPEN** — diagnosed and fixed on the branch, awaiting human merge decision
-(no autonomous merges — see `framer-change-control`) as of 2026-07-09; PR is 0 behind main.
+**STATUS: FIXED — merged 2026-07-09 (`b06601c`).** A Thread Performance Checker
+inversion warning on current main is therefore a NEW regression, not this saga
+(see framer-debugging-playbook entry 13).
 
 ## 14. PR #12 color and serialization bugs
 
-Three distinct root causes fixed on the open branch `fix/effect-params-and-editor-bugs`
-(11 commits, 0 behind main as of 2026-07-09). Ingested here from the PR body and
-review threads before that context evaporates.
+Three distinct root causes fixed on the branch `fix/effect-params-and-editor-bugs`
+(11 commits; merged to main 2026-07-09 as `f2c9521`). Ingested here from the PR body
+and review threads before that context evaporates.
 
 **14a. Untagged CGColor sRGB shift.** SYMPTOM: every color swatch, picker round-trip,
 and CPU-rendered color was slightly off from the stored hex value. ROOT CAUSE:
@@ -411,8 +415,10 @@ PrintSampling/EdgeField/Glitch params so adding fields can't break old projects.
 PR: `EdgeFieldRenderer` now dispatches by layer kind, with `gpu_edge_variant` still
 written on encode for older-app back-compat.
 
-**STATUS: OPEN PR** — all three fixed on the branch, unmerged. Schema conventions are
-owned by `framer-config-and-flags`.
+**STATUS: FIXED — merged 2026-07-09 (`f2c9521`).** All three are covered by
+`Tests/FramerCoreTests/GPUEffectRegressionTests.swift` (5 tests: three Blockify
+color-mode tests, EdgeField dispatch-by-kind, stale YAML edge-variant
+normalization). Schema conventions are owned by `framer-config-and-flags`.
 
 ## 15. Parked: video support
 
@@ -488,7 +494,7 @@ Volatile facts and one-line re-verification commands:
 
 | Fact (may drift) | Re-verify with |
 |---|---|
-| PRs #11 and #12 still open | `gh pr list --state open` |
+| PRs #11 and #12 MERGED 2026-07-09 (`b06601c`, `f2c9521`) | `gh pr view 11 --json state` and `gh pr view 12 --json state` (both expect MERGED) |
 | pr6-check still preserves the 8 PR #6 commits | `git log --oneline origin/main..origin/pr6-check` |
 | salvage branch unmerged | `git branch -a --contains aa60b94` (should list only salvage/e2e-test-scaffolding) |
 | feature/video-support parked, 19 ahead | `git rev-list --count origin/main..origin/feature/video-support` |
@@ -500,6 +506,7 @@ Volatile facts and one-line re-verification commands:
 | Matrix doc still stale re: common block | `grep -n 'none of the bucket shaders' docs/gpu-effects-parameter-matrix.md` and `grep -l applyCommonAdjustments Sources/FramerCore/Effects/Metal/*.metal` |
 | PIXEL_SORT_SAMPLE_COUNT still 24 | `grep -n 'PIXEL_SORT_SAMPLE_COUNT' Sources/FramerCore/Effects/Metal/PixelSort.metal` |
 
-When a saga's STATUS changes (e.g. PR #11/#12 merge, e2e revival lands, CPU path
+When a saga's STATUS changes (as done 2026-07-09 for the PR #11/#12 merges; next:
+e2e revival lands, CPU path
 retired), update the entry and the index row in the same commit as the change — this
 skill is only useful while it stays true.

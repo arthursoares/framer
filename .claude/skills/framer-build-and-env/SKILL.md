@@ -100,7 +100,7 @@ swift build
 
 # 4. Run the SPM test tier
 swift test
-# Expect (2026-07-09): "Executed 268 tests, with 0 failures (0 unexpected) in ~3.9 seconds"
+# Expect (2026-07-09, post PR #12 merge f2c9521): "Executed 273 tests, with 0 failures (0 unexpected) in ~3.7 seconds"
 # The count WILL drift — see provenance section. All tests are XCTest;
 # a "0 tests in 0 suites" Swift Testing line also prints and is normal.
 
@@ -163,7 +163,7 @@ anything.
 | | Tier 1: SPM (`swift build` / `swift test`) | Tier 2: xcodebuild (Xcode project) |
 |---|---|---|
 | Builds | FramerCore (library), `framer` CLI executable | Framer.app (macOS), FramerMobile (iOS), FramerAppTests bundle |
-| Tests | FramerCoreTests (20 files) + FramerCLITests (2 files) = 268 tests today | FramerAppTests (12 files, incl. all SwiftUI snapshot tests) |
+| Tests | FramerCoreTests (21 files) + FramerCLITests (2 files) = 273 tests today (as of f2c9521) | FramerAppTests (12 files, incl. all SwiftUI snapshot tests) |
 | .metal shader handling | Files copied as **text resources**; `MetalEffectLibrary` compiles them **at runtime** via `makeLibrary(source:)` | Compiled **offline** to `default.metallib` by the Metal Toolchain |
 | Needs Metal Toolchain? | **No** | **Yes** (hard requirement) |
 | Needs code signing? | No | Yes (or `CODE_SIGNING_ALLOWED=NO`) |
@@ -352,7 +352,7 @@ Re-verification one-liners for every drift-prone fact:
 # Toolchain versions
 swift --version && xcodebuild -version && xcodegen --version && git lfs version
 
-# Test count and pass state (was: 268 tests, 0 failures, ~3.9s)
+# Test count and pass state (was: 273 tests, 0 failures, ~3.7s at f2c9521; 268 at 48d85a5)
 swift test 2>&1 | grep -E 'Executed [0-9]+ tests' | tail -1
 
 # Clean-build timing claim (~15s): use a fresh scratch path

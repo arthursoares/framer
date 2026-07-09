@@ -48,12 +48,12 @@ Why: without linearization, thresholding at 0.5 on encoded bytes biases output t
 | Standard | Weights (R, G, B) | Space | Used by | Evidence |
 |---|---|---|---|---|
 | Rec.601 | 0.299, 0.587, 0.114 | nonlinear sRGB | All GPU effects (`luminance()` in ShaderCommon.h), overlay strength masks, CPU shader-layer pixel sort | `Sources/FramerCore/Effects/Metal/ShaderCommon.h:39-41`; `BorderRenderer.swift:786-790`; `ShaderPixelSortRenderer.swift:76-81` |
-| Rec.709 (nonlinear) | 0.2126, 0.7152, 0.0722 | nonlinear sRGB | LayerCompositor HSL blend modes (hue/saturation/color/luminosity); CPU bucket pixel-sort sort key | `LayerCompositor.swift:236-239`; `Effects/Renderers/GlitchRenderer.swift:270-271` |
+| Rec.709 (nonlinear) | 0.2126, 0.7152, 0.0722 | nonlinear sRGB | LayerCompositor HSL blend modes (hue/saturation/color/luminosity) | `LayerCompositor.swift:236-239` |
 | Rec.709 (linear) | 0.2126, 0.7152, 0.0722 | linear light | Mono dither threshold comparison only | `Dither.metal:383-385`; `DitherRenderer.swift:38,405` |
 
 Why the split exists: Rec.601 is what the Grainrad-derived effect shaders and Kim Asendorf's pixel-sort lineage use; SVG 1.1 §15.7 (the spec LayerCompositor's HSL modes implement) mandates 0.2126/0.7152/0.0722; the linear-dither fix required physically meaningful luminance.
 
-**Known wrinkle** (verified 2026-07-09): the *bucket* pixel-sort CPU fallback scores `.luminance` with Rec.709 (`GlitchRenderer.swift:270-271`) while the GPU shader's default sort key is Rec.601 (`PixelSort.metal:137` → `ShaderCommon.h:39`). The delta is small enough to sit inside the parity-test tolerances, but if you tighten tolerances or chase exact parity, this is a real divergence. The *shader-layer* CPU path (`ShaderPixelSortRenderer.swift:81`) correctly uses Rec.601.
+**Historical wrinkle (RESOLVED by deletion, PR #12 merged 2026-07-09):** the *bucket* pixel-sort CPU fallback in `GlitchRenderer` scored `.luminance` with Rec.709 while the GPU shader's default sort key is Rec.601 (`PixelSort.metal:137` → `ShaderCommon.h:39`) — a real, tolerance-masked divergence. PR #12 removed that CPU loop entirely (the Glitch bucket is GPU-only now), so the divergence no longer exists on main. The *shader-layer* CPU path (`ShaderPixelSortRenderer.swift:81`) uses Rec.601, matching the shader. Keep this note: it is the canonical example of why two implementations of "luminance" drift.
 
 ### 1.4 Premultiplied alpha rules
 
@@ -140,7 +140,7 @@ Pixel sorting = finding runs ("spans") of adjacent pixels along a line that sati
 
 ### 3.1 CPU vs GPU strategy
 
-- **CPU** (`Sources/FramerCore/Processing/ShaderPixelSortRenderer.swift` for the shader layer; `Sources/FramerCore/Effects/Renderers/GlitchRenderer.swift` for the bucket): serial sweep per row/column — find span, sort *every* pixel in it exactly.
+- **CPU** (`Sources/FramerCore/Processing/ShaderPixelSortRenderer.swift`, the `.shader`-layer path — the bucket's CPU loop in `GlitchRenderer` was deleted by PR #12, merged 2026-07-09; that bucket is GPU-only now): serial sweep per row/column — find span, sort *every* pixel in it exactly.
 - **GPU** (`Sources/FramerCore/Effects/Metal/PixelSort.metal`, from Grainrad's per-fragment design): every fragment independently
   1. walks backward then forward along the sort axis to find its enclosing span, bounded by `PIXEL_SORT_MAX_WALK = 1024` steps and the span cap (`PixelSort.metal:31, 196-229`);
   2. samples at most `PIXEL_SORT_SAMPLE_COUNT = 24` evenly-strided positions across the span (`PixelSort.metal:30, 231-254`);
@@ -169,7 +169,7 @@ Sort key — what pixels are *ranked* by inside the span (`PixelSort.metal:116-1
 | 1 brightness | `max(r, g, b)` — Kim Asendorf's choice; preserves saturated colors |
 | 2 hue | HSV hue sector `h/6`, with negative wrap `h < 0 → h + 1` so the result is in [0, 1) |
 
-**Parity bug history** (the reason those definitions are spelled out in code comments, `GlitchRenderer.swift:251-264`):
+**Parity bug history** (the definitions used to be spelled out in `GlitchRenderer` code comments; that CPU loop was deleted by PR #12, merged 2026-07-09 — the history stays here):
 - Commit `761fae6`: CPU `.brightness` had returned Rec.709 luminance (identical to `.luminance`), and CPU `.hue` returned the raw HSV sector in [-1, 6) — negative (blue-dominant) scores fell below every threshold and whole hue ranges never sorted. Both now match `psSortValue`.
 - Commit `f21a6fe`: CPU had used `amount` as sort-*rank* scaling (amount=0 rendered the darkest 20% of spans!) while the GPU used it as a mix blend factor. CPU was rewritten to shader `mix` semantics. Lesson: for any new effect, CPU-fallback semantic parity is part of the definition of done.
 
@@ -279,7 +279,7 @@ All formulas, constants, and line numbers verified against the working tree at c
 |---|---|
 | Rec.601 luminance in effects | `grep -n '0.299' Sources/FramerCore/Effects/Metal/ShaderCommon.h` |
 | Rec.709 in LayerCompositor / mono dither | `grep -rn '0.2126' Sources/FramerCore/Processing/LayerCompositor.swift Sources/FramerCore/Effects/Metal/Dither.metal Sources/FramerCore/Processing/DitherRenderer.swift` |
-| CPU bucket sort-key luma wrinkle | `grep -n '0.2126' Sources/FramerCore/Effects/Renderers/GlitchRenderer.swift` |
+| Bucket CPU loop stays deleted (Rec.709 wrinkle resolved by PR #12) | `grep -n '0.2126' Sources/FramerCore/Effects/Renderers/GlitchRenderer.swift` (expect NO hits; file is a 34-line GPU-only dispatcher) |
 | Upload passthrough (`SRGB: false`) | `grep -n 'SRGB' Sources/FramerCore/Effects/GPU/MetalTextureSupport.swift` |
 | IGN coefficient/phase table | `grep -n 'float2(pos) + float2' Sources/FramerCore/Effects/Metal/Dither.metal` |
 | Threshold inversion in mono dither | `grep -n 'step(1.0 - threshold' Sources/FramerCore/Effects/Metal/Dither.metal` |
