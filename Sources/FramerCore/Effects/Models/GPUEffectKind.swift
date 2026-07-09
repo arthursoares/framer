@@ -33,9 +33,10 @@ public enum GPUEffectKind: String, Codable, Hashable, Sendable, CaseIterable {
     ///     feature surface.
     ///
     /// PixelSort is exposed here as of sidebar harmony pass 4 — its GPU path
-    /// now routes through PixelSort.metal via `GlitchGPURenderer.renderPixelSort`
-    /// (the same shader the `.shader` layer uses), with the CPU loop in
-    /// `GlitchRenderer` as a headless-host fallback.
+    /// routes through PixelSort.metal via `GlitchGPURenderer.renderPixelSort`
+    /// (the same shader the `.shader` layer uses). The bucket path is GPU-only:
+    /// the `GlitchRenderer` CPU loop was removed with the PR #12 merge, so
+    /// Metal-less hosts get a thrown `MetalEffectError`, not a CPU render.
     ///
     /// The enum cases themselves are preserved (YAML back-compat, preset
     /// roundtrip, Codable).
