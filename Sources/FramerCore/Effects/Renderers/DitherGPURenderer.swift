@@ -135,9 +135,11 @@ public enum DitherGPURenderer {
     // MARK: - Public entry
 
     /// GPU dither. Mirrors `DitherRenderer.apply` signature.
-    /// Throws `MetalEffectError` on any GPU failure or for algorithms the GPU
-    /// path doesn't implement (currently: Riemersma) — callers handle the
-    /// fallback.
+    /// Throws `MetalEffectError` on any GPU failure. Riemersma never reaches
+    /// this entry point — `DitherRenderer.apply` dispatches it to the kept
+    /// CPU implementation by algorithm (the CPU dither path was otherwise
+    /// retired: docs/adr/2026-07-09-retire-cpu-effect-path.md); the guard
+    /// below is defense-in-depth for direct callers.
     public static func apply(
         to image: CGImage,
         params: DitherLayerParams,
@@ -148,7 +150,7 @@ public enum DitherGPURenderer {
             throw MetalEffectError.metalUnavailable
         }
         guard let algoID = AlgorithmID(params.algorithm) else {
-            // Riemersma — force CPU fallback.
+            // Riemersma has no GPU port (serial Hilbert-curve error history).
             throw MetalEffectError.metalUnavailable
         }
 

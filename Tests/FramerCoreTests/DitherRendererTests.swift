@@ -4,6 +4,16 @@ import CoreGraphics
 @testable import FramerCore
 
 final class DitherRendererTests: XCTestCase {
+    // The dither path is GPU-only since the CPU implementations were retired
+    // (docs/adr/2026-07-09-retire-cpu-effect-path.md) — without Metal every
+    // non-Riemersma render here would throw MetalEffectError. Riemersma's
+    // Metal-less coverage lives in EffectGPUBehaviorTests, which runs its
+    // routing test on any host.
+    override func setUpWithError() throws {
+        guard MetalEffectLibrary.shared != nil else {
+            throw XCTSkip("Metal device unavailable on this host (likely CI sandbox).")
+        }
+    }
 
     // MARK: - Test Helpers
 

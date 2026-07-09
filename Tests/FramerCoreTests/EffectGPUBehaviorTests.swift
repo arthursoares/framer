@@ -190,11 +190,10 @@ final class EffectGPUBehaviorTests: XCTestCase {
 
     // MARK: - Dither
     //
-    // Dither parity is structurally loose: GPU uses blue-noise threshold
-    // approximation while CPU uses real error diffusion (Floyd-Steinberg etc).
-    // The two are *visually* similar on natural images but per-pixel deltas
-    // are large. These tests assert structure: output dimensions, output range
-    // (binary for bw mode), Riemersma forced-fallback path, etc.
+    // Dither output is noise-like, so these tests assert structure rather
+    // than exact pixels: output dimensions, output range (binary for bw
+    // mode), palette membership, per-channel quantization grid, and the
+    // Riemersma explicit CPU dispatch.
 
     func testDitherBayerOutputIsBinaryBW() throws {
         try requireMetal()
@@ -242,9 +241,11 @@ final class EffectGPUBehaviorTests: XCTestCase {
     }
 
     func testDitherRiemersmaRoutesToCPU() throws {
-        // Riemersma has no GPU implementation; the public `apply` should silently
-        // fall back to CPU. This test runs even without Metal because the GPU
-        // call would throw and the fallback would handle it.
+        // Riemersma has no GPU implementation (inherently serial Hilbert-curve
+        // error history); the public `apply` dispatches it to the kept CPU
+        // implementation BY ALGORITHM — an explicit capability route, not an
+        // error-triggered fallback (the CPU dither path was otherwise retired,
+        // docs/adr/2026-07-09-retire-cpu-effect-path.md). Runs without Metal.
         let img = makeTestImage(width: 64, height: 64)
         let params = DitherLayerParams(algorithm: .riemersma, colorMode: .bw,
                                        bayerLevel: 2, pixelScale: 1, threshold: 0.5)
@@ -258,7 +259,7 @@ final class EffectGPUBehaviorTests: XCTestCase {
             if bytes[i] < 8 || bytes[i] > 247 { binary += 1 }
         }
         XCTAssertGreaterThan(binary, bytes.count / 4 * 90 / 100,
-                             "Riemersma fallback didn't actually dither (got \(binary) binary pixels)")
+                             "Riemersma CPU route didn't actually dither (got \(binary) binary pixels)")
     }
 
     func testDitherSierraOutputIsBinaryBW() throws {
@@ -326,10 +327,11 @@ final class EffectGPUBehaviorTests: XCTestCase {
                              "Palette dither emitted too many off-palette pixels (\(inPalette)/\(pixelCount))")
     }
 
-    func testDitherCMYKHalftoneFallsBackOnEmptyMetal() throws {
-        // CMYK halftone runs on the GPU; CPU path degrades to monochrome
-        // halftone (documented in DitherRenderer.applyMonochromeDither). Just
-        // verify the algorithm option doesn't crash through either path.
+    func testDitherCMYKHalftoneRendersOnGPU() throws {
+        // CMYK halftone is GPU-only; the degraded monochrome CPU fallback was
+        // deleted with the CPU-path retirement — on a Metal-less host this
+        // algorithm now throws instead of silently rendering mono.
+        try requireMetal()
         let img = makeTestImage(width: 64, height: 64)
         let params = DitherLayerParams(algorithm: .cmykHalftone, colorMode: .bw,
                                        bayerLevel: 2, pixelScale: 1, threshold: 0.5)
