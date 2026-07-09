@@ -4,12 +4,12 @@
 // converts the direction enum to the uint the shader switches on, and clamps
 // the span to the same 1..256 range.
 //
-// Note on parity: spans ≤ 24 sample exactly the same pixels as the CPU path
-// and produce nearly identical output (modulo Float vs. Double precision).
-// Spans > 24 are sub-sampled by the shader, so output diverges visibly. For
-// export-quality renders prefer the CPU path; the GPU is intended for live
-// preview where the 24-sample approximation is invisible at typical viewing
-// scale.
+// Note on span sampling: spans ≤ 24 read every pixel in the span, so the
+// rank lookup is exact. Spans > 24 are sub-sampled by the shader (the
+// 24-sample approximation from grainrad/notes/pixel-sort.md) — a deliberate
+// quality/speed tradeoff for long streaks. This is the only pixel-sort
+// implementation: the exact-rank CPU sorter was retired with the CPU effect
+// path (docs/adr/2026-07-09-retire-cpu-effect-path.md).
 
 import Foundation
 import CoreGraphics

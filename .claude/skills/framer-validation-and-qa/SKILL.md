@@ -51,7 +51,7 @@ A change is "validated" only when you can quote the command AND its output:
 
 | | Tier 1: SPM | Tier 2: Xcode app tests |
 |---|---|---|
-| Targets | FramerCoreTests (259 tests) + FramerCLITests (9 tests) | FramerAppTests (12 files, 63 test methods) |
+| Targets | FramerCoreTests (264 tests) + FramerCLITests (9 tests) | FramerAppTests (12 files, 63 test methods) |
 | Total | 273 tests, ~4s execution (2026-07-09, post CPU-path retirement) | 63 methods |
 | Declared in | Package.swift (`.testTarget`) | project.yml ONLY — **not** in Package.swift |
 | Run with | `swift test` | `xcodegen generate` then `xcodebuild test -project Framer.xcodeproj -scheme Framer -destination 'platform=macOS'` |
@@ -82,13 +82,13 @@ skip — the run still prints "0 failures":
 |---|---|---|
 | Tests/FramerCoreTests/EffectGPUGoldenTests.swift | all 13 | `requireMetal()` → `XCTSkip` when `MetalEffectLibrary.shared == nil` |
 | Tests/FramerCoreTests/EffectGPUBehaviorTests.swift | 13 of its 14 (the Riemersma routing test runs everywhere — it exercises the kept CPU capability) | `requireMetal()` per test |
-| Tests/FramerCoreTests/DitherRendererTests.swift | all 27 | class-level `setUpWithError` skip — the dither path is GPU-only post-retirement |
-| Tests/FramerCoreTests/ShaderRendererTests.swift | all 16 | class-level `setUpWithError` skip — ShaderRenderer is GPU-only post-retirement |
+| Tests/FramerCoreTests/DitherRendererTests.swift | 20 of its 27 (6 pure param/YAML-Codable tests + the Riemersma render test carry no guard and run everywhere) | `requireMetal()` per render test |
+| Tests/FramerCoreTests/ShaderRendererTests.swift | all 16 | class-level `setUpWithError` skip — every test renders, and ShaderRenderer is GPU-only post-retirement |
 | Tests/FramerCoreTests/LUTRendererTests.swift | 5 | `guard LUTMetalRenderer.isAvailable` |
 | Tests/FramerCoreTests/MetalTextureSupportTests.swift | 1 | `MTLCreateSystemDefaultDevice()` |
 | Tests/FramerCoreTests/ASCIIAtlasGeneratorTests.swift | 1 | `MTLCreateSystemDefaultDevice()` |
 
-That is **76 tests that vanish on Metal-less hosts** while the suite still reads
+That is **69 tests that vanish on Metal-less hosts** while the suite still reads
 "passed" (up from 32 pre-retirement: effect rendering now requires Metal, so whole
 render suites skip rather than silently exercising a deleted CPU path). The two ASCII
 golden tests additionally skip if the LUT atlas PNGs are unreachable. (Other
@@ -215,8 +215,10 @@ machine without a maintainer decision.
 - `@MainActor` on any test class that hosts AppKit/SwiftUI views (all snapshot,
   containment, and bitmap tests carry it).
 - Environment-dependent tests use the `XCTSkip` guard pattern — copy `requireMetal()`
-  from EffectGPUGoldenTests (per test) or the `setUpWithError` class-level skip from
-  DitherRendererTests. Never let a missing GPU/fixture produce a red test.
+  from EffectGPUGoldenTests (per test; scope the guard to tests that actually need
+  the environment) or the `setUpWithError` class-level skip from ShaderRendererTests
+  (only when EVERY test in the class needs it). Never let a missing GPU/fixture
+  produce a red test.
 - Fixtures: `Bundle.module` + `.copy` resources. Exemplar: FrameProcessorTests reads
   Tests/FramerCoreTests/Resources/sample.jpg via
   `Bundle.module.url(forResource: "sample", withExtension: "jpg", subdirectory: "Resources")`,
@@ -319,7 +321,7 @@ Re-verification one-liners:
 | Zero skips on this host | `swift test 2>&1 \| grep -c skipped` (expect 0) |
 | 12 app-test files / 63 methods | `ls Tests/FramerAppTests \| wc -l` ; `grep -rc 'func test' Tests/FramerAppTests/*.swift \| awk -F: '{s+=$2} END{print s}'` |
 | FramerAppTests not in SPM | `grep -c FramerAppTests Package.swift` (expect 0) ; `grep -n 'FramerAppTests' project.yml` |
-| Golden/behavior Metal guards (13/13, 13/14) | `grep -c 'try requireMetal()' Tests/FramerCoreTests/EffectGPUGoldenTests.swift Tests/FramerCoreTests/EffectGPUBehaviorTests.swift` ; class-level: `grep -n 'setUpWithError' Tests/FramerCoreTests/DitherRendererTests.swift Tests/FramerCoreTests/ShaderRendererTests.swift` |
+| Golden/behavior/dither Metal guards (13/13, 13/14, 20/27) | `grep -c 'try requireMetal()' Tests/FramerCoreTests/EffectGPUGoldenTests.swift Tests/FramerCoreTests/EffectGPUBehaviorTests.swift Tests/FramerCoreTests/DitherRendererTests.swift` ; class-level: `grep -n 'setUpWithError' Tests/FramerCoreTests/ShaderRendererTests.swift` |
 | Other Metal guards (5+1+1) | `grep -rn 'LUTMetalRenderer.isAvailable' Tests/FramerCoreTests/LUTRendererTests.swift \| wc -l` ; `grep -rn 'MTLCreateSystemDefaultDevice' Tests/FramerCoreTests/MetalTextureSupportTests.swift Tests/FramerCoreTests/ASCIIAtlasGeneratorTests.swift` |
 | Snapshot harness + failure message | `grep -n 'Actual SHA256' Tests/FramerAppTests/SidebarHarmonySnapshotTests.swift` |
 | 10 snapshot surfaces | `grep -c 'expectedSHA256: "' Tests/FramerAppTests/SidebarHarmonySnapshotTests.swift` |

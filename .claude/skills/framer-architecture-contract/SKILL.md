@@ -65,7 +65,7 @@ that guarantee — don't.
 ## Invariants (must hold; each has a WHY)
 
 ### I1 — Layer order IS render semantics
-`FrameProcessor.applyConfiguredLayers` (FrameProcessor.swift:139-187) iterates
+`FrameProcessor.applyConfiguredLayers` (FrameProcessor.swift:154-205) iterates
 `layers` in array order; each layer's output is the next layer's input. Disabled layers
 are skipped (`guard layer.isEnabled` in BorderRenderer.swift:64). Reordering the array
 reorders the render. There is no dependency graph, no z-index, no "smart" ordering.

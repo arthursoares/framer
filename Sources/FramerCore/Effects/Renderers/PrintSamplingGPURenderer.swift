@@ -2,8 +2,9 @@
 // GPU path for the PrintSampling bucket (`.gpuEffect.printSampling.*`).
 // Called by PrintSamplingRenderer.renderPreview for variants whose fragment
 // shader is implemented in Effects/Metal/PrintSampling.metal. Throws
-// MetalEffectError on Metal failure so the caller can fall back to the
-// existing CPU pixel-loop path.
+// MetalEffectError on Metal failure and the error propagates — only the
+// hidden legacy `.halftone`/`.dithering` bucket variants (no GPU entry)
+// still route to the kept CPU loop, selected by variant.
 
 import Foundation
 import CoreGraphics

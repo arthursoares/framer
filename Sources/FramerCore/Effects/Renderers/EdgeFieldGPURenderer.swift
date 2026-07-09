@@ -2,7 +2,8 @@
 // GPU path for the EdgeField bucket (`.gpuEffect.edgeField.*`). Called by
 // EdgeFieldRenderer.renderPreview for variants whose fragment shader is
 // implemented in Effects/Metal/EdgeField.metal. Throws MetalEffectError on
-// Metal failure so the caller can fall back to the existing CPU path.
+// Metal failure and the error propagates — the bucket is GPU-only (the CPU
+// loop was removed in PR #12).
 
 import Foundation
 import CoreGraphics

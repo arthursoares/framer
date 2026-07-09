@@ -23,9 +23,9 @@
 // images, not by chasing pixel-perfect parity (which is impossible).
 //
 // Algorithms NOT GPU-portable in this shader:
-//   - Riemersma (Hilbert-curve traversal). The Swift wrapper throws
-//     `MetalEffectError.metalUnavailable` for that algorithm so the CPU path
-//     handles it as the export-quality fallback.
+//   - Riemersma (Hilbert-curve traversal). `DitherRenderer.apply` dispatches
+//     that algorithm to its kept CPU implementation explicitly — it never
+//     reaches this shader (the rest of the CPU dither path was retired).
 //
 // CPU reference: Sources/FramerCore/Processing/DitherRenderer.swift
 // Bayer matrices and IGN come from ShaderCommon.h.

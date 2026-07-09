@@ -1,10 +1,12 @@
 // DitherGPURenderer.swift
-// GPU dither implementation. Mirrors DitherRenderer.apply signature so
-// callers can swap in the GPU path transparently. Falls back to CPU for:
-//   - Riemersma (Hilbert-curve traversal — inherently serial, no GPU port)
-//   - dominantTwoTone colour mode for the colour extraction step (the dither
-//     itself runs GPU; the dominant-colour resolution happens CPU-side and
-//     the resolved colours are passed in as the foreground/background)
+// GPU dither implementation. Mirrors DitherRenderer.apply signature.
+// Not handled here:
+//   - Riemersma (Hilbert-curve traversal — inherently serial, no GPU port):
+//     `DitherRenderer.apply` dispatches it to the kept CPU implementation
+//     BEFORE this entry point is reached.
+//   - dominantTwoTone colour extraction (the dither itself runs GPU; the
+//     dominant-colour resolution happens CPU-side and the resolved colours
+//     are passed in as the foreground/background)
 //
 // Pixel-scale handling matches the CPU pipeline exactly:
 //   1. Downscale source to (work_width, work_height) with bilinear (.high

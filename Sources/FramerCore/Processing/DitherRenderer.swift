@@ -101,7 +101,7 @@ public enum DitherRenderer {
     /// (pixel-scale handling, sharpen/contrast pre-passes, color-mode
     /// mapping, nearest-neighbor upscale) is unchanged from the original CPU
     /// renderer; the non-Riemersma algorithm bodies were retired.
-    static func applyRiemersma(to image: CGImage, params: DitherLayerParams, previewBaseDimension: Int? = nil, sourceImage: CGImage? = nil) throws -> CGImage {
+    private static func applyRiemersma(to image: CGImage, params: DitherLayerParams, previewBaseDimension: Int? = nil, sourceImage: CGImage? = nil) throws -> CGImage {
         let width = image.width
         let height = image.height
         guard width > 0, height > 0 else {

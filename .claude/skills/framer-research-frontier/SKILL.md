@@ -331,7 +331,7 @@ Volatile facts and their re-verification one-liners:
 
 | Fact | Re-verify with |
 |---|---|
-| gpuOrCPU falls back only on MetalEffectError | `grep -n "catch let error as MetalEffectError" Sources/FramerCore/Processing/ShaderRenderer.swift` |
+| ShaderRenderer stays GPU-only (no gpuOrCPU) | `grep -c "gpuOrCPU" Sources/FramerCore/Processing/ShaderRenderer.swift` (expect 0) |
 | 13 golden + 14 behavior tests, current tolerances | `swift test --filter EffectGPUGoldenTests` ; `swift test --filter EffectGPUBehaviorTests` ; `grep -n "meanTolerance" Tests/FramerCoreTests/EffectGPUGoldenTests.swift` |
 | EffectPreviewComparator still unwired | `grep -rn "EffectPreviewComparator" Sources Tests --include="*.swift"` (only its own file → still unwired) |
 | userFacingCases hides ascii/halftone/dithering | `grep -n "userFacingCases" -A 8 Sources/FramerCore/Effects/Models/GPUEffectKind.swift` |
