@@ -60,7 +60,13 @@ final class AppState {
         exportQueue.append(job)
         let jobId = job.id
 
-        let task = Task {
+        // `.utility` priority avoids the same CoreGraphics priority inversion
+        // the preview render hits: `processor.process` runs on the FrameProcessor
+        // actor, which escalates to the awaiter's QoS; at User-initiated the
+        // synchronous CG draws inside BorderRenderer block on CG's Default-QoS
+        // internal threads. Export is batch work with its own progress UI, so
+        // utility is the right band — TaskGroup children inherit this priority.
+        let task = Task(priority: .utility) {
             defer { exportTasks.removeValue(forKey: jobId) }
             let maxConcurrency = Self.recommendedExportConcurrency(itemCount: items.count)
             var completed = 0
