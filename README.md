@@ -45,8 +45,9 @@ Effects render on the GPU. Metal is a hard requirement for the dither/shader/GPU
 - **Font Styling**: Bold and italic font style options, any installed font family
 
 ### Presets
-- **JSON presets** (app + CLI `--preset`): stored in `~/Library/Application Support/Framer/presets/`
-- **YAML configs**: v1-compatible schema; discovery chain is `--config path` → `--preset name` → `./.framer.yaml` → `~/.config/framer/default.yaml`
+- **JSON presets** (app-managed): saved by the macOS app to `~/Library/Application Support/Framer/presets/` — not currently resolvable by name via CLI `--preset`. Note: saving a preset in the app replaces any same-named YAML file, so a built-in preset edited in the app stops resolving via the CLI
+- **YAML presets/configs**: v1-compatible schema; CLI discovery chain is `--config path` → `--preset name` (probes `~/Library/Application Support/Framer/presets/<name>.yaml`) → `./.framer.yaml` → `~/.config/framer/default.yaml`. If `--preset` finds no YAML file of that name it silently falls through to the next source
+- **Built-in presets** (seeded as YAML on first CLI run): `film`, `instagram`, `minimal`, `print 10x15`, `dark gradient`, `Shader ASCII`, `Shader Crimewave`
 
 ## Architecture
 
@@ -111,7 +112,7 @@ framer -i photo.jpg -o output/
 framer -i photos/ -o output/
 
 # Use a preset
-framer -i photo.jpg -o output/ --preset vintage
+framer -i photo.jpg -o output/ --preset film
 
 # Custom caption template
 framer -i photo.jpg -o output/ --caption-template "{{camera}} {{aperture}} {{shutter}}"
