@@ -52,12 +52,12 @@ A change is "validated" only when you can quote the command AND its output:
 | | Tier 1: SPM | Tier 2: Xcode app tests |
 |---|---|---|
 | Targets | FramerCoreTests (259 tests) + FramerCLITests (9 tests) | FramerAppTests (12 files, 63 test methods) |
-| Total | 268 tests, ~4s execution | 63 methods |
+| Total | 273 tests, ~4s execution (2026-07-09, post CPU-path retirement) | 63 methods |
 | Declared in | Package.swift (`.testTarget`) | project.yml ONLY — **not** in Package.swift |
 | Run with | `swift test` | `xcodegen generate` then `xcodebuild test -project Framer.xcodeproj -scheme Framer -destination 'platform=macOS'` |
 | Needs | Swift toolchain; Metal device for full coverage (see skips) | Xcode, valid signing, Metal Toolchain component |
-| Status | GREEN (verified 2026-07-09: `Executed 268 tests, with 0 failures (0 unexpected) in 3.7s`, zero skips on this host) | **BROKEN on the primary dev Mac** as of 2026-07-09 |
-| Contains | All FramerCore rendering/config/preset logic, GPU parity, CLI helper units | All SwiftUI snapshot/containment/resolver tests for the sidebar + inspector |
+| Status | GREEN (verified 2026-07-09 post-retirement: `Executed 273 tests, with 0 failures (0 unexpected)`, zero skips on this host) | **BROKEN on the primary dev Mac** as of 2026-07-09 |
+| Contains | All FramerCore rendering/config/preset logic, GPU golden-reference + behavior tests, CLI helper units | All SwiftUI snapshot/containment/resolver tests for the sidebar + inspector |
 
 Counts date-stamped 2026-07-09, commit 48d85a5.
 
@@ -65,12 +65,12 @@ Counts date-stamped 2026-07-09, commit 48d85a5.
 
 ```bash
 swift test                                   # full suite, ~4s test execution
-swift test --filter EffectGPUParityTests     # one suite
-swift test --list-tests | wc -l              # expect 268
+swift test --filter EffectGPUGoldenTests     # one suite
+swift test --list-tests | wc -l              # expect 273
 ```
 
-Expect: `Executed 268 tests, with 0 failures (0 unexpected)`. If you see fewer tests
-than 268 executed or any `skipped` lines, read the XCTSkip section before declaring green.
+Expect: `Executed 273 tests, with 0 failures (0 unexpected)`. If you see fewer tests
+than 273 executed or any `skipped` lines, read the XCTSkip section before declaring green.
 
 ### Tier 1: the XCTSkip trap (silent coverage loss)
 
@@ -80,21 +80,26 @@ skip — the run still prints "0 failures":
 
 | File | Metal-guarded tests | Guard |
 |---|---|---|
-| Tests/FramerCoreTests/EffectGPUParityTests.swift | 25 of its 27 | `requireMetal()` → `XCTSkip` when `MetalEffectLibrary.shared == nil` (lines 115–119) |
+| Tests/FramerCoreTests/EffectGPUGoldenTests.swift | all 13 | `requireMetal()` → `XCTSkip` when `MetalEffectLibrary.shared == nil` |
+| Tests/FramerCoreTests/EffectGPUBehaviorTests.swift | 13 of its 14 (the Riemersma routing test runs everywhere — it exercises the kept CPU capability) | `requireMetal()` per test |
+| Tests/FramerCoreTests/DitherRendererTests.swift | all 27 | class-level `setUpWithError` skip — the dither path is GPU-only post-retirement |
+| Tests/FramerCoreTests/ShaderRendererTests.swift | all 16 | class-level `setUpWithError` skip — ShaderRenderer is GPU-only post-retirement |
 | Tests/FramerCoreTests/LUTRendererTests.swift | 5 | `guard LUTMetalRenderer.isAvailable` |
 | Tests/FramerCoreTests/MetalTextureSupportTests.swift | 1 | `MTLCreateSystemDefaultDevice()` |
 | Tests/FramerCoreTests/ASCIIAtlasGeneratorTests.swift | 1 | `MTLCreateSystemDefaultDevice()` |
 
-That is **32 tests that vanish on Metal-less hosts** while the suite still reads
-"passed". The two ASCII parity tests additionally skip if the LUT atlas PNGs are
-unreachable. (Other `XCTSkip`s in EXIFReaderTests / TextureFrameProviderTests guard
-fixture-construction failures, not Metal.)
+That is **76 tests that vanish on Metal-less hosts** while the suite still reads
+"passed" (up from 32 pre-retirement: effect rendering now requires Metal, so whole
+render suites skip rather than silently exercising a deleted CPU path). The two ASCII
+golden tests additionally skip if the LUT atlas PNGs are unreachable. (Other
+`XCTSkip`s in EXIFReaderTests / TextureFrameProviderTests guard fixture-construction
+failures, not Metal.)
 
 **Rule: a test report is `Executed N, failures F, skipped S` — always all three.**
 On the primary dev Mac (Metal present, atlases present) the expected skip count is 0.
 
-Note: the parity file's comments mention "CI sandbox" — there is no CI; those comments
-describe hypothetical environments. Don't go looking for a CI config.
+Note: the test files' skip messages mention "CI sandbox" — there is no CI; those
+comments describe hypothetical environments. Don't go looking for a CI config.
 
 ### Tier 2: run it (currently broken locally)
 
@@ -183,9 +188,9 @@ machine without a maintainer decision.
 
 | Pattern | Exemplar | When to copy it |
 |---|---|---|
-| CPU/GPU parity: mean + max per-channel byte delta vs per-effect tolerance on a deterministic 256×256 gradient+checkerboard | Tests/FramerCoreTests/EffectGPUParityTests.swift (`compare(_:_:)`, `makeTestImage()`) | Any "two render paths must match" claim |
+| Golden-reference regression: mean + max per-channel byte delta vs a committed PNG, per-effect tolerance, deterministic 256×256 gradient+checkerboard fixture | Tests/FramerCoreTests/EffectGPUGoldenTests.swift (`compare(_:_:)`, `assertMatchesGolden`; regeneration env-gated per the file header) | Any "this effect must render what it rendered yesterday" claim |
 | Statistical property assertions (color-variety reduction, channel bias, premultiplied-alpha invariants) | Tests/FramerCoreTests/ShaderRendererTests.swift (e.g. `test_crimewaveShader_pushesNeonBias`, `test_pixelSortMaintainsPremultipliedAlpha`) | Directional effects with no exact expected output |
-| Per-pixel membership (output must be binary B/W or drawn only from a palette) | EffectGPUParityTests dither tests (`testDitherBayerOutputIsBinaryBW`, `testDitherPaletteUsesOnlyPaletteColors`) | Quantizing/dithering effects |
+| Per-pixel membership (output must be binary B/W or drawn only from a palette) | EffectGPUBehaviorTests dither tests (`testDitherBayerOutputIsBinaryBW`, `testDitherPaletteUsesOnlyPaletteColors`) | Quantizing/dithering effects |
 | Bitmap INEQUALITY: two renders must hash differently (machine-independent) | Tests/FramerAppTests/StyledSliderSuffixTests.swift (`bitmapSHA256`, pumps the run loop with `RunLoop.main.run(until:)`) | "This parameter must visibly change rendering" |
 | Layout containment: walk the NSView tree, fail on frames whose `maxX` exceeds the sidebar width + 0.5, excluding `NSClipView` descendants | Tests/FramerAppTests/SidebarLayoutContainmentTests.swift (`assertFitsSidebarWidth`, `visibleDescendantFrames`) | "This view must not overflow" |
 | Pure-resolver seam: extract decision logic into a value-type function, test it directly | LayerPanelRowStateResolver, StyledSliderValueResolver, InspectorOutputControlState (tests in Tests/FramerAppTests/) | SwiftUI state logic — see conventions below |
@@ -202,14 +207,16 @@ machine without a maintainer decision.
 - Imports: `@testable import FramerCore` / `@testable import FramerCLI`; for app tests
   it is `@testable import Framer` — **the macOS app module is named `Framer`, not
   `FramerApp`** (a documented gotcha).
-- Naming: dominant style is `test_subject_condition` (29 of 34 test files). Five older
-  files use legacy `testCamelCase` (ASCIIAtlasGeneratorTests, EffectGPUParityTests,
-  GPUEffectBucketDispatchTests, LayerCompositorTests, MetalTextureSupportTests). Write
+- Naming: dominant style is `test_subject_condition` (majority of test files). Older
+  files use legacy `testCamelCase` (ASCIIAtlasGeneratorTests, EffectGPUBehaviorTests,
+  EffectGPUGoldenTests, GPUEffectBucketDispatchTests, LayerCompositorTests,
+  MetalTextureSupportTests). Write
   new tests in `test_subject_condition`; match the local file's style when appending.
 - `@MainActor` on any test class that hosts AppKit/SwiftUI views (all snapshot,
   containment, and bitmap tests carry it).
 - Environment-dependent tests use the `XCTSkip` guard pattern — copy `requireMetal()`
-  from EffectGPUParityTests. Never let a missing GPU/fixture produce a red test.
+  from EffectGPUGoldenTests (per test) or the `setUpWithError` class-level skip from
+  DitherRendererTests. Never let a missing GPU/fixture produce a red test.
 - Fixtures: `Bundle.module` + `.copy` resources. Exemplar: FrameProcessorTests reads
   Tests/FramerCoreTests/Resources/sample.jpg via
   `Bundle.module.url(forResource: "sample", withExtension: "jpg", subdirectory: "Resources")`,
@@ -236,32 +243,37 @@ machine without a maintainer decision.
    in project.yml — the bundle and the app target must match or macOS refuses to load
    the test bundle into Framer.app (Team ID mismatch, a recorded incident).
 
-## Parity tolerance discipline
+## Golden-reference discipline (was: parity tolerance discipline)
 
-Tolerances are per-effect inline literals, e.g. Crimewave `mean < 6.0`, `max < 40`;
-PixelSort default-span `mean < 12.0` (EffectGPUParityTests.swift). They are
-provisional-but-passing: the file header still says "Authored on Linux Cloud — has not
-yet been compiled / executed" — that note is **stale**; the tests compile, run, and
-pass on the dev Mac (verified 2026-07-09).
+The CPU effect path was retired 2026-07-09 (docs/adr/2026-07-09-retire-cpu-effect-path.md
+— executed the same day; see framer-architecture-contract I3 for the new contract).
+Pixel-level regression is now anchored to frozen golden PNGs in
+Tests/FramerCoreTests/Resources/GoldenReferences/, compared in
+EffectGPUGoldenTests.swift with the per-effect tolerances inherited from the retired
+CPU-vs-GPU parity tests, e.g. Crimewave `mean < 6.0`, `max < 40`; PixelSort
+default-span `mean < 12.0`. On the machine that generated the goldens the delta is 0;
+the tolerances are cross-machine headroom.
 
-Rules for touching a tolerance:
+Rules:
 
+- **Golden refresh follows the snapshot-hash discipline (house rule 2): never
+  blind-refresh.** Regeneration is env-gated
+  (`FRAMER_REGENERATE_GOLDENS=1 swift test --filter EffectGPUGoldenTests`); the new
+  PNGs land in the same commit as the shader change that caused the shift, with an
+  explanation of WHY the pixels moved.
 - Changing any tolerance REQUIRES a written justification in the commit message with
   the measured before/after delta numbers (mean and max). Get the numbers from the
   test's own failure message or the recipes in framer-diagnostics-and-proof. Older
   guidance in docs/gpu-migration-mac-resume.md says "raise the tolerance after
   eyeballing the diff" — superseded: measure, don't eyeball (maintainer ruling 2026-07-09).
-- Rough triage from that same doc, still valid: PixelSort mean delta 12–20 → likely
-  legitimate rank-flip cascade, investigate then justify; 50+ → real bug (check sweep
-  direction, sort order, intensity blend factor).
-- Known intentional divergence: `cmykHalftone` CPU is a mono fallback; true CMYK
-  rotation is GPU-only. Not a parity bug.
-- Status note (2026-07-09): CPU/GPU parity is current mechanical reality, not eternal
-  doctrine. `ShaderRenderer.gpuOrCPU` falls back to CPU only on `MetalEffectError`
-  (Sources/FramerCore/Processing/ShaderRenderer.swift:72–91); keep EffectGPUParityTests
-  green **while the CPU path exists**. Whether to retire the CPU path entirely is an
-  OPEN architectural question — see framer-architecture-contract; do not treat parity
-  as sacred or as retired.
+- Rough triage, still valid: PixelSort mean delta 12–20 → likely legitimate rank-flip
+  cascade, investigate then justify; 50+ → real bug (check sweep direction, sort
+  order, intensity blend factor).
+- Kept CPU code, by design: Riemersma dither (sole implementation — serial
+  Hilbert-curve walk, dispatched by algorithm), the hidden legacy bucket variants
+  (textCell `.ascii`, printSampling `.halftone`/`.dithering`), and the LUT stack's
+  `applyCPU`/`applyCPUReference` (LUT oracle tests + `benchmark lut` baseline). The
+  degraded mono cmykHalftone CPU fallback is GONE — cmykHalftone is GPU-only.
 
 ## The honest no-tests map
 
@@ -271,7 +283,7 @@ Assume NO safety net in these areas (as of 2026-07-09, commit 48d85a5):
 |---|---|---|
 | FramerMobile (iOS) | **Zero.** No test target exists in project.yml or Package.swift | Manual-only |
 | CLI process-level | **Zero on main.** The 9 FramerCLITests are static-helper units (`validatedWorkers`, `applyOutputFormatOverride`, `shellQuote`, one ArgumentParser parse) — nothing spawns the binary | E2E spec exists only on branch `salvage/e2e-test-scaffolding` (commit aa60b94, +265 lines, 11 files) — **not wired into any build manifest**, so it executes nothing. Revival is owned by framer-campaign-restore-validation |
-| Metal shaders directly | Only indirect, via parity + statistical tests | No per-shader unit tests |
+| Metal shaders directly | Only indirect, via golden-reference + behavior/statistical tests | No per-shader unit tests |
 | FramerApp outside sidebar/inspector | **Untested**: Canvas/, ZoomState, AppState behavior, export execution | `exportQueue` appears in tests only as snapshot fixture state |
 | E2E (any target) | **Does not exist on main** | The salvage branch is the design spec, not a runnable suite |
 
@@ -283,7 +295,10 @@ Assume NO safety net in these areas (as of 2026-07-09, commit 48d85a5):
   plain git blobs, not LFS.
 - Snapshot baselines — inline SHA-256 hex strings in SidebarHarmonySnapshotTests.swift.
   **No stored reference PNGs anywhere.**
-- `Tests/FramerCoreTests/Resources/sample.jpg` — the one SPM test fixture.
+- `Tests/FramerCoreTests/Resources/sample.jpg` — SPM test fixture.
+- `Tests/FramerCoreTests/Resources/GoldenReferences/*.png` — 16 frozen GPU effect
+  references (2026-07-09), regenerable only via the env-gated command in
+  EffectGPUGoldenTests.swift's header; plain git blobs, not LFS.
 - ASCII LUT atlases in Sources/FramerCore/Resources/textures/ are deliberately outside
   LFS so Tier 1 passes on a fresh clone without `git lfs pull` (framer-build-and-env).
 
@@ -299,20 +314,21 @@ Re-verification one-liners:
 
 | Fact | Command |
 |---|---|
-| 268 SPM tests (259 Core + 9 CLI) | `swift test --list-tests \| cut -d. -f1 \| sort \| uniq -c` |
+| 273 SPM tests (264 Core + 9 CLI) | `swift test --list-tests \| cut -d. -f1 \| sort \| uniq -c` |
 | Suite green, ~4s | `swift test 2>&1 \| grep Executed \| tail -1` |
 | Zero skips on this host | `swift test 2>&1 \| grep -c skipped` (expect 0) |
 | 12 app-test files / 63 methods | `ls Tests/FramerAppTests \| wc -l` ; `grep -rc 'func test' Tests/FramerAppTests/*.swift \| awk -F: '{s+=$2} END{print s}'` |
 | FramerAppTests not in SPM | `grep -c FramerAppTests Package.swift` (expect 0) ; `grep -n 'FramerAppTests' project.yml` |
-| 25/27 parity tests Metal-guarded | `grep -c 'try requireMetal()' Tests/FramerCoreTests/EffectGPUParityTests.swift` (expect 25) ; `grep -c 'func test' ...` (27) |
+| Golden/behavior Metal guards (13/13, 13/14) | `grep -c 'try requireMetal()' Tests/FramerCoreTests/EffectGPUGoldenTests.swift Tests/FramerCoreTests/EffectGPUBehaviorTests.swift` ; class-level: `grep -n 'setUpWithError' Tests/FramerCoreTests/DitherRendererTests.swift Tests/FramerCoreTests/ShaderRendererTests.swift` |
 | Other Metal guards (5+1+1) | `grep -rn 'LUTMetalRenderer.isAvailable' Tests/FramerCoreTests/LUTRendererTests.swift \| wc -l` ; `grep -rn 'MTLCreateSystemDefaultDevice' Tests/FramerCoreTests/MetalTextureSupportTests.swift Tests/FramerCoreTests/ASCIIAtlasGeneratorTests.swift` |
 | Snapshot harness + failure message | `grep -n 'Actual SHA256' Tests/FramerAppTests/SidebarHarmonySnapshotTests.swift` |
 | 10 snapshot surfaces | `grep -c 'expectedSHA256: "' Tests/FramerAppTests/SidebarHarmonySnapshotTests.swift` |
 | No Swift Testing | `grep -rln 'import Testing' Sources/ Tests/` (expect empty) |
 | Naming split (29 vs 5 files) | `grep -rl 'func test_' Tests --include='*.swift' \| wc -l` |
-| gpuOrCPU catches only MetalEffectError | `grep -n 'catch let error as MetalEffectError' Sources/FramerCore/Processing/ShaderRenderer.swift` |
-| Example tolerances | `grep -n 'XCTAssertLessThan(mean' Tests/FramerCoreTests/EffectGPUParityTests.swift` |
-| Stale "Authored on Linux" header | `sed -n '20,24p' Tests/FramerCoreTests/EffectGPUParityTests.swift` |
+| ShaderRenderer is GPU-only (no gpuOrCPU) | `grep -c 'gpuOrCPU\|catch let error as MetalEffectError' Sources/FramerCore/Processing/ShaderRenderer.swift` (expect 0) |
+| Riemersma dispatched by algorithm | `grep -n 'riemersma' Sources/FramerCore/Processing/DitherRenderer.swift \| head -3` |
+| Example tolerances | `grep -n 'meanTolerance' Tests/FramerCoreTests/EffectGPUGoldenTests.swift` |
+| 16 golden PNGs committed | `ls Tests/FramerCoreTests/Resources/GoldenReferences \| wc -l` |
 | No CI / scripts | `ls .github scripts` (expect ENOENT for both) |
 | No iOS tests | `grep -rn 'FramerMobileTests' project.yml Package.swift` (expect empty) |
 | No E2E on main | `grep -rln 'E2E' Sources Tests Package.swift project.yml` (expect empty) ; branch: `git branch -a \| grep e2e` |

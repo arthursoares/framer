@@ -5,7 +5,14 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [Unreleased] — GPU effects migration (PR #7)
+## [Unreleased]
+
+### Removed (2026-07-09 — CPU effect path retired)
+
+- **CPU effect implementations (~2,900 lines)** per `docs/adr/2026-07-09-retire-cpu-effect-path.md`: `ShaderRenderer`'s `gpuOrCPU` fallback and 7 CPU style renderers, `ShaderASCIIRenderer`, `ShaderPixelSortRenderer`, 15 GPU-covered CPU dither algorithms, and the degraded monochrome cmykHalftone CPU fallback. Metal is now a hard requirement for effect rendering; a Metal failure throws `MetalEffectError` instead of silently rendering a visually different CPU image. Kept by design: Riemersma dither (sole implementation, dispatched by algorithm), the hidden legacy bucket variants, and the LUT CPU path (oracle + `benchmark lut` baseline).
+- The CPU-vs-GPU parity suite is superseded: `EffectGPUParityTests` → `EffectGPUBehaviorTests` (GPU invariants + routing), with pixel-level regression re-anchored to frozen golden references in the new `EffectGPUGoldenTests` (same per-effect tolerances; env-gated regeneration; snapshot-grade refresh discipline). Pre/post CLI renders verified byte-identical on Metal hosts.
+
+### Earlier unreleased work — GPU effects migration (PR #7)
 
 Work on `claude/gpu-effects-migration-MbMMo` refining the GPU-effects bucket system against Grainrad WGSL references.
 

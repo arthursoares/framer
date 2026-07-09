@@ -38,27 +38,27 @@
   `git commit -m "docs(adr): record the CPU-effect-path retirement decision"`
 
 ## Task 2: Freeze golden references (before deleting anything)
-- [ ] Add `EffectGPUGoldenTests.swift` with: golden loader, env-gated regenerator (records its command in the header), and 13 golden tests mirroring the CPU-vs-GPU parity list (ascii ×2, crimewave ×2, narc, shiba ×2, distantPast ×2, crt, halftone-mono, kuwahara, pixelSort-default-span) using the existing per-effect tolerances.
-- [ ] Generate goldens on this machine: `FRAMER_REGENERATE_GOLDENS=1 swift test --filter EffectGPUGoldenTests`
-- [ ] `swift test` — old parity tests AND new golden tests both green (predicted golden deltas: mean 0.0, max 0).
+- [x] Add `EffectGPUGoldenTests.swift` with: golden loader, env-gated regenerator (records its command in the header), and 13 golden tests mirroring the CPU-vs-GPU parity list (ascii ×2, crimewave ×2, narc, shiba ×2, distantPast ×2, crt, halftone-mono, kuwahara, pixelSort-default-span) using the existing per-effect tolerances.
+- [x] Generate goldens on this machine: `FRAMER_REGENERATE_GOLDENS=1 swift test --filter EffectGPUGoldenTests`
+- [x] `swift test` — 286 tests green pre-deletion; golden deltas measured mean 0.0 / max 0 as predicted.
   `git commit -m "test(gpu-effects): anchor effect verification to frozen golden references"`
 
 ## Task 3: Retire ShaderRenderer CPU path
-- [ ] `ShaderRenderer.apply` → direct GPU calls; delete `gpuOrCPU`, 7 CPU implementations, `mixStylizedContext`/`smoothstep`; delete the two CPU renderer files; fix the stale pixel-sort span comment.
-- [ ] Remove/convert the 13 CPU-referencing tests in `EffectGPUParityTests.swift`; keep GPU-only smoke tests; add Metal-skip guards to `ShaderRendererTests`.
-- [ ] `swift build && swift test` green.
+- [x] `ShaderRenderer.apply` → direct GPU calls; delete `gpuOrCPU`, 7 CPU implementations, `mixStylizedContext`/`smoothstep`; delete the two CPU renderer files; fix the stale pixel-sort span comment.
+- [x] Remove/convert the 13 CPU-referencing tests in `EffectGPUParityTests.swift`; keep GPU-only smoke tests; add Metal-skip guards to `ShaderRendererTests`.
+- [x] `swift build && swift test` green (273 tests).
   `git commit -m "refactor(gpu-effects): retire ShaderRenderer CPU implementations — GPU is the only path"`
 
 ## Task 4: Retire DitherRenderer CPU algorithms
-- [ ] `apply` dispatches `.riemersma` → CPU, else GPU (errors propagate); prune CPU body to riemersma + required plumbing; delete matrices/tables and cmykHalftone mono fallback; update `testDitherRiemersmaRoutesToCPU` (explicit dispatch), delete `testDitherCMYKHalftoneFallsBackOnEmptyMetal`; Metal-skip guards in `DitherRendererTests` (except riemersma tests).
-- [ ] `swift build && swift test` green; `git mv` parity file to `EffectGPUGoldenTests.swift` home if not already done.
+- [x] `apply` dispatches `.riemersma` → CPU, else GPU (errors propagate); prune CPU body to riemersma + required plumbing; delete matrices/tables and cmykHalftone mono fallback; update `testDitherRiemersmaRoutesToCPU` (explicit dispatch), delete `testDitherCMYKHalftoneFallsBackOnEmptyMetal`; Metal-skip guards in `DitherRendererTests` (except riemersma tests).
+- [x] `swift build && swift test` green (273 tests); `git mv` parity file to `EffectGPUGoldenTests.swift` home if not already done.
   `git commit -m "refactor(dither): retire CPU dither algorithms — Riemersma stays as the sole serial implementation"`
 
 ## Task 5: CLI visual gate
-- [ ] Render a real image through dither + shader + lut layers via `swift run framer` before/at HEAD and eyeball vs Task-2 output (render-path gate from framer-change-control).
+- [x] Rendered docs/sample.jpg through crimewave+floydSteinberg and riemersma stacks at HEAD and at main (f2c9521): outputs byte-identical (`cmp` clean) — the retirement changed no shipped pixels on a Metal host. Render a real image through dither + shader + lut layers via `swift run framer` before/at HEAD and eyeball vs Task-2 output (render-path gate from framer-change-control).
 
 ## Task 6: Sync the record
-- [ ] Fix stale comments (`FrameProcessor.swift:168-171`, `GPUEffectsPlatform.swift:38-42`); update CLAUDE.md rule 4, the four skills, CHANGELOG `[Unreleased]`.
+- [x] Fix stale comments (`FrameProcessor.swift:168-171`, `GPUEffectsPlatform.swift:38-42`); update CLAUDE.md rule 4, the four skills, CHANGELOG `[Unreleased]`.
   `git commit -m "docs: sync skills, CLAUDE.md, CHANGELOG to the GPU-only effect contract"`
 
 ## Task 7: Adversarial review

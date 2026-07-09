@@ -175,7 +175,7 @@ The recurring audit finding in this repo is **dead-slider drift**: a control ren
 4. **Capability flag if variant-specific.** If only some `GPUEffectKind`s read it, gate the UI via a flag on GPUEffectKind.swift (extend an existing flag or add one) — otherwise you ship inert controls on other variants.
 5. **UI row on BOTH platforms.** macOS: `Sources/FramerApp/Editor/LayerListSection.swift` (4833 lines — GPU-effect controls around lines 325-379 consult the flags). iOS: `Sources/FramerMobile/Layers/LayerDetailView.swift` (3273 lines; currently flag-blind — don't make it worse). Sidebar row grammar: framer-ui-design-system.
 6. **YAML key.** New `gpu_*`/`shader_*` optional field in `YAMLLayerSchema` + encode in `encodeLayers` + tolerant decode (`?? default`) in `decodeLayer` (YAMLConfig.swift).
-7. **CPU path + parity test.** While the CPU fallback path exists, the CPU implementation must consume the parameter with IDENTICAL semantics and `Tests/FramerCoreTests/EffectGPUParityTests.swift` (27 tests) must stay green — run `swift test --filter EffectGPUParityTests`. (Whether the CPU path survives at all is an OPEN architectural question — see framer-architecture-contract; do not add new CPU-only semantics, and do not delete the CPU path as a side effect.)
+7. **Golden/behavior tests.** The effect path is GPU-only (CPU twins retired 2026-07-09 — docs/adr/2026-07-09-retire-cpu-effect-path.md; do NOT write a CPU twin for the new parameter). `swift test --filter EffectGPUGoldenTests` and `--filter EffectGPUBehaviorTests` must stay green; if the parameter deliberately changes a default look, regenerate the affected goldens in the same commit with an explanation. Exception: a parameter consumed by Riemersma dither or the legacy bucket CPU loops must be wired in those kept CPU paths.
 8. **Defaults, everywhere they live.** `makeDefaultLayer()` in GPUEffectKind.swift AND — until PR #12 merges — the duplicated `defaultParams(for:)` in LayerListSection.swift:900 and LayerDetailView.swift:1381.
 9. **Dead-slider self-audit before PR:** for the new control, trace value → model field → encoder → MSL field → actual read in shader code. If any hop is missing, you've recreated the incident. Measurement-based verification recipes: framer-diagnostics-and-proof.
 
@@ -204,5 +204,5 @@ Re-verification one-liners (run from repo root):
 | Config discovery chain | `grep -n -A 25 "func loadDefault" Sources/FramerCore/Presets/YAMLConfig.swift` |
 | CLI subcommands + flags | `swift run framer --help && swift run framer process --help` |
 | Legacy decode branches intact | `grep -n "sharpness" Sources/FramerCore/Models/CompositionLayer.swift Sources/FramerCore/Presets/YAMLConfig.swift` |
-| Parity tests green | `swift test --filter EffectGPUParityTests` (27 tests; self-skip without a Metal device) |
+| Golden/behavior tests green | `swift test --filter EffectGPUGoldenTests` ; `swift test --filter EffectGPUBehaviorTests` (self-skip without a Metal device) |
 | Matrix doc still stale | `grep -n "none of the bucket shaders\|Hidden from picker" docs/gpu-effects-parameter-matrix.md` |

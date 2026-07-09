@@ -265,9 +265,9 @@ Several shaders explicitly credit **Grainrad** (grainrad.com, @almmaasoglu) as t
 
 ---
 
-## 8. Parity: current mechanical reality, not doctrine
+## 8. GPU-only rendering, golden-anchored (CPU path retired 2026-07-09)
 
-Every GPU effect has a CPU implementation; `ShaderRenderer.gpuOrCPU` falls back to CPU **only** on `MetalEffectError` (`ShaderRenderer.swift:76-90`). `Tests/FramerCoreTests/EffectGPUParityTests.swift` asserts mean/max per-channel deltas under loose per-effect tolerances — GPU≠CPU bit-for-bit is by design (IGN vs true error diffusion, 24-sample sub-sampling, fp math). Keep those tests green while the CPU path exists, and never blind-refresh a snapshot hash (house rule — framer-change-control). But note: whether the CPU path should exist *at all* is an OPEN architectural question ("we will always have Metal available") owned by framer-architecture-contract — do not treat parity as sacred when weighing new work, and do not treat it as retired either. To *measure* a divergence instead of eyeballing it, use framer-diagnostics-and-proof.
+The CPU effect implementations were retired per docs/adr/2026-07-09-retire-cpu-effect-path.md — `ShaderRenderer.apply` calls the Metal renderers directly and `MetalEffectError` propagates. Exceptions kept by design: Riemersma dither (sole implementation, dispatched by algorithm in `DitherRenderer.apply`), the hidden legacy bucket variants, and the LUT stack's `applyCPU` (oracle + benchmark baseline). Pixel-level regression anchors to `Tests/FramerCoreTests/EffectGPUGoldenTests.swift` (frozen goldens, per-effect mean/max tolerances; refresh discipline = snapshot-hash discipline) plus `EffectGPUBehaviorTests` invariants. When the pixel math in this skill and a golden disagree after a shader edit, the golden is the regression signal — explain the shift before regenerating. To *measure* a divergence instead of eyeballing it, use framer-diagnostics-and-proof.
 
 ---
 
@@ -291,4 +291,4 @@ All formulas, constants, and line numbers verified against the working tree at c
 | 20 blend modes / SVG HSL | `grep -c 'case \.' Sources/FramerCore/Processing/LayerCompositor.swift` and read `blend()` |
 | .cube size bounds + 1D skip | `grep -n 'parsedSize >= 2\|LUT_1D_SIZE' Sources/FramerCore/Processing/CubeFileParser.swift` |
 | Grainrad still not vendored | `find . -maxdepth 2 -iname '*grainrad*'` (expect only source-comment hits via grep, no files) |
-| Parity suite still green | `swift test --filter EffectGPUParityTests` (self-skips without Metal) |
+| Golden + behavior suites still green | `swift test --filter EffectGPUGoldenTests` ; `swift test --filter EffectGPUBehaviorTests` (self-skip without Metal) |

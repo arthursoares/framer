@@ -33,7 +33,7 @@ xcodegen generate                 # regenerate Framer.xcodeproj — REQUIRED aft
 | Build | `swift build` |
 | Test (tier 1: FramerCore + FramerCLI) | `swift test` |
 | App tests (tier 2: FramerAppTests) | `xcodegen generate && xcodebuild test -project Framer.xcodeproj -scheme Framer -destination 'platform=macOS'` — see `framer-campaign-restore-validation` for current blockers |
-| GPU/CPU parity check | `swift test --filter EffectGPUParityTests` |
+| Effect golden-reference check | `swift test --filter EffectGPUGoldenTests` (regeneration is env-gated — see the file header; never blind-refresh) |
 | Run CLI | `swift run framer --help` |
 | Environment health | `.claude/skills/framer-diagnostics-and-proof/scripts/env-doctor.sh` |
 
@@ -44,7 +44,7 @@ Details, rationale, and the incidents behind each: `framer-change-control` skill
 1. **No autonomous merges or pushes to main.** AI sessions branch, commit, and open PRs when asked; a human decides every merge.
 2. **Never blind-refresh snapshot SHA-256 hashes.** Read the rendered pixels and explain the shift; land the refresh in the same commit as its cause.
 3. **Schema/preset changes must keep legacy decoding.** `PresetStore` deletes undecodable preset files — a decode regression silently destroys user data.
-4. **Shader changes patch CPU and GPU paths in the same commit** and keep `EffectGPUParityTests` green while the CPU path exists (its retirement is an open decision — `framer-architecture-contract`).
+4. **Shader changes keep `EffectGPUGoldenTests` green.** The CPU effect path was retired 2026-07-09 (docs/adr/2026-07-09-retire-cpu-effect-path.md); a deliberate look change regenerates the golden PNGs in the same commit with an explanation of the pixel shift — same discipline as rule 2. Riemersma dither and the hidden legacy bucket variants stay CPU by design.
 5. **Conventional commits with scopes**: `fix(sidebar): …`, `feat(gpu-effects): …`, one task per commit, buildable at every commit.
 
 ## Skill Library Map

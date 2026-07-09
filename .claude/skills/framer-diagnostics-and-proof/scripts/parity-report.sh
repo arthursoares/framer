@@ -5,7 +5,7 @@
 # Usage (from anywhere inside the repo):
 #   .claude/skills/framer-diagnostics-and-proof/scripts/parity-report.sh [FilterName]
 #
-#   FilterName defaults to EffectGPUParityTests. Pass another suite name to
+#   FilterName defaults to EffectGPUGoldenTests. Pass another suite name to
 #   report on it instead (e.g. ShaderRendererTests).
 #
 # How skip detection works: XCTSkip'd tests (no Metal device, missing ASCII
@@ -21,7 +21,7 @@
 
 set -u
 
-FILTER=${1:-EffectGPUParityTests}
+FILTER=${1:-EffectGPUGoldenTests}
 ROOT=$(git rev-parse --show-toplevel 2>/dev/null) || { echo "not inside a git repo" >&2; exit 3; }
 cd "$ROOT" || exit 3
 

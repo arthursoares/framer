@@ -77,7 +77,7 @@ The test count drifts as tests are added — record the actual number you see; w
 
 **If you see failures instead** → STOP. This campaign is the wrong tool; branch to `framer-debugging-playbook` and fix tier 1 first.
 
-**If you see skips** (`XCTSkip`) → you are on a machine without a Metal device or without LFS-hydrated fixtures; 25 of the 27 `EffectGPUParityTests` self-skip (2 fallback-routing tests still run without Metal — skip arithmetic is owned by `framer-validation-and-qa`). The campaign's later phases require a real Mac with a GPU, so relocate before continuing (see `framer-build-and-env`).
+**If you see skips** (`XCTSkip`) → you are on a machine without a Metal device or without LFS-hydrated fixtures; the effect render suites self-skip — 76 Metal-dependent tests as of the 2026-07-09 CPU-path retirement; only the Riemersma routing test still renders without Metal (skip arithmetic is owned by `framer-validation-and-qa`). The campaign's later phases require a real Mac with a GPU, so relocate before continuing (see `framer-build-and-env`).
 
 ---
 

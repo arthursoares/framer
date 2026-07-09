@@ -130,15 +130,14 @@ decodes reproduce the bug, so this rule is enforced by convention, not by test.
 
 This is the recurring failure mode of the entire GPU program: **every shader port has
 historically shipped 1–3 parity bugs**. "Parity" = the CPU fallback and the GPU shader
-must produce the same output for the same parameters
-(`ShaderRenderer.gpuOrCPU` in `Sources/FramerCore/Processing/ShaderRenderer.swift`
-falls back to CPU only on `MetalEffectError`, so users silently get whichever path runs).
+had to produce the same output for the same parameters, because `ShaderRenderer.gpuOrCPU`
+fell back to CPU on `MetalEffectError` and users silently got whichever path ran.
 
-Maintainer ruling (2026-07-09): parity is **current mechanical reality, not eternal
-doctrine**. Keep `EffectGPUParityTests` green while the CPU path exists (27 tests,
-0 failures, re-verified 2026-07-09 via `swift test --filter EffectGPUParityTests`),
-but "retire the CPU path entirely" is an open architectural question — see
-`framer-architecture-contract`. Do not canonize parity as sacred; do not treat it as retired.
+HISTORICAL CONTEXT ONLY as of 2026-07-09: the CPU effect path was RETIRED
+(docs/adr/2026-07-09-retire-cpu-effect-path.md) — `gpuOrCPU` and the CPU twins are gone,
+errors propagate, and regression is anchored to EffectGPUGoldenTests' frozen goldens
+(+ EffectGPUBehaviorTests invariants). The incidents below remain instructive: they are
+why the divergence class was worth eliminating.
 
 The complete incident list, each verified via `git show -s <hash>`:
 
@@ -481,7 +480,7 @@ maintainer's machine (Apple Silicon, macOS). Verification methods: `git show -s
 `aa60b94`, `17f8111`; `gh pr view 4/6/7/8/11/12` for PR states, bodies, and #12 review
 threads; direct file reads for BorderRenderer, Halftone.metal, PixelSort.metal,
 learnings.md, CHANGELOG.md, gpu-migration-plan.md, gpu-effects-parameter-matrix.md,
-gpu-migration-mac-resume.md; `swift test --filter EffectGPUParityTests` (27 tests,
+gpu-migration-mac-resume.md; effect suites at the time of writing (27 parity tests,
 0 failures).
 
 Volatile facts and one-line re-verification commands:
@@ -492,7 +491,7 @@ Volatile facts and one-line re-verification commands:
 | pr6-check still preserves the 8 PR #6 commits | `git log --oneline origin/main..origin/pr6-check` |
 | salvage branch unmerged | `git branch -a --contains aa60b94` (should list only salvage/e2e-test-scaffolding) |
 | feature/video-support parked, 19 ahead | `git rev-list --count origin/main..origin/feature/video-support` |
-| Parity suite green, 27 tests | `swift test --filter EffectGPUParityTests` |
+| Golden/behavior suites green (13/14; parity suite retired 2026-07-09) | `swift test --filter EffectGPUGoldenTests` ; `swift test --filter EffectGPUBehaviorTests` |
 | userFacingCases + capability flags location | `grep -n 'userFacingCases\|usesCommonAdjustments' Sources/FramerCore/Effects/Models/GPUEffectKind.swift` |
 | Overlay deadband + alpha gating in place | `grep -n 'negDeadband\|overlay.alpha' Sources/FramerCore/Processing/BorderRenderer.swift` |
 | Result-builder revert rationale on record | `grep -n '_ConditionalContent' .sisyphus/notepads/sidebar-harmony/learnings.md` |

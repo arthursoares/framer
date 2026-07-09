@@ -37,22 +37,22 @@ Each problem: why current SOTA fails → this repo's specific asset → first th
 THIS repo → falsifiable "you have a result when…" milestone. Facts verified 2026-07-09 at
 commit 48d85a5 unless noted.
 
-### 1. Measurement-verified effect parity as a discipline
+### 1. Measurement-verified effect regression as a discipline
 
 **Why SOTA fails.** Hobby/creative shader tools (Grainrad-class) ship one GPU path and
 judge output by eye. Nothing guarantees the preview matches the export, or that a refactor
 didn't silently change the look. There is no published discipline for "this effect renders
 what it rendered yesterday, provably."
 
-**This repo's assets (all verified in code):**
-- **Dual render paths with a strict fallback contract**: `ShaderRenderer.gpuOrCPU`
-  (Sources/FramerCore/Processing/ShaderRenderer.swift:75-90) runs the GPU path and falls
-  back to CPU only on `MetalEffectError`; any other error propagates. The CPU path is the
-  de-facto reference implementation.
-- **A parity harness**: Tests/FramerCoreTests/EffectGPUParityTests.swift — 27 tests
-  asserting mean/max per-channel byte deltas per effect (e.g. color grades mean < 6/255,
-  ASCII mean < 25/255), self-skipping when Metal is unavailable. Ran live 2026-07-09:
-  `swift test --filter EffectGPUParityTests` → "Executed 27 tests, with 0 failures".
+**This repo's assets (all verified in code; updated 2026-07-09 after the CPU-path
+retirement — docs/adr/2026-07-09-retire-cpu-effect-path.md):**
+- **A golden-reference harness**: Tests/FramerCoreTests/EffectGPUGoldenTests.swift — 13
+  tests asserting mean/max per-channel byte deltas per effect against frozen PNGs in
+  Tests/FramerCoreTests/Resources/GoldenReferences/ (e.g. color grades mean < 6/255,
+  ASCII mean < 25/255), self-skipping when Metal is unavailable. Regeneration is
+  env-gated and disciplined like snapshot hashes (never blind-refresh).
+- **A behavior/invariant harness**: EffectGPUBehaviorTests.swift — binary-BW, palette
+  membership, quantization-grid, flag-wiring, and routing assertions on GPU output.
 - **A WYSIWYG contract**: scale-sensitive layers (Dither, LUT, Shader) take a
   `previewBaseDimension` so pattern density matches between preview and export; the
   rationale comment is at Sources/FramerCore/Processing/FrameProcessor.swift:40-47.
@@ -66,26 +66,26 @@ what it rendered yesterday, provably."
 **The gap.** Coverage is uneven: `GPUEffectKind.userFacingCases`
 (Sources/FramerCore/Effects/Models/GPUEffectKind.swift:42-49) exposes 12 bucket effects,
 but Tests/FramerCoreTests/GPUEffectBucketDispatchTests.swift has only 4 smoke/dispatch
-tests for the whole bucket family — no per-effect parity for voronoi, vhs, matrixRain,
+tests for the whole bucket family — no per-effect golden for voronoi, vhs, matrixRain,
 dots, blockify, threshold, edgeDetection, crosshatch, waveLines, noiseField, contour.
-History says every new shader port shipped 1–3 parity bugs (see framer-failure-archaeology:
+History says every new shader port shipped 1–3 pixel bugs (see framer-failure-archaeology:
 pixel-sort took 6 fix rounds across 3 PRs).
 
 **First three steps:**
 1. Build the coverage matrix: every case in `GPUEffectKind.userFacingCases` plus the
    `.shader`/`.dither` layer effects, vs the test list from
-   `grep -n "func test" Tests/FramerCoreTests/EffectGPUParityTests.swift`.
+   `grep -n "func test" Tests/FramerCoreTests/EffectGPUGoldenTests.swift`.
 2. Wire `EffectPreviewComparator` into one real preview-vs-export test for a
    scale-sensitive layer (dither is the sharpest case), and recalibrate
    `previewExportDefault` to a meaningful tolerance — predict the number before running.
-3. Add one bucket-effect parity test (pick voronoi or vhs) following the
-   EffectGPUParityTests pattern (`requireMetal()` skip helper, mean/max delta asserts).
+3. Add one bucket-effect golden test (pick voronoi or vhs) following the
+   EffectGPUGoldenTests pattern (`requireMetal()` skip helper, `assertMatchesGolden`).
 
-**You have a result when:** every user-facing effect has either a CPU/GPU parity test
-with a stated tolerance or a documented intentional divergence (the cmykHalftone
-precedent — its CPU fallback deliberately degrades to mono clustered dot, recorded in
-docs/gpu-migration-plan.md), AND a preview/export comparison runs through
-EffectPreviewComparator. Falsified the day a new effect merges without one.
+**You have a result when:** every user-facing effect has either a golden-reference test
+with a stated tolerance or a documented intentional invariant-only lock (dither's
+noise-like outputs use membership/grid invariants instead of goldens), AND a
+preview/export comparison runs through EffectPreviewComparator. Falsified the day a
+new effect merges without one.
 
 ### 2. Metal-texture-resident preview (README's own stated next step)
 
@@ -182,41 +182,28 @@ maintainer has not green-lit it.
 stated peak-memory bound, measured, on main. Until then this is a parked branch — never
 describe video support as a feature.
 
-### 5. The retire-the-CPU-path decision study (open architectural question)
+### 5. ~~The retire-the-CPU-path decision study~~ — RESOLVED 2026-07-09: RETIRED
 
-**The question (maintainer, 2026-07-09):** "we will always have Metal available" — is the
-CPU render path needed at all? Note the tension already in the record:
-docs/gpu-migration-plan.md's Target section says "GPU-only — CPU renderers deleted as
-each bucket lands… `MTLCreateSystemDefaultDevice()` is always available", yet the shipped
-code kept CPU fallbacks everywhere. Per the maintainer's ruling, CPU/GPU parity is
-**current mechanical reality, not eternal doctrine**: keep EffectGPUParityTests green
-while the CPU path exists; do not canonize parity as sacred; do not treat it as retired.
-The decision itself is owned by framer-architecture-contract; this skill owns the study.
+The study ran to completion on 2026-07-09, exactly as prescribed here: full
+inventory with reference/capability/fallback/benchmark-baseline classification,
+replacement verification strategy (frozen golden references + invariant tests),
+and a written decision record — **docs/adr/2026-07-09-retire-cpu-effect-path.md**,
+executed in the same PR (plan: docs/superpowers/plans/2026-07-09-retire-cpu-effect-path.md).
+The maintainer signs by merging (house rule: humans decide merges).
 
-**What the CPU path uniquely provides today (all verified in code):**
+Outcome, in brief: ~2,900 lines of redundant CPU twins deleted (ShaderRenderer
+styles, ShaderASCIIRenderer, ShaderPixelSortRenderer, 15 CPU dither algorithms,
+the degraded mono cmykHalftone fallback); `MetalEffectError` now propagates.
+Kept by design: Riemersma (capability — dispatched by algorithm), the hidden
+legacy bucket variants (capability), and LUT `applyCPU`/`applyCPUReference`
+(benchmark baseline + oracle). Verification re-anchored: EffectGPUGoldenTests
+(13 golden tests, tolerances inherited from the parity suite) +
+EffectGPUBehaviorTests (invariants/routing). Pre/post CLI renders were verified
+byte-identical on a Metal host (GPU was already the active path).
 
-| Capability | Evidence |
-|---|---|
-| Riemersma (Hilbert-curve) dither — inherently serial, no GPU port | DitherGPURenderer.swift:148-152 throws `metalUnavailable` to force CPU; test `testDitherRiemersmaRoutesToCPU` |
-| The reference implementation parity tests measure against | EffectGPUParityTests compares GPU output to CPU output — retire CPU and the current definition of "correct" goes with it |
-| Headless/Metal-less operation (CI sandboxes) | `requireMetal()` skips parity tests when `MetalEffectLibrary.shared == nil` ("likely CI sandbox"); pixelSort bucket keeps "the CPU loop in GlitchRenderer as a headless-host fallback" (GPUEffectKind.swift doc comment) |
-| LUT CPU reference used by the benchmark | LUTRenderer.applyCPU / applyCPUReference; BenchmarkCommand measures CPU as the baseline |
-| Known intentional divergence to resolve either way | cmykHalftone CPU fallback is deliberately degraded (mono 6×6 clustered dot; docs/gpu-migration-plan.md) |
-
-**First three steps:**
-1. Complete the inventory: grep every `gpuOrCPU` / `MetalEffectError` fallback site and
-   every CPU-only algorithm; classify each as "reference", "capability", or "dead weight".
-2. Define the replacement verification strategy if retired: golden reference images
-   generated once and committed (per snapshot discipline — never blind-refreshed;
-   framer-validation-and-qa), plus statistical invariant tests (binary-BW, palette-only,
-   dimensions), possibly keeping `applyCPUReference` solely as a benchmark baseline.
-3. Write an ADR (Architecture Decision Record): both options with costs — maintenance tax
-   of dual paths vs losing the executable reference — and put it in front of the
-   maintainer.
-
-**You have a result when:** a written ADR-style decision exists in the repo and the
-maintainer has signed it — either direction counts as the result. Until then, new
-effects still need matching CPU semantics and a parity test.
+New-contract home: framer-architecture-contract I3. Rule home:
+framer-change-control rule 5. New effects need a golden or invariant lock from
+day one — CPU twins are no longer written.
 
 ### 6. Deferred Grainrad features (each gated on product intent)
 
@@ -228,7 +215,7 @@ probably belong as separate effect layers rather than dither sub-modes."
 
 None of these are green-lit (open question to the maintainer). When one is: it goes
 through framer-campaign-gpu-effects-quality's add-an-effect pipeline, with the problem-1
-discipline (parity test + reference comparison) from day one — not retrofitted. The
+discipline (golden/invariant lock + reference comparison) from day one — not retrofitted. The
 milestone per feature is the same as problem 1's: shipped with its verification, or not
 shipped.
 
@@ -295,7 +282,7 @@ retirement. Concretely:
 | Aspect | Status |
 |---|---|
 | Layer-fold composition architecture | **Common** — every editor has one; not a claim |
-| Dual-path effects with enforced CPU/GPU parity tests + WYSIWYG previewBaseDimension contract | **Uncommon** — this is the defensible technical story, and it strengthens as problem 1 closes |
+| Golden-anchored effect regression (frozen references + invariant tests, snapshot-grade refresh discipline) + WYSIWYG previewBaseDimension contract | **Uncommon** — this is the defensible technical story, and it strengthens as problem 1 closes. (Until 2026-07-09 the story was dual-path CPU/GPU parity; the CPU path is retired, see problem 5) |
 | The AI-assisted-development experiment itself | **Notable** — and already public: README.md line 5 declares "created using Claude Code as an experiment in AI-assisted development" |
 | True blue-noise dithering, video support, texture-resident preview | **Candidates** — not implemented / unmerged; may not be claimed |
 
@@ -338,14 +325,14 @@ its generation command.
 ## Provenance and maintenance
 
 All claims verified 2026-07-09 against main @ 48d85a5 by reading the cited files, running
-`swift test --filter EffectGPUParityTests` (27 tests, 0 failures, Apple Silicon), and
+the effect suites (now EffectGPUGoldenTests/EffectGPUBehaviorTests — 2026-07-09 retirement), and
 read-only git/gh commands. Maintainer rulings dated 2026-07-09 are recorded as such.
 Volatile facts and their re-verification one-liners:
 
 | Fact | Re-verify with |
 |---|---|
 | gpuOrCPU falls back only on MetalEffectError | `grep -n "catch let error as MetalEffectError" Sources/FramerCore/Processing/ShaderRenderer.swift` |
-| 27 parity tests, current tolerances | `swift test --filter EffectGPUParityTests` and `grep -n "XCTAssertLessThan" Tests/FramerCoreTests/EffectGPUParityTests.swift` |
+| 13 golden + 14 behavior tests, current tolerances | `swift test --filter EffectGPUGoldenTests` ; `swift test --filter EffectGPUBehaviorTests` ; `grep -n "meanTolerance" Tests/FramerCoreTests/EffectGPUGoldenTests.swift` |
 | EffectPreviewComparator still unwired | `grep -rn "EffectPreviewComparator" Sources Tests --include="*.swift"` (only its own file → still unwired) |
 | userFacingCases hides ascii/halftone/dithering | `grep -n "userFacingCases" -A 8 Sources/FramerCore/Effects/Models/GPUEffectKind.swift` |
 | DITHER_BLUE_NOISE is still IGN; void-and-cluster note | `grep -n "void-and-cluster" Sources/FramerCore/Effects/Metal/Dither.metal` |

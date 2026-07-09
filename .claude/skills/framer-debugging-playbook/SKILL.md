@@ -48,26 +48,19 @@ Jargon used below, defined once:
 | 11 | Preview looks different from export | `previewBaseDimension` not honored | Compare pattern density at same crop, preview vs exported file |
 | 12 | Crash deleting a layer while its editor is open | Index-captured binding | Check the binding is by `layer.id`, not array index |
 | 13 | Thread Performance Checker: priority inversion | `Task {}` from `@MainActor` + actor QoS escalation | Check `Task(priority:)` at spawn sites |
-| 14 | Same preset renders differently on two machines | One machine on CPU fallback, or accepted CPU/GPU divergence | `swift test --filter EffectGPUParityTests` on both |
+| 14 | Same preset renders differently on two machines | GPU float/rounding drift across devices (CPU fallback no longer exists) | `swift test --filter EffectGPUGoldenTests` on both — goldens were frozen on one machine; deltas within tolerance are expected drift |
 
 ## Detailed entries
 
-### 1. Every GPU effect looks subtly different / slow → silent CPU fallback
+### 1. Effects throw MetalEffectError / render nothing → shader library failed to load
 
-**Mechanism.** `ShaderRenderer.gpuOrCPU` catches ONLY `MetalEffectError` and silently runs the CPU implementation; GPU≠CPU output is loosely-toleranced by design, so a fallback *looks like* a subtle quality/speed change, not an error.
+**Mechanism (updated 2026-07-09 — CPU path retired, docs/adr/2026-07-09-retire-cpu-effect-path.md).** Effect renderers are GPU-only and `MetalEffectError` propagates to the caller: a Metal failure now surfaces as a thrown error (CLI failure, app error state), NOT as a silently different render. The historical "silent CPU fallback made everything look subtly different" failure mode — and the `[ShaderRenderer] GPU path ✓ / CPU fallback` log lines — no longer exist. If effects render AND look wrong, you are NOT in this entry; see #2 (uniforms) or the golden tests.
 
-**Experiment.** Run the CLI or app from a terminal and check stdout. Every `.shader`-layer effect call prints exactly one of (verified `Sources/FramerCore/Processing/ShaderRenderer.swift:84,87`):
-
-```
-[ShaderRenderer] GPU path ✓  <label>
-[ShaderRenderer] CPU fallback (Metal error: <error>) — <label>
-```
-
-Caution: bucket (`.gpuEffect`) renderers fall back WITHOUT a log line — e.g. `GlitchRenderer` catches `MetalEffectError` with a bare `// fall through to CPU` (`Sources/FramerCore/Effects/Renderers/GlitchRenderer.swift:25-41`). For buckets, run `swift test --filter EffectGPUParityTests` instead — the suite self-skips with `XCTSkip("Metal device unavailable…")` when there's no GPU library.
+**Experiment.** Run `swift test --filter EffectGPUGoldenTests` (self-skips with `XCTSkip("Metal device unavailable…")` when there's no GPU library) and check stdout for `MetalEffectLibrary` load errors.
 
 **Discriminator for scope.** ONE effect falling back = that effect's pipeline/function failed. MANY effects falling back simultaneously = the whole shader library failed to build — either `default.metallib` missing from the bundle, or one bad `.metal` file breaking the *concatenated* runtime source compile (all `.metal` files compile as one translation unit under `swift build`; a typo in any one kills all of them). `docs/gpu-migration-mac-resume.md` calls this out: "multiple effects 'look like CPU' simultaneously is the signature." Look for `MetalEffectLibrary: makeLibrary failed: <compile error>` on stdout (`MetalEffectLibrary.swift:113`).
 
-**Also note:** a GPU command buffer finishing with error status *throws* `commandEncodingFailed` rather than returning garbage (`Sources/FramerCore/Effects/GPU/MetalRenderPass.swift:88-90`) — so corrupt-pixels-with-`GPU path ✓` points elsewhere (usually entry #2). Loader mechanics live in **framer-metal-pipeline-reference**; the SPM-doesn't-compile-metal saga in **framer-failure-archaeology**.
+**Also note:** a GPU command buffer finishing with error status *throws* `commandEncodingFailed` rather than returning garbage (`Sources/FramerCore/Effects/GPU/MetalRenderPass.swift:88-90`) — so corrupt pixels from a successful render point elsewhere (usually entry #2). Loader mechanics live in **framer-metal-pipeline-reference**; the SPM-doesn't-compile-metal saga in **framer-failure-archaeology**.
 
 ### 2. Garbled colors, parameters do nothing → uniform layout drift
 
@@ -201,14 +194,14 @@ head -c 60 assets/textures/<file>     # pointers start "version https://git-lfs.
 **Experiment (verified 2026-07-09: 27 tests, 0 failures, ~2.3s):**
 
 ```bash
-swift test --filter EffectGPUParityTests
+swift test --filter EffectGPUGoldenTests
 ```
 
 Run on BOTH machines. All-skip (`XCTSkip`) on one machine = that machine has no working Metal → it's on CPU fallback, expected divergence. Failures = a real parity bug.
 
 **Known ACCEPTED divergences (don't chase these):** cmykHalftone (CPU degrades to monochrome clustered dot; true rotated CMYK screens are GPU-only), Riemersma dither (CPU-only by design), pixel-sort spans > 24 samples (GPU sub-samples, coarser streaks).
 
-**Doctrine note (maintainer ruling, 2026-07-09):** CPU/GPU parity is current mechanical reality — keep `EffectGPUParityTests` green while the CPU path exists — but it is NOT sacred: whether to retire the CPU path entirely is an open architectural question. See **framer-architecture-contract** and **framer-research-frontier**. Parity incident details: **framer-failure-archaeology**.
+**Doctrine note (updated 2026-07-09):** the CPU effect path was RETIRED (docs/adr/2026-07-09-retire-cpu-effect-path.md). Keep `EffectGPUGoldenTests` + `EffectGPUBehaviorTests` green; golden refresh follows snapshot-hash discipline. Contract: **framer-architecture-contract** I3. Historical parity incidents: **framer-failure-archaeology**.
 
 ## When NOT to use this skill
 
@@ -239,7 +232,7 @@ Verified 2026-07-09 against main @ 48d85a5 on the primary dev Mac (Apple Silicon
 | previewBaseDimension plumbing | `grep -n 'previewBaseDimension' Sources/FramerCore/Processing/FrameProcessor.swift` |
 | id-based layer binding | `sed -n '266,275p' Sources/FramerApp/Editor/LayerListSection.swift` |
 | PR #11 merged yet? (entry 13 stale once merged) | `gh pr view 11 --json state` and `grep -n 'Task(priority' Sources/FramerApp/Editor/PreviewViewModel.swift` |
-| Parity suite passing / count (27) | `swift test --filter EffectGPUParityTests` |
+| Golden/behavior suites passing (13/14) | `swift test --filter EffectGPUGoldenTests` ; `swift test --filter EffectGPUBehaviorTests` |
 | Metal Toolchain installed yet? (entries 6–7 stale once env repaired) | `xcodebuild -showComponent metalToolchain` |
 | LFS pointer size (132 bytes) | `git cat-file blob HEAD:$(git lfs ls-files -n \| head -1) \| wc -c` |
 | Snapshot assert message | `sed -n '299,306p' Tests/FramerAppTests/SidebarHarmonySnapshotTests.swift` |
