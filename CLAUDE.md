@@ -49,7 +49,7 @@ Details, rationale, and the incidents behind each: `framer-change-control` skill
 
 ## Skill Library Map
 
-- **Process & gates** — framer-change-control · framer-validation-and-qa · framer-docs-and-writing
+- **Process & gates** — framer-change-control · framer-validation-and-qa · framer-docs-and-writing · release (the release ceremony)
 - **Understanding the system** — framer-architecture-contract · framer-metal-pipeline-reference · framer-image-processing-reference · framer-config-and-flags
 - **Doing the work** — framer-build-and-env · framer-run-and-operate · framer-ui-design-system · framer-debugging-playbook · framer-diagnostics-and-proof
 - **History & direction** — framer-failure-archaeology · framer-campaign-restore-validation · framer-campaign-gpu-effects-quality · framer-research-frontier

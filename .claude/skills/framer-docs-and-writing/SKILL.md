@@ -62,36 +62,40 @@ update this ledger whenever you resolve or discover a doc-vs-code contradiction.
 |---|---|---|
 | `CLAUDE.md` | **RESOLVED 2026-07-09** — rewritten to route to this skill library. Historical defect: it delegated to `.ai-assistant/.instructions.md` and `.ai-project/`, directories that never existed in git on any branch. Old copies survive on stale branches and in PR #1's diff (CLOSED unmerged 2026-07-09) — never resurrect one (framer-change-control danger list). | The current CLAUDE.md + this library. framer-build-and-env owns the authoritative command table. |
 | `.claude/commands/*.md` (21 of 29 top-level files) | **RESOLVED 2026-07-09** — the 21 dead files were removed. Historical defect: each began "Follow **[x.prompt.md](../../.ai-assistant/workflows/x.prompt.md)**" — all targets nonexistent; `validate.md` was a JS-project template ("npm audit", bundle size). STILL OPEN: `.claude/settings.json` allowlists `npm run typecheck/lint/test/build` — this is a Swift repo with no npm. | framer-change-control for workflow; framer-validation-and-qa for what validation means here. |
-| `README.md` | (a) Line 56: "Swift Package with three targets" listing FramerCore/FramerCLI/FramerApp — `Package.swift` actually declares only **FramerCore + FramerCLI** (plus two test targets); FramerApp (macOS, product name "Framer") and **FramerMobile (iOS, omitted entirely)** are XcodeGen targets in `project.yml`. (b) Line 52: presets "save and load from `~/.config/framer/presets/`" — wrong; `PresetStore.swift` uses `~/Library/Application Support/Framer/presets/`, and `~/.config/framer/` only holds `default.yaml` as the last-resort config fallback (`YAMLConfig.loadDefault`, priority: `--config` → App Support preset → `./.framer.yaml` → `~/.config/framer/default.yaml`). (c) Layer list (lines 28–34) stops at Dither — omits aspectRatio, LUT, shader, and gpuEffect layers, zoom, and the Darkroom Editorial UI. The LUT *benchmark* section (lines 137–166) is accurate and dated 2026-04-01. | `Package.swift` + `project.yml` for targets; `Sources/FramerCore/Presets/PresetStore.swift` and `YAMLConfig.swift` for paths; framer-config-and-flags for the layer catalog. |
+| `README.md` | **RESOLVED 2026-07-09 (v2.0.0 release PR)** — rewritten: four-target table (incl. FramerMobile), correct preset paths (App Support JSON + YAML discovery chain), full 12-layer list with 17 dither algorithms, `--border-style` examples (the invalid `-s` short flag removed), Git LFS + release-binary install steps. Historical defects preserved in git history. |
 | `docs/gpu-effects-parameter-matrix.md` | Line 15 lists `pixelSort` among variants "hidden from picker". Stale: sidebar-harmony pass 4 re-exposed it. `GPUEffectKind.userFacingCases` now hides only `.ascii`, `.halftone`, `.dithering` (with a long doc comment explaining why, including the "Dithering doesn't have the presets" user report). Common-adjustments wiring also changed after the doc's snapshot. | `Sources/FramerCore/Effects/Models/GPUEffectKind.swift` (the `userFacingCases` doc comment is the record). framer-config-and-flags owns the parameter catalog. |
 | `docs/plans/2026-04-01-metal-dither-plan.md` | Header says "Status: Planned / Branch: feat/metal-dither (not yet created)" and lays out a `MetalDitherPipeline` under a Processing/Metal layout. **Superseded, never executed as written**: GPU dithering shipped via the Effects bucket (`Sources/FramerCore/Effects/Metal/Dither.metal` + DitherGPURenderer); `Sources/FramerCore/Processing/Metal/` does not exist. | `docs/gpu-migration-plan.md` and `docs/gpu-migration-mac-resume.md`; framer-metal-pipeline-reference. |
 | `docs/superpowers/plans/2026-04-02-acerola-shader-layer-handoff.md` | Describes a live branch `feat/acerola-shader-layer` with "uncommitted work" in worktree `~/Github/framer-acerola-shader`. The branch is fully merged, the worktree is gone, and the "uncommitted" `ASCIIColorMode.dominantTwoTone` is on main. Its absolute-path file links are dead. | Main's code. Only the doc's "Recommended Next Steps" (visual tuning of ASCII / PixelSort / composite looks) remain open — tracked in framer-campaign-gpu-effects-quality. |
 | `docs/index.html` + `docs/examples/` | Go-era GitHub Pages site, last touched 2026-01-23 (a month before the Swift rewrite). Says "Requires Go 1.22+"; example commands use `-s instagram` — the Swift CLI's `--border-style` has **no short flag**, so those commands fail as written (`framer -i … -o …` itself still works: ProcessCommand is the default subcommand and input/output are `.shortAndLong`). The `docs/examples/*.jpg` goldens were rendered by the deleted Go implementation — regenerating them with the Swift CLI would produce different pixels. | framer-run-and-operate for real CLI usage. |
 | `docs/product-review/` (7 files) | A March 7, 2026 go-to-market snapshot (PMF interviews, freemium pricing, Lightroom-plugin roadmap, an April-30 "pivot or proceed" gate). **No validation outcome is recorded anywhere in the repo**, and its "iOS is the wrong platform" ranking was contradicted by building FramerMobile anyway. | Treat as historical strategy context only. Open question for maintainer: what was decided at the gate? |
 | `assets/design/DESIGN_BRIEFING.md` (paths only) | Lines 5 and 320 reference the mockup at `docs/design/framer-final-concept.html` — `docs/design/` does not exist. Actual mockups: `assets/design/framer-final-concept.html` and `assets/design/ios/framer-ios-concept.html`. The design *content* is largely binding law — but its 280pt fixed inspector width is superseded by `SidebarLayoutPolicy`'s 300/350/520 band (min/ideal/max; the earlier 304/320/352 band was itself superseded by commit c83b509, 2026-04-15). | framer-ui-design-system owns the corrected design rules. |
-| `CHANGELOG.md` `[Unreleased]` | Titled "GPU effects migration (PR #7)" — but PR #7 **merged 2026-04-14** (verified via `gh pr view 7`). The section was never rolled into a release, and nothing merged after 2026-04-14 (PR #8 sidebar harmony, PRs #9/#10 of 2026-05-25) is recorded at all. | Git history is the only complete change record past 2026-04-14. See §3. |
+| `CHANGELOG.md` `[Unreleased]` | **RESOLVED 2026-07-09 (v2.0.0 release PR)** — rolled into `[2.0.0] - 2026-07-09`, which backfills the full v1.2.0..HEAD gap (PRs #2–#15); Go-era 1.1.0/1.2.0 entries backfilled from tags; `[Unreleased]` is empty again. Keep it rolled at every release (`.claude/skills/release/SKILL.md`). |
 
 **Ledger maintenance rule:** this table is a living document. When you fix a
 contradiction (e.g., README gets rewritten, a stale doc gets deleted), update or
 remove its row in the same PR. When you *find* a new contradiction anywhere in
 the repo, add a row here even if you don't fix the doc.
 
-## 3. Release records: four sources, none agree
+## 3. Release records: reconciled at v2.0.0 (2026-07-09)
 
-Verified state as of 2026-07-09, commit 48d85a5:
+The four version sources — CHANGELOG.md, git tags, and both `project.yml`
+MARKETING_VERSIONs — disagreed for five months (v2.0.0 claimed in the
+CHANGELOG on 2026-02-24 but never tagged; iOS stuck at 1.0.0; a PR #8–#15
+recording gap). The maintainer resolved it 2026-07-09: **v2.0.0 released from
+HEAD**, its CHANGELOG entry rewritten to cover everything since v1.2.0, all
+four locations aligned (plus a fifth added: `framer --version` in
+`Sources/FramerCLI/Framer.swift`).
 
-| Source | Says | Verify with |
-|---|---|---|
-| `CHANGELOG.md` | Keep-a-Changelog + SemVer; sections `[Unreleased]` (PR #7 work, already merged), `[2.0.0] - 2026-02-24`, `[1.0.0] - 2025`. Last commit touching it: 0debb71, 2026-04-14. | `grep -n '^## \[' CHANGELOG.md` |
-| Git tags | `v1.0.0`, `v1.1.0`, `v1.2.0` — **v2.0.0 was never tagged** despite the CHANGELOG entry and a team-review action item to tag it. | `git tag` |
-| `project.yml` macOS target | `MARKETING_VERSION: "2.0.0"` (line 40, Framer app target) | `grep -n MARKETING_VERSION project.yml` |
-| `project.yml` iOS target | `MARKETING_VERSION: "1.0.0"` (line 90, FramerMobile) | same |
+The release ceremony now lives in **`.claude/skills/release/SKILL.md`** —
+version-location table, step-by-step flow (release branch → PR → human merges
+→ tag → gh release), artifact commands, validation gate. Any release work
+starts there. Standing rules: all five version locations move together;
+`[Unreleased]` stays rolled; merging is a human decision
+(framer-change-control rule 1).
 
-Any release work MUST reconcile all four: decide the next version, roll
-`[Unreleased]` (and backfill the PR #8/#9/#10 gap from `git log`), tag, and align
-both MARKETING_VERSIONs — and remember **merging/tagging is a human decision**
-(house rule; see framer-change-control). Open question owned by the maintainer:
-tag v2.0.0 retroactively at the 2026-02-24 rewrite, or start fresh from HEAD.
+Re-verify alignment: `git tag --sort=-v:refname | head -1` ;
+`grep -n '^## \[' CHANGELOG.md` ; `grep -n MARKETING_VERSION project.yml` ;
+`swift run framer --version` — all must agree.
 
 ## 4. House plan style (plan-driven development)
 
