@@ -1540,6 +1540,10 @@ public enum BWFilmResponse: String, Codable, CaseIterable, Sendable {
     case ilfordHP5, ilfordXP2, ilfordDelta3200
     case kodakTMax100, kodakTMax400, kodakBW400CN, kodakTriX400, kodakP3200
     case rolleiOrtho25, rolleiRetro80s, rolleiRetro100, rolleiIR400
+    // Films present in SEP3's own picker (measured 2026-07-19) that were
+    // not in the original SEP2-name roster:
+    case kodakPanatomicX32, adoxSilvermax21, fomapan100, ilfordPan100
+    case kodakPlusX125, agfaScala200, berggerBRF400, ilfordPan400, fujiNeopan400
 
     public var label: String {
         switch self {
@@ -1564,6 +1568,15 @@ public enum BWFilmResponse: String, Codable, CaseIterable, Sendable {
         case .rolleiRetro80s:  return "Rollei Retro 80S"
         case .rolleiRetro100:  return "Rollei Retro 100 Tonal"
         case .rolleiIR400:     return "Rollei IR 400"
+        case .kodakPanatomicX32: return "Kodak Panatomic-X 32"
+        case .adoxSilvermax21:   return "Adox Silvermax 21"
+        case .fomapan100:        return "Fomapan 100 Classic"
+        case .ilfordPan100:      return "Ilford Pan 100"
+        case .kodakPlusX125:     return "Kodak Plus-X 125"
+        case .agfaScala200:      return "Agfa Scala 200x"
+        case .berggerBRF400:    return "Bergger BRF 400 Plus"
+        case .ilfordPan400:      return "Ilford Pan 400"
+        case .fujiNeopan400:     return "Fuji Neopan 400"
         }
     }
 
@@ -1595,6 +1608,77 @@ public enum BWFilmResponse: String, Codable, CaseIterable, Sendable {
         case .rolleiRetro80s:  return (20, 10, -10, -20, -30, 0)
         case .rolleiRetro100:  return (-5, 10, 0, -10, -25, 0)
         case .rolleiIR400:     return (60, 25, -20, -35, -45, 20)
+        case .kodakPanatomicX32: return (-10, 10, 0, -5, -20, -5)
+        case .adoxSilvermax21:   return (0, 5, 0, 0, -15, 0)
+        case .fomapan100:        return (-5, 10, 0, -10, -25, -5)
+        case .ilfordPan100:      return (0, 10, 0, -5, -20, 0)
+        case .kodakPlusX125:     return (5, 15, -5, -10, -25, 0)
+        case .agfaScala200:      return (0, 5, 5, 5, -10, 0)
+        case .berggerBRF400:    return (5, 10, 0, -5, -15, 5)
+        case .ilfordPan400:      return (5, 10, -5, -10, -20, 5)
+        case .fujiNeopan400:     return (0, 10, 0, -10, -20, -5)
+        }
+    }
+
+    /// The film's characteristic tone curve, MEASURED from Silver Efex Pro
+    /// 3 itself (gray-ramp exports per film with grain zeroed, 2026-07-19 —
+    /// tools/sep-measurement/). Values are the film's Levels & Curves
+    /// response sampled at 7 interior points plus the black/white levels.
+    /// nil for films SEP3 does not carry (kept from the SEP2 roster with
+    /// reconstructed character) and for `.custom`.
+    public var measuredCurve: (lowY: Double, highY: Double, points: [BWCurvePoint])? {
+        switch self {
+        case .ilfordPanF50:
+            return (lowY: 0.000, highY: 0.976, points: [BWCurvePoint(x: 0.125, y: 0.083), BWCurvePoint(x: 0.251, y: 0.185), BWCurvePoint(x: 0.376, y: 0.311), BWCurvePoint(x: 0.502, y: 0.451), BWCurvePoint(x: 0.627, y: 0.601), BWCurvePoint(x: 0.753, y: 0.740), BWCurvePoint(x: 0.878, y: 0.866)])
+        case .agfaAPX100:
+            return (lowY: 0.000, highY: 1.000, points: [BWCurvePoint(x: 0.125, y: 0.090), BWCurvePoint(x: 0.251, y: 0.203), BWCurvePoint(x: 0.376, y: 0.335), BWCurvePoint(x: 0.502, y: 0.482), BWCurvePoint(x: 0.627, y: 0.624), BWCurvePoint(x: 0.753, y: 0.765), BWCurvePoint(x: 0.878, y: 0.889)])
+        case .fujiAcros100:
+            return (lowY: 0.000, highY: 1.000, points: [BWCurvePoint(x: 0.125, y: 0.094), BWCurvePoint(x: 0.251, y: 0.196), BWCurvePoint(x: 0.376, y: 0.310), BWCurvePoint(x: 0.502, y: 0.443), BWCurvePoint(x: 0.627, y: 0.600), BWCurvePoint(x: 0.753, y: 0.757), BWCurvePoint(x: 0.878, y: 0.890)])
+        case .kodakTMax100:
+            return (lowY: 0.000, highY: 1.000, points: [BWCurvePoint(x: 0.125, y: 0.000), BWCurvePoint(x: 0.251, y: 0.137), BWCurvePoint(x: 0.376, y: 0.298), BWCurvePoint(x: 0.502, y: 0.471), BWCurvePoint(x: 0.627, y: 0.639), BWCurvePoint(x: 0.753, y: 0.780), BWCurvePoint(x: 0.878, y: 0.898)])
+        case .rolleiRetro100:
+            return (lowY: 0.000, highY: 1.000, points: [BWCurvePoint(x: 0.125, y: 0.141), BWCurvePoint(x: 0.251, y: 0.267), BWCurvePoint(x: 0.376, y: 0.408), BWCurvePoint(x: 0.502, y: 0.573), BWCurvePoint(x: 0.627, y: 0.718), BWCurvePoint(x: 0.753, y: 0.847), BWCurvePoint(x: 0.878, y: 0.941)])
+        case .ilfordFP4:
+            return (lowY: 0.000, highY: 0.988, points: [BWCurvePoint(x: 0.125, y: 0.047), BWCurvePoint(x: 0.251, y: 0.161), BWCurvePoint(x: 0.376, y: 0.357), BWCurvePoint(x: 0.502, y: 0.565), BWCurvePoint(x: 0.627, y: 0.725), BWCurvePoint(x: 0.753, y: 0.839), BWCurvePoint(x: 0.878, y: 0.922)])
+        case .ilfordDelta100:
+            return (lowY: 0.000, highY: 1.000, points: [BWCurvePoint(x: 0.125, y: 0.059), BWCurvePoint(x: 0.251, y: 0.173), BWCurvePoint(x: 0.376, y: 0.333), BWCurvePoint(x: 0.502, y: 0.510), BWCurvePoint(x: 0.627, y: 0.675), BWCurvePoint(x: 0.753, y: 0.808), BWCurvePoint(x: 0.878, y: 0.910)])
+        case .agfaAPX400:
+            return (lowY: 0.000, highY: 1.000, points: [BWCurvePoint(x: 0.125, y: 0.106), BWCurvePoint(x: 0.251, y: 0.220), BWCurvePoint(x: 0.376, y: 0.349), BWCurvePoint(x: 0.502, y: 0.490), BWCurvePoint(x: 0.627, y: 0.631), BWCurvePoint(x: 0.753, y: 0.769), BWCurvePoint(x: 0.878, y: 0.890)])
+        case .ilfordDelta400:
+            return (lowY: 0.000, highY: 1.000, points: [BWCurvePoint(x: 0.125, y: 0.063), BWCurvePoint(x: 0.251, y: 0.153), BWCurvePoint(x: 0.376, y: 0.290), BWCurvePoint(x: 0.502, y: 0.475), BWCurvePoint(x: 0.627, y: 0.659), BWCurvePoint(x: 0.753, y: 0.804), BWCurvePoint(x: 0.878, y: 0.910)])
+        case .ilfordHP5:
+            return (lowY: 0.000, highY: 1.000, points: [BWCurvePoint(x: 0.125, y: 0.059), BWCurvePoint(x: 0.251, y: 0.149), BWCurvePoint(x: 0.376, y: 0.286), BWCurvePoint(x: 0.502, y: 0.459), BWCurvePoint(x: 0.627, y: 0.647), BWCurvePoint(x: 0.753, y: 0.804), BWCurvePoint(x: 0.878, y: 0.914)])
+        case .ilfordXP2:
+            return (lowY: 0.000, highY: 0.988, points: [BWCurvePoint(x: 0.125, y: 0.000), BWCurvePoint(x: 0.251, y: 0.153), BWCurvePoint(x: 0.376, y: 0.337), BWCurvePoint(x: 0.502, y: 0.525), BWCurvePoint(x: 0.627, y: 0.702), BWCurvePoint(x: 0.753, y: 0.831), BWCurvePoint(x: 0.878, y: 0.922)])
+        case .kodakTMax400:
+            return (lowY: 0.000, highY: 1.000, points: [BWCurvePoint(x: 0.125, y: 0.020), BWCurvePoint(x: 0.251, y: 0.102), BWCurvePoint(x: 0.376, y: 0.255), BWCurvePoint(x: 0.502, y: 0.467), BWCurvePoint(x: 0.627, y: 0.698), BWCurvePoint(x: 0.753, y: 0.855), BWCurvePoint(x: 0.878, y: 0.945)])
+        case .kodakBW400CN:
+            return (lowY: 0.000, highY: 0.988, points: [BWCurvePoint(x: 0.125, y: 0.008), BWCurvePoint(x: 0.251, y: 0.184), BWCurvePoint(x: 0.376, y: 0.353), BWCurvePoint(x: 0.502, y: 0.506), BWCurvePoint(x: 0.627, y: 0.647), BWCurvePoint(x: 0.753, y: 0.773), BWCurvePoint(x: 0.878, y: 0.886)])
+        case .kodakTriX400:
+            return (lowY: 0.000, highY: 1.000, points: [BWCurvePoint(x: 0.125, y: 0.047), BWCurvePoint(x: 0.251, y: 0.173), BWCurvePoint(x: 0.376, y: 0.333), BWCurvePoint(x: 0.502, y: 0.518), BWCurvePoint(x: 0.627, y: 0.710), BWCurvePoint(x: 0.753, y: 0.875), BWCurvePoint(x: 0.878, y: 0.961)])
+        case .fujiNeopan1600:
+            return (lowY: 0.000, highY: 1.000, points: [BWCurvePoint(x: 0.125, y: 0.071), BWCurvePoint(x: 0.251, y: 0.137), BWCurvePoint(x: 0.376, y: 0.231), BWCurvePoint(x: 0.502, y: 0.412), BWCurvePoint(x: 0.627, y: 0.639), BWCurvePoint(x: 0.753, y: 0.812), BWCurvePoint(x: 0.878, y: 0.922)])
+        case .ilfordDelta3200:
+            return (lowY: 0.000, highY: 1.000, points: [BWCurvePoint(x: 0.125, y: 0.035), BWCurvePoint(x: 0.251, y: 0.098), BWCurvePoint(x: 0.376, y: 0.227), BWCurvePoint(x: 0.502, y: 0.463), BWCurvePoint(x: 0.627, y: 0.714), BWCurvePoint(x: 0.753, y: 0.875), BWCurvePoint(x: 0.878, y: 0.957)])
+        case .kodakPanatomicX32:
+            return (lowY: 0.000, highY: 1.000, points: [BWCurvePoint(x: 0.125, y: 0.039), BWCurvePoint(x: 0.251, y: 0.180), BWCurvePoint(x: 0.376, y: 0.318), BWCurvePoint(x: 0.502, y: 0.455), BWCurvePoint(x: 0.627, y: 0.592), BWCurvePoint(x: 0.753, y: 0.729), BWCurvePoint(x: 0.878, y: 0.867)])
+        case .adoxSilvermax21:
+            return (lowY: 0.004, highY: 0.984, points: [BWCurvePoint(x: 0.125, y: 0.106), BWCurvePoint(x: 0.251, y: 0.237), BWCurvePoint(x: 0.376, y: 0.486), BWCurvePoint(x: 0.502, y: 0.682), BWCurvePoint(x: 0.627, y: 0.832), BWCurvePoint(x: 0.753, y: 0.921), BWCurvePoint(x: 0.878, y: 0.974)])
+        case .fomapan100:
+            return (lowY: 0.000, highY: 1.000, points: [BWCurvePoint(x: 0.125, y: 0.075), BWCurvePoint(x: 0.251, y: 0.196), BWCurvePoint(x: 0.376, y: 0.345), BWCurvePoint(x: 0.502, y: 0.600), BWCurvePoint(x: 0.627, y: 0.780), BWCurvePoint(x: 0.753, y: 0.910), BWCurvePoint(x: 0.878, y: 0.988)])
+        case .ilfordPan100:
+            return (lowY: 0.000, highY: 1.000, points: [BWCurvePoint(x: 0.125, y: 0.118), BWCurvePoint(x: 0.251, y: 0.212), BWCurvePoint(x: 0.376, y: 0.357), BWCurvePoint(x: 0.502, y: 0.506), BWCurvePoint(x: 0.627, y: 0.682), BWCurvePoint(x: 0.753, y: 0.827), BWCurvePoint(x: 0.878, y: 0.922)])
+        case .kodakPlusX125:
+            return (lowY: 0.004, highY: 1.000, points: [BWCurvePoint(x: 0.125, y: 0.071), BWCurvePoint(x: 0.251, y: 0.176), BWCurvePoint(x: 0.376, y: 0.337), BWCurvePoint(x: 0.502, y: 0.514), BWCurvePoint(x: 0.627, y: 0.671), BWCurvePoint(x: 0.753, y: 0.796), BWCurvePoint(x: 0.878, y: 0.906)])
+        case .agfaScala200:
+            return (lowY: 0.000, highY: 1.000, points: [BWCurvePoint(x: 0.125, y: 0.075), BWCurvePoint(x: 0.251, y: 0.220), BWCurvePoint(x: 0.376, y: 0.369), BWCurvePoint(x: 0.502, y: 0.506), BWCurvePoint(x: 0.627, y: 0.624), BWCurvePoint(x: 0.753, y: 0.729), BWCurvePoint(x: 0.878, y: 0.843)])
+        case .berggerBRF400:
+            return (lowY: 0.000, highY: 1.000, points: [BWCurvePoint(x: 0.125, y: 0.106), BWCurvePoint(x: 0.251, y: 0.247), BWCurvePoint(x: 0.376, y: 0.400), BWCurvePoint(x: 0.502, y: 0.541), BWCurvePoint(x: 0.627, y: 0.667), BWCurvePoint(x: 0.753, y: 0.784), BWCurvePoint(x: 0.878, y: 0.894)])
+        case .ilfordPan400:
+            return (lowY: 0.004, highY: 0.996, points: [BWCurvePoint(x: 0.125, y: 0.094), BWCurvePoint(x: 0.251, y: 0.204), BWCurvePoint(x: 0.376, y: 0.345), BWCurvePoint(x: 0.502, y: 0.498), BWCurvePoint(x: 0.627, y: 0.639), BWCurvePoint(x: 0.753, y: 0.780), BWCurvePoint(x: 0.878, y: 0.910)])
+        case .fujiNeopan400:
+            return (lowY: 0.004, highY: 0.996, points: [BWCurvePoint(x: 0.125, y: 0.114), BWCurvePoint(x: 0.251, y: 0.247), BWCurvePoint(x: 0.376, y: 0.384), BWCurvePoint(x: 0.502, y: 0.518), BWCurvePoint(x: 0.627, y: 0.663), BWCurvePoint(x: 0.753, y: 0.796), BWCurvePoint(x: 0.878, y: 0.906)])
+        default: return nil
         }
     }
 }
@@ -1926,6 +2010,25 @@ public struct BWFilmShaderParams: Codable, Equatable, Sendable {
         updated.sensCyan = s.cy
         updated.sensBlue = s.b
         updated.sensMagenta = s.mg
+        // A film's Levels & Curves is part of its character (SEP replaces
+        // the curve on film selection). Measured films install their
+        // measured curve; unmeasured films reset to identity; `.custom`
+        // leaves the user's curve untouched.
+        if let curve = newResponse.measuredCurve {
+            updated.curveGamma = 0
+            updated.curveLowX = 0
+            updated.curveLowY = curve.lowY
+            updated.curveHighX = 1
+            updated.curveHighY = curve.highY
+            updated.curvePoints = curve.points
+        } else if newResponse != .custom {
+            updated.curveGamma = 0
+            updated.curveLowX = 0
+            updated.curveLowY = 0
+            updated.curveHighX = 1
+            updated.curveHighY = 1
+            updated.curvePoints = []
+        }
         return updated
     }
 }

@@ -525,7 +525,17 @@ final class EffectGPUBehaviorTests: XCTestCase {
         XCTAssertEqual(ortho.response, .rolleiOrtho25)
         XCTAssertEqual(ortho.sensRed, BWFilmResponse.rolleiOrtho25.sensitivities.r)
         XCTAssertEqual(ortho.contrast, 42, "tonality must survive a response change")
-        XCTAssertEqual(ortho.curveGamma, 0.3, "curve must survive a response change")
+        // A film's Levels & Curves is part of its character: unmeasured
+        // films reset the curve to identity...
+        XCTAssertEqual(ortho.curveGamma, 0, "film selection replaces the curve")
+        XCTAssertTrue(ortho.curvePoints.isEmpty)
+        // ...measured films install their measured curve...
+        let triX = start.applyingResponse(.kodakTriX400)
+        XCTAssertFalse(triX.curvePoints.isEmpty, "measured film must install its curve")
+        XCTAssertEqual(triX.curvePoints.count, 7)
+        // ...and .custom leaves the user's curve untouched.
+        let backToCustom = triX.applyingResponse(.custom)
+        XCTAssertEqual(backToCustom.curvePoints.count, 7, "custom must not clear the curve")
     }
 
     func testBWFilmOrthoRendersRedDarkerThanNeutral() throws {
