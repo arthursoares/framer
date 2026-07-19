@@ -1023,6 +1023,7 @@ public enum ShaderStyle: String, Codable, CaseIterable, Sendable {
     case crt
     case halftone
     case kuwahara
+    case bwFilm
 
     public var label: String {
         switch self {
@@ -1035,6 +1036,7 @@ public enum ShaderStyle: String, Codable, CaseIterable, Sendable {
         case .crt: return "CRT"
         case .halftone: return "Halftone"
         case .kuwahara: return "Kuwahara"
+        case .bwFilm: return "B&W Film"
         }
     }
 
@@ -1053,6 +1055,7 @@ public enum ShaderStyle: String, Codable, CaseIterable, Sendable {
         case .crt:         return "tv"
         case .halftone:    return "circle.dotted"
         case .kuwahara:    return "paintbrush.pointed"
+        case .bwFilm:      return "circle.lefthalf.filled.inverse"
         }
     }
 
@@ -1510,6 +1513,119 @@ public struct KuwaharaShaderParams: Codable, Equatable, Sendable {
     }
 }
 
+/// One tone-curve control point, input `x` -> output `y`, both normalized
+/// 0...1. Matches SEP's `lacdata.points` schema (which is NOT x-sorted on
+/// disk — the renderer sorts before interpolating).
+public struct BWCurvePoint: Codable, Equatable, Sendable {
+    public var x: Double
+    public var y: Double
+    public init(x: Double, y: Double) {
+        self.x = max(0, min(1, x))
+        self.y = max(0, min(1, y))
+    }
+}
+
+/// Silver-Efex-style black-and-white conversion (BWFilm.metal). Modeled on
+/// the SilverEfexParams pipeline characterized by bundle inspection, minus
+/// the ColorFilter block (dropped by design):
+///   1. Six-channel spectral sensitivity (R/Ye/G/Cy/B/Mg, SEP `sens*`)
+///      weights how each hue renders into gray.
+///   2. Zone tonality (SEP GlobalAdjustments): brightness global +
+///      highlights/midtones/shadows, contrast, protect highlights/shadows.
+///   3. Tone curve (SEP `lacdata`): gamma + black/white nodes + control
+///      points, CPU-baked to a 256-entry LUT texture.
+/// All values are UI-scale, matching SEP's own storage (no normalization).
+public struct BWFilmShaderParams: Codable, Equatable, Sendable {
+    // Spectral sensitivity, -100...100, 0 = neutral (Rec.601 luma only).
+    public var sensRed: Double
+    public var sensYellow: Double
+    public var sensGreen: Double
+    public var sensCyan: Double
+    public var sensBlue: Double
+    public var sensMagenta: Double
+
+    // Zone tonality, -100...100 (protect dials 0...100).
+    public var brightness: Double
+    public var brightnessHighlights: Double
+    public var brightnessMidtones: Double
+    public var brightnessShadows: Double
+    public var contrast: Double
+    public var protectHighlights: Double
+    public var protectShadows: Double
+
+    // Tone curve (lacdata-compatible).
+    public var curveGamma: Double        // -1...1, 0 neutral, + brightens mids
+    public var curveLowX: Double         // black point input
+    public var curveLowY: Double         // black point output (lift)
+    public var curveHighX: Double        // white point input
+    public var curveHighY: Double        // white point output (cap)
+    public var curvePoints: [BWCurvePoint]
+
+    public init(
+        sensRed: Double = 0, sensYellow: Double = 0, sensGreen: Double = 0,
+        sensCyan: Double = 0, sensBlue: Double = 0, sensMagenta: Double = 0,
+        brightness: Double = 0, brightnessHighlights: Double = 0,
+        brightnessMidtones: Double = 0, brightnessShadows: Double = 0,
+        contrast: Double = 0, protectHighlights: Double = 0, protectShadows: Double = 0,
+        curveGamma: Double = 0, curveLowX: Double = 0, curveLowY: Double = 0,
+        curveHighX: Double = 1, curveHighY: Double = 1,
+        curvePoints: [BWCurvePoint] = []
+    ) {
+        func clampSens(_ v: Double) -> Double { max(-100, min(100, v)) }
+        self.sensRed = clampSens(sensRed)
+        self.sensYellow = clampSens(sensYellow)
+        self.sensGreen = clampSens(sensGreen)
+        self.sensCyan = clampSens(sensCyan)
+        self.sensBlue = clampSens(sensBlue)
+        self.sensMagenta = clampSens(sensMagenta)
+        self.brightness = clampSens(brightness)
+        self.brightnessHighlights = clampSens(brightnessHighlights)
+        self.brightnessMidtones = clampSens(brightnessMidtones)
+        self.brightnessShadows = clampSens(brightnessShadows)
+        self.contrast = clampSens(contrast)
+        self.protectHighlights = max(0, min(100, protectHighlights))
+        self.protectShadows = max(0, min(100, protectShadows))
+        self.curveGamma = max(-1, min(1, curveGamma))
+        self.curveLowX = max(0, min(1, curveLowX))
+        self.curveLowY = max(0, min(1, curveLowY))
+        self.curveHighX = max(0, min(1, curveHighX))
+        self.curveHighY = max(0, min(1, curveHighY))
+        self.curvePoints = curvePoints
+    }
+
+    private enum CodingKeys: String, CodingKey {
+        case sensRed, sensYellow, sensGreen, sensCyan, sensBlue, sensMagenta
+        case brightness, brightnessHighlights, brightnessMidtones, brightnessShadows
+        case contrast, protectHighlights, protectShadows
+        case curveGamma, curveLowX, curveLowY, curveHighX, curveHighY, curvePoints
+    }
+
+    public init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        self.init(
+            sensRed: try c.decodeIfPresent(Double.self, forKey: .sensRed) ?? 0,
+            sensYellow: try c.decodeIfPresent(Double.self, forKey: .sensYellow) ?? 0,
+            sensGreen: try c.decodeIfPresent(Double.self, forKey: .sensGreen) ?? 0,
+            sensCyan: try c.decodeIfPresent(Double.self, forKey: .sensCyan) ?? 0,
+            sensBlue: try c.decodeIfPresent(Double.self, forKey: .sensBlue) ?? 0,
+            sensMagenta: try c.decodeIfPresent(Double.self, forKey: .sensMagenta) ?? 0,
+            brightness: try c.decodeIfPresent(Double.self, forKey: .brightness) ?? 0,
+            brightnessHighlights: try c.decodeIfPresent(Double.self, forKey: .brightnessHighlights) ?? 0,
+            brightnessMidtones: try c.decodeIfPresent(Double.self, forKey: .brightnessMidtones) ?? 0,
+            brightnessShadows: try c.decodeIfPresent(Double.self, forKey: .brightnessShadows) ?? 0,
+            contrast: try c.decodeIfPresent(Double.self, forKey: .contrast) ?? 0,
+            protectHighlights: try c.decodeIfPresent(Double.self, forKey: .protectHighlights) ?? 0,
+            protectShadows: try c.decodeIfPresent(Double.self, forKey: .protectShadows) ?? 0,
+            curveGamma: try c.decodeIfPresent(Double.self, forKey: .curveGamma) ?? 0,
+            curveLowX: try c.decodeIfPresent(Double.self, forKey: .curveLowX) ?? 0,
+            curveLowY: try c.decodeIfPresent(Double.self, forKey: .curveLowY) ?? 0,
+            curveHighX: try c.decodeIfPresent(Double.self, forKey: .curveHighX) ?? 1,
+            curveHighY: try c.decodeIfPresent(Double.self, forKey: .curveHighY) ?? 1,
+            curvePoints: try c.decodeIfPresent([BWCurvePoint].self, forKey: .curvePoints) ?? []
+        )
+    }
+}
+
 public enum ShaderStyleParams: Codable, Equatable, Sendable {
     case ascii(ASCIIShaderParams)
     case crimewave(CrimewaveShaderParams)
@@ -1520,6 +1636,7 @@ public enum ShaderStyleParams: Codable, Equatable, Sendable {
     case crt(CRTShaderParams)
     case halftone(HalftoneShaderParams)
     case kuwahara(KuwaharaShaderParams)
+    case bwFilm(BWFilmShaderParams)
 
     private enum CodingKeys: String, CodingKey {
         case type, params
@@ -1536,6 +1653,7 @@ public enum ShaderStyleParams: Codable, Equatable, Sendable {
         case .crt: return .crt
         case .halftone: return .halftone
         case .kuwahara: return .kuwahara
+        case .bwFilm: return .bwFilm
         }
     }
 
@@ -1550,6 +1668,7 @@ public enum ShaderStyleParams: Codable, Equatable, Sendable {
         case .crt: return .crt(CRTShaderParams())
         case .halftone: return .halftone(HalftoneShaderParams())
         case .kuwahara: return .kuwahara(KuwaharaShaderParams())
+        case .bwFilm: return .bwFilm(BWFilmShaderParams())
         }
     }
 
@@ -1575,6 +1694,8 @@ public enum ShaderStyleParams: Codable, Equatable, Sendable {
             self = .halftone(try container.decode(HalftoneShaderParams.self, forKey: .params))
         case "kuwahara":
             self = .kuwahara(try container.decode(KuwaharaShaderParams.self, forKey: .params))
+        case "bwFilm":
+            self = .bwFilm(try container.decode(BWFilmShaderParams.self, forKey: .params))
         default:
             throw DecodingError.dataCorruptedError(
                 forKey: .type, in: container,
@@ -1612,6 +1733,9 @@ public enum ShaderStyleParams: Codable, Equatable, Sendable {
             try container.encode(params, forKey: .params)
         case .kuwahara(let params):
             try container.encode("kuwahara", forKey: .type)
+            try container.encode(params, forKey: .params)
+        case .bwFilm(let params):
+            try container.encode("bwFilm", forKey: .type)
             try container.encode(params, forKey: .params)
         }
     }

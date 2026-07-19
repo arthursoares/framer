@@ -112,6 +112,26 @@ public enum YAMLConfig {
         // Kuwahara legacy: 0..8 (0 = full effect). Replaced by shader_softness
         // (already declared above; shared with Crimewave/Narc/Shiba/DistantPast).
         var shader_sharpness: Double?
+        var shader_bw_sens_red: Double?
+        var shader_bw_sens_yellow: Double?
+        var shader_bw_sens_green: Double?
+        var shader_bw_sens_cyan: Double?
+        var shader_bw_sens_blue: Double?
+        var shader_bw_sens_magenta: Double?
+        var shader_bw_brightness: Double?
+        var shader_bw_brightness_highlights: Double?
+        var shader_bw_brightness_midtones: Double?
+        var shader_bw_brightness_shadows: Double?
+        var shader_bw_contrast: Double?
+        var shader_bw_protect_highlights: Double?
+        var shader_bw_protect_shadows: Double?
+        var shader_bw_curve_gamma: Double?
+        var shader_bw_curve_low_x: Double?
+        var shader_bw_curve_low_y: Double?
+        var shader_bw_curve_high_x: Double?
+        var shader_bw_curve_high_y: Double?
+        // Interior curve points, flattened [x1, y1, x2, y2, ...]
+        var shader_bw_curve_points: [Double]?
         var gpu_effect_kind: String?
         var gpu_common_brightness: Double?
         var gpu_common_contrast: Double?
@@ -979,6 +999,28 @@ public enum YAMLConfig {
         case .kuwahara(let p):
             schema.shader_kernel_size = p.kernelSize
             schema.shader_softness = p.softness
+        case .bwFilm(let p):
+            schema.shader_bw_sens_red = p.sensRed
+            schema.shader_bw_sens_yellow = p.sensYellow
+            schema.shader_bw_sens_green = p.sensGreen
+            schema.shader_bw_sens_cyan = p.sensCyan
+            schema.shader_bw_sens_blue = p.sensBlue
+            schema.shader_bw_sens_magenta = p.sensMagenta
+            schema.shader_bw_brightness = p.brightness
+            schema.shader_bw_brightness_highlights = p.brightnessHighlights
+            schema.shader_bw_brightness_midtones = p.brightnessMidtones
+            schema.shader_bw_brightness_shadows = p.brightnessShadows
+            schema.shader_bw_contrast = p.contrast
+            schema.shader_bw_protect_highlights = p.protectHighlights
+            schema.shader_bw_protect_shadows = p.protectShadows
+            schema.shader_bw_curve_gamma = p.curveGamma
+            schema.shader_bw_curve_low_x = p.curveLowX
+            schema.shader_bw_curve_low_y = p.curveLowY
+            schema.shader_bw_curve_high_x = p.curveHighX
+            schema.shader_bw_curve_high_y = p.curveHighY
+            if !p.curvePoints.isEmpty {
+                schema.shader_bw_curve_points = p.curvePoints.flatMap { [$0.x, $0.y] }
+            }
         }
     }
 
@@ -1084,6 +1126,36 @@ public enum YAMLConfig {
             return .kuwahara(KuwaharaShaderParams(
                 kernelSize: schema.shader_kernel_size ?? 4,
                 softness: softness
+            ))
+        case .bwFilm:
+            var points: [BWCurvePoint] = []
+            if let flat = schema.shader_bw_curve_points {
+                var i = 0
+                while i + 1 < flat.count {
+                    points.append(BWCurvePoint(x: flat[i], y: flat[i + 1]))
+                    i += 2
+                }
+            }
+            return .bwFilm(BWFilmShaderParams(
+                sensRed: schema.shader_bw_sens_red ?? 0,
+                sensYellow: schema.shader_bw_sens_yellow ?? 0,
+                sensGreen: schema.shader_bw_sens_green ?? 0,
+                sensCyan: schema.shader_bw_sens_cyan ?? 0,
+                sensBlue: schema.shader_bw_sens_blue ?? 0,
+                sensMagenta: schema.shader_bw_sens_magenta ?? 0,
+                brightness: schema.shader_bw_brightness ?? 0,
+                brightnessHighlights: schema.shader_bw_brightness_highlights ?? 0,
+                brightnessMidtones: schema.shader_bw_brightness_midtones ?? 0,
+                brightnessShadows: schema.shader_bw_brightness_shadows ?? 0,
+                contrast: schema.shader_bw_contrast ?? 0,
+                protectHighlights: schema.shader_bw_protect_highlights ?? 0,
+                protectShadows: schema.shader_bw_protect_shadows ?? 0,
+                curveGamma: schema.shader_bw_curve_gamma ?? 0,
+                curveLowX: schema.shader_bw_curve_low_x ?? 0,
+                curveLowY: schema.shader_bw_curve_low_y ?? 0,
+                curveHighX: schema.shader_bw_curve_high_x ?? 1,
+                curveHighY: schema.shader_bw_curve_high_y ?? 1,
+                curvePoints: points
             ))
         }
     }

@@ -42,6 +42,8 @@ public enum ShaderRenderer {
             return try HalftoneRenderer.render(to: image, params: params)
         case .kuwahara:
             return try KuwaharaRenderer.render(to: image, params: params)
+        case .bwFilm:
+            return try BWFilmRenderer.render(to: image, params: params)
         }
     }
 }

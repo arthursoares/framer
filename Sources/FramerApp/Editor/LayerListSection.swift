@@ -4124,7 +4124,58 @@ struct ShaderLayerControls: View {
                 halftoneControls(halftoneParams)
             case .kuwahara(let kuwaharaParams):
                 kuwaharaControls(kuwaharaParams)
+            case .bwFilm(let bwFilmParams):
+                bwFilmControls(bwFilmParams)
             }
+        }
+    }
+
+    @ViewBuilder
+    private func bwFilmControls(_ bw: BWFilmShaderParams) -> some View {
+        // Spectral sensitivity — how each hue family renders into gray.
+        bwFilmSlider("Red", bw.sensRed) { v, p in var u = p; u.sensRed = v; return u }
+        bwFilmSlider("Yellow", bw.sensYellow) { v, p in var u = p; u.sensYellow = v; return u }
+        bwFilmSlider("Green", bw.sensGreen) { v, p in var u = p; u.sensGreen = v; return u }
+        bwFilmSlider("Cyan", bw.sensCyan) { v, p in var u = p; u.sensCyan = v; return u }
+        bwFilmSlider("Blue", bw.sensBlue) { v, p in var u = p; u.sensBlue = v; return u }
+        bwFilmSlider("Magenta", bw.sensMagenta) { v, p in var u = p; u.sensMagenta = v; return u }
+
+        SimpleLayerEditorDivider()
+
+        bwFilmSlider("Brightness", bw.brightness) { v, p in var u = p; u.brightness = v; return u }
+        bwFilmSlider("Highlights", bw.brightnessHighlights) { v, p in var u = p; u.brightnessHighlights = v; return u }
+        bwFilmSlider("Midtones", bw.brightnessMidtones) { v, p in var u = p; u.brightnessMidtones = v; return u }
+        bwFilmSlider("Shadows", bw.brightnessShadows) { v, p in var u = p; u.brightnessShadows = v; return u }
+        bwFilmSlider("Contrast", bw.contrast) { v, p in var u = p; u.contrast = v; return u }
+        bwFilmSlider("Protect Highlights", bw.protectHighlights, range: 0...100) { v, p in var u = p; u.protectHighlights = v; return u }
+        bwFilmSlider("Protect Shadows", bw.protectShadows, range: 0...100) { v, p in var u = p; u.protectShadows = v; return u }
+
+        SimpleLayerEditorDivider()
+
+        bwFilmSlider("Gamma", bw.curveGamma, range: -1...1, step: 0.02) { v, p in var u = p; u.curveGamma = v; return u }
+        bwFilmSlider("Black Point", bw.curveLowX, range: 0...0.5, step: 0.01) { v, p in var u = p; u.curveLowX = v; return u }
+        bwFilmSlider("Black Lift", bw.curveLowY, range: 0...0.5, step: 0.01) { v, p in var u = p; u.curveLowY = v; return u }
+        bwFilmSlider("White Point", bw.curveHighX, range: 0.5...1, step: 0.01, resetValue: 1) { v, p in var u = p; u.curveHighX = v; return u }
+        bwFilmSlider("White Cap", bw.curveHighY, range: 0.5...1, step: 0.01, resetValue: 1) { v, p in var u = p; u.curveHighY = v; return u }
+    }
+
+    private func bwFilmSlider(
+        _ title: String,
+        _ value: Double,
+        range: ClosedRange<Double> = -100...100,
+        step: Double = 1,
+        resetValue: Double = 0,
+        update: @escaping (Double, BWFilmShaderParams) -> BWFilmShaderParams
+    ) -> some View {
+        sliderRow(
+            title: title,
+            value: value,
+            range: range,
+            step: step,
+            resetValue: resetValue
+        ) { newValue in
+            guard case .bwFilm(let current) = params.params else { return }
+            onChange(params.withParams(.bwFilm(update(newValue, current))))
         }
     }
 
