@@ -1028,7 +1028,7 @@ final class EffectGPUBehaviorTests: XCTestCase {
     func testBWFilmToningPresetTableIsDistinctAndApplies() {
         // Non-neutral presets must be pairwise distinct; applying one sets
         // the dials without touching conversion settings.
-        let all = BWToningPreset.allCases.filter { $0 != .neutral }
+        let all = BWToningPreset.allCases.filter { $0 != .neutral && $0 != .custom }
         for i in 0..<all.count {
             for j in (i + 1)..<all.count {
                 XCTAssertFalse(all[i].toning == all[j].toning,

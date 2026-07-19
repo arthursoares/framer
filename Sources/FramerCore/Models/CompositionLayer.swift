@@ -1970,6 +1970,9 @@ public enum BWFilmResponse: String, Codable, CaseIterable, Sendable {
 /// (`toningPresets` "1"–"24"). Each preset sets the five toning dials;
 /// values are reconstructions of the named darkroom process looks.
 public enum BWToningPreset: Int, Codable, CaseIterable, Sendable {
+    /// Sentinel for hand-edited toning dials (rawValue 0 is outside SEP's
+    /// 1-24 table; older builds decode it tolerantly to .neutral).
+    case custom = 0
     case neutral = 1
     case splitToner1 = 2, splitToner2 = 3
     case blueToner1 = 4, blueToner2 = 5, blueToner3 = 6
@@ -1982,6 +1985,7 @@ public enum BWToningPreset: Int, Codable, CaseIterable, Sendable {
 
     public var label: String {
         switch self {
+        case .custom: return "Custom"
         case .neutral: return "Neutral"
         case .splitToner1: return "Split Toner 1"
         case .splitToner2: return "Split Toner 2"
@@ -2014,6 +2018,7 @@ public enum BWToningPreset: Int, Codable, CaseIterable, Sendable {
     /// toneHueLow/toneStrengthLow/toneHueBalance/toningStrength.
     public var toning: (hueHigh: Double, strengthHigh: Double, hueLow: Double, strengthLow: Double, balance: Double, strength: Double) {
         switch self {
+        case .custom:      return (40, 0, 40, 0, 0, 0)
         case .neutral:     return (40, 0, 40, 0, 0, 0)
         case .splitToner1: return (45, 20, 220, 25, 0, 50)
         case .splitToner2: return (200, 20, 40, 30, 10, 50)
