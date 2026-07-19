@@ -3521,6 +3521,7 @@ private struct ShaderControls: View {
             }
             .pickerStyle(.menu)
         }
+        bwSectionHeader("GRAIN")
         sliderRow(
             label: "Grain per Pixel",
             value: filmGrainParams.grainsPerPixel,
@@ -3545,6 +3546,7 @@ private struct ShaderControls: View {
             current.stock = .custom
             onChange(params.withParams(.filmGrain(current)))
         }
+        bwSectionHeader("TONAL PROTECTION")
         sliderRow(
             label: "Protect Highlights",
             value: filmGrainParams.protectHighlights,
@@ -3565,6 +3567,7 @@ private struct ShaderControls: View {
             var updated = filmGrainParams; updated.protectShadows = value
             onChange(params.withParams(.filmGrain(updated)))
         }
+        bwSectionHeader("VARIATION")
         seedRow(
             seed: filmGrainParams.seed,
             varyPerImage: filmGrainParams.varyPerImage

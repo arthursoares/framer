@@ -4085,6 +4085,9 @@ struct ShaderLayerControls: View {
     @AppStorage("bwFilmToningExpanded") private var bwToningExpanded = false
     @AppStorage("bwFilmVignetteExpanded") private var bwVignetteExpanded = false
     @AppStorage("bwFilmBurnExpanded") private var bwBurnExpanded = false
+    @AppStorage("filmGrainGrainExpanded") private var grainGrainExpanded = true
+    @AppStorage("filmGrainProtectionExpanded") private var grainProtectionExpanded = false
+    @AppStorage("filmGrainVariationExpanded") private var grainVariationExpanded = false
 
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
@@ -5095,9 +5098,7 @@ struct ShaderLayerControls: View {
                 }
             }
         )) {
-            ForEach(FilmGrainStock.allCases, id: \.self) { stock in
-                Text(stock.label).tag(stock)
-            }
+            filmStockMenuItems
         }
         .pickerStyle(.menu)
         .labelsHidden()
@@ -5105,65 +5106,88 @@ struct ShaderLayerControls: View {
         .help("Selecting a film retunes the grain density and hardness dials.")
         .denseControlRow("Film Stock")
 
-        sliderRow(
-            title: "Grain per Pixel",
-            value: filmGrainParams.grainsPerPixel,
-            range: expandedRange(1...500, including: filmGrainParams.grainsPerPixel),
-            step: 1,
-            resetValue: filmGrainParams.stock.grainProfile.grainsPerPixel
-        ) { value in
-            guard case .filmGrain(var current) = params.params else { return }
-            current.grainsPerPixel = value
-            current.stock = .custom
-            onChange(params.withParams(.filmGrain(current)))
-        }
-        sliderRow(
-            title: "Soft / Hard",
-            value: filmGrainParams.softness,
-            range: expandedRange(0...1, including: filmGrainParams.softness),
-            step: 0.05,
-            resetValue: filmGrainParams.stock.grainProfile.softness
-        ) { value in
-            guard case .filmGrain(var current) = params.params else { return }
-            current.softness = value
-            current.stock = .custom
-            onChange(params.withParams(.filmGrain(current)))
-        }
-        sliderRow(
-            title: "Protect Highlights",
-            value: filmGrainParams.protectHighlights,
-            range: expandedRange(0...1, including: filmGrainParams.protectHighlights),
-            step: 0.05,
-            resetValue: FilmGrainShaderParams().protectHighlights
-        ) { value in
-            var updated = filmGrainParams; updated.protectHighlights = value
-            onChange(params.withParams(.filmGrain(updated)))
-        }
-        sliderRow(
-            title: "Protect Shadows",
-            value: filmGrainParams.protectShadows,
-            range: expandedRange(0...1, including: filmGrainParams.protectShadows),
-            step: 0.05,
-            resetValue: FilmGrainShaderParams().protectShadows
-        ) { value in
-            var updated = filmGrainParams; updated.protectShadows = value
-            onChange(params.withParams(.filmGrain(updated)))
-        }
-        seedRow(
-            seed: filmGrainParams.seed,
-            varyPerImage: filmGrainParams.varyPerImage
-        ) { newSeed in
-            var updated = filmGrainParams; updated.seed = newSeed
-            onChange(params.withParams(.filmGrain(updated)))
-        }
-        SidebarControlRow("Vary per Image") {
-            StyledToggle(isOn: Binding(
-                get: { filmGrainParams.varyPerImage },
-                set: { value in
-                    var updated = filmGrainParams; updated.varyPerImage = value
-                    onChange(params.withParams(.filmGrain(updated)))
-                }
-            ))
+        CollapsibleSidebarSection("GRAIN", isExpanded: $grainGrainExpanded) {
+            sliderRow(
+                title: "Grain per Pixel",
+                value: filmGrainParams.grainsPerPixel,
+                range: expandedRange(1...500, including: filmGrainParams.grainsPerPixel),
+                step: 1,
+                resetValue: filmGrainParams.stock.grainProfile.grainsPerPixel
+            ) { value in
+                guard case .filmGrain(var current) = params.params else { return }
+                current.grainsPerPixel = value
+                current.stock = .custom
+                onChange(params.withParams(.filmGrain(current)))
+            }
+            sliderRow(
+                title: "Soft / Hard",
+                value: filmGrainParams.softness,
+                range: expandedRange(0...1, including: filmGrainParams.softness),
+                step: 0.05,
+                resetValue: filmGrainParams.stock.grainProfile.softness
+            ) { value in
+                guard case .filmGrain(var current) = params.params else { return }
+                current.softness = value
+                current.stock = .custom
+                onChange(params.withParams(.filmGrain(current)))
+            }
+        } collapsedContent: { EmptyView() }
+
+        CollapsibleSidebarSection("TONAL PROTECTION", isExpanded: $grainProtectionExpanded) {
+            sliderRow(
+                title: "Protect Highlights",
+                value: filmGrainParams.protectHighlights,
+                range: expandedRange(0...1, including: filmGrainParams.protectHighlights),
+                step: 0.05,
+                resetValue: FilmGrainShaderParams().protectHighlights
+            ) { value in
+                var updated = filmGrainParams; updated.protectHighlights = value
+                onChange(params.withParams(.filmGrain(updated)))
+            }
+            sliderRow(
+                title: "Protect Shadows",
+                value: filmGrainParams.protectShadows,
+                range: expandedRange(0...1, including: filmGrainParams.protectShadows),
+                step: 0.05,
+                resetValue: FilmGrainShaderParams().protectShadows
+            ) { value in
+                var updated = filmGrainParams; updated.protectShadows = value
+                onChange(params.withParams(.filmGrain(updated)))
+            }
+        } collapsedContent: { EmptyView() }
+
+        CollapsibleSidebarSection("VARIATION", isExpanded: $grainVariationExpanded) {
+            seedRow(
+                seed: filmGrainParams.seed,
+                varyPerImage: filmGrainParams.varyPerImage
+            ) { newSeed in
+                var updated = filmGrainParams; updated.seed = newSeed
+                onChange(params.withParams(.filmGrain(updated)))
+            }
+            SidebarControlRow("Vary per Image") {
+                StyledToggle(isOn: Binding(
+                    get: { filmGrainParams.varyPerImage },
+                    set: { value in
+                        var updated = filmGrainParams; updated.varyPerImage = value
+                        onChange(params.withParams(.filmGrain(updated)))
+                    }
+                ))
+            }
+        } collapsedContent: { EmptyView() }
+    }
+
+    /// Film-stock menu grouped by manufacturer, same derivation as the B&W
+    /// film menu — new stocks file themselves.
+    @ViewBuilder
+    private var filmStockMenuItems: some View {
+        Text(FilmGrainStock.custom.label).tag(FilmGrainStock.custom)
+        let stocks = FilmGrainStock.allCases.filter { $0 != .custom }
+        let groups = Dictionary(grouping: stocks) { String($0.label.split(separator: " ").first ?? "") }
+        ForEach(groups.keys.sorted(), id: \.self) { maker in
+            Divider()
+            ForEach(groups[maker] ?? [], id: \.self) { stock in
+                Text(stock.label).tag(stock)
+            }
         }
     }
 
