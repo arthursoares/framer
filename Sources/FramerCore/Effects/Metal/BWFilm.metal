@@ -41,9 +41,59 @@ struct BWFilmUniforms {
 
     float protectHighlights;  // 0..100
     float protectShadows;     // 0..100
+    float toningStrength;     // 0..100
+    float toneHueHigh;        // degrees
+
+    float toneStrengthHigh;
+    float toneHueLow;
+    float toneStrengthLow;
+    float toneBalance;        // -100..100
+
+    float vigStrength;        // -100..100
+    float vigSize;            // 0..100
+    float vigShape;           // 1..5 superellipse exponent
+    float beStrengthTop;
+
+    float beStrengthBottom;
+    float beStrengthLeft;
+    float beStrengthRight;
+    float beSizeTop;
+
+    float beSizeBottom;
+    float beSizeLeft;
+    float beSizeRight;
+    float beTransitionTop;
+
+    float beTransitionBottom;
+    float beTransitionLeft;
+    float beTransitionRight;
     float _pad0;
-    float _pad1;
 };
+
+/// HSV -> RGB for the toning tints (h degrees, s/v 0..1).
+inline float3 bwfHSVtoRGB(float h, float s, float v) {
+    float c = v * s;
+    float hp = fmod(h / 60.0, 6.0);
+    float x = c * (1.0 - fabs(fmod(hp, 2.0) - 1.0));
+    float3 rgb;
+    if (hp < 1.0)      rgb = float3(c, x, 0);
+    else if (hp < 2.0) rgb = float3(x, c, 0);
+    else if (hp < 3.0) rgb = float3(0, c, x);
+    else if (hp < 4.0) rgb = float3(0, x, c);
+    else if (hp < 5.0) rgb = float3(x, 0, c);
+    else               rgb = float3(c, 0, x);
+    return rgb + (v - c);
+}
+
+/// One burn-edge contribution: distance-from-edge d (0..1), size sets
+/// reach, transition sets softness. Returns the darkening weight 0..1.
+inline float bwfBurnEdge(float d, float strength, float size, float transition) {
+    if (strength <= 0.0) return 0.0;
+    float reach = size / 100.0 * 0.5;
+    float soft = max(transition / 100.0 * 0.5, 0.01);
+    float w = 1.0 - smoothstep(reach - soft, reach + soft, d);
+    return strength / 100.0 * w;
+}
 
 /// Weight of hue `h` (degrees) for a basis lobe centered at `center`:
 /// triangular falloff over ±60°, so adjacent lobes cross at 0.5 and the
@@ -123,6 +173,39 @@ fragment float4 bwFilmFragment(
     float c1 = curveLUT.read(uint2(i1, 0)).r;
     g = saturate(mix(c0, c1, t));
 
-    float3 final = mix(src, float3(g), saturate(uniforms.intensity));
+    // --- 4. Vignette (superellipse falloff; negative strength darkens) --
+    float2 pos = (float2(pixel) + 0.5) / dims;
+    if (uniforms.vigStrength != 0.0) {
+        float2 rel = pos - float2(0.5, 0.5);
+        rel.x *= dims.x / dims.y;  // aspect-true circle at shape 2
+        float e = clamp(uniforms.vigShape, 1.0, 5.0);
+        float d = pow(pow(fabs(rel.x), e) + pow(fabs(rel.y), e), 1.0 / e);
+        float radius = uniforms.vigSize / 100.0 * 0.9 + 0.1;
+        float fall = smoothstep(radius * 0.55, radius * 1.35, d);
+        g = saturate(g * (1.0 + uniforms.vigStrength / 100.0 * fall));
+    }
+
+    // --- 5. Burn edges ---------------------------------------------------
+    float burn =
+        bwfBurnEdge(pos.y,        uniforms.beStrengthTop,    uniforms.beSizeTop,    uniforms.beTransitionTop) +
+        bwfBurnEdge(1.0 - pos.y,  uniforms.beStrengthBottom, uniforms.beSizeBottom, uniforms.beTransitionBottom) +
+        bwfBurnEdge(pos.x,        uniforms.beStrengthLeft,   uniforms.beSizeLeft,   uniforms.beTransitionLeft) +
+        bwfBurnEdge(1.0 - pos.x,  uniforms.beStrengthRight,  uniforms.beSizeRight,  uniforms.beTransitionRight);
+    g = saturate(g * (1.0 - min(burn, 1.0) * 0.85));
+
+    // --- 6. Split toning (silver = highlights, paper = shadows) ---------
+    float3 outRGB = float3(g);
+    if (uniforms.toningStrength > 0.0) {
+        float pivot = 0.5 - uniforms.toneBalance / 100.0 * 0.3;
+        float hiW = smoothstep(pivot - 0.35, pivot + 0.35, g);
+        float3 toneHi = bwfHSVtoRGB(uniforms.toneHueHigh,
+                                    uniforms.toneStrengthHigh / 100.0 * 0.8, g);
+        float3 toneLo = bwfHSVtoRGB(uniforms.toneHueLow,
+                                    uniforms.toneStrengthLow / 100.0 * 0.8, g);
+        float3 toned = mix(toneLo, toneHi, hiW);
+        outRGB = mix(outRGB, toned, saturate(uniforms.toningStrength / 100.0));
+    }
+
+    float3 final = mix(src, outRGB, saturate(uniforms.intensity));
     return float4(final, 1.0);
 }

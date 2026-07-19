@@ -1599,6 +1599,82 @@ public enum BWFilmResponse: String, Codable, CaseIterable, Sendable {
     }
 }
 
+/// The 24-entry toning table from SEP3's FinishingAdjustments
+/// (`toningPresets` "1"–"24"). Each preset sets the five toning dials;
+/// values are reconstructions of the named darkroom process looks.
+public enum BWToningPreset: Int, Codable, CaseIterable, Sendable {
+    case neutral = 1
+    case splitToner1 = 2, splitToner2 = 3
+    case blueToner1 = 4, blueToner2 = 5, blueToner3 = 6
+    case coffee1 = 7, coffee2 = 8, coffee3 = 9
+    case copper1 = 10, copper2 = 11, copper3 = 12
+    case selenium1 = 13, selenium2 = 14, selenium3 = 15
+    case sepia1 = 16, sepia2 = 17, sepia3 = 18
+    case cyan1 = 19, cyan2 = 20, cyan3 = 21
+    case ambrotype1 = 22, ambrotype2 = 23, ambrotype3 = 24
+
+    public var label: String {
+        switch self {
+        case .neutral: return "Neutral"
+        case .splitToner1: return "Split Toner 1"
+        case .splitToner2: return "Split Toner 2"
+        case .blueToner1: return "Blue Toner 1"
+        case .blueToner2: return "Blue Toner 2"
+        case .blueToner3: return "Blue Toner 3"
+        case .coffee1: return "Coffee 1"
+        case .coffee2: return "Coffee 2"
+        case .coffee3: return "Coffee 3"
+        case .copper1: return "Copper 1"
+        case .copper2: return "Copper 2"
+        case .copper3: return "Copper 3"
+        case .selenium1: return "Selenium 1"
+        case .selenium2: return "Selenium 2"
+        case .selenium3: return "Selenium 3"
+        case .sepia1: return "Sepia 1"
+        case .sepia2: return "Sepia 2"
+        case .sepia3: return "Sepia 3"
+        case .cyan1: return "Cyan 1"
+        case .cyan2: return "Cyan 2"
+        case .cyan3: return "Cyan 3"
+        case .ambrotype1: return "Ambrotype 1"
+        case .ambrotype2: return "Ambrotype 2"
+        case .ambrotype3: return "Ambrotype 3"
+        }
+    }
+
+    /// (silver hue, silver strength, paper hue, paper strength, balance,
+    /// overall strength) — SEP dial names: toneHueHigh/toneStrengthHigh/
+    /// toneHueLow/toneStrengthLow/toneHueBalance/toningStrength.
+    public var toning: (hueHigh: Double, strengthHigh: Double, hueLow: Double, strengthLow: Double, balance: Double, strength: Double) {
+        switch self {
+        case .neutral:     return (40, 0, 40, 0, 0, 0)
+        case .splitToner1: return (45, 20, 220, 25, 0, 50)
+        case .splitToner2: return (200, 20, 40, 30, 10, 50)
+        case .blueToner1:  return (220, 15, 215, 15, 0, 40)
+        case .blueToner2:  return (220, 28, 215, 28, 0, 55)
+        case .blueToner3:  return (222, 40, 215, 42, 0, 70)
+        case .coffee1:     return (32, 18, 28, 22, 0, 40)
+        case .coffee2:     return (32, 28, 28, 34, 0, 55)
+        case .coffee3:     return (30, 38, 26, 46, 0, 70)
+        case .copper1:     return (22, 20, 18, 24, 0, 40)
+        case .copper2:     return (22, 32, 18, 36, 0, 55)
+        case .copper3:     return (20, 44, 16, 48, 0, 70)
+        case .selenium1:   return (290, 10, 280, 14, -10, 35)
+        case .selenium2:   return (290, 16, 280, 22, -10, 50)
+        case .selenium3:   return (288, 24, 278, 30, -10, 65)
+        case .sepia1:      return (38, 22, 34, 28, 5, 45)
+        case .sepia2:      return (38, 32, 34, 40, 5, 60)
+        case .sepia3:      return (36, 42, 32, 52, 5, 75)
+        case .cyan1:       return (190, 16, 188, 18, 0, 40)
+        case .cyan2:       return (190, 26, 188, 30, 0, 55)
+        case .cyan3:       return (192, 36, 186, 42, 0, 70)
+        case .ambrotype1:  return (90, 8, 70, 14, -15, 40)
+        case .ambrotype2:  return (90, 12, 70, 20, -15, 55)
+        case .ambrotype3:  return (88, 16, 66, 26, -15, 70)
+        }
+    }
+}
+
 /// Silver-Efex-style black-and-white conversion (BWFilm.metal). Modeled on
 /// the SilverEfexParams pipeline characterized by bundle inspection, minus
 /// the ColorFilter block (dropped by design):
@@ -1630,6 +1706,34 @@ public struct BWFilmShaderParams: Codable, Equatable, Sendable {
     public var protectHighlights: Double
     public var protectShadows: Double
 
+    // Finishing — toning (SEP FinishingAdjustments).
+    public var toningPreset: BWToningPreset
+    public var toningStrength: Double    // 0...100 overall
+    public var toneHueHigh: Double       // Silver Hue, 0...360
+    public var toneStrengthHigh: Double  // Silver Toning, 0...100
+    public var toneHueLow: Double        // Paper Hue, 0...360
+    public var toneStrengthLow: Double   // Paper Toning, 0...100
+    public var toneBalance: Double       // -100...100 silver<->paper
+
+    // Finishing — vignette.
+    public var vigStrength: Double       // -100 (darken) ... 100 (lighten)
+    public var vigSize: Double           // 0...100 radius
+    public var vigShape: Double          // 2 (circle) ... 4.5 (rectangle)
+
+    // Finishing — burn edges, per edge: strength/size/transition 0...100.
+    public var beStrengthTop: Double
+    public var beStrengthBottom: Double
+    public var beStrengthLeft: Double
+    public var beStrengthRight: Double
+    public var beSizeTop: Double
+    public var beSizeBottom: Double
+    public var beSizeLeft: Double
+    public var beSizeRight: Double
+    public var beTransitionTop: Double
+    public var beTransitionBottom: Double
+    public var beTransitionLeft: Double
+    public var beTransitionRight: Double
+
     // Tone curve (lacdata-compatible).
     public var curveGamma: Double        // -1...1, 0 neutral, + brightens mids
     public var curveLowX: Double         // black point input
@@ -1645,6 +1749,16 @@ public struct BWFilmShaderParams: Codable, Equatable, Sendable {
         brightness: Double = 0, brightnessHighlights: Double = 0,
         brightnessMidtones: Double = 0, brightnessShadows: Double = 0,
         contrast: Double = 0, protectHighlights: Double = 0, protectShadows: Double = 0,
+        toningPreset: BWToningPreset = .neutral, toningStrength: Double = 0,
+        toneHueHigh: Double = 40, toneStrengthHigh: Double = 0,
+        toneHueLow: Double = 40, toneStrengthLow: Double = 0, toneBalance: Double = 0,
+        vigStrength: Double = 0, vigSize: Double = 50, vigShape: Double = 3,
+        beStrengthTop: Double = 0, beStrengthBottom: Double = 0,
+        beStrengthLeft: Double = 0, beStrengthRight: Double = 0,
+        beSizeTop: Double = 25, beSizeBottom: Double = 25,
+        beSizeLeft: Double = 25, beSizeRight: Double = 25,
+        beTransitionTop: Double = 50, beTransitionBottom: Double = 50,
+        beTransitionLeft: Double = 50, beTransitionRight: Double = 50,
         curveGamma: Double = 0, curveLowX: Double = 0, curveLowY: Double = 0,
         curveHighX: Double = 1, curveHighY: Double = 1,
         curvePoints: [BWCurvePoint] = []
@@ -1664,6 +1778,30 @@ public struct BWFilmShaderParams: Codable, Equatable, Sendable {
         self.contrast = clampSens(contrast)
         self.protectHighlights = max(0, min(100, protectHighlights))
         self.protectShadows = max(0, min(100, protectShadows))
+        func clamp01_100(_ v: Double) -> Double { max(0, min(100, v)) }
+        func clampHue(_ v: Double) -> Double { max(0, min(360, v)) }
+        self.toningPreset = toningPreset
+        self.toningStrength = clamp01_100(toningStrength)
+        self.toneHueHigh = clampHue(toneHueHigh)
+        self.toneStrengthHigh = clamp01_100(toneStrengthHigh)
+        self.toneHueLow = clampHue(toneHueLow)
+        self.toneStrengthLow = clamp01_100(toneStrengthLow)
+        self.toneBalance = clampSens(toneBalance)
+        self.vigStrength = clampSens(vigStrength)
+        self.vigSize = clamp01_100(vigSize)
+        self.vigShape = max(1, min(5, vigShape))
+        self.beStrengthTop = clamp01_100(beStrengthTop)
+        self.beStrengthBottom = clamp01_100(beStrengthBottom)
+        self.beStrengthLeft = clamp01_100(beStrengthLeft)
+        self.beStrengthRight = clamp01_100(beStrengthRight)
+        self.beSizeTop = clamp01_100(beSizeTop)
+        self.beSizeBottom = clamp01_100(beSizeBottom)
+        self.beSizeLeft = clamp01_100(beSizeLeft)
+        self.beSizeRight = clamp01_100(beSizeRight)
+        self.beTransitionTop = clamp01_100(beTransitionTop)
+        self.beTransitionBottom = clamp01_100(beTransitionBottom)
+        self.beTransitionLeft = clamp01_100(beTransitionLeft)
+        self.beTransitionRight = clamp01_100(beTransitionRight)
         self.curveGamma = max(-1, min(1, curveGamma))
         self.curveLowX = max(0, min(1, curveLowX))
         self.curveLowY = max(0, min(1, curveLowY))
@@ -1677,6 +1815,12 @@ public struct BWFilmShaderParams: Codable, Equatable, Sendable {
         case sensRed, sensYellow, sensGreen, sensCyan, sensBlue, sensMagenta
         case brightness, brightnessHighlights, brightnessMidtones, brightnessShadows
         case contrast, protectHighlights, protectShadows
+        case toningPreset, toningStrength, toneHueHigh, toneStrengthHigh
+        case toneHueLow, toneStrengthLow, toneBalance
+        case vigStrength, vigSize, vigShape
+        case beStrengthTop, beStrengthBottom, beStrengthLeft, beStrengthRight
+        case beSizeTop, beSizeBottom, beSizeLeft, beSizeRight
+        case beTransitionTop, beTransitionBottom, beTransitionLeft, beTransitionRight
         case curveGamma, curveLowX, curveLowY, curveHighX, curveHighY, curvePoints
     }
 
@@ -1697,6 +1841,28 @@ public struct BWFilmShaderParams: Codable, Equatable, Sendable {
             contrast: try c.decodeIfPresent(Double.self, forKey: .contrast) ?? 0,
             protectHighlights: try c.decodeIfPresent(Double.self, forKey: .protectHighlights) ?? 0,
             protectShadows: try c.decodeIfPresent(Double.self, forKey: .protectShadows) ?? 0,
+            toningPreset: try c.decodeIfPresent(BWToningPreset.self, forKey: .toningPreset) ?? .neutral,
+            toningStrength: try c.decodeIfPresent(Double.self, forKey: .toningStrength) ?? 0,
+            toneHueHigh: try c.decodeIfPresent(Double.self, forKey: .toneHueHigh) ?? 40,
+            toneStrengthHigh: try c.decodeIfPresent(Double.self, forKey: .toneStrengthHigh) ?? 0,
+            toneHueLow: try c.decodeIfPresent(Double.self, forKey: .toneHueLow) ?? 40,
+            toneStrengthLow: try c.decodeIfPresent(Double.self, forKey: .toneStrengthLow) ?? 0,
+            toneBalance: try c.decodeIfPresent(Double.self, forKey: .toneBalance) ?? 0,
+            vigStrength: try c.decodeIfPresent(Double.self, forKey: .vigStrength) ?? 0,
+            vigSize: try c.decodeIfPresent(Double.self, forKey: .vigSize) ?? 50,
+            vigShape: try c.decodeIfPresent(Double.self, forKey: .vigShape) ?? 3,
+            beStrengthTop: try c.decodeIfPresent(Double.self, forKey: .beStrengthTop) ?? 0,
+            beStrengthBottom: try c.decodeIfPresent(Double.self, forKey: .beStrengthBottom) ?? 0,
+            beStrengthLeft: try c.decodeIfPresent(Double.self, forKey: .beStrengthLeft) ?? 0,
+            beStrengthRight: try c.decodeIfPresent(Double.self, forKey: .beStrengthRight) ?? 0,
+            beSizeTop: try c.decodeIfPresent(Double.self, forKey: .beSizeTop) ?? 25,
+            beSizeBottom: try c.decodeIfPresent(Double.self, forKey: .beSizeBottom) ?? 25,
+            beSizeLeft: try c.decodeIfPresent(Double.self, forKey: .beSizeLeft) ?? 25,
+            beSizeRight: try c.decodeIfPresent(Double.self, forKey: .beSizeRight) ?? 25,
+            beTransitionTop: try c.decodeIfPresent(Double.self, forKey: .beTransitionTop) ?? 50,
+            beTransitionBottom: try c.decodeIfPresent(Double.self, forKey: .beTransitionBottom) ?? 50,
+            beTransitionLeft: try c.decodeIfPresent(Double.self, forKey: .beTransitionLeft) ?? 50,
+            beTransitionRight: try c.decodeIfPresent(Double.self, forKey: .beTransitionRight) ?? 50,
             curveGamma: try c.decodeIfPresent(Double.self, forKey: .curveGamma) ?? 0,
             curveLowX: try c.decodeIfPresent(Double.self, forKey: .curveLowX) ?? 0,
             curveLowY: try c.decodeIfPresent(Double.self, forKey: .curveLowY) ?? 0,
@@ -1704,6 +1870,21 @@ public struct BWFilmShaderParams: Codable, Equatable, Sendable {
             curveHighY: try c.decodeIfPresent(Double.self, forKey: .curveHighY) ?? 1,
             curvePoints: try c.decodeIfPresent([BWCurvePoint].self, forKey: .curvePoints) ?? []
         )
+    }
+
+    /// Set the five toning dials + overall strength from a toning preset
+    /// (SEP's 24-entry table); everything else is untouched.
+    public func applyingToningPreset(_ preset: BWToningPreset) -> BWFilmShaderParams {
+        var updated = self
+        let t = preset.toning
+        updated.toningPreset = preset
+        updated.toneHueHigh = t.hueHigh
+        updated.toneStrengthHigh = t.strengthHigh
+        updated.toneHueLow = t.hueLow
+        updated.toneStrengthLow = t.strengthLow
+        updated.toneBalance = t.balance
+        updated.toningStrength = t.strength
+        return updated
     }
 
     /// Set the six sensitivity dials to a film response profile (the picker

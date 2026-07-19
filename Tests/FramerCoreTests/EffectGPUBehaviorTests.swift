@@ -552,6 +552,84 @@ final class EffectGPUBehaviorTests: XCTestCase {
                           "ortho film must render red much darker than neutral")
     }
 
+    func testBWFilmToningTintsHighlightsAndShadowsSeparately() throws {
+        try requireMetal()
+        let img = makeTestImage()
+        // Sepia silver (warm, hue 38) + blue paper (hue 220): highlights
+        // must lean warm (R > B), shadows must lean cool (B > R).
+        let p = BWFilmShaderParams(
+            toningStrength: 80, toneHueHigh: 38, toneStrengthHigh: 60,
+            toneHueLow: 220, toneStrengthLow: 60)
+        let out = try BWFilmRenderer.render(to: img, params: bwParams(p))
+        let bytes = drawToBytes(out)
+        var warmHi = 0.0, coolSh = 0.0, nHi = 0.0, nSh = 0.0
+        for i in stride(from: 0, to: bytes.count, by: 4) {
+            let r = Double(bytes[i]), g = Double(bytes[i + 1]), b = Double(bytes[i + 2])
+            let luma = (r + g + b) / 3
+            if luma > 170 { warmHi += r - b; nHi += 1 }
+            if luma < 85 { coolSh += b - r; nSh += 1 }
+        }
+        XCTAssertGreaterThan(nHi, 100, "test image should have highlights")
+        XCTAssertGreaterThan(nSh, 100, "test image should have shadows")
+        XCTAssertGreaterThan(warmHi / nHi, 2, "highlights should tint warm (silver hue)")
+        XCTAssertGreaterThan(coolSh / nSh, 2, "shadows should tint cool (paper hue)")
+    }
+
+    func testBWFilmToningPresetTableIsDistinctAndApplies() {
+        // Non-neutral presets must be pairwise distinct; applying one sets
+        // the dials without touching conversion settings.
+        let all = BWToningPreset.allCases.filter { $0 != .neutral }
+        for i in 0..<all.count {
+            for j in (i + 1)..<all.count {
+                XCTAssertFalse(all[i].toning == all[j].toning,
+                               "\(all[i]) and \(all[j]) share identical toning values")
+            }
+        }
+        let start = BWFilmShaderParams(sensRed: 33, contrast: 21)
+        let sepia = start.applyingToningPreset(.sepia2)
+        XCTAssertEqual(sepia.toningPreset, .sepia2)
+        XCTAssertEqual(sepia.toningStrength, BWToningPreset.sepia2.toning.strength)
+        XCTAssertEqual(sepia.sensRed, 33, "conversion must survive a toning change")
+    }
+
+    func testBWFilmVignetteDarkensCornersOnly() throws {
+        try requireMetal()
+        let img = makeTestImage()
+        let plain = try BWFilmRenderer.render(to: img, params: bwParams(BWFilmShaderParams()))
+        let vig = try BWFilmRenderer.render(
+            to: img, params: bwParams(BWFilmShaderParams(vigStrength: -80, vigSize: 40)))
+        let pb = drawToBytes(plain), vb = drawToBytes(vig)
+        let w = img.width
+        func luma(_ b: [UInt8], _ x: Int, _ y: Int) -> Double { Double(b[(y * w + x) * 4]) }
+        // The vignette is multiplicative, so assert a RELATIVE darkening —
+        // the test image's corners are already dim, making absolute deltas
+        // small.
+        let cornerPlain = luma(pb, 2, 2)
+        let cornerVig = luma(vb, 2, 2)
+        let centerDelta = abs(luma(pb, w / 2, img.height / 2) - luma(vb, w / 2, img.height / 2))
+        XCTAssertLessThan(cornerVig, cornerPlain * 0.55 + 2,
+                          "corner should darken to <~half under -80 vignette (\(cornerPlain) → \(cornerVig))")
+        XCTAssertLessThanOrEqual(centerDelta, 3, "center should be untouched")
+    }
+
+    func testBWFilmBurnEdgesAreIndependent() throws {
+        try requireMetal()
+        let img = makeTestImage()
+        let topOnly = try BWFilmRenderer.render(
+            to: img, params: bwParams(BWFilmShaderParams(beStrengthTop: 90, beSizeTop: 40)))
+        let plain = try BWFilmRenderer.render(to: img, params: bwParams(BWFilmShaderParams()))
+        let tb = drawToBytes(topOnly), pb = drawToBytes(plain)
+        let w = img.width, h = img.height
+        func rowMean(_ b: [UInt8], _ y: Int) -> Double {
+            var t = 0.0
+            for x in 0..<w { t += Double(b[(y * w + x) * 4]) }
+            return t / Double(w)
+        }
+        XCTAssertLessThan(rowMean(tb, 2), rowMean(pb, 2) - 15, "top rows should burn darker")
+        XCTAssertEqual(rowMean(tb, h - 3), rowMean(pb, h - 3), accuracy: 3,
+                       "bottom rows should be untouched by a top-only burn")
+    }
+
     func testBWFilmDeterministicAndRoundTrips() throws {
         try requireMetal()
         let img = makeTestImage()
@@ -568,7 +646,15 @@ final class EffectGPUBehaviorTests: XCTestCase {
             sensBlue: 50, sensMagenta: -60,
             brightness: 5, brightnessHighlights: -10, brightnessMidtones: 15,
             brightnessShadows: -20, contrast: 25, protectHighlights: 30,
-            protectShadows: 35, curveGamma: -0.4, curveLowX: 0.05,
+            protectShadows: 35,
+            toningPreset: .selenium2, toningStrength: 44, toneHueHigh: 100,
+            toneStrengthHigh: 22, toneHueLow: 200, toneStrengthLow: 33,
+            toneBalance: -12, vigStrength: -40, vigSize: 60, vigShape: 4.2,
+            beStrengthTop: 11, beStrengthBottom: 12, beStrengthLeft: 13,
+            beStrengthRight: 14, beSizeTop: 21, beSizeBottom: 22,
+            beSizeLeft: 23, beSizeRight: 24, beTransitionTop: 31,
+            beTransitionBottom: 32, beTransitionLeft: 33, beTransitionRight: 34,
+            curveGamma: -0.4, curveLowX: 0.05,
             curveLowY: 0.1, curveHighX: 0.9, curveHighY: 0.95,
             curvePoints: [BWCurvePoint(x: 0.3, y: 0.25)])
         let layer = ShaderLayerParams(style: .bwFilm, params: .bwFilm(original))

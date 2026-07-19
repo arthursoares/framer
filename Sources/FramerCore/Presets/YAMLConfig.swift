@@ -133,6 +133,20 @@ public enum YAMLConfig {
         var shader_bw_curve_high_y: Double?
         // Interior curve points, flattened [x1, y1, x2, y2, ...]
         var shader_bw_curve_points: [Double]?
+        var shader_bw_toning_preset: Int?
+        var shader_bw_toning_strength: Double?
+        var shader_bw_tone_hue_high: Double?
+        var shader_bw_tone_strength_high: Double?
+        var shader_bw_tone_hue_low: Double?
+        var shader_bw_tone_strength_low: Double?
+        var shader_bw_tone_balance: Double?
+        var shader_bw_vig_strength: Double?
+        var shader_bw_vig_size: Double?
+        var shader_bw_vig_shape: Double?
+        // Burn edges, [top, bottom, left, right] per group.
+        var shader_bw_burn_strengths: [Double]?
+        var shader_bw_burn_sizes: [Double]?
+        var shader_bw_burn_transitions: [Double]?
         var gpu_effect_kind: String?
         var gpu_common_brightness: Double?
         var gpu_common_contrast: Double?
@@ -1023,6 +1037,19 @@ public enum YAMLConfig {
             if !p.curvePoints.isEmpty {
                 schema.shader_bw_curve_points = p.curvePoints.flatMap { [$0.x, $0.y] }
             }
+            schema.shader_bw_toning_preset = p.toningPreset.rawValue
+            schema.shader_bw_toning_strength = p.toningStrength
+            schema.shader_bw_tone_hue_high = p.toneHueHigh
+            schema.shader_bw_tone_strength_high = p.toneStrengthHigh
+            schema.shader_bw_tone_hue_low = p.toneHueLow
+            schema.shader_bw_tone_strength_low = p.toneStrengthLow
+            schema.shader_bw_tone_balance = p.toneBalance
+            schema.shader_bw_vig_strength = p.vigStrength
+            schema.shader_bw_vig_size = p.vigSize
+            schema.shader_bw_vig_shape = p.vigShape
+            schema.shader_bw_burn_strengths = [p.beStrengthTop, p.beStrengthBottom, p.beStrengthLeft, p.beStrengthRight]
+            schema.shader_bw_burn_sizes = [p.beSizeTop, p.beSizeBottom, p.beSizeLeft, p.beSizeRight]
+            schema.shader_bw_burn_transitions = [p.beTransitionTop, p.beTransitionBottom, p.beTransitionLeft, p.beTransitionRight]
         }
     }
 
@@ -1138,6 +1165,10 @@ public enum YAMLConfig {
                     i += 2
                 }
             }
+            let burnS = schema.shader_bw_burn_strengths ?? []
+            let burnSz = schema.shader_bw_burn_sizes ?? []
+            let burnT = schema.shader_bw_burn_transitions ?? []
+            func at(_ a: [Double], _ i: Int, _ d: Double) -> Double { i < a.count ? a[i] : d }
             return .bwFilm(BWFilmShaderParams(
                 response: schema.shader_bw_response.flatMap(BWFilmResponse.init(rawValue:)) ?? .custom,
                 sensRed: schema.shader_bw_sens_red ?? 0,
@@ -1153,6 +1184,22 @@ public enum YAMLConfig {
                 contrast: schema.shader_bw_contrast ?? 0,
                 protectHighlights: schema.shader_bw_protect_highlights ?? 0,
                 protectShadows: schema.shader_bw_protect_shadows ?? 0,
+                toningPreset: schema.shader_bw_toning_preset.flatMap(BWToningPreset.init(rawValue:)) ?? .neutral,
+                toningStrength: schema.shader_bw_toning_strength ?? 0,
+                toneHueHigh: schema.shader_bw_tone_hue_high ?? 40,
+                toneStrengthHigh: schema.shader_bw_tone_strength_high ?? 0,
+                toneHueLow: schema.shader_bw_tone_hue_low ?? 40,
+                toneStrengthLow: schema.shader_bw_tone_strength_low ?? 0,
+                toneBalance: schema.shader_bw_tone_balance ?? 0,
+                vigStrength: schema.shader_bw_vig_strength ?? 0,
+                vigSize: schema.shader_bw_vig_size ?? 50,
+                vigShape: schema.shader_bw_vig_shape ?? 3,
+                beStrengthTop: at(burnS, 0, 0), beStrengthBottom: at(burnS, 1, 0),
+                beStrengthLeft: at(burnS, 2, 0), beStrengthRight: at(burnS, 3, 0),
+                beSizeTop: at(burnSz, 0, 25), beSizeBottom: at(burnSz, 1, 25),
+                beSizeLeft: at(burnSz, 2, 25), beSizeRight: at(burnSz, 3, 25),
+                beTransitionTop: at(burnT, 0, 50), beTransitionBottom: at(burnT, 1, 50),
+                beTransitionLeft: at(burnT, 2, 50), beTransitionRight: at(burnT, 3, 50),
                 curveGamma: schema.shader_bw_curve_gamma ?? 0,
                 curveLowX: schema.shader_bw_curve_low_x ?? 0,
                 curveLowY: schema.shader_bw_curve_low_y ?? 0,

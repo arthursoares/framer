@@ -4172,6 +4172,48 @@ struct ShaderLayerControls: View {
         bwFilmSlider("Black Lift", bw.curveLowY, range: 0...0.5, step: 0.01) { v, p in var u = p; u.curveLowY = v; return u }
         bwFilmSlider("White Point", bw.curveHighX, range: 0.5...1, step: 0.01, resetValue: 1) { v, p in var u = p; u.curveHighX = v; return u }
         bwFilmSlider("White Cap", bw.curveHighY, range: 0.5...1, step: 0.01, resetValue: 1) { v, p in var u = p; u.curveHighY = v; return u }
+
+        SimpleLayerEditorDivider()
+
+        Picker("", selection: Binding(
+            get: { bw.toningPreset },
+            set: { value in
+                onChange(params.withParams(.bwFilm(bw.applyingToningPreset(value))))
+            }
+        )) {
+            ForEach(BWToningPreset.allCases, id: \.self) { preset in
+                Text(preset.label).tag(preset)
+            }
+        }
+        .pickerStyle(.menu)
+        .labelsHidden()
+        .denseControlRow("Toning")
+
+        bwFilmSlider("Strength", bw.toningStrength, range: 0...100) { v, p in var u = p; u.toningStrength = v; return u }
+        bwFilmSlider("Silver Hue", bw.toneHueHigh, range: 0...360, resetValue: 40) { v, p in var u = p; u.toneHueHigh = v; return u }
+        bwFilmSlider("Silver Toning", bw.toneStrengthHigh, range: 0...100) { v, p in var u = p; u.toneStrengthHigh = v; return u }
+        bwFilmSlider("Paper Hue", bw.toneHueLow, range: 0...360, resetValue: 40) { v, p in var u = p; u.toneHueLow = v; return u }
+        bwFilmSlider("Paper Toning", bw.toneStrengthLow, range: 0...100) { v, p in var u = p; u.toneStrengthLow = v; return u }
+        bwFilmSlider("Balance", bw.toneBalance) { v, p in var u = p; u.toneBalance = v; return u }
+
+        SimpleLayerEditorDivider()
+
+        bwFilmSlider("Vignette", bw.vigStrength) { v, p in var u = p; u.vigStrength = v; return u }
+        bwFilmSlider("Vignette Size", bw.vigSize, range: 0...100, resetValue: 50) { v, p in var u = p; u.vigSize = v; return u }
+        bwFilmSlider("Circle / Rectangle", bw.vigShape, range: 1...5, step: 0.1, resetValue: 3) { v, p in var u = p; u.vigShape = v; return u }
+
+        SimpleLayerEditorDivider()
+
+        bwFilmSlider("Burn Top", bw.beStrengthTop, range: 0...100) { v, p in var u = p; u.beStrengthTop = v; return u }
+        bwFilmSlider("Burn Bottom", bw.beStrengthBottom, range: 0...100) { v, p in var u = p; u.beStrengthBottom = v; return u }
+        bwFilmSlider("Burn Left", bw.beStrengthLeft, range: 0...100) { v, p in var u = p; u.beStrengthLeft = v; return u }
+        bwFilmSlider("Burn Right", bw.beStrengthRight, range: 0...100) { v, p in var u = p; u.beStrengthRight = v; return u }
+        bwFilmSlider("Burn Size", bw.beSizeTop, range: 0...100, resetValue: 25) { v, p in
+            var u = p; u.beSizeTop = v; u.beSizeBottom = v; u.beSizeLeft = v; u.beSizeRight = v; return u
+        }
+        bwFilmSlider("Burn Transition", bw.beTransitionTop, range: 0...100, resetValue: 50) { v, p in
+            var u = p; u.beTransitionTop = v; u.beTransitionBottom = v; u.beTransitionLeft = v; u.beTransitionRight = v; return u
+        }
     }
 
     private func bwFilmSlider(

@@ -31,8 +31,33 @@ public enum BWFilmRenderer {
 
         var protectHighlights: Float = 0
         var protectShadows: Float = 0
+        var toningStrength: Float = 0
+        var toneHueHigh: Float = 40
+
+        var toneStrengthHigh: Float = 0
+        var toneHueLow: Float = 40
+        var toneStrengthLow: Float = 0
+        var toneBalance: Float = 0
+
+        var vigStrength: Float = 0
+        var vigSize: Float = 50
+        var vigShape: Float = 3
+        var beStrengthTop: Float = 0
+
+        var beStrengthBottom: Float = 0
+        var beStrengthLeft: Float = 0
+        var beStrengthRight: Float = 0
+        var beSizeTop: Float = 25
+
+        var beSizeBottom: Float = 25
+        var beSizeLeft: Float = 25
+        var beSizeRight: Float = 25
+        var beTransitionTop: Float = 50
+
+        var beTransitionBottom: Float = 50
+        var beTransitionLeft: Float = 50
+        var beTransitionRight: Float = 50
         var _pad0: Float = 0
-        var _pad1: Float = 0
     }
 
     /// Bake the tone curve into 256 output samples. SEP lacdata semantics:
@@ -118,6 +143,27 @@ public enum BWFilmRenderer {
         uniforms.contrast = Float(bw.contrast)
         uniforms.protectHighlights = Float(bw.protectHighlights)
         uniforms.protectShadows = Float(bw.protectShadows)
+        uniforms.toningStrength = Float(bw.toningStrength)
+        uniforms.toneHueHigh = Float(bw.toneHueHigh)
+        uniforms.toneStrengthHigh = Float(bw.toneStrengthHigh)
+        uniforms.toneHueLow = Float(bw.toneHueLow)
+        uniforms.toneStrengthLow = Float(bw.toneStrengthLow)
+        uniforms.toneBalance = Float(bw.toneBalance)
+        uniforms.vigStrength = Float(bw.vigStrength)
+        uniforms.vigSize = Float(bw.vigSize)
+        uniforms.vigShape = Float(bw.vigShape)
+        uniforms.beStrengthTop = Float(bw.beStrengthTop)
+        uniforms.beStrengthBottom = Float(bw.beStrengthBottom)
+        uniforms.beStrengthLeft = Float(bw.beStrengthLeft)
+        uniforms.beStrengthRight = Float(bw.beStrengthRight)
+        uniforms.beSizeTop = Float(bw.beSizeTop)
+        uniforms.beSizeBottom = Float(bw.beSizeBottom)
+        uniforms.beSizeLeft = Float(bw.beSizeLeft)
+        uniforms.beSizeRight = Float(bw.beSizeRight)
+        uniforms.beTransitionTop = Float(bw.beTransitionTop)
+        uniforms.beTransitionBottom = Float(bw.beTransitionBottom)
+        uniforms.beTransitionLeft = Float(bw.beTransitionLeft)
+        uniforms.beTransitionRight = Float(bw.beTransitionRight)
 
         let pipeline = try library.pipeline(for: "bwFilmFragment")
         // Nearest sampler — the shader reads only its own pinned pixel;
