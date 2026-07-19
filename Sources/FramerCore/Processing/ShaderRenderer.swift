@@ -42,6 +42,8 @@ public enum ShaderRenderer {
             return try HalftoneRenderer.render(to: image, params: params)
         case .kuwahara:
             return try KuwaharaRenderer.render(to: image, params: params)
+        case .roughBorder:
+            return try RoughBorderRenderer.render(to: image, params: params)
         }
     }
 }

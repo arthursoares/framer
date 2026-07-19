@@ -112,6 +112,11 @@ public enum YAMLConfig {
         // Kuwahara legacy: 0..8 (0 = full effect). Replaced by shader_softness
         // (already declared above; shared with Crimewave/Narc/Shiba/DistantPast).
         var shader_sharpness: Double?
+        var shader_border_size: Double?
+        var shader_border_spread: Double?
+        var shader_border_roughness: Double?
+        var shader_border_seed: Int?
+        var shader_border_color: String?
         var gpu_effect_kind: String?
         var gpu_common_brightness: Double?
         var gpu_common_contrast: Double?
@@ -979,6 +984,12 @@ public enum YAMLConfig {
         case .kuwahara(let p):
             schema.shader_kernel_size = p.kernelSize
             schema.shader_softness = p.softness
+        case .roughBorder(let p):
+            schema.shader_border_size = p.size
+            schema.shader_border_spread = p.spread
+            schema.shader_border_roughness = p.roughness
+            schema.shader_border_seed = p.seed
+            schema.shader_border_color = p.borderColor.hex
         }
     }
 
@@ -1084,6 +1095,14 @@ public enum YAMLConfig {
             return .kuwahara(KuwaharaShaderParams(
                 kernelSize: schema.shader_kernel_size ?? 4,
                 softness: softness
+            ))
+        case .roughBorder:
+            return .roughBorder(RoughBorderShaderParams(
+                size: schema.shader_border_size ?? 0.05,
+                spread: schema.shader_border_spread ?? 0.5,
+                roughness: schema.shader_border_roughness ?? 0.5,
+                seed: schema.shader_border_seed ?? 1,
+                borderColor: (schema.shader_border_color.flatMap { try? CodableColor(hex: $0) }) ?? .white
             ))
         }
     }

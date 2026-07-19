@@ -4124,6 +4124,8 @@ struct ShaderLayerControls: View {
                 halftoneControls(halftoneParams)
             case .kuwahara(let kuwaharaParams):
                 kuwaharaControls(kuwaharaParams)
+            case .roughBorder(let roughBorderParams):
+                roughBorderControls(roughBorderParams)
             }
         }
     }
@@ -4773,6 +4775,70 @@ struct ShaderLayerControls: View {
             var updated = kuwaharaParams; updated.softness = value
             onChange(params.withParams(.kuwahara(updated)))
         }
+    }
+
+    @ViewBuilder
+    private func roughBorderControls(_ roughBorderParams: RoughBorderShaderParams) -> some View {
+        sliderRow(
+            title: "Size",
+            value: roughBorderParams.size,
+            range: 0...0.25,
+            step: 0.005,
+            resetValue: RoughBorderShaderParams().size
+        ) { value in
+            var updated = roughBorderParams; updated.size = value
+            onChange(params.withParams(.roughBorder(updated)))
+        }
+        sliderRow(
+            title: "Spread",
+            value: roughBorderParams.spread,
+            range: 0...1,
+            step: 0.05,
+            resetValue: RoughBorderShaderParams().spread
+        ) { value in
+            var updated = roughBorderParams; updated.spread = value
+            onChange(params.withParams(.roughBorder(updated)))
+        }
+        sliderRow(
+            title: "Roughness",
+            value: roughBorderParams.roughness,
+            range: 0...1,
+            step: 0.05,
+            resetValue: RoughBorderShaderParams().roughness
+        ) { value in
+            var updated = roughBorderParams; updated.roughness = value
+            onChange(params.withParams(.roughBorder(updated)))
+        }
+        sliderRow(
+            title: "Seed",
+            value: Double(roughBorderParams.seed),
+            range: 0...9999,
+            step: 1,
+            resetValue: Double(RoughBorderShaderParams().seed)
+        ) { value in
+            var updated = roughBorderParams; updated.seed = Int(value.rounded())
+            onChange(params.withParams(.roughBorder(updated)))
+        }
+        SidebarControlRow("Vary Border") {
+            Button {
+                var updated = roughBorderParams
+                updated.seed = Int.random(in: 0...9999)
+                onChange(params.withParams(.roughBorder(updated)))
+            } label: {
+                Label("Shuffle", systemImage: "shuffle")
+                    .font(AppFont.controlLabel)
+            }
+            .buttonStyle(.plain)
+            .foregroundStyle(Color.text2)
+        }
+        labeledColorPicker("Color", selection: Binding(
+            get: { Color(nsColor: NSColor(cgColor: roughBorderParams.borderColor.cgColor) ?? .white) },
+            set: { newColor in
+                guard let hex = newColor.hexString, let codable = try? CodableColor(hex: hex) else { return }
+                var updated = roughBorderParams; updated.borderColor = codable
+                onChange(params.withParams(.roughBorder(updated)))
+            }
+        ))
     }
 
     @ViewBuilder

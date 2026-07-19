@@ -1023,6 +1023,7 @@ public enum ShaderStyle: String, Codable, CaseIterable, Sendable {
     case crt
     case halftone
     case kuwahara
+    case roughBorder
 
     public var label: String {
         switch self {
@@ -1035,6 +1036,7 @@ public enum ShaderStyle: String, Codable, CaseIterable, Sendable {
         case .crt: return "CRT"
         case .halftone: return "Halftone"
         case .kuwahara: return "Kuwahara"
+        case .roughBorder: return "Rough Border"
         }
     }
 
@@ -1053,6 +1055,7 @@ public enum ShaderStyle: String, Codable, CaseIterable, Sendable {
         case .crt:         return "tv"
         case .halftone:    return "circle.dotted"
         case .kuwahara:    return "paintbrush.pointed"
+        case .roughBorder: return "square.dashed"
         }
     }
 
@@ -1510,6 +1513,52 @@ public struct KuwaharaShaderParams: Codable, Equatable, Sendable {
     }
 }
 
+/// Seeded procedural darkroom border (RoughBorder.metal). Behavior modeled
+/// on Silver Efex Pro 3's Image Borders: thickness and noise are computed
+/// in units of min(width, height), so the border stays proportional across
+/// resolutions and aspect ratios, and `seed` makes each variation exactly
+/// reproducible (SEP3's "Vary Border" number).
+public struct RoughBorderShaderParams: Codable, Equatable, Sendable {
+    /// Border thickness as a fraction of min(width, height). 0..0.25.
+    public var size: Double
+    /// How far the boundary wanders, as a fraction of `size`. 0..1.
+    public var spread: Double
+    /// Clean (long smooth undulation) .. rough (dense jagged grain). 0..1.
+    public var roughness: Double
+    /// Vary-border seed — same seed reproduces the identical border.
+    public var seed: Int
+    public var borderColor: CodableColor
+
+    public init(
+        size: Double = 0.05,
+        spread: Double = 0.5,
+        roughness: Double = 0.5,
+        seed: Int = 1,
+        borderColor: CodableColor = .white
+    ) {
+        self.size = max(0, min(0.25, size))
+        self.spread = max(0, min(1, spread))
+        self.roughness = max(0, min(1, roughness))
+        self.seed = seed
+        self.borderColor = borderColor
+    }
+
+    private enum CodingKeys: String, CodingKey {
+        case size, spread, roughness, seed, borderColor
+    }
+
+    public init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        self.init(
+            size: try c.decodeIfPresent(Double.self, forKey: .size) ?? 0.05,
+            spread: try c.decodeIfPresent(Double.self, forKey: .spread) ?? 0.5,
+            roughness: try c.decodeIfPresent(Double.self, forKey: .roughness) ?? 0.5,
+            seed: try c.decodeIfPresent(Int.self, forKey: .seed) ?? 1,
+            borderColor: try c.decodeIfPresent(CodableColor.self, forKey: .borderColor) ?? .white
+        )
+    }
+}
+
 public enum ShaderStyleParams: Codable, Equatable, Sendable {
     case ascii(ASCIIShaderParams)
     case crimewave(CrimewaveShaderParams)
@@ -1520,6 +1569,7 @@ public enum ShaderStyleParams: Codable, Equatable, Sendable {
     case crt(CRTShaderParams)
     case halftone(HalftoneShaderParams)
     case kuwahara(KuwaharaShaderParams)
+    case roughBorder(RoughBorderShaderParams)
 
     private enum CodingKeys: String, CodingKey {
         case type, params
@@ -1536,6 +1586,7 @@ public enum ShaderStyleParams: Codable, Equatable, Sendable {
         case .crt: return .crt
         case .halftone: return .halftone
         case .kuwahara: return .kuwahara
+        case .roughBorder: return .roughBorder
         }
     }
 
@@ -1550,6 +1601,7 @@ public enum ShaderStyleParams: Codable, Equatable, Sendable {
         case .crt: return .crt(CRTShaderParams())
         case .halftone: return .halftone(HalftoneShaderParams())
         case .kuwahara: return .kuwahara(KuwaharaShaderParams())
+        case .roughBorder: return .roughBorder(RoughBorderShaderParams())
         }
     }
 
@@ -1575,6 +1627,8 @@ public enum ShaderStyleParams: Codable, Equatable, Sendable {
             self = .halftone(try container.decode(HalftoneShaderParams.self, forKey: .params))
         case "kuwahara":
             self = .kuwahara(try container.decode(KuwaharaShaderParams.self, forKey: .params))
+        case "roughBorder":
+            self = .roughBorder(try container.decode(RoughBorderShaderParams.self, forKey: .params))
         default:
             throw DecodingError.dataCorruptedError(
                 forKey: .type, in: container,
@@ -1612,6 +1666,9 @@ public enum ShaderStyleParams: Codable, Equatable, Sendable {
             try container.encode(params, forKey: .params)
         case .kuwahara(let params):
             try container.encode("kuwahara", forKey: .type)
+            try container.encode(params, forKey: .params)
+        case .roughBorder(let params):
+            try container.encode("roughBorder", forKey: .type)
             try container.encode(params, forKey: .params)
         }
     }

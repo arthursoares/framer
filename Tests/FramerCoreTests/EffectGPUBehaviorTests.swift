@@ -393,4 +393,144 @@ final class EffectGPUBehaviorTests: XCTestCase {
             XCTAssertEqual(out.height, img.height)
         }
     }
+
+    // MARK: - RoughBorder invariants
+
+    private func roughBorderParams(
+        size: Double = 0.08, spread: Double = 0.5, roughness: Double = 0.5,
+        seed: Int = 42, color: CodableColor = .white
+    ) -> ShaderLayerParams {
+        ShaderLayerParams(
+            style: .roughBorder, intensity: 1.0,
+            params: .roughBorder(RoughBorderShaderParams(
+                size: size, spread: spread, roughness: roughness,
+                seed: seed, borderColor: color))
+        )
+    }
+
+    func testRoughBorderSameSeedIsDeterministic() throws {
+        try requireMetal()
+        let img = makeTestImage()
+        let a = try RoughBorderRenderer.render(to: img, params: roughBorderParams(seed: 2201))
+        let b = try RoughBorderRenderer.render(to: img, params: roughBorderParams(seed: 2201))
+        let (mean, maxDelta) = compare(a, b)
+        XCTAssertEqual(maxDelta, 0,
+                       "Same seed must reproduce the identical border (mean \(mean), max \(maxDelta))")
+    }
+
+    func testRoughBorderDifferentSeedsVary() throws {
+        try requireMetal()
+        let img = makeTestImage()
+        let a = try RoughBorderRenderer.render(to: img, params: roughBorderParams(seed: 1))
+        let b = try RoughBorderRenderer.render(to: img, params: roughBorderParams(seed: 2))
+        let (mean, _) = compare(a, b)
+        XCTAssertGreaterThan(mean, 0.05,
+                             "Different seeds should produce different borders (mean delta \(mean))")
+    }
+
+    func testRoughBorderCornersAreBorderColorAndCenterUntouched() throws {
+        try requireMetal()
+        let img = makeTestImage()
+        let out = try RoughBorderRenderer.render(to: img, params: roughBorderParams())
+        let bytes = drawToBytes(out)
+        let src = drawToBytes(img)
+        let w = out.width, h = out.height
+
+        // Corner pixel sits well inside the border band (d≈0 < any threshold).
+        let cornerIdx = 0
+        XCTAssertGreaterThan(bytes[cornerIdx], 250, "corner should be border white (r)")
+        XCTAssertGreaterThan(bytes[cornerIdx + 1], 250, "corner should be border white (g)")
+        XCTAssertGreaterThan(bytes[cornerIdx + 2], 250, "corner should be border white (b)")
+
+        // Center pixel is far outside the border reach (max threshold
+        // 0.08 * (1 + 0.5) = 0.12 of min dim; center is at 0.5).
+        let centerIdx = ((h / 2) * w + (w / 2)) * 4
+        for ch in 0..<3 {
+            let delta = abs(Int(bytes[centerIdx + ch]) - Int(src[centerIdx + ch]))
+            XCTAssertLessThanOrEqual(delta, 2,
+                                     "center pixel should pass through unchanged (ch \(ch) delta \(delta))")
+        }
+    }
+
+    func testRoughBorderThicknessIsProportionalAcrossAspectRatios() throws {
+        try requireMetal()
+        // Same min-dimension, different aspect: the border band measured
+        // along the vertical centerline (in units of min dim) must match,
+        // because thickness is defined in min(w,h) units.
+        let square = makeTestImage(width: 256, height: 256)
+        let wide = makeTestImage(width: 512, height: 256)
+        // spread 0 → clean straight border: thickness is exactly `size`.
+        let p = roughBorderParams(size: 0.1, spread: 0.0)
+        let outSquare = try RoughBorderRenderer.render(to: square, params: p)
+        let outWide = try RoughBorderRenderer.render(to: wide, params: p)
+
+        func topBorderRows(_ image: CGImage) -> Int {
+            let bytes = drawToBytes(image)
+            let w = image.width
+            let x = w / 2
+            var rows = 0
+            for y in 0..<image.height {
+                let idx = (y * w + x) * 4
+                if bytes[idx] > 250 && bytes[idx + 1] > 250 && bytes[idx + 2] > 250 {
+                    rows += 1
+                } else {
+                    break
+                }
+            }
+            return rows
+        }
+
+        let sqRows = topBorderRows(outSquare)
+        let wideRows = topBorderRows(outWide)
+        // 0.1 × 256 = ~26 rows on both, independent of the width.
+        XCTAssertGreaterThan(sqRows, 20, "square top border missing (\(sqRows) rows)")
+        XCTAssertLessThanOrEqual(abs(sqRows - wideRows), 2,
+                                 "border thickness should be aspect-independent (square \(sqRows) vs wide \(wideRows))")
+    }
+
+    func testRoughBorderShapeScalesWithResolution() throws {
+        try requireMetal()
+        // Doubling resolution must not change the border's relative
+        // thickness: measure top-border rows as a fraction of height.
+        let small = makeTestImage(width: 128, height: 128)
+        let large = makeTestImage(width: 256, height: 256)
+        let p = roughBorderParams(size: 0.1, spread: 0.0)
+        let outSmall = try RoughBorderRenderer.render(to: small, params: p)
+        let outLarge = try RoughBorderRenderer.render(to: large, params: p)
+
+        func topBorderFraction(_ image: CGImage) -> Double {
+            let bytes = drawToBytes(image)
+            let w = image.width
+            let x = w / 2
+            var rows = 0
+            for y in 0..<image.height {
+                let idx = (y * w + x) * 4
+                if bytes[idx] > 250 && bytes[idx + 1] > 250 && bytes[idx + 2] > 250 {
+                    rows += 1
+                } else {
+                    break
+                }
+            }
+            return Double(rows) / Double(image.height)
+        }
+
+        let smallFrac = topBorderFraction(outSmall)
+        let largeFrac = topBorderFraction(outLarge)
+        XCTAssertEqual(smallFrac, largeFrac, accuracy: 0.02,
+                       "border fraction should be resolution-independent (\(smallFrac) vs \(largeFrac))")
+    }
+
+    func testRoughBorderRoundTripsThroughJSON() throws {
+        // Codable round-trip (preset safety, house rule 4). No Metal needed.
+        let original = RoughBorderShaderParams(
+            size: 0.12, spread: 0.79, roughness: 0.67, seed: 2201,
+            borderColor: .black)
+        let layer = ShaderLayerParams(style: .roughBorder, params: .roughBorder(original))
+        let data = try JSONEncoder().encode(layer)
+        let decoded = try JSONDecoder().decode(ShaderLayerParams.self, from: data)
+        guard case .roughBorder(let roundTripped) = decoded.params else {
+            return XCTFail("style did not round-trip")
+        }
+        XCTAssertEqual(roundTripped, original)
+    }
 }
