@@ -654,6 +654,42 @@ final class EffectGPUBehaviorTests: XCTestCase {
         XCTAssertEqual(triX.softness, FilmGrainStock.kodakTriX400.grainProfile.softness)
     }
 
+    func testFilmGrainSoftnessChangesCharacter() throws {
+        try requireMetal()
+        // Isolate softness (Codex review on PR #18): hold density fixed at a
+        // chunky pitch so the hard-specks vs soft-blobs kernels are visibly
+        // different — if the renderer dropped the softness uniform, these
+        // renders would be identical.
+        let img = makeTestImage()
+        let hard = try FilmGrainRenderer.render(
+            to: img, params: filmGrainParams(grainsPerPixel: 40, softness: 0.0))
+        let soft = try FilmGrainRenderer.render(
+            to: img, params: filmGrainParams(grainsPerPixel: 40, softness: 1.0))
+        let (mean, _) = compare(hard, soft)
+        XCTAssertGreaterThan(mean, 0.3,
+                             "softness should change grain character (mean delta \(mean))")
+    }
+
+    func testFilmGrainPreviewBaseDimensionScalesGrain() throws {
+        try requireMetal()
+        // Lock the preview→export pitch compensation (Codex review on PR
+        // #18): with previewBase = half the render size, pitchScale is 2 and
+        // the grain lattice must coarsen; with previewBase == render size,
+        // pitchScale is 1 and output must be byte-identical to the nil path.
+        let img = makeTestImage()
+        let p = filmGrainParams(grainsPerPixel: 250)
+        let plain = try FilmGrainRenderer.render(to: img, params: p)
+        let scaled = try FilmGrainRenderer.render(to: img, params: p, previewBaseDimension: 128)
+        let neutral = try FilmGrainRenderer.render(to: img, params: p, previewBaseDimension: 256)
+
+        let (scaledMean, _) = compare(plain, scaled)
+        XCTAssertGreaterThan(scaledMean, 0.3,
+                             "previewBase at half size should coarsen the grain (mean \(scaledMean))")
+        let (neutralMax) = compare(plain, neutral).max
+        XCTAssertEqual(neutralMax, 0,
+                       "previewBase equal to render size must not alter the grain")
+    }
+
     func testFilmGrainStockProfilesArePairwiseDistinct() {
         // Two stocks with the same (grainsPerPixel, softness) render
         // identically — a silent duplicate in the catalog (Retro 80S and

@@ -54,6 +54,9 @@ public enum FilmGrainRenderer {
         // Export path: enlarge the grain lattice by the preview→export scale
         // so the export reproduces the grain size the preview showed (same
         // convention as DitherGPURenderer's pixel-scale compensation).
+        // Deliberately UNCLAMPED above 1 — unlike dither cells, grain must
+        // scale linearly with export resolution or a large print export
+        // would show visibly finer grain than the preview promised.
         if let previewBase = previewBaseDimension, previewBase > 0 {
             let currentMax = max(image.width, image.height)
             uniforms.pitchScale = Float(max(1.0, Double(currentMax) / Double(previewBase)))
