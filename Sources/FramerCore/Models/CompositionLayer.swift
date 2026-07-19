@@ -1827,7 +1827,11 @@ public struct BWFilmShaderParams: Codable, Equatable, Sendable {
     public init(from decoder: Decoder) throws {
         let c = try decoder.container(keyedBy: CodingKeys.self)
         self.init(
-            response: try c.decodeIfPresent(BWFilmResponse.self, forKey: .response) ?? .custom,
+            // Decode via raw string so an UNKNOWN future film falls back to
+            // .custom instead of throwing — a throwing decode makes
+            // PresetStore delete the preset file (house rule 4).
+            response: (try c.decodeIfPresent(String.self, forKey: .response))
+                .flatMap(BWFilmResponse.init(rawValue:)) ?? .custom,
             sensRed: try c.decodeIfPresent(Double.self, forKey: .sensRed) ?? 0,
             sensYellow: try c.decodeIfPresent(Double.self, forKey: .sensYellow) ?? 0,
             sensGreen: try c.decodeIfPresent(Double.self, forKey: .sensGreen) ?? 0,
