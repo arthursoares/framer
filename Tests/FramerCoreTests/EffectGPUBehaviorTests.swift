@@ -500,9 +500,12 @@ final class EffectGPUBehaviorTests: XCTestCase {
         // And the identity bake really is identity.
         let identity = BWFilmRenderer.bakeCurve(BWFilmShaderParams())
         XCTAssertEqual(identity.count, 256)
-        XCTAssertEqual(identity[0], 0, accuracy: 0.005)
-        XCTAssertEqual(identity[255], 1, accuracy: 0.005)
-        XCTAssertEqual(identity[128], 128.0 / 255.0, accuracy: 0.01)
+        // Assert the QUARTER points too — the endpoint-duplication bug bent
+        // the default curve into an S that passed midpoint/endpoint checks.
+        for i in [0, 32, 64, 128, 192, 224, 255] {
+            XCTAssertEqual(identity[i], Float(i) / 255.0, accuracy: 0.005,
+                           "default curve must be identity at \(i)")
+        }
     }
 
     func testBWFilmResponseProfilesArePairwiseDistinctAndApply() throws {

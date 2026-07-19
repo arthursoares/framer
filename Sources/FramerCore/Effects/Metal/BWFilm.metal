@@ -209,34 +209,41 @@ fragment float4 bwFilmFragment(
         g = saturate(g);
     }
 
-    // --- 2. Zone tonality ----------------------------------------------
-    // Response curves tuned against SEP side-by-side (maintainer feedback:
-    // the first linear-additive version slammed tones in the first slider
-    // ticks and clipped — SEP spreads the same reach over the whole travel).
+    // --- 2. Zone tonality — MEASURED response laws ----------------------
+    // Fitted against transfer curves exported from Silver Efex Pro 3
+    // itself (gray-ramp chart, GUI-automated exports, 2026-07-19; fitting
+    // script tools/sep-measurement/). All SEP tonality ops pin BOTH
+    // endpoints — input 0 and 1 never move.
     //
-    // Brightness is an asymptotic lift: positive values move g toward
-    // white proportionally to the remaining headroom (1-g), negative
-    // toward black proportionally to g — full slider reaches at most
-    // halfway to the endpoint and never clips.
-    float shMask  = 1.0 - smoothstep(0.15, 0.55, g);
-    float hiMask  = smoothstep(0.45, 0.85, g);
-    float midMask = saturate(1.0 - shMask - hiMask);
+    // Brightness: pure gamma. Positive law exponent = 2^(-b/50) is exact
+    // (rms 0.34/255 at +50 and +100); the negative side runs slightly
+    // hotter (best fit 2.285 at -50 → asymmetry factor 1.19, rms 7/255).
+    float b = uniforms.brightness;
+    if (fabs(b) > 0.01) {
+        float e = exp2(-b / 50.0 * (b < 0.0 ? 1.19 : 1.0));
+        g = pow(g, e);
+    }
 
-    float briAmt = uniforms.brightness / 100.0 * 0.5
-        + (uniforms.briShadows   * shMask
-         + uniforms.briMidtones  * midMask
-         + uniforms.briHighlights * hiMask) / 100.0 * 0.35;
-    g += briAmt > 0.0 ? briAmt * (1.0 - g) : briAmt * g;
+    // Zone brightness: measured weight functions (delta = slider × w(g)),
+    // each fading to exact identity outside its band:
+    //   shadows   w = 1.19·g^0.65·(1-g)^5.8   (rms 0.78/255)
+    //   midtones  w = 0.79·g^0.80·(1-g)^1.4   (rms 0.75/255)
+    //   highlights w = 0.17·g^1.95·(1-g)^0.4  (rms 3.4/255)
+    if (g > 1e-6 && g < 1.0 - 1e-6) {
+        float d = uniforms.briShadows   / 100.0 * 1.19 * pow(g, 0.65) * pow(1.0 - g, 5.8)
+                + uniforms.briMidtones  / 100.0 * 0.79 * pow(g, 0.80) * pow(1.0 - g, 1.4)
+                + uniforms.briHighlights / 100.0 * 0.17 * pow(g, 1.95) * pow(1.0 - g, 0.4);
+        g = saturate(g + d);
+    }
 
-    // Contrast: blend toward a smoothstep S-curve (positive) or toward a
-    // flattened line (negative) — progressive over the whole dial, no
-    // hard clipping at the extremes.
-    float c = uniforms.contrast / 100.0;
-    if (c > 0.0) {
-        float sCurve = g * g * (3.0 - 2.0 * g);
-        g = mix(g, sCurve, c);
-    } else if (c < 0.0) {
-        g = mix(g, 0.5 + (g - 0.5) * 0.6, -c);
+    // Contrast: log-odds sigmoid g^k / (g^k + (1-g)^k) — pins 0, 0.5, 1.
+    // Positive law k = 3^(c/100) measured exact (rms 0.76/255 at +50);
+    // negative side asymmetry factor 0.86 (best fit k 0.635 at -50).
+    float c = uniforms.contrast;
+    if (fabs(c) > 0.01 && g > 1e-6 && g < 1.0 - 1e-6) {
+        float k = pow(3.0, c / 100.0 * (c < 0.0 ? 0.86 : 1.0));
+        float a = pow(g, k);
+        g = a / (a + pow(1.0 - g, k));
     }
     g = saturate(g);
 

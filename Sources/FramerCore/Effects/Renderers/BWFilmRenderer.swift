@@ -88,8 +88,14 @@ public enum BWFilmRenderer {
             var seg = 0
             while seg < nodes.count - 2 && t > nodes[seg + 1].x { seg += 1 }
             let p1 = nodes[seg], p2 = nodes[seg + 1]
-            let p0 = seg > 0 ? nodes[seg - 1] : p1
-            let p3 = seg < nodes.count - 2 ? nodes[seg + 2] : p2
+            // Mirror endpoints for boundary tangents — duplicating them
+            // halves the edge slope and bends the default curve into a
+            // subtle unintended S (caught by SEP ramp parity: 13/255 error
+            // at the quarter-tones).
+            let p0 = seg > 0 ? nodes[seg - 1]
+                : (x: 2 * p1.x - p2.x, y: 2 * p1.y - p2.y)
+            let p3 = seg < nodes.count - 2 ? nodes[seg + 2]
+                : (x: 2 * p2.x - p1.x, y: 2 * p2.y - p1.y)
             let span = p2.x - p1.x
             guard span > 1e-9 else { return p2.y }
             let u = (t - p1.x) / span
