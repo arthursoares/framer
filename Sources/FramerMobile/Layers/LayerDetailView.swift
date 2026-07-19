@@ -2590,7 +2590,117 @@ private struct ShaderControls: View {
                 roughBorderControls(roughBorderParams)
             case .filmGrain(let filmGrainParams):
                 filmGrainControls(filmGrainParams)
+            case .bwFilm(let bwFilmParams):
+                bwFilmControls(bwFilmParams)
             }
+        }
+    }
+
+    @ViewBuilder
+    private func bwFilmControls(_ bw: BWFilmShaderParams) -> some View {
+        ControlRow(label: "Film Response") {
+            Picker("Film Response", selection: Binding(
+                get: { bw.response },
+                set: { value in
+                    onChange(params.withParams(.bwFilm(bw.applyingResponse(value))))
+                }
+            )) {
+                ForEach(BWFilmResponse.allCases, id: \.self) { response in
+                    Text(response.label).tag(response)
+                }
+            }
+            .pickerStyle(.menu)
+        }
+        bwFilmSlider("Red", bw.sensRed) { v, p in var u = p; u.sensRed = v; return u }
+        bwFilmSlider("Yellow", bw.sensYellow) { v, p in var u = p; u.sensYellow = v; return u }
+        bwFilmSlider("Green", bw.sensGreen) { v, p in var u = p; u.sensGreen = v; return u }
+        bwFilmSlider("Cyan", bw.sensCyan) { v, p in var u = p; u.sensCyan = v; return u }
+        bwFilmSlider("Blue", bw.sensBlue) { v, p in var u = p; u.sensBlue = v; return u }
+        bwFilmSlider("Magenta", bw.sensMagenta) { v, p in var u = p; u.sensMagenta = v; return u }
+        bwFilmSlider("Brightness", bw.brightness) { v, p in var u = p; u.brightness = v; return u }
+        bwFilmSlider("Highlights", bw.brightnessHighlights) { v, p in var u = p; u.brightnessHighlights = v; return u }
+        bwFilmSlider("Midtones", bw.brightnessMidtones) { v, p in var u = p; u.brightnessMidtones = v; return u }
+        bwFilmSlider("Shadows", bw.brightnessShadows) { v, p in var u = p; u.brightnessShadows = v; return u }
+        bwFilmSlider("Contrast", bw.contrast) { v, p in var u = p; u.contrast = v; return u }
+        bwFilmSlider("Protect Highlights", bw.protectHighlights, range: 0...100) { v, p in var u = p; u.protectHighlights = v; return u }
+        bwFilmSlider("Protect Shadows", bw.protectShadows, range: 0...100) { v, p in var u = p; u.protectShadows = v; return u }
+        bwFilmSlider("Structure", bw.structure) { v, p in var u = p; u.structure = v; return u }
+        bwFilmSlider("Structure Highlights", bw.structureHighlights) { v, p in var u = p; u.structureHighlights = v; return u }
+        bwFilmSlider("Structure Midtones", bw.structureMidtones) { v, p in var u = p; u.structureMidtones = v; return u }
+        bwFilmSlider("Structure Shadows", bw.structureShadows) { v, p in var u = p; u.structureShadows = v; return u }
+        bwFilmSlider("Fine Structure", bw.fineStructure, range: 0...100) { v, p in var u = p; u.fineStructure = v; return u }
+        bwFilmSlider("Gamma", bw.curveGamma, range: -1...1, step: 0.02) { v, p in var u = p; u.curveGamma = v; return u }
+        bwFilmSlider("Black Point", bw.curveLowX, range: 0...0.5, step: 0.01) { v, p in var u = p; u.curveLowX = v; return u }
+        bwFilmSlider("Black Lift", bw.curveLowY, range: 0...0.5, step: 0.01) { v, p in var u = p; u.curveLowY = v; return u }
+        bwFilmSlider("White Point", bw.curveHighX, range: 0.5...1, step: 0.01, resetValue: 1) { v, p in var u = p; u.curveHighX = v; return u }
+        bwFilmSlider("White Cap", bw.curveHighY, range: 0.5...1, step: 0.01, resetValue: 1) { v, p in var u = p; u.curveHighY = v; return u }
+
+        if !bw.curvePoints.isEmpty {
+            ControlRow(label: "Film Curve") {
+                Button {
+                    guard case .bwFilm(var current) = params.params else { return }
+                    current.curvePoints = []
+                    current.curveLowY = 0
+                    current.curveHighY = 1
+                    onChange(params.withParams(.bwFilm(current)))
+                } label: {
+                    Label("\(bw.curvePoints.count) points · Reset", systemImage: "point.topleft.down.curvedto.point.bottomright.up")
+                }
+                .buttonStyle(.plain)
+            }
+        }
+
+        ControlRow(label: "Toning") {
+            Picker("Toning", selection: Binding(
+                get: { bw.toningPreset },
+                set: { value in
+                    onChange(params.withParams(.bwFilm(bw.applyingToningPreset(value))))
+                }
+            )) {
+                ForEach(BWToningPreset.allCases, id: \.self) { preset in
+                    Text(preset.label).tag(preset)
+                }
+            }
+            .pickerStyle(.menu)
+        }
+        bwFilmSlider("Toning Strength", bw.toningStrength, range: 0...100) { v, p in var u = p; u.toningStrength = v; return u }
+        bwFilmSlider("Silver Hue", bw.toneHueHigh, range: 0...360, resetValue: 40) { v, p in var u = p; u.toneHueHigh = v; return u }
+        bwFilmSlider("Silver Toning", bw.toneStrengthHigh, range: 0...100) { v, p in var u = p; u.toneStrengthHigh = v; return u }
+        bwFilmSlider("Paper Hue", bw.toneHueLow, range: 0...360, resetValue: 40) { v, p in var u = p; u.toneHueLow = v; return u }
+        bwFilmSlider("Paper Toning", bw.toneStrengthLow, range: 0...100) { v, p in var u = p; u.toneStrengthLow = v; return u }
+        bwFilmSlider("Balance", bw.toneBalance) { v, p in var u = p; u.toneBalance = v; return u }
+        bwFilmSlider("Vignette", bw.vigStrength) { v, p in var u = p; u.vigStrength = v; return u }
+        bwFilmSlider("Vignette Size", bw.vigSize, range: 0...100, resetValue: 50) { v, p in var u = p; u.vigSize = v; return u }
+        bwFilmSlider("Circle / Rectangle", bw.vigShape, range: 1...5, step: 0.1, resetValue: 3) { v, p in var u = p; u.vigShape = v; return u }
+        bwFilmSlider("Burn Top", bw.beStrengthTop, range: 0...100) { v, p in var u = p; u.beStrengthTop = v; return u }
+        bwFilmSlider("Burn Bottom", bw.beStrengthBottom, range: 0...100) { v, p in var u = p; u.beStrengthBottom = v; return u }
+        bwFilmSlider("Burn Left", bw.beStrengthLeft, range: 0...100) { v, p in var u = p; u.beStrengthLeft = v; return u }
+        bwFilmSlider("Burn Right", bw.beStrengthRight, range: 0...100) { v, p in var u = p; u.beStrengthRight = v; return u }
+        bwFilmSlider("Burn Size", bw.beSizeTop, range: 0...100, resetValue: 25) { v, p in
+            var u = p; u.beSizeTop = v; u.beSizeBottom = v; u.beSizeLeft = v; u.beSizeRight = v; return u
+        }
+        bwFilmSlider("Burn Transition", bw.beTransitionTop, range: 0...100, resetValue: 50) { v, p in
+            var u = p; u.beTransitionTop = v; u.beTransitionBottom = v; u.beTransitionLeft = v; u.beTransitionRight = v; return u
+        }
+    }
+
+    private func bwFilmSlider(
+        _ label: String,
+        _ value: Double,
+        range: ClosedRange<Double> = -100...100,
+        step: Double = 1,
+        resetValue: Double = 0,
+        update: @escaping (Double, BWFilmShaderParams) -> BWFilmShaderParams
+    ) -> some View {
+        sliderRow(
+            label: label,
+            value: value,
+            range: range,
+            step: step,
+            resetValue: resetValue
+        ) { newValue in
+            guard case .bwFilm(let current) = params.params else { return }
+            onChange(params.withParams(.bwFilm(update(newValue, current))))
         }
     }
 

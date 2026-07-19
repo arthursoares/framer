@@ -831,4 +831,355 @@ final class EffectGPUBehaviorTests: XCTestCase {
                            "noisy border depth at x=\(x) drifts across resolutions (\(small) vs \(large))")
         }
     }
+    // MARK: - BWFilm invariants
+
+    private func bwParams(_ p: BWFilmShaderParams, intensity: Double = 1.0) -> ShaderLayerParams {
+        ShaderLayerParams(style: .bwFilm, intensity: intensity, params: .bwFilm(p))
+    }
+
+    func testBWFilmOutputIsMonochrome() throws {
+        try requireMetal()
+        let img = makeTestImage()
+        let out = try BWFilmRenderer.render(to: img, params: bwParams(BWFilmShaderParams()))
+        let bytes = drawToBytes(out)
+        var maxChannelSpread = 0
+        for i in stride(from: 0, to: bytes.count, by: 4) {
+            let r = Int(bytes[i]), g = Int(bytes[i + 1]), b = Int(bytes[i + 2])
+            maxChannelSpread = max(maxChannelSpread,
+                                   max(abs(r - g), max(abs(g - b), abs(r - b))))
+        }
+        XCTAssertLessThanOrEqual(maxChannelSpread, 1,
+                                 "B&W output must be achromatic (spread \(maxChannelSpread))")
+    }
+
+    func testBWFilmSensitivityShiftsHueFamilies() throws {
+        try requireMetal()
+        // Left half pure red, right half pure blue. Boosting red sensitivity
+        // must brighten the red half relative to suppressing it; the blue
+        // half must stay (nearly) unchanged by the red dial.
+        let width = 128, height = 64
+        let ctx = CGContext(
+            data: nil, width: width, height: height, bitsPerComponent: 8,
+            bytesPerRow: width * 4, space: CGColorSpaceCreateDeviceRGB(),
+            bitmapInfo: CGImageAlphaInfo.premultipliedLast.rawValue)!
+        ctx.setFillColor(CGColor(srgbRed: 0.85, green: 0.1, blue: 0.1, alpha: 1))
+        ctx.fill(CGRect(x: 0, y: 0, width: width / 2, height: height))
+        ctx.setFillColor(CGColor(srgbRed: 0.1, green: 0.1, blue: 0.85, alpha: 1))
+        ctx.fill(CGRect(x: width / 2, y: 0, width: width / 2, height: height))
+        let img = ctx.makeImage()!
+
+        func meanLuma(_ image: CGImage, xRange: Range<Int>) -> Double {
+            let bytes = drawToBytes(image)
+            var total = 0.0, n = 0.0
+            for y in 0..<image.height {
+                for x in xRange {
+                    total += Double(bytes[(y * image.width + x) * 4])
+                    n += 1
+                }
+            }
+            return total / n
+        }
+
+        let boosted = try BWFilmRenderer.render(
+            to: img, params: bwParams(BWFilmShaderParams(sensRed: 100)))
+        let cut = try BWFilmRenderer.render(
+            to: img, params: bwParams(BWFilmShaderParams(sensRed: -100)))
+
+        let redBoosted = meanLuma(boosted, xRange: 0..<(width / 2))
+        let redCut = meanLuma(cut, xRange: 0..<(width / 2))
+        XCTAssertGreaterThan(redBoosted, redCut + 30,
+                             "red sensitivity should govern red rendering (\(redBoosted) vs \(redCut))")
+
+        let blueBoosted = meanLuma(boosted, xRange: (width / 2)..<width)
+        let blueCut = meanLuma(cut, xRange: (width / 2)..<width)
+        XCTAssertLessThanOrEqual(abs(blueBoosted - blueCut), 6,
+                                 "red dial should not move blue rendering (\(blueBoosted) vs \(blueCut))")
+    }
+
+    func testBWFilmBrightnessAndContrastBehave() throws {
+        try requireMetal()
+        let img = makeTestImage()
+        func stats(_ image: CGImage) -> (mean: Double, spread: Double) {
+            let bytes = drawToBytes(image)
+            var total = 0.0, n = 0.0
+            for i in stride(from: 0, to: bytes.count, by: 4) { total += Double(bytes[i]); n += 1 }
+            let mean = total / n
+            var dev = 0.0
+            for i in stride(from: 0, to: bytes.count, by: 4) { dev += abs(Double(bytes[i]) - mean) }
+            return (mean, dev / n)
+        }
+        let neutral = stats(try BWFilmRenderer.render(to: img, params: bwParams(BWFilmShaderParams())))
+        let bright = stats(try BWFilmRenderer.render(to: img, params: bwParams(BWFilmShaderParams(brightness: 60))))
+        let punchy = stats(try BWFilmRenderer.render(to: img, params: bwParams(BWFilmShaderParams(contrast: 80))))
+        XCTAssertGreaterThan(bright.mean, neutral.mean + 10, "brightness should raise mean luma")
+        XCTAssertGreaterThan(punchy.spread, neutral.spread + 5, "contrast should widen the tonal spread")
+    }
+
+    func testBWFilmCurveBlackLiftRaisesFloor() throws {
+        try requireMetal()
+        let img = makeTestImage()
+        let lifted = try BWFilmRenderer.render(
+            to: img, params: bwParams(BWFilmShaderParams(curveLowY: 0.2)))
+        let bytes = drawToBytes(lifted)
+        var minLuma = 255
+        for i in stride(from: 0, to: bytes.count, by: 4) { minLuma = min(minLuma, Int(bytes[i])) }
+        XCTAssertGreaterThanOrEqual(minLuma, 44,
+                                    "black lift 0.2 should floor output near 51/255 (min \(minLuma))")
+    }
+
+    func testBWFilmCurveBakeSortsUnsortedPoints() {
+        // SEP stores curve points UNSORTED — the bake must sort by x.
+        let sorted = BWFilmShaderParams(
+            curvePoints: [BWCurvePoint(x: 0.25, y: 0.2), BWCurvePoint(x: 0.75, y: 0.85)])
+        let unsorted = BWFilmShaderParams(
+            curvePoints: [BWCurvePoint(x: 0.75, y: 0.85), BWCurvePoint(x: 0.25, y: 0.2)])
+        XCTAssertEqual(BWFilmRenderer.bakeCurve(sorted), BWFilmRenderer.bakeCurve(unsorted))
+        // And the identity bake really is identity.
+        let identity = BWFilmRenderer.bakeCurve(BWFilmShaderParams())
+        XCTAssertEqual(identity.count, 256)
+        // Assert the QUARTER points too — the endpoint-duplication bug bent
+        // the default curve into an S that passed midpoint/endpoint checks.
+        for i in [0, 32, 64, 128, 192, 224, 255] {
+            XCTAssertEqual(identity[i], Float(i) / 255.0, accuracy: 0.005,
+                           "default curve must be identity at \(i)")
+        }
+    }
+
+    func testBWFilmResponseProfilesArePairwiseDistinctAndApply() throws {
+        // No two films may share an identical spectral profile (the film-
+        // grain catalog shipped exact twins once — same lock here), and
+        // applying a response must set all six dials while leaving
+        // tonality/curve untouched.
+        let all = BWFilmResponse.allCases
+        for i in 0..<all.count {
+            for j in (i + 1)..<all.count {
+                XCTAssertFalse(all[i].sensitivities == all[j].sensitivities,
+                               "\(all[i]) and \(all[j]) share an identical response profile")
+            }
+        }
+        let start = BWFilmShaderParams(sensRed: 99, contrast: 42, curveGamma: 0.3)
+        let ortho = start.applyingResponse(.rolleiOrtho25)
+        XCTAssertEqual(ortho.response, .rolleiOrtho25)
+        XCTAssertEqual(ortho.sensRed, BWFilmResponse.rolleiOrtho25.sensitivities.r)
+        XCTAssertEqual(ortho.contrast, 42, "tonality must survive a response change")
+        // A film's Levels & Curves is part of its character: unmeasured
+        // films reset the curve to identity...
+        XCTAssertEqual(ortho.curveGamma, 0, "film selection replaces the curve")
+        XCTAssertTrue(ortho.curvePoints.isEmpty)
+        // ...measured films install their measured curve...
+        let triX = start.applyingResponse(.kodakTriX400)
+        XCTAssertFalse(triX.curvePoints.isEmpty, "measured film must install its curve")
+        XCTAssertEqual(triX.curvePoints.count, 7)
+        // ...and .custom leaves the user's curve untouched.
+        let backToCustom = triX.applyingResponse(.custom)
+        XCTAssertEqual(backToCustom.curvePoints.count, 7, "custom must not clear the curve")
+    }
+
+    func testBWFilmOrthoRendersRedDarkerThanNeutral() throws {
+        try requireMetal()
+        // Red-blind orthochromatic film: a red patch must render clearly
+        // darker than under the neutral response.
+        let width = 64, height = 64
+        let ctx = CGContext(
+            data: nil, width: width, height: height, bitsPerComponent: 8,
+            bytesPerRow: width * 4, space: CGColorSpaceCreateDeviceRGB(),
+            bitmapInfo: CGImageAlphaInfo.premultipliedLast.rawValue)!
+        ctx.setFillColor(CGColor(srgbRed: 0.85, green: 0.15, blue: 0.15, alpha: 1))
+        ctx.fill(CGRect(x: 0, y: 0, width: width, height: height))
+        let red = ctx.makeImage()!
+
+        func meanLuma(_ image: CGImage) -> Double {
+            let bytes = drawToBytes(image)
+            var total = 0.0
+            for i in stride(from: 0, to: bytes.count, by: 4) { total += Double(bytes[i]) }
+            return total / Double(bytes.count / 4)
+        }
+
+        let neutral = try BWFilmRenderer.render(to: red, params: bwParams(BWFilmShaderParams()))
+        let ortho = try BWFilmRenderer.render(
+            to: red, params: bwParams(BWFilmShaderParams().applyingResponse(.rolleiOrtho25)))
+        XCTAssertLessThan(meanLuma(ortho), meanLuma(neutral) - 25,
+                          "ortho film must render red much darker than neutral")
+    }
+
+    func testBWFilmToningTintsHighlightsAndShadowsSeparately() throws {
+        try requireMetal()
+        let img = makeTestImage()
+        // Sepia silver (warm, hue 38) + blue paper (hue 220): highlights
+        // must lean warm (R > B), shadows must lean cool (B > R).
+        let p = BWFilmShaderParams(
+            toningStrength: 80, toneHueHigh: 38, toneStrengthHigh: 60,
+            toneHueLow: 220, toneStrengthLow: 60)
+        let out = try BWFilmRenderer.render(to: img, params: bwParams(p))
+        let bytes = drawToBytes(out)
+        var warmHi = 0.0, coolSh = 0.0, nHi = 0.0, nSh = 0.0
+        for i in stride(from: 0, to: bytes.count, by: 4) {
+            let r = Double(bytes[i]), g = Double(bytes[i + 1]), b = Double(bytes[i + 2])
+            let luma = (r + g + b) / 3
+            if luma > 170 { warmHi += r - b; nHi += 1 }
+            if luma < 85 { coolSh += b - r; nSh += 1 }
+        }
+        XCTAssertGreaterThan(nHi, 100, "test image should have highlights")
+        XCTAssertGreaterThan(nSh, 100, "test image should have shadows")
+        XCTAssertGreaterThan(warmHi / nHi, 2, "highlights should tint warm (silver hue)")
+        XCTAssertGreaterThan(coolSh / nSh, 2, "shadows should tint cool (paper hue)")
+    }
+
+    func testBWFilmToningPresetTableIsDistinctAndApplies() {
+        // Non-neutral presets must be pairwise distinct; applying one sets
+        // the dials without touching conversion settings.
+        let all = BWToningPreset.allCases.filter { $0 != .neutral }
+        for i in 0..<all.count {
+            for j in (i + 1)..<all.count {
+                XCTAssertFalse(all[i].toning == all[j].toning,
+                               "\(all[i]) and \(all[j]) share identical toning values")
+            }
+        }
+        let start = BWFilmShaderParams(sensRed: 33, contrast: 21)
+        let sepia = start.applyingToningPreset(.sepia2)
+        XCTAssertEqual(sepia.toningPreset, .sepia2)
+        XCTAssertEqual(sepia.toningStrength, BWToningPreset.sepia2.toning.strength)
+        XCTAssertEqual(sepia.sensRed, 33, "conversion must survive a toning change")
+    }
+
+    func testBWFilmVignetteDarkensCornersOnly() throws {
+        try requireMetal()
+        let img = makeTestImage()
+        let plain = try BWFilmRenderer.render(to: img, params: bwParams(BWFilmShaderParams()))
+        let vig = try BWFilmRenderer.render(
+            to: img, params: bwParams(BWFilmShaderParams(vigStrength: -80, vigSize: 40)))
+        let pb = drawToBytes(plain), vb = drawToBytes(vig)
+        let w = img.width
+        func luma(_ b: [UInt8], _ x: Int, _ y: Int) -> Double { Double(b[(y * w + x) * 4]) }
+        // The vignette is multiplicative, so assert a RELATIVE darkening —
+        // the test image's corners are already dim, making absolute deltas
+        // small.
+        let cornerPlain = luma(pb, 2, 2)
+        let cornerVig = luma(vb, 2, 2)
+        let centerDelta = abs(luma(pb, w / 2, img.height / 2) - luma(vb, w / 2, img.height / 2))
+        XCTAssertLessThan(cornerVig, cornerPlain * 0.55 + 2,
+                          "corner should darken to <~half under -80 vignette (\(cornerPlain) → \(cornerVig))")
+        XCTAssertLessThanOrEqual(centerDelta, 3, "center should be untouched")
+    }
+
+    func testBWFilmBurnEdgesAreIndependent() throws {
+        try requireMetal()
+        let img = makeTestImage()
+        let topOnly = try BWFilmRenderer.render(
+            to: img, params: bwParams(BWFilmShaderParams(beStrengthTop: 90, beSizeTop: 40)))
+        let plain = try BWFilmRenderer.render(to: img, params: bwParams(BWFilmShaderParams()))
+        let tb = drawToBytes(topOnly), pb = drawToBytes(plain)
+        let w = img.width, h = img.height
+        func rowMean(_ b: [UInt8], _ y: Int) -> Double {
+            var t = 0.0
+            for x in 0..<w { t += Double(b[(y * w + x) * 4]) }
+            return t / Double(w)
+        }
+        XCTAssertLessThan(rowMean(tb, 2), rowMean(pb, 2) - 15, "top rows should burn darker")
+        XCTAssertEqual(rowMean(tb, h - 3), rowMean(pb, h - 3), accuracy: 3,
+                       "bottom rows should be untouched by a top-only burn")
+    }
+
+    func testBWFilmUnknownResponseDecodesToCustomInsteadOfThrowing() throws {
+        // Forward-compat guard: a preset written by a FUTURE version with a
+        // new film name must not make this version's decode throw —
+        // PresetStore deletes files that fail to decode (house rule 4).
+        let layer = ShaderLayerParams(style: .bwFilm, params: .bwFilm(BWFilmShaderParams()))
+        var json = try JSONSerialization.jsonObject(
+            with: JSONEncoder().encode(layer)) as! [String: Any]
+        var paramsObj = json["params"] as! [String: Any]
+        var inner = paramsObj["params"] as! [String: Any]
+        inner["response"] = "futureFilm2030"
+        paramsObj["params"] = inner
+        json["params"] = paramsObj
+        let data = try JSONSerialization.data(withJSONObject: json)
+        let decoded = try JSONDecoder().decode(ShaderLayerParams.self, from: data)
+        guard case .bwFilm(let p) = decoded.params else { return XCTFail("style lost") }
+        XCTAssertEqual(p.response, .custom, "unknown film must fall back, not throw")
+    }
+
+    func testBWFilmStructureAmplifiesLocalContrast() throws {
+        try requireMetal()
+        let img = makeTestImage()
+        func highFreqEnergy(_ image: CGImage) -> Double {
+            // Mean |horizontal neighbor delta| of the red channel — a cheap
+            // local-contrast metric.
+            let bytes = drawToBytes(image)
+            let w = image.width
+            var total = 0.0, n = 0.0
+            for y in 0..<image.height {
+                for x in 1..<w {
+                    total += abs(Double(bytes[(y * w + x) * 4]) - Double(bytes[(y * w + x - 1) * 4]))
+                    n += 1
+                }
+            }
+            return total / n
+        }
+        let neutral = highFreqEnergy(try BWFilmRenderer.render(to: img, params: bwParams(BWFilmShaderParams())))
+        let boosted = highFreqEnergy(try BWFilmRenderer.render(to: img, params: bwParams(BWFilmShaderParams(structure: 80))))
+        let softened = highFreqEnergy(try BWFilmRenderer.render(to: img, params: bwParams(BWFilmShaderParams(structure: -80))))
+        let fine = highFreqEnergy(try BWFilmRenderer.render(to: img, params: bwParams(BWFilmShaderParams(fineStructure: 90))))
+        XCTAssertGreaterThan(boosted, neutral * 1.1,
+                             "positive structure should amplify local contrast (\(neutral) → \(boosted))")
+        XCTAssertLessThan(softened, neutral * 0.97,
+                          "negative structure should soften (\(neutral) → \(softened))")
+        XCTAssertGreaterThan(fine, neutral * 1.1,
+                             "fine structure should amplify detail (\(neutral) → \(fine))")
+    }
+
+    func testBWFilmStructureLeavesFlatFieldsUntouched() throws {
+        try requireMetal()
+        // Unsharp masking has nothing to amplify on a constant field.
+        let width = 96, height = 96
+        let ctx = CGContext(
+            data: nil, width: width, height: height, bitsPerComponent: 8,
+            bytesPerRow: width * 4, space: CGColorSpaceCreateDeviceRGB(),
+            bitmapInfo: CGImageAlphaInfo.premultipliedLast.rawValue)!
+        ctx.setFillColor(CGColor(srgbRed: 0.5, green: 0.5, blue: 0.5, alpha: 1))
+        ctx.fill(CGRect(x: 0, y: 0, width: width, height: height))
+        let flat = ctx.makeImage()!
+        let plain = try BWFilmRenderer.render(to: flat, params: bwParams(BWFilmShaderParams()))
+        let structured = try BWFilmRenderer.render(
+            to: flat, params: bwParams(BWFilmShaderParams(structure: 100, fineStructure: 100)))
+        let (mean, _) = compare(plain, structured)
+        XCTAssertLessThan(mean, 0.5, "flat field should be unaffected by structure (mean \(mean))")
+    }
+
+    func testBWFilmDeterministicAndRoundTrips() throws {
+        try requireMetal()
+        let img = makeTestImage()
+        let p = BWFilmShaderParams(sensRed: 40, sensBlue: -60, contrast: 30, curveGamma: 0.2)
+        let a = try BWFilmRenderer.render(to: img, params: bwParams(p))
+        let b = try BWFilmRenderer.render(to: img, params: bwParams(p))
+        let (_, maxDelta) = compare(a, b)
+        XCTAssertEqual(maxDelta, 0, "render must be deterministic")
+
+        // All-non-default JSON round-trip (house discipline).
+        let original = BWFilmShaderParams(
+            response: .kodakTriX400,
+            sensRed: 10, sensYellow: -20, sensGreen: 30, sensCyan: -40,
+            sensBlue: 50, sensMagenta: -60,
+            brightness: 5, brightnessHighlights: -10, brightnessMidtones: 15,
+            brightnessShadows: -20, contrast: 25, protectHighlights: 30,
+            protectShadows: 35,
+            structure: 22, structureHighlights: -11, structureMidtones: 12,
+            structureShadows: 13, fineStructure: 27,
+            toningPreset: .selenium2, toningStrength: 44, toneHueHigh: 100,
+            toneStrengthHigh: 22, toneHueLow: 200, toneStrengthLow: 33,
+            toneBalance: -12, vigStrength: -40, vigSize: 60, vigShape: 4.2,
+            beStrengthTop: 11, beStrengthBottom: 12, beStrengthLeft: 13,
+            beStrengthRight: 14, beSizeTop: 21, beSizeBottom: 22,
+            beSizeLeft: 23, beSizeRight: 24, beTransitionTop: 31,
+            beTransitionBottom: 32, beTransitionLeft: 33, beTransitionRight: 34,
+            curveGamma: -0.4, curveLowX: 0.05,
+            curveLowY: 0.1, curveHighX: 0.9, curveHighY: 0.95,
+            curvePoints: [BWCurvePoint(x: 0.3, y: 0.25)])
+        let layer = ShaderLayerParams(style: .bwFilm, params: .bwFilm(original))
+        let data = try JSONEncoder().encode(layer)
+        let decoded = try JSONDecoder().decode(ShaderLayerParams.self, from: data)
+        guard case .bwFilm(let roundTripped) = decoded.params else {
+            return XCTFail("style did not round-trip")
+        }
+        XCTAssertEqual(roundTripped, original)
+    }
 }

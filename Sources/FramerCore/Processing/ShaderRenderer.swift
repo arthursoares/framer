@@ -52,6 +52,8 @@ public enum ShaderRenderer {
                 previewBaseDimension: previewBaseDimension,
                 sourceIdentity: sourceIdentity
             )
+        case .bwFilm:
+            return try BWFilmRenderer.render(to: image, params: params)
         }
     }
 }

@@ -1025,6 +1025,7 @@ public enum ShaderStyle: String, Codable, CaseIterable, Sendable {
     case kuwahara
     case roughBorder
     case filmGrain
+    case bwFilm
 
     public var label: String {
         switch self {
@@ -1039,6 +1040,7 @@ public enum ShaderStyle: String, Codable, CaseIterable, Sendable {
         case .kuwahara: return "Kuwahara"
         case .roughBorder: return "Rough Border"
         case .filmGrain: return "Film Grain"
+        case .bwFilm: return "B&W Film"
         }
     }
 
@@ -1059,6 +1061,7 @@ public enum ShaderStyle: String, Codable, CaseIterable, Sendable {
         case .kuwahara:    return "paintbrush.pointed"
         case .roughBorder: return "square.dashed"
         case .filmGrain:   return "circle.grid.3x3"
+        case .bwFilm:      return "circle.lefthalf.filled.inverse"
         }
     }
 
@@ -1793,6 +1796,526 @@ public struct FilmGrainShaderParams: Codable, Equatable, Sendable {
     }
 }
 
+/// One tone-curve control point, input `x` -> output `y`, both normalized
+/// 0...1. Matches SEP's `lacdata.points` schema (which is NOT x-sorted on
+/// disk — the renderer sorts before interpolating).
+public struct BWCurvePoint: Codable, Equatable, Sendable {
+    public var x: Double
+    public var y: Double
+    public init(x: Double, y: Double) {
+        self.x = max(0, min(1, x))
+        self.y = max(0, min(1, y))
+    }
+}
+
+/// Spectral-response profiles for the B&W Film effect — the SEP2 film
+/// roster (same names as the Film Grain stocks; raw values kept identical
+/// so the two enums can be unified once both PRs land). Each profile is a
+/// set of six sensitivity values reconstructed from the film's documented
+/// character — SEP3's own per-film curves are compiled into its binary and
+/// not recoverable, so these are tuned analogues, not measurements.
+/// Raw values are stored in presets — never rename or remove cases.
+public enum BWFilmResponse: String, Codable, CaseIterable, Sendable {
+    case custom
+    case agfaAPX100, agfaAPX400
+    case fujiAcros100, fujiNeopan1600
+    case ilfordPanF50, ilfordFP4, ilfordDelta100, ilfordDelta400
+    case ilfordHP5, ilfordXP2, ilfordDelta3200
+    case kodakTMax100, kodakTMax400, kodakBW400CN, kodakTriX400, kodakP3200
+    case rolleiOrtho25, rolleiRetro80s, rolleiRetro100, rolleiIR400
+    // Films present in SEP3's own picker (measured 2026-07-19) that were
+    // not in the original SEP2-name roster:
+    case kodakPanatomicX32, adoxSilvermax21, fomapan100, ilfordPan100
+    case kodakPlusX125, agfaScala200, berggerBRF400, ilfordPan400, fujiNeopan400
+
+    public var label: String {
+        switch self {
+        case .custom:          return "Custom"
+        case .agfaAPX100:      return "Agfa APX 100"
+        case .agfaAPX400:      return "Agfa APX 400"
+        case .fujiAcros100:    return "Fuji Neopan Acros 100"
+        case .fujiNeopan1600:  return "Fuji Neopan 1600"
+        case .ilfordPanF50:    return "Ilford Pan F Plus 50"
+        case .ilfordFP4:       return "Ilford FP4 Plus 125"
+        case .ilfordDelta100:  return "Ilford Delta 100"
+        case .ilfordDelta400:  return "Ilford Delta 400"
+        case .ilfordHP5:       return "Ilford HP5 Plus 400"
+        case .ilfordXP2:       return "Ilford XP2 Super 400"
+        case .ilfordDelta3200: return "Ilford Delta 3200"
+        case .kodakTMax100:    return "Kodak 100 TMAX"
+        case .kodakTMax400:    return "Kodak 400 TMAX"
+        case .kodakBW400CN:    return "Kodak BW 400CN"
+        case .kodakTriX400:    return "Kodak Tri-X 400"
+        case .kodakP3200:      return "Kodak P3200 TMAX"
+        case .rolleiOrtho25:   return "Rollei Ortho 25"
+        case .rolleiRetro80s:  return "Rollei Retro 80S"
+        case .rolleiRetro100:  return "Rollei Retro 100 Tonal"
+        case .rolleiIR400:     return "Rollei IR 400"
+        case .kodakPanatomicX32: return "Kodak Panatomic-X 32"
+        case .adoxSilvermax21:   return "Adox Silvermax 21"
+        case .fomapan100:        return "Fomapan 100 Classic"
+        case .ilfordPan100:      return "Ilford Pan 100"
+        case .kodakPlusX125:     return "Kodak Plus-X 125"
+        case .agfaScala200:      return "Agfa Scala 200x"
+        case .berggerBRF400:    return "Bergger BRF 400 Plus"
+        case .ilfordPan400:      return "Ilford Pan 400"
+        case .fujiNeopan400:     return "Fuji Neopan 400"
+        }
+    }
+
+    /// (R, Ye, G, Cy, B, Mg) sensitivity values. Panchromatic films differ
+    /// subtly (mostly in blue excess and red extension); the outliers are
+    /// deliberately dramatic: Ortho 25 is red-blind, Retro 80S/IR 400 have
+    /// extended red (IR approximating the Wood-effect look), Tri-X carries
+    /// its iconic warm response.
+    public var sensitivities: (r: Double, ye: Double, g: Double, cy: Double, b: Double, mg: Double) {
+        switch self {
+        case .custom:          return (0, 0, 0, 0, 0, 0)
+        case .agfaAPX100:      return (-10, 5, 0, -5, -15, -5)
+        case .agfaAPX400:      return (-5, 10, 5, -10, -20, 0)
+        case .fujiAcros100:    return (-25, 0, 10, 5, -10, -10)
+        case .fujiNeopan1600:  return (0, 10, 0, -10, -25, -5)
+        case .ilfordPanF50:    return (-10, 15, 5, -10, -25, -5)
+        case .ilfordFP4:       return (-5, 10, 0, -5, -20, 0)
+        case .ilfordDelta100:  return (0, 5, 5, 0, -10, 0)
+        case .ilfordDelta400:  return (0, 5, 0, 0, -12, 0)
+        case .ilfordHP5:       return (5, 10, -5, -10, -18, 5)
+        case .ilfordXP2:       return (0, 0, 0, 5, -5, 0)
+        case .ilfordDelta3200: return (10, 5, -5, -15, -20, 5)
+        case .kodakTMax100:    return (0, 0, 5, 5, -8, -5)
+        case .kodakTMax400:    return (5, 5, 0, 0, -10, 0)
+        case .kodakBW400CN:    return (0, 5, 0, 0, -8, 0)
+        case .kodakTriX400:    return (10, 15, -10, -15, -25, 5)
+        case .kodakP3200:      return (10, 10, -5, -15, -25, 10)
+        case .rolleiOrtho25:   return (-85, -30, 15, 25, 20, -40)
+        case .rolleiRetro80s:  return (20, 10, -10, -20, -30, 0)
+        case .rolleiRetro100:  return (-5, 10, 0, -10, -25, 0)
+        case .rolleiIR400:     return (60, 25, -20, -35, -45, 20)
+        case .kodakPanatomicX32: return (-10, 10, 0, -5, -20, -5)
+        case .adoxSilvermax21:   return (0, 5, 0, 0, -15, 0)
+        case .fomapan100:        return (-5, 10, 0, -10, -25, -5)
+        case .ilfordPan100:      return (0, 10, 0, -5, -20, 0)
+        case .kodakPlusX125:     return (5, 15, -5, -10, -25, 0)
+        case .agfaScala200:      return (0, 5, 5, 5, -10, 0)
+        case .berggerBRF400:    return (5, 10, 0, -5, -15, 5)
+        case .ilfordPan400:      return (5, 10, -5, -10, -20, 5)
+        case .fujiNeopan400:     return (0, 10, 0, -10, -20, -5)
+        }
+    }
+
+    /// The film's characteristic tone curve, MEASURED from Silver Efex Pro
+    /// 3 itself (gray-ramp exports per film with grain zeroed, 2026-07-19 —
+    /// tools/sep-measurement/). Values are the film's Levels & Curves
+    /// response sampled at 7 interior points plus the black/white levels.
+    /// nil for films SEP3 does not carry (kept from the SEP2 roster with
+    /// reconstructed character) and for `.custom`.
+    public var measuredCurve: (lowY: Double, highY: Double, points: [BWCurvePoint])? {
+        switch self {
+        case .ilfordPanF50:
+            return (lowY: 0.000, highY: 0.976, points: [BWCurvePoint(x: 0.125, y: 0.083), BWCurvePoint(x: 0.251, y: 0.185), BWCurvePoint(x: 0.376, y: 0.311), BWCurvePoint(x: 0.502, y: 0.451), BWCurvePoint(x: 0.627, y: 0.601), BWCurvePoint(x: 0.753, y: 0.740), BWCurvePoint(x: 0.878, y: 0.866)])
+        case .agfaAPX100:
+            return (lowY: 0.000, highY: 1.000, points: [BWCurvePoint(x: 0.125, y: 0.090), BWCurvePoint(x: 0.251, y: 0.203), BWCurvePoint(x: 0.376, y: 0.335), BWCurvePoint(x: 0.502, y: 0.482), BWCurvePoint(x: 0.627, y: 0.624), BWCurvePoint(x: 0.753, y: 0.765), BWCurvePoint(x: 0.878, y: 0.889)])
+        case .fujiAcros100:
+            return (lowY: 0.000, highY: 1.000, points: [BWCurvePoint(x: 0.125, y: 0.094), BWCurvePoint(x: 0.251, y: 0.196), BWCurvePoint(x: 0.376, y: 0.310), BWCurvePoint(x: 0.502, y: 0.443), BWCurvePoint(x: 0.627, y: 0.600), BWCurvePoint(x: 0.753, y: 0.757), BWCurvePoint(x: 0.878, y: 0.890)])
+        case .kodakTMax100:
+            return (lowY: 0.000, highY: 1.000, points: [BWCurvePoint(x: 0.125, y: 0.000), BWCurvePoint(x: 0.251, y: 0.137), BWCurvePoint(x: 0.376, y: 0.298), BWCurvePoint(x: 0.502, y: 0.471), BWCurvePoint(x: 0.627, y: 0.639), BWCurvePoint(x: 0.753, y: 0.780), BWCurvePoint(x: 0.878, y: 0.898)])
+        case .rolleiRetro100:
+            return (lowY: 0.000, highY: 1.000, points: [BWCurvePoint(x: 0.125, y: 0.141), BWCurvePoint(x: 0.251, y: 0.267), BWCurvePoint(x: 0.376, y: 0.408), BWCurvePoint(x: 0.502, y: 0.573), BWCurvePoint(x: 0.627, y: 0.718), BWCurvePoint(x: 0.753, y: 0.847), BWCurvePoint(x: 0.878, y: 0.941)])
+        case .ilfordFP4:
+            return (lowY: 0.000, highY: 0.988, points: [BWCurvePoint(x: 0.125, y: 0.047), BWCurvePoint(x: 0.251, y: 0.161), BWCurvePoint(x: 0.376, y: 0.357), BWCurvePoint(x: 0.502, y: 0.565), BWCurvePoint(x: 0.627, y: 0.725), BWCurvePoint(x: 0.753, y: 0.839), BWCurvePoint(x: 0.878, y: 0.922)])
+        case .ilfordDelta100:
+            return (lowY: 0.000, highY: 1.000, points: [BWCurvePoint(x: 0.125, y: 0.059), BWCurvePoint(x: 0.251, y: 0.173), BWCurvePoint(x: 0.376, y: 0.333), BWCurvePoint(x: 0.502, y: 0.510), BWCurvePoint(x: 0.627, y: 0.675), BWCurvePoint(x: 0.753, y: 0.808), BWCurvePoint(x: 0.878, y: 0.910)])
+        case .agfaAPX400:
+            return (lowY: 0.000, highY: 1.000, points: [BWCurvePoint(x: 0.125, y: 0.106), BWCurvePoint(x: 0.251, y: 0.220), BWCurvePoint(x: 0.376, y: 0.349), BWCurvePoint(x: 0.502, y: 0.490), BWCurvePoint(x: 0.627, y: 0.631), BWCurvePoint(x: 0.753, y: 0.769), BWCurvePoint(x: 0.878, y: 0.890)])
+        case .ilfordDelta400:
+            return (lowY: 0.000, highY: 1.000, points: [BWCurvePoint(x: 0.125, y: 0.063), BWCurvePoint(x: 0.251, y: 0.153), BWCurvePoint(x: 0.376, y: 0.290), BWCurvePoint(x: 0.502, y: 0.475), BWCurvePoint(x: 0.627, y: 0.659), BWCurvePoint(x: 0.753, y: 0.804), BWCurvePoint(x: 0.878, y: 0.910)])
+        case .ilfordHP5:
+            return (lowY: 0.000, highY: 1.000, points: [BWCurvePoint(x: 0.125, y: 0.059), BWCurvePoint(x: 0.251, y: 0.149), BWCurvePoint(x: 0.376, y: 0.286), BWCurvePoint(x: 0.502, y: 0.459), BWCurvePoint(x: 0.627, y: 0.647), BWCurvePoint(x: 0.753, y: 0.804), BWCurvePoint(x: 0.878, y: 0.914)])
+        case .ilfordXP2:
+            return (lowY: 0.000, highY: 0.988, points: [BWCurvePoint(x: 0.125, y: 0.000), BWCurvePoint(x: 0.251, y: 0.153), BWCurvePoint(x: 0.376, y: 0.337), BWCurvePoint(x: 0.502, y: 0.525), BWCurvePoint(x: 0.627, y: 0.702), BWCurvePoint(x: 0.753, y: 0.831), BWCurvePoint(x: 0.878, y: 0.922)])
+        case .kodakTMax400:
+            return (lowY: 0.000, highY: 1.000, points: [BWCurvePoint(x: 0.125, y: 0.020), BWCurvePoint(x: 0.251, y: 0.102), BWCurvePoint(x: 0.376, y: 0.255), BWCurvePoint(x: 0.502, y: 0.467), BWCurvePoint(x: 0.627, y: 0.698), BWCurvePoint(x: 0.753, y: 0.855), BWCurvePoint(x: 0.878, y: 0.945)])
+        case .kodakBW400CN:
+            return (lowY: 0.000, highY: 0.988, points: [BWCurvePoint(x: 0.125, y: 0.008), BWCurvePoint(x: 0.251, y: 0.184), BWCurvePoint(x: 0.376, y: 0.353), BWCurvePoint(x: 0.502, y: 0.506), BWCurvePoint(x: 0.627, y: 0.647), BWCurvePoint(x: 0.753, y: 0.773), BWCurvePoint(x: 0.878, y: 0.886)])
+        case .kodakTriX400:
+            return (lowY: 0.000, highY: 1.000, points: [BWCurvePoint(x: 0.125, y: 0.047), BWCurvePoint(x: 0.251, y: 0.173), BWCurvePoint(x: 0.376, y: 0.333), BWCurvePoint(x: 0.502, y: 0.518), BWCurvePoint(x: 0.627, y: 0.710), BWCurvePoint(x: 0.753, y: 0.875), BWCurvePoint(x: 0.878, y: 0.961)])
+        case .fujiNeopan1600:
+            return (lowY: 0.000, highY: 1.000, points: [BWCurvePoint(x: 0.125, y: 0.071), BWCurvePoint(x: 0.251, y: 0.137), BWCurvePoint(x: 0.376, y: 0.231), BWCurvePoint(x: 0.502, y: 0.412), BWCurvePoint(x: 0.627, y: 0.639), BWCurvePoint(x: 0.753, y: 0.812), BWCurvePoint(x: 0.878, y: 0.922)])
+        case .ilfordDelta3200:
+            return (lowY: 0.000, highY: 1.000, points: [BWCurvePoint(x: 0.125, y: 0.035), BWCurvePoint(x: 0.251, y: 0.098), BWCurvePoint(x: 0.376, y: 0.227), BWCurvePoint(x: 0.502, y: 0.463), BWCurvePoint(x: 0.627, y: 0.714), BWCurvePoint(x: 0.753, y: 0.875), BWCurvePoint(x: 0.878, y: 0.957)])
+        case .kodakPanatomicX32:
+            return (lowY: 0.000, highY: 1.000, points: [BWCurvePoint(x: 0.125, y: 0.039), BWCurvePoint(x: 0.251, y: 0.180), BWCurvePoint(x: 0.376, y: 0.318), BWCurvePoint(x: 0.502, y: 0.455), BWCurvePoint(x: 0.627, y: 0.592), BWCurvePoint(x: 0.753, y: 0.729), BWCurvePoint(x: 0.878, y: 0.867)])
+        case .adoxSilvermax21:
+            return (lowY: 0.004, highY: 0.984, points: [BWCurvePoint(x: 0.125, y: 0.106), BWCurvePoint(x: 0.251, y: 0.237), BWCurvePoint(x: 0.376, y: 0.486), BWCurvePoint(x: 0.502, y: 0.682), BWCurvePoint(x: 0.627, y: 0.832), BWCurvePoint(x: 0.753, y: 0.921), BWCurvePoint(x: 0.878, y: 0.974)])
+        case .fomapan100:
+            return (lowY: 0.000, highY: 1.000, points: [BWCurvePoint(x: 0.125, y: 0.075), BWCurvePoint(x: 0.251, y: 0.196), BWCurvePoint(x: 0.376, y: 0.345), BWCurvePoint(x: 0.502, y: 0.600), BWCurvePoint(x: 0.627, y: 0.780), BWCurvePoint(x: 0.753, y: 0.910), BWCurvePoint(x: 0.878, y: 0.988)])
+        case .ilfordPan100:
+            return (lowY: 0.000, highY: 1.000, points: [BWCurvePoint(x: 0.125, y: 0.118), BWCurvePoint(x: 0.251, y: 0.212), BWCurvePoint(x: 0.376, y: 0.357), BWCurvePoint(x: 0.502, y: 0.506), BWCurvePoint(x: 0.627, y: 0.682), BWCurvePoint(x: 0.753, y: 0.827), BWCurvePoint(x: 0.878, y: 0.922)])
+        case .kodakPlusX125:
+            return (lowY: 0.004, highY: 1.000, points: [BWCurvePoint(x: 0.125, y: 0.071), BWCurvePoint(x: 0.251, y: 0.176), BWCurvePoint(x: 0.376, y: 0.337), BWCurvePoint(x: 0.502, y: 0.514), BWCurvePoint(x: 0.627, y: 0.671), BWCurvePoint(x: 0.753, y: 0.796), BWCurvePoint(x: 0.878, y: 0.906)])
+        case .agfaScala200:
+            return (lowY: 0.000, highY: 1.000, points: [BWCurvePoint(x: 0.125, y: 0.075), BWCurvePoint(x: 0.251, y: 0.220), BWCurvePoint(x: 0.376, y: 0.369), BWCurvePoint(x: 0.502, y: 0.506), BWCurvePoint(x: 0.627, y: 0.624), BWCurvePoint(x: 0.753, y: 0.729), BWCurvePoint(x: 0.878, y: 0.843)])
+        case .berggerBRF400:
+            return (lowY: 0.000, highY: 1.000, points: [BWCurvePoint(x: 0.125, y: 0.106), BWCurvePoint(x: 0.251, y: 0.247), BWCurvePoint(x: 0.376, y: 0.400), BWCurvePoint(x: 0.502, y: 0.541), BWCurvePoint(x: 0.627, y: 0.667), BWCurvePoint(x: 0.753, y: 0.784), BWCurvePoint(x: 0.878, y: 0.894)])
+        case .ilfordPan400:
+            return (lowY: 0.004, highY: 0.996, points: [BWCurvePoint(x: 0.125, y: 0.094), BWCurvePoint(x: 0.251, y: 0.204), BWCurvePoint(x: 0.376, y: 0.345), BWCurvePoint(x: 0.502, y: 0.498), BWCurvePoint(x: 0.627, y: 0.639), BWCurvePoint(x: 0.753, y: 0.780), BWCurvePoint(x: 0.878, y: 0.910)])
+        case .fujiNeopan400:
+            return (lowY: 0.004, highY: 0.996, points: [BWCurvePoint(x: 0.125, y: 0.114), BWCurvePoint(x: 0.251, y: 0.247), BWCurvePoint(x: 0.376, y: 0.384), BWCurvePoint(x: 0.502, y: 0.518), BWCurvePoint(x: 0.627, y: 0.663), BWCurvePoint(x: 0.753, y: 0.796), BWCurvePoint(x: 0.878, y: 0.906)])
+        default: return nil
+        }
+    }
+}
+
+/// The 24-entry toning table from SEP3's FinishingAdjustments
+/// (`toningPresets` "1"–"24"). Each preset sets the five toning dials;
+/// values are reconstructions of the named darkroom process looks.
+public enum BWToningPreset: Int, Codable, CaseIterable, Sendable {
+    case neutral = 1
+    case splitToner1 = 2, splitToner2 = 3
+    case blueToner1 = 4, blueToner2 = 5, blueToner3 = 6
+    case coffee1 = 7, coffee2 = 8, coffee3 = 9
+    case copper1 = 10, copper2 = 11, copper3 = 12
+    case selenium1 = 13, selenium2 = 14, selenium3 = 15
+    case sepia1 = 16, sepia2 = 17, sepia3 = 18
+    case cyan1 = 19, cyan2 = 20, cyan3 = 21
+    case ambrotype1 = 22, ambrotype2 = 23, ambrotype3 = 24
+
+    public var label: String {
+        switch self {
+        case .neutral: return "Neutral"
+        case .splitToner1: return "Split Toner 1"
+        case .splitToner2: return "Split Toner 2"
+        case .blueToner1: return "Blue Toner 1"
+        case .blueToner2: return "Blue Toner 2"
+        case .blueToner3: return "Blue Toner 3"
+        case .coffee1: return "Coffee 1"
+        case .coffee2: return "Coffee 2"
+        case .coffee3: return "Coffee 3"
+        case .copper1: return "Copper 1"
+        case .copper2: return "Copper 2"
+        case .copper3: return "Copper 3"
+        case .selenium1: return "Selenium 1"
+        case .selenium2: return "Selenium 2"
+        case .selenium3: return "Selenium 3"
+        case .sepia1: return "Sepia 1"
+        case .sepia2: return "Sepia 2"
+        case .sepia3: return "Sepia 3"
+        case .cyan1: return "Cyan 1"
+        case .cyan2: return "Cyan 2"
+        case .cyan3: return "Cyan 3"
+        case .ambrotype1: return "Ambrotype 1"
+        case .ambrotype2: return "Ambrotype 2"
+        case .ambrotype3: return "Ambrotype 3"
+        }
+    }
+
+    /// (silver hue, silver strength, paper hue, paper strength, balance,
+    /// overall strength) — SEP dial names: toneHueHigh/toneStrengthHigh/
+    /// toneHueLow/toneStrengthLow/toneHueBalance/toningStrength.
+    public var toning: (hueHigh: Double, strengthHigh: Double, hueLow: Double, strengthLow: Double, balance: Double, strength: Double) {
+        switch self {
+        case .neutral:     return (40, 0, 40, 0, 0, 0)
+        case .splitToner1: return (45, 20, 220, 25, 0, 50)
+        case .splitToner2: return (200, 20, 40, 30, 10, 50)
+        case .blueToner1:  return (220, 15, 215, 15, 0, 40)
+        case .blueToner2:  return (220, 28, 215, 28, 0, 55)
+        case .blueToner3:  return (222, 40, 215, 42, 0, 70)
+        case .coffee1:     return (32, 18, 28, 22, 0, 40)
+        case .coffee2:     return (32, 28, 28, 34, 0, 55)
+        case .coffee3:     return (30, 38, 26, 46, 0, 70)
+        case .copper1:     return (22, 20, 18, 24, 0, 40)
+        case .copper2:     return (22, 32, 18, 36, 0, 55)
+        case .copper3:     return (20, 44, 16, 48, 0, 70)
+        case .selenium1:   return (290, 10, 280, 14, -10, 35)
+        case .selenium2:   return (290, 16, 280, 22, -10, 50)
+        case .selenium3:   return (288, 24, 278, 30, -10, 65)
+        case .sepia1:      return (38, 22, 34, 28, 5, 45)
+        case .sepia2:      return (38, 32, 34, 40, 5, 60)
+        case .sepia3:      return (36, 42, 32, 52, 5, 75)
+        case .cyan1:       return (190, 16, 188, 18, 0, 40)
+        case .cyan2:       return (190, 26, 188, 30, 0, 55)
+        case .cyan3:       return (192, 36, 186, 42, 0, 70)
+        case .ambrotype1:  return (90, 8, 70, 14, -15, 40)
+        case .ambrotype2:  return (90, 12, 70, 20, -15, 55)
+        case .ambrotype3:  return (88, 16, 66, 26, -15, 70)
+        }
+    }
+}
+
+/// Silver-Efex-style black-and-white conversion (BWFilm.metal). Modeled on
+/// the SilverEfexParams pipeline characterized by bundle inspection, minus
+/// the ColorFilter block (dropped by design):
+///   1. Six-channel spectral sensitivity (R/Ye/G/Cy/B/Mg, SEP `sens*`)
+///      weights how each hue renders into gray.
+///   2. Zone tonality (SEP GlobalAdjustments): brightness global +
+///      highlights/midtones/shadows, contrast, protect highlights/shadows.
+///   3. Tone curve (SEP `lacdata`): gamma + black/white nodes + control
+///      points, CPU-baked to a 256-entry LUT texture.
+/// All values are UI-scale, matching SEP's own storage (no normalization).
+public struct BWFilmShaderParams: Codable, Equatable, Sendable {
+    /// Which film response the sensitivity dials were last set from.
+    public var response: BWFilmResponse
+
+    // Spectral sensitivity, -100...100, 0 = neutral (Rec.601 luma only).
+    public var sensRed: Double
+    public var sensYellow: Double
+    public var sensGreen: Double
+    public var sensCyan: Double
+    public var sensBlue: Double
+    public var sensMagenta: Double
+
+    // Zone tonality, -100...100 (protect dials 0...100).
+    public var brightness: Double
+    public var brightnessHighlights: Double
+    public var brightnessMidtones: Double
+    public var brightnessShadows: Double
+    public var contrast: Double
+    public var protectHighlights: Double
+    public var protectShadows: Double
+
+    // Structure — multi-scale local contrast (SEP GlobalAdjustments).
+    public var structure: Double            // -100 (soften) ... 100
+    public var structureHighlights: Double  // -100...100 zone boosts
+    public var structureMidtones: Double
+    public var structureShadows: Double
+    public var fineStructure: Double        // 0...100
+
+    // Finishing — toning (SEP FinishingAdjustments).
+    public var toningPreset: BWToningPreset
+    public var toningStrength: Double    // 0...100 overall
+    public var toneHueHigh: Double       // Silver Hue, 0...360
+    public var toneStrengthHigh: Double  // Silver Toning, 0...100
+    public var toneHueLow: Double        // Paper Hue, 0...360
+    public var toneStrengthLow: Double   // Paper Toning, 0...100
+    public var toneBalance: Double       // -100...100 silver<->paper
+
+    // Finishing — vignette.
+    public var vigStrength: Double       // -100 (darken) ... 100 (lighten)
+    public var vigSize: Double           // 0...100 radius
+    public var vigShape: Double          // 2 (circle) ... 4.5 (rectangle)
+
+    // Finishing — burn edges, per edge: strength/size/transition 0...100.
+    public var beStrengthTop: Double
+    public var beStrengthBottom: Double
+    public var beStrengthLeft: Double
+    public var beStrengthRight: Double
+    public var beSizeTop: Double
+    public var beSizeBottom: Double
+    public var beSizeLeft: Double
+    public var beSizeRight: Double
+    public var beTransitionTop: Double
+    public var beTransitionBottom: Double
+    public var beTransitionLeft: Double
+    public var beTransitionRight: Double
+
+    // Tone curve (lacdata-compatible).
+    public var curveGamma: Double        // -1...1, 0 neutral, + brightens mids
+    public var curveLowX: Double         // black point input
+    public var curveLowY: Double         // black point output (lift)
+    public var curveHighX: Double        // white point input
+    public var curveHighY: Double        // white point output (cap)
+    public var curvePoints: [BWCurvePoint]
+
+    public init(
+        response: BWFilmResponse = .custom,
+        sensRed: Double = 0, sensYellow: Double = 0, sensGreen: Double = 0,
+        sensCyan: Double = 0, sensBlue: Double = 0, sensMagenta: Double = 0,
+        brightness: Double = 0, brightnessHighlights: Double = 0,
+        brightnessMidtones: Double = 0, brightnessShadows: Double = 0,
+        contrast: Double = 0, protectHighlights: Double = 0, protectShadows: Double = 0,
+        structure: Double = 0, structureHighlights: Double = 0,
+        structureMidtones: Double = 0, structureShadows: Double = 0,
+        fineStructure: Double = 0,
+        toningPreset: BWToningPreset = .neutral, toningStrength: Double = 0,
+        toneHueHigh: Double = 40, toneStrengthHigh: Double = 0,
+        toneHueLow: Double = 40, toneStrengthLow: Double = 0, toneBalance: Double = 0,
+        vigStrength: Double = 0, vigSize: Double = 50, vigShape: Double = 3,
+        beStrengthTop: Double = 0, beStrengthBottom: Double = 0,
+        beStrengthLeft: Double = 0, beStrengthRight: Double = 0,
+        beSizeTop: Double = 25, beSizeBottom: Double = 25,
+        beSizeLeft: Double = 25, beSizeRight: Double = 25,
+        beTransitionTop: Double = 50, beTransitionBottom: Double = 50,
+        beTransitionLeft: Double = 50, beTransitionRight: Double = 50,
+        curveGamma: Double = 0, curveLowX: Double = 0, curveLowY: Double = 0,
+        curveHighX: Double = 1, curveHighY: Double = 1,
+        curvePoints: [BWCurvePoint] = []
+    ) {
+        func clampSens(_ v: Double) -> Double { max(-100, min(100, v)) }
+        self.response = response
+        self.sensRed = clampSens(sensRed)
+        self.sensYellow = clampSens(sensYellow)
+        self.sensGreen = clampSens(sensGreen)
+        self.sensCyan = clampSens(sensCyan)
+        self.sensBlue = clampSens(sensBlue)
+        self.sensMagenta = clampSens(sensMagenta)
+        self.brightness = clampSens(brightness)
+        self.brightnessHighlights = clampSens(brightnessHighlights)
+        self.brightnessMidtones = clampSens(brightnessMidtones)
+        self.brightnessShadows = clampSens(brightnessShadows)
+        self.contrast = clampSens(contrast)
+        self.protectHighlights = max(0, min(100, protectHighlights))
+        self.protectShadows = max(0, min(100, protectShadows))
+        self.structure = clampSens(structure)
+        self.structureHighlights = clampSens(structureHighlights)
+        self.structureMidtones = clampSens(structureMidtones)
+        self.structureShadows = clampSens(structureShadows)
+        self.fineStructure = max(0, min(100, fineStructure))
+        func clamp01_100(_ v: Double) -> Double { max(0, min(100, v)) }
+        func clampHue(_ v: Double) -> Double { max(0, min(360, v)) }
+        self.toningPreset = toningPreset
+        self.toningStrength = clamp01_100(toningStrength)
+        self.toneHueHigh = clampHue(toneHueHigh)
+        self.toneStrengthHigh = clamp01_100(toneStrengthHigh)
+        self.toneHueLow = clampHue(toneHueLow)
+        self.toneStrengthLow = clamp01_100(toneStrengthLow)
+        self.toneBalance = clampSens(toneBalance)
+        self.vigStrength = clampSens(vigStrength)
+        self.vigSize = clamp01_100(vigSize)
+        self.vigShape = max(1, min(5, vigShape))
+        self.beStrengthTop = clamp01_100(beStrengthTop)
+        self.beStrengthBottom = clamp01_100(beStrengthBottom)
+        self.beStrengthLeft = clamp01_100(beStrengthLeft)
+        self.beStrengthRight = clamp01_100(beStrengthRight)
+        self.beSizeTop = clamp01_100(beSizeTop)
+        self.beSizeBottom = clamp01_100(beSizeBottom)
+        self.beSizeLeft = clamp01_100(beSizeLeft)
+        self.beSizeRight = clamp01_100(beSizeRight)
+        self.beTransitionTop = clamp01_100(beTransitionTop)
+        self.beTransitionBottom = clamp01_100(beTransitionBottom)
+        self.beTransitionLeft = clamp01_100(beTransitionLeft)
+        self.beTransitionRight = clamp01_100(beTransitionRight)
+        self.curveGamma = max(-1, min(1, curveGamma))
+        self.curveLowX = max(0, min(1, curveLowX))
+        self.curveLowY = max(0, min(1, curveLowY))
+        self.curveHighX = max(0, min(1, curveHighX))
+        self.curveHighY = max(0, min(1, curveHighY))
+        self.curvePoints = curvePoints
+    }
+
+    private enum CodingKeys: String, CodingKey {
+        case response
+        case sensRed, sensYellow, sensGreen, sensCyan, sensBlue, sensMagenta
+        case brightness, brightnessHighlights, brightnessMidtones, brightnessShadows
+        case contrast, protectHighlights, protectShadows
+        case structure, structureHighlights, structureMidtones, structureShadows
+        case fineStructure
+        case toningPreset, toningStrength, toneHueHigh, toneStrengthHigh
+        case toneHueLow, toneStrengthLow, toneBalance
+        case vigStrength, vigSize, vigShape
+        case beStrengthTop, beStrengthBottom, beStrengthLeft, beStrengthRight
+        case beSizeTop, beSizeBottom, beSizeLeft, beSizeRight
+        case beTransitionTop, beTransitionBottom, beTransitionLeft, beTransitionRight
+        case curveGamma, curveLowX, curveLowY, curveHighX, curveHighY, curvePoints
+    }
+
+    public init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        self.init(
+            // Decode via raw string so an UNKNOWN future film falls back to
+            // .custom instead of throwing — a throwing decode makes
+            // PresetStore delete the preset file (house rule 4).
+            response: (try c.decodeIfPresent(String.self, forKey: .response))
+                .flatMap(BWFilmResponse.init(rawValue:)) ?? .custom,
+            sensRed: try c.decodeIfPresent(Double.self, forKey: .sensRed) ?? 0,
+            sensYellow: try c.decodeIfPresent(Double.self, forKey: .sensYellow) ?? 0,
+            sensGreen: try c.decodeIfPresent(Double.self, forKey: .sensGreen) ?? 0,
+            sensCyan: try c.decodeIfPresent(Double.self, forKey: .sensCyan) ?? 0,
+            sensBlue: try c.decodeIfPresent(Double.self, forKey: .sensBlue) ?? 0,
+            sensMagenta: try c.decodeIfPresent(Double.self, forKey: .sensMagenta) ?? 0,
+            brightness: try c.decodeIfPresent(Double.self, forKey: .brightness) ?? 0,
+            brightnessHighlights: try c.decodeIfPresent(Double.self, forKey: .brightnessHighlights) ?? 0,
+            brightnessMidtones: try c.decodeIfPresent(Double.self, forKey: .brightnessMidtones) ?? 0,
+            brightnessShadows: try c.decodeIfPresent(Double.self, forKey: .brightnessShadows) ?? 0,
+            contrast: try c.decodeIfPresent(Double.self, forKey: .contrast) ?? 0,
+            protectHighlights: try c.decodeIfPresent(Double.self, forKey: .protectHighlights) ?? 0,
+            protectShadows: try c.decodeIfPresent(Double.self, forKey: .protectShadows) ?? 0,
+            structure: try c.decodeIfPresent(Double.self, forKey: .structure) ?? 0,
+            structureHighlights: try c.decodeIfPresent(Double.self, forKey: .structureHighlights) ?? 0,
+            structureMidtones: try c.decodeIfPresent(Double.self, forKey: .structureMidtones) ?? 0,
+            structureShadows: try c.decodeIfPresent(Double.self, forKey: .structureShadows) ?? 0,
+            fineStructure: try c.decodeIfPresent(Double.self, forKey: .fineStructure) ?? 0,
+            toningPreset: try c.decodeIfPresent(BWToningPreset.self, forKey: .toningPreset) ?? .neutral,
+            toningStrength: try c.decodeIfPresent(Double.self, forKey: .toningStrength) ?? 0,
+            toneHueHigh: try c.decodeIfPresent(Double.self, forKey: .toneHueHigh) ?? 40,
+            toneStrengthHigh: try c.decodeIfPresent(Double.self, forKey: .toneStrengthHigh) ?? 0,
+            toneHueLow: try c.decodeIfPresent(Double.self, forKey: .toneHueLow) ?? 40,
+            toneStrengthLow: try c.decodeIfPresent(Double.self, forKey: .toneStrengthLow) ?? 0,
+            toneBalance: try c.decodeIfPresent(Double.self, forKey: .toneBalance) ?? 0,
+            vigStrength: try c.decodeIfPresent(Double.self, forKey: .vigStrength) ?? 0,
+            vigSize: try c.decodeIfPresent(Double.self, forKey: .vigSize) ?? 50,
+            vigShape: try c.decodeIfPresent(Double.self, forKey: .vigShape) ?? 3,
+            beStrengthTop: try c.decodeIfPresent(Double.self, forKey: .beStrengthTop) ?? 0,
+            beStrengthBottom: try c.decodeIfPresent(Double.self, forKey: .beStrengthBottom) ?? 0,
+            beStrengthLeft: try c.decodeIfPresent(Double.self, forKey: .beStrengthLeft) ?? 0,
+            beStrengthRight: try c.decodeIfPresent(Double.self, forKey: .beStrengthRight) ?? 0,
+            beSizeTop: try c.decodeIfPresent(Double.self, forKey: .beSizeTop) ?? 25,
+            beSizeBottom: try c.decodeIfPresent(Double.self, forKey: .beSizeBottom) ?? 25,
+            beSizeLeft: try c.decodeIfPresent(Double.self, forKey: .beSizeLeft) ?? 25,
+            beSizeRight: try c.decodeIfPresent(Double.self, forKey: .beSizeRight) ?? 25,
+            beTransitionTop: try c.decodeIfPresent(Double.self, forKey: .beTransitionTop) ?? 50,
+            beTransitionBottom: try c.decodeIfPresent(Double.self, forKey: .beTransitionBottom) ?? 50,
+            beTransitionLeft: try c.decodeIfPresent(Double.self, forKey: .beTransitionLeft) ?? 50,
+            beTransitionRight: try c.decodeIfPresent(Double.self, forKey: .beTransitionRight) ?? 50,
+            curveGamma: try c.decodeIfPresent(Double.self, forKey: .curveGamma) ?? 0,
+            curveLowX: try c.decodeIfPresent(Double.self, forKey: .curveLowX) ?? 0,
+            curveLowY: try c.decodeIfPresent(Double.self, forKey: .curveLowY) ?? 0,
+            curveHighX: try c.decodeIfPresent(Double.self, forKey: .curveHighX) ?? 1,
+            curveHighY: try c.decodeIfPresent(Double.self, forKey: .curveHighY) ?? 1,
+            curvePoints: try c.decodeIfPresent([BWCurvePoint].self, forKey: .curvePoints) ?? []
+        )
+    }
+
+    /// Set the five toning dials + overall strength from a toning preset
+    /// (SEP's 24-entry table); everything else is untouched.
+    public func applyingToningPreset(_ preset: BWToningPreset) -> BWFilmShaderParams {
+        var updated = self
+        let t = preset.toning
+        updated.toningPreset = preset
+        updated.toneHueHigh = t.hueHigh
+        updated.toneStrengthHigh = t.strengthHigh
+        updated.toneHueLow = t.hueLow
+        updated.toneStrengthLow = t.strengthLow
+        updated.toneBalance = t.balance
+        updated.toningStrength = t.strength
+        return updated
+    }
+
+    /// Set the six sensitivity dials to a film response profile (the picker
+    /// behavior: choosing a film re-tunes the dials, which stay editable —
+    /// tonality and curve settings are left untouched).
+    public func applyingResponse(_ newResponse: BWFilmResponse) -> BWFilmShaderParams {
+        var updated = self
+        let s = newResponse.sensitivities
+        updated.response = newResponse
+        updated.sensRed = s.r
+        updated.sensYellow = s.ye
+        updated.sensGreen = s.g
+        updated.sensCyan = s.cy
+        updated.sensBlue = s.b
+        updated.sensMagenta = s.mg
+        // A film's Levels & Curves is part of its character (SEP replaces
+        // the curve on film selection). Measured films install their
+        // measured curve; unmeasured films reset to identity; `.custom`
+        // leaves the user's curve untouched.
+        if let curve = newResponse.measuredCurve {
+            updated.curveGamma = 0
+            updated.curveLowX = 0
+            updated.curveLowY = curve.lowY
+            updated.curveHighX = 1
+            updated.curveHighY = curve.highY
+            updated.curvePoints = curve.points
+        } else if newResponse != .custom {
+            updated.curveGamma = 0
+            updated.curveLowX = 0
+            updated.curveLowY = 0
+            updated.curveHighX = 1
+            updated.curveHighY = 1
+            updated.curvePoints = []
+        }
+        return updated
+    }
+}
+
 public enum ShaderStyleParams: Codable, Equatable, Sendable {
     case ascii(ASCIIShaderParams)
     case crimewave(CrimewaveShaderParams)
@@ -1805,6 +2328,7 @@ public enum ShaderStyleParams: Codable, Equatable, Sendable {
     case kuwahara(KuwaharaShaderParams)
     case roughBorder(RoughBorderShaderParams)
     case filmGrain(FilmGrainShaderParams)
+    case bwFilm(BWFilmShaderParams)
 
     private enum CodingKeys: String, CodingKey {
         case type, params
@@ -1823,6 +2347,7 @@ public enum ShaderStyleParams: Codable, Equatable, Sendable {
         case .kuwahara: return .kuwahara
         case .roughBorder: return .roughBorder
         case .filmGrain: return .filmGrain
+        case .bwFilm: return .bwFilm
         }
     }
 
@@ -1839,6 +2364,7 @@ public enum ShaderStyleParams: Codable, Equatable, Sendable {
         case .kuwahara: return .kuwahara(KuwaharaShaderParams())
         case .roughBorder: return .roughBorder(RoughBorderShaderParams())
         case .filmGrain: return .filmGrain(FilmGrainShaderParams())
+        case .bwFilm: return .bwFilm(BWFilmShaderParams())
         }
     }
 
@@ -1868,6 +2394,8 @@ public enum ShaderStyleParams: Codable, Equatable, Sendable {
             self = .roughBorder(try container.decode(RoughBorderShaderParams.self, forKey: .params))
         case "filmGrain":
             self = .filmGrain(try container.decode(FilmGrainShaderParams.self, forKey: .params))
+        case "bwFilm":
+            self = .bwFilm(try container.decode(BWFilmShaderParams.self, forKey: .params))
         default:
             throw DecodingError.dataCorruptedError(
                 forKey: .type, in: container,
@@ -1911,6 +2439,9 @@ public enum ShaderStyleParams: Codable, Equatable, Sendable {
             try container.encode(params, forKey: .params)
         case .filmGrain(let params):
             try container.encode("filmGrain", forKey: .type)
+            try container.encode(params, forKey: .params)
+        case .bwFilm(let params):
+            try container.encode("bwFilm", forKey: .type)
             try container.encode(params, forKey: .params)
         }
     }
