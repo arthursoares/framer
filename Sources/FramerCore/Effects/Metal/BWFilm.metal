@@ -183,11 +183,13 @@ fragment float4 bwFilmFragment(
     // resolution; sampled with the linear sampler over a sparse disc.
     {
         float minDim = min(dims.x, dims.y);
+        // Zone bands match the tonality masks below (widened per the
+        // response-curve retune).
         float zoneStructure = uniforms.structureGlobal
-            + uniforms.structureShadows   * (1.0 - smoothstep(0.25, 0.6, g))
-            + uniforms.structureHighlights * smoothstep(0.4, 0.75, g)
+            + uniforms.structureShadows   * (1.0 - smoothstep(0.15, 0.55, g))
+            + uniforms.structureHighlights * smoothstep(0.45, 0.85, g)
             + uniforms.structureMidtones
-              * saturate(1.0 - (1.0 - smoothstep(0.25, 0.6, g)) - smoothstep(0.4, 0.75, g));
+              * saturate(1.0 - (1.0 - smoothstep(0.15, 0.55, g)) - smoothstep(0.45, 0.85, g));
         if (fabs(zoneStructure) > 0.5) {
             float2 radius = float2(0.012 * minDim) / dims;
             float blurred = bwfBlurGray(source, texSampler, selfUV, radius, uniforms);
@@ -202,16 +204,34 @@ fragment float4 bwFilmFragment(
     }
 
     // --- 2. Zone tonality ----------------------------------------------
-    float shMask  = 1.0 - smoothstep(0.25, 0.6, g);
-    float hiMask  = smoothstep(0.4, 0.75, g);
+    // Response curves tuned against SEP side-by-side (maintainer feedback:
+    // the first linear-additive version slammed tones in the first slider
+    // ticks and clipped — SEP spreads the same reach over the whole travel).
+    //
+    // Brightness is an asymptotic lift: positive values move g toward
+    // white proportionally to the remaining headroom (1-g), negative
+    // toward black proportionally to g — full slider reaches at most
+    // halfway to the endpoint and never clips.
+    float shMask  = 1.0 - smoothstep(0.15, 0.55, g);
+    float hiMask  = smoothstep(0.45, 0.85, g);
     float midMask = saturate(1.0 - shMask - hiMask);
 
-    g += uniforms.brightness / 100.0 * 0.4
-       + (uniforms.briShadows   * shMask
-        + uniforms.briMidtones  * midMask
-        + uniforms.briHighlights * hiMask) / 100.0 * 0.4;
+    float briAmt = uniforms.brightness / 100.0 * 0.5
+        + (uniforms.briShadows   * shMask
+         + uniforms.briMidtones  * midMask
+         + uniforms.briHighlights * hiMask) / 100.0 * 0.35;
+    g += briAmt > 0.0 ? briAmt * (1.0 - g) : briAmt * g;
 
-    g = 0.5 + (g - 0.5) * (1.0 + uniforms.contrast / 100.0 * 1.2);
+    // Contrast: blend toward a smoothstep S-curve (positive) or toward a
+    // flattened line (negative) — progressive over the whole dial, no
+    // hard clipping at the extremes.
+    float c = uniforms.contrast / 100.0;
+    if (c > 0.0) {
+        float sCurve = g * g * (3.0 - 2.0 * g);
+        g = mix(g, sCurve, c);
+    } else if (c < 0.0) {
+        g = mix(g, 0.5 + (g - 0.5) * 0.6, -c);
+    }
     g = saturate(g);
 
     // Soft knees: pull crushed shadows up / blown highlights down.
