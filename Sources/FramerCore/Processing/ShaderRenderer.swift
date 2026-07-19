@@ -11,7 +11,8 @@ public enum ShaderRenderer {
         to image: CGImage,
         params: ShaderLayerParams,
         previewBaseDimension: Int? = nil,
-        sourceImage: CGImage? = nil
+        sourceImage: CGImage? = nil,
+        sourceIdentity: String? = nil
     ) throws -> CGImage {
         try Task.checkCancellation()
 
@@ -43,7 +44,7 @@ public enum ShaderRenderer {
         case .kuwahara:
             return try KuwaharaRenderer.render(to: image, params: params)
         case .roughBorder:
-            return try RoughBorderRenderer.render(to: image, params: params)
+            return try RoughBorderRenderer.render(to: image, params: params, sourceIdentity: sourceIdentity)
         }
     }
 }

@@ -3235,8 +3235,8 @@ private struct ShaderControls: View {
         sliderRow(
             label: "Size",
             value: roughBorderParams.size,
-            range: 0...0.25,
-            step: 0.005,
+            range: 0...0.05,
+            step: 0.001,
             resetValue: RoughBorderShaderParams().size
         ) { value in
             var updated = roughBorderParams; updated.size = value
@@ -3272,15 +3272,15 @@ private struct ShaderControls: View {
             var updated = roughBorderParams; updated.seed = Int(value.rounded())
             onChange(params.withParams(.roughBorder(updated)))
         }
-        ControlRow(label: "Vary Border") {
-            Button {
-                var updated = roughBorderParams
-                updated.seed = Int.random(in: 0...9999)
-                onChange(params.withParams(.roughBorder(updated)))
-            } label: {
-                Label("Shuffle", systemImage: "shuffle")
-            }
-            .buttonStyle(.plain)
+        ControlRow(label: "Vary per Image") {
+            Toggle("", isOn: Binding(
+                get: { roughBorderParams.varyPerImage },
+                set: { value in
+                    var updated = roughBorderParams; updated.varyPerImage = value
+                    onChange(params.withParams(.roughBorder(updated)))
+                }
+            ))
+            .labelsHidden()
         }
         ControlRow(label: "Color") {
             ColorPicker("", selection: Binding(

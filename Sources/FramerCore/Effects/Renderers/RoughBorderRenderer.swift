@@ -28,9 +28,22 @@ public enum RoughBorderRenderer {
         var borderRGBA = SIMD4<Float>(1, 1, 1, 1)
     }
 
+    /// FNV-1a over the identity string's UTF-8 bytes. Swift's `hashValue` is
+    /// randomized per process — a border seeded from it would change on every
+    /// launch, breaking preview/export agreement and re-run reproducibility.
+    private static func stableHash(_ identity: String) -> UInt64 {
+        var hash: UInt64 = 0xcbf29ce484222325
+        for byte in identity.utf8 {
+            hash ^= UInt64(byte)
+            hash = hash &* 0x100000001b3
+        }
+        return hash
+    }
+
     public static func render(
         to image: CGImage,
-        params: ShaderLayerParams
+        params: ShaderLayerParams,
+        sourceIdentity: String? = nil
     ) throws -> CGImage {
         guard case .roughBorder(let rb) = params.params else { return image }
         guard let library = MetalEffectLibrary.shared else {
@@ -42,10 +55,17 @@ public enum RoughBorderRenderer {
         uniforms.size = Float(max(0, min(0.25, rb.size)))
         uniforms.spread = Float(max(0, min(1, rb.spread)))
         uniforms.roughness = Float(max(0, min(1, rb.roughness)))
+        // Vary-per-image: fold a stable hash of the source filename into the
+        // seed so each image in a batch gets its own border while the same
+        // image always reproduces the same edge.
+        var effectiveSeed = rb.seed
+        if rb.varyPerImage, let identity = sourceIdentity {
+            effectiveSeed = rb.seed &+ Int(truncatingIfNeeded: stableHash(identity))
+        }
         // Fold the integer seed into the float domain the noise hash reads.
         // Modulo keeps precision: beyond ~2^24 a Float can no longer resolve
         // adjacent seeds.
-        uniforms.seed = Float(((rb.seed % 100_000) + 100_000) % 100_000)
+        uniforms.seed = Float(((effectiveSeed % 100_000) + 100_000) % 100_000)
         uniforms.widthPx = Float(image.width)
         uniforms.heightPx = Float(image.height)
         uniforms.borderRGBA = SIMD4<Float>(

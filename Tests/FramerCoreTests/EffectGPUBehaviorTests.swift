@@ -520,6 +520,32 @@ final class EffectGPUBehaviorTests: XCTestCase {
                        "border fraction should be resolution-independent (\(smallFrac) vs \(largeFrac))")
     }
 
+    func testRoughBorderVaryPerImageDerivesStableSeedFromIdentity() throws {
+        try requireMetal()
+        let img = makeTestImage()
+        var p = RoughBorderShaderParams(size: 0.08, spread: 0.5, roughness: 0.5, seed: 42)
+        p.varyPerImage = true
+        let layer = ShaderLayerParams(style: .roughBorder, intensity: 1.0, params: .roughBorder(p))
+
+        let a1 = try RoughBorderRenderer.render(to: img, params: layer, sourceIdentity: "IMG_0001.jpg")
+        let a2 = try RoughBorderRenderer.render(to: img, params: layer, sourceIdentity: "IMG_0001.jpg")
+        let b = try RoughBorderRenderer.render(to: img, params: layer, sourceIdentity: "IMG_0002.jpg")
+
+        let (_, sameMax) = compare(a1, a2)
+        XCTAssertEqual(sameMax, 0, "same identity must reproduce the identical border")
+        let (diffMean, _) = compare(a1, b)
+        XCTAssertGreaterThan(diffMean, 0.05,
+                             "different identities should produce different borders (mean \(diffMean))")
+
+        // Toggle off: identity must be ignored.
+        var off = p; off.varyPerImage = false
+        let offLayer = ShaderLayerParams(style: .roughBorder, intensity: 1.0, params: .roughBorder(off))
+        let c1 = try RoughBorderRenderer.render(to: img, params: offLayer, sourceIdentity: "IMG_0001.jpg")
+        let c2 = try RoughBorderRenderer.render(to: img, params: offLayer, sourceIdentity: "IMG_0002.jpg")
+        let (_, offMax) = compare(c1, c2)
+        XCTAssertEqual(offMax, 0, "with varyPerImage off, identity must not affect the border")
+    }
+
     func testRoughBorderRoundTripsThroughJSON() throws {
         // Codable round-trip (preset safety, house rule 4). No Metal needed.
         let original = RoughBorderShaderParams(

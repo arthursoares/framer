@@ -116,6 +116,7 @@ public enum YAMLConfig {
         var shader_border_spread: Double?
         var shader_border_roughness: Double?
         var shader_border_seed: Int?
+        var shader_border_vary_per_image: Bool?
         var shader_border_color: String?
         var gpu_effect_kind: String?
         var gpu_common_brightness: Double?
@@ -989,6 +990,7 @@ public enum YAMLConfig {
             schema.shader_border_spread = p.spread
             schema.shader_border_roughness = p.roughness
             schema.shader_border_seed = p.seed
+            if p.varyPerImage { schema.shader_border_vary_per_image = true }
             schema.shader_border_color = p.borderColor.hex
         }
     }
@@ -1098,10 +1100,11 @@ public enum YAMLConfig {
             ))
         case .roughBorder:
             return .roughBorder(RoughBorderShaderParams(
-                size: schema.shader_border_size ?? 0.05,
+                size: schema.shader_border_size ?? 0.01,
                 spread: schema.shader_border_spread ?? 0.5,
                 roughness: schema.shader_border_roughness ?? 0.5,
                 seed: schema.shader_border_seed ?? 1,
+                varyPerImage: schema.shader_border_vary_per_image ?? false,
                 borderColor: (schema.shader_border_color.flatMap { try? CodableColor(hex: $0) }) ?? .white
             ))
         }

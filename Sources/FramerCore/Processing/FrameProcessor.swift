@@ -68,7 +68,8 @@ public actor FrameProcessor {
                 to: cgImage,
                 sourceImage: cgImage,
                 exif: exif,
-                previewBaseDimension: layerPreviewBase
+                previewBaseDimension: layerPreviewBase,
+                sourceIdentity: url.lastPathComponent
             )
         } else {
             borderResult = try BorderRenderer.applyBorder(to: cgImage, config: config, style: config.borderStyle)
@@ -110,7 +111,8 @@ public actor FrameProcessor {
                 to: cgImage,
                 sourceImage: cgImage,
                 exif: exif,
-                previewBaseDimension: previewBase
+                previewBaseDimension: previewBase,
+                sourceIdentity: input.lastPathComponent
             )
         } else {
             borderResult = try BorderRenderer.applyBorder(to: cgImage, config: config, style: config.borderStyle)
@@ -156,7 +158,8 @@ public actor FrameProcessor {
         to image: CGImage,
         sourceImage: CGImage,
         exif: ExifData,
-        previewBaseDimension: Int?
+        previewBaseDimension: Int?,
+        sourceIdentity: String? = nil
     ) throws -> BorderResult {
         var result = BorderResult(image: image, imageOrigin: nil, imageSize: nil)
 
@@ -196,7 +199,8 @@ public actor FrameProcessor {
                     to: result.image,
                     sourceImage: sourceImage,
                     exif: exif,
-                    previewBaseDimension: previewBaseDimension
+                    previewBaseDimension: previewBaseDimension,
+                    sourceIdentity: sourceIdentity
                 )
             }
         }

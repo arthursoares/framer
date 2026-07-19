@@ -1527,33 +1527,41 @@ public struct RoughBorderShaderParams: Codable, Equatable, Sendable {
     public var roughness: Double
     /// Vary-border seed — same seed reproduces the identical border.
     public var seed: Int
+    /// When true, each image derives its own seed from a stable hash of the
+    /// source filename (combined with `seed`): every image in a batch gets a
+    /// different border, but re-rendering the same image — preview, export,
+    /// or a re-run — always reproduces the identical edge.
+    public var varyPerImage: Bool
     public var borderColor: CodableColor
 
     public init(
-        size: Double = 0.05,
+        size: Double = 0.01,
         spread: Double = 0.5,
         roughness: Double = 0.5,
         seed: Int = 1,
+        varyPerImage: Bool = false,
         borderColor: CodableColor = .white
     ) {
         self.size = max(0, min(0.25, size))
         self.spread = max(0, min(1, spread))
         self.roughness = max(0, min(1, roughness))
         self.seed = seed
+        self.varyPerImage = varyPerImage
         self.borderColor = borderColor
     }
 
     private enum CodingKeys: String, CodingKey {
-        case size, spread, roughness, seed, borderColor
+        case size, spread, roughness, seed, varyPerImage, borderColor
     }
 
     public init(from decoder: Decoder) throws {
         let c = try decoder.container(keyedBy: CodingKeys.self)
         self.init(
-            size: try c.decodeIfPresent(Double.self, forKey: .size) ?? 0.05,
+            size: try c.decodeIfPresent(Double.self, forKey: .size) ?? 0.01,
             spread: try c.decodeIfPresent(Double.self, forKey: .spread) ?? 0.5,
             roughness: try c.decodeIfPresent(Double.self, forKey: .roughness) ?? 0.5,
             seed: try c.decodeIfPresent(Int.self, forKey: .seed) ?? 1,
+            varyPerImage: try c.decodeIfPresent(Bool.self, forKey: .varyPerImage) ?? false,
             borderColor: try c.decodeIfPresent(CodableColor.self, forKey: .borderColor) ?? .white
         )
     }
