@@ -112,6 +112,7 @@ public enum YAMLConfig {
         // Kuwahara legacy: 0..8 (0 = full effect). Replaced by shader_softness
         // (already declared above; shared with Crimewave/Narc/Shiba/DistantPast).
         var shader_sharpness: Double?
+        var shader_bw_response: String?
         var shader_bw_sens_red: Double?
         var shader_bw_sens_yellow: Double?
         var shader_bw_sens_green: Double?
@@ -1000,6 +1001,7 @@ public enum YAMLConfig {
             schema.shader_kernel_size = p.kernelSize
             schema.shader_softness = p.softness
         case .bwFilm(let p):
+            schema.shader_bw_response = p.response.rawValue
             schema.shader_bw_sens_red = p.sensRed
             schema.shader_bw_sens_yellow = p.sensYellow
             schema.shader_bw_sens_green = p.sensGreen
@@ -1137,6 +1139,7 @@ public enum YAMLConfig {
                 }
             }
             return .bwFilm(BWFilmShaderParams(
+                response: schema.shader_bw_response.flatMap(BWFilmResponse.init(rawValue:)) ?? .custom,
                 sensRed: schema.shader_bw_sens_red ?? 0,
                 sensYellow: schema.shader_bw_sens_yellow ?? 0,
                 sensGreen: schema.shader_bw_sens_green ?? 0,

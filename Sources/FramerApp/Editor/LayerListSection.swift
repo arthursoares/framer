@@ -4132,6 +4132,21 @@ struct ShaderLayerControls: View {
 
     @ViewBuilder
     private func bwFilmControls(_ bw: BWFilmShaderParams) -> some View {
+        Picker("", selection: Binding(
+            get: { bw.response },
+            set: { value in
+                // Picking a film re-tunes the six sensitivity dials.
+                onChange(params.withParams(.bwFilm(bw.applyingResponse(value))))
+            }
+        )) {
+            ForEach(BWFilmResponse.allCases, id: \.self) { response in
+                Text(response.label).tag(response)
+            }
+        }
+        .pickerStyle(.menu)
+        .labelsHidden()
+        .denseControlRow("Film Response")
+
         // Spectral sensitivity — how each hue family renders into gray.
         bwFilmSlider("Red", bw.sensRed) { v, p in var u = p; u.sensRed = v; return u }
         bwFilmSlider("Yellow", bw.sensYellow) { v, p in var u = p; u.sensYellow = v; return u }

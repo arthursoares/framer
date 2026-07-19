@@ -505,6 +505,53 @@ final class EffectGPUBehaviorTests: XCTestCase {
         XCTAssertEqual(identity[128], 128.0 / 255.0, accuracy: 0.01)
     }
 
+    func testBWFilmResponseProfilesArePairwiseDistinctAndApply() throws {
+        // No two films may share an identical spectral profile (the film-
+        // grain catalog shipped exact twins once — same lock here), and
+        // applying a response must set all six dials while leaving
+        // tonality/curve untouched.
+        let all = BWFilmResponse.allCases
+        for i in 0..<all.count {
+            for j in (i + 1)..<all.count {
+                XCTAssertFalse(all[i].sensitivities == all[j].sensitivities,
+                               "\(all[i]) and \(all[j]) share an identical response profile")
+            }
+        }
+        let start = BWFilmShaderParams(sensRed: 99, contrast: 42, curveGamma: 0.3)
+        let ortho = start.applyingResponse(.rolleiOrtho25)
+        XCTAssertEqual(ortho.response, .rolleiOrtho25)
+        XCTAssertEqual(ortho.sensRed, BWFilmResponse.rolleiOrtho25.sensitivities.r)
+        XCTAssertEqual(ortho.contrast, 42, "tonality must survive a response change")
+        XCTAssertEqual(ortho.curveGamma, 0.3, "curve must survive a response change")
+    }
+
+    func testBWFilmOrthoRendersRedDarkerThanNeutral() throws {
+        try requireMetal()
+        // Red-blind orthochromatic film: a red patch must render clearly
+        // darker than under the neutral response.
+        let width = 64, height = 64
+        let ctx = CGContext(
+            data: nil, width: width, height: height, bitsPerComponent: 8,
+            bytesPerRow: width * 4, space: CGColorSpaceCreateDeviceRGB(),
+            bitmapInfo: CGImageAlphaInfo.premultipliedLast.rawValue)!
+        ctx.setFillColor(CGColor(srgbRed: 0.85, green: 0.15, blue: 0.15, alpha: 1))
+        ctx.fill(CGRect(x: 0, y: 0, width: width, height: height))
+        let red = ctx.makeImage()!
+
+        func meanLuma(_ image: CGImage) -> Double {
+            let bytes = drawToBytes(image)
+            var total = 0.0
+            for i in stride(from: 0, to: bytes.count, by: 4) { total += Double(bytes[i]) }
+            return total / Double(bytes.count / 4)
+        }
+
+        let neutral = try BWFilmRenderer.render(to: red, params: bwParams(BWFilmShaderParams()))
+        let ortho = try BWFilmRenderer.render(
+            to: red, params: bwParams(BWFilmShaderParams().applyingResponse(.rolleiOrtho25)))
+        XCTAssertLessThan(meanLuma(ortho), meanLuma(neutral) - 25,
+                          "ortho film must render red much darker than neutral")
+    }
+
     func testBWFilmDeterministicAndRoundTrips() throws {
         try requireMetal()
         let img = makeTestImage()
@@ -516,6 +563,7 @@ final class EffectGPUBehaviorTests: XCTestCase {
 
         // All-non-default JSON round-trip (house discipline).
         let original = BWFilmShaderParams(
+            response: .kodakTriX400,
             sensRed: 10, sensYellow: -20, sensGreen: 30, sensCyan: -40,
             sensBlue: 50, sensMagenta: -60,
             brightness: 5, brightnessHighlights: -10, brightnessMidtones: 15,

@@ -2594,6 +2594,19 @@ private struct ShaderControls: View {
 
     @ViewBuilder
     private func bwFilmControls(_ bw: BWFilmShaderParams) -> some View {
+        ControlRow(label: "Film Response") {
+            Picker("Film Response", selection: Binding(
+                get: { bw.response },
+                set: { value in
+                    onChange(params.withParams(.bwFilm(bw.applyingResponse(value))))
+                }
+            )) {
+                ForEach(BWFilmResponse.allCases, id: \.self) { response in
+                    Text(response.label).tag(response)
+                }
+            }
+            .pickerStyle(.menu)
+        }
         bwFilmSlider("Red", bw.sensRed) { v, p in var u = p; u.sensRed = v; return u }
         bwFilmSlider("Yellow", bw.sensYellow) { v, p in var u = p; u.sensYellow = v; return u }
         bwFilmSlider("Green", bw.sensGreen) { v, p in var u = p; u.sensGreen = v; return u }

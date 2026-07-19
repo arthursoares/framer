@@ -1525,6 +1525,80 @@ public struct BWCurvePoint: Codable, Equatable, Sendable {
     }
 }
 
+/// Spectral-response profiles for the B&W Film effect — the SEP2 film
+/// roster (same names as the Film Grain stocks; raw values kept identical
+/// so the two enums can be unified once both PRs land). Each profile is a
+/// set of six sensitivity values reconstructed from the film's documented
+/// character — SEP3's own per-film curves are compiled into its binary and
+/// not recoverable, so these are tuned analogues, not measurements.
+/// Raw values are stored in presets — never rename or remove cases.
+public enum BWFilmResponse: String, Codable, CaseIterable, Sendable {
+    case custom
+    case agfaAPX100, agfaAPX400
+    case fujiAcros100, fujiNeopan1600
+    case ilfordPanF50, ilfordFP4, ilfordDelta100, ilfordDelta400
+    case ilfordHP5, ilfordXP2, ilfordDelta3200
+    case kodakTMax100, kodakTMax400, kodakBW400CN, kodakTriX400, kodakP3200
+    case rolleiOrtho25, rolleiRetro80s, rolleiRetro100, rolleiIR400
+
+    public var label: String {
+        switch self {
+        case .custom:          return "Custom"
+        case .agfaAPX100:      return "Agfa APX 100"
+        case .agfaAPX400:      return "Agfa APX 400"
+        case .fujiAcros100:    return "Fuji Neopan Acros 100"
+        case .fujiNeopan1600:  return "Fuji Neopan 1600"
+        case .ilfordPanF50:    return "Ilford Pan F Plus 50"
+        case .ilfordFP4:       return "Ilford FP4 Plus 125"
+        case .ilfordDelta100:  return "Ilford Delta 100"
+        case .ilfordDelta400:  return "Ilford Delta 400"
+        case .ilfordHP5:       return "Ilford HP5 Plus 400"
+        case .ilfordXP2:       return "Ilford XP2 Super 400"
+        case .ilfordDelta3200: return "Ilford Delta 3200"
+        case .kodakTMax100:    return "Kodak 100 TMAX"
+        case .kodakTMax400:    return "Kodak 400 TMAX"
+        case .kodakBW400CN:    return "Kodak BW 400CN"
+        case .kodakTriX400:    return "Kodak Tri-X 400"
+        case .kodakP3200:      return "Kodak P3200 TMAX"
+        case .rolleiOrtho25:   return "Rollei Ortho 25"
+        case .rolleiRetro80s:  return "Rollei Retro 80S"
+        case .rolleiRetro100:  return "Rollei Retro 100 Tonal"
+        case .rolleiIR400:     return "Rollei IR 400"
+        }
+    }
+
+    /// (R, Ye, G, Cy, B, Mg) sensitivity values. Panchromatic films differ
+    /// subtly (mostly in blue excess and red extension); the outliers are
+    /// deliberately dramatic: Ortho 25 is red-blind, Retro 80S/IR 400 have
+    /// extended red (IR approximating the Wood-effect look), Tri-X carries
+    /// its iconic warm response.
+    public var sensitivities: (r: Double, ye: Double, g: Double, cy: Double, b: Double, mg: Double) {
+        switch self {
+        case .custom:          return (0, 0, 0, 0, 0, 0)
+        case .agfaAPX100:      return (-10, 5, 0, -5, -15, -5)
+        case .agfaAPX400:      return (-5, 10, 5, -10, -20, 0)
+        case .fujiAcros100:    return (-25, 0, 10, 5, -10, -10)
+        case .fujiNeopan1600:  return (0, 10, 0, -10, -25, -5)
+        case .ilfordPanF50:    return (-10, 15, 5, -10, -25, -5)
+        case .ilfordFP4:       return (-5, 10, 0, -5, -20, 0)
+        case .ilfordDelta100:  return (0, 5, 5, 0, -10, 0)
+        case .ilfordDelta400:  return (0, 5, 0, 0, -12, 0)
+        case .ilfordHP5:       return (5, 10, -5, -10, -18, 5)
+        case .ilfordXP2:       return (0, 0, 0, 5, -5, 0)
+        case .ilfordDelta3200: return (10, 5, -5, -15, -20, 5)
+        case .kodakTMax100:    return (0, 0, 5, 5, -8, -5)
+        case .kodakTMax400:    return (5, 5, 0, 0, -10, 0)
+        case .kodakBW400CN:    return (0, 5, 0, 0, -8, 0)
+        case .kodakTriX400:    return (10, 15, -10, -15, -25, 5)
+        case .kodakP3200:      return (10, 10, -5, -15, -25, 10)
+        case .rolleiOrtho25:   return (-85, -30, 15, 25, 20, -40)
+        case .rolleiRetro80s:  return (20, 10, -10, -20, -30, 0)
+        case .rolleiRetro100:  return (-5, 10, 0, -10, -25, 0)
+        case .rolleiIR400:     return (60, 25, -20, -35, -45, 20)
+        }
+    }
+}
+
 /// Silver-Efex-style black-and-white conversion (BWFilm.metal). Modeled on
 /// the SilverEfexParams pipeline characterized by bundle inspection, minus
 /// the ColorFilter block (dropped by design):
@@ -1536,6 +1610,9 @@ public struct BWCurvePoint: Codable, Equatable, Sendable {
 ///      points, CPU-baked to a 256-entry LUT texture.
 /// All values are UI-scale, matching SEP's own storage (no normalization).
 public struct BWFilmShaderParams: Codable, Equatable, Sendable {
+    /// Which film response the sensitivity dials were last set from.
+    public var response: BWFilmResponse
+
     // Spectral sensitivity, -100...100, 0 = neutral (Rec.601 luma only).
     public var sensRed: Double
     public var sensYellow: Double
@@ -1562,6 +1639,7 @@ public struct BWFilmShaderParams: Codable, Equatable, Sendable {
     public var curvePoints: [BWCurvePoint]
 
     public init(
+        response: BWFilmResponse = .custom,
         sensRed: Double = 0, sensYellow: Double = 0, sensGreen: Double = 0,
         sensCyan: Double = 0, sensBlue: Double = 0, sensMagenta: Double = 0,
         brightness: Double = 0, brightnessHighlights: Double = 0,
@@ -1572,6 +1650,7 @@ public struct BWFilmShaderParams: Codable, Equatable, Sendable {
         curvePoints: [BWCurvePoint] = []
     ) {
         func clampSens(_ v: Double) -> Double { max(-100, min(100, v)) }
+        self.response = response
         self.sensRed = clampSens(sensRed)
         self.sensYellow = clampSens(sensYellow)
         self.sensGreen = clampSens(sensGreen)
@@ -1594,6 +1673,7 @@ public struct BWFilmShaderParams: Codable, Equatable, Sendable {
     }
 
     private enum CodingKeys: String, CodingKey {
+        case response
         case sensRed, sensYellow, sensGreen, sensCyan, sensBlue, sensMagenta
         case brightness, brightnessHighlights, brightnessMidtones, brightnessShadows
         case contrast, protectHighlights, protectShadows
@@ -1603,6 +1683,7 @@ public struct BWFilmShaderParams: Codable, Equatable, Sendable {
     public init(from decoder: Decoder) throws {
         let c = try decoder.container(keyedBy: CodingKeys.self)
         self.init(
+            response: try c.decodeIfPresent(BWFilmResponse.self, forKey: .response) ?? .custom,
             sensRed: try c.decodeIfPresent(Double.self, forKey: .sensRed) ?? 0,
             sensYellow: try c.decodeIfPresent(Double.self, forKey: .sensYellow) ?? 0,
             sensGreen: try c.decodeIfPresent(Double.self, forKey: .sensGreen) ?? 0,
@@ -1623,6 +1704,22 @@ public struct BWFilmShaderParams: Codable, Equatable, Sendable {
             curveHighY: try c.decodeIfPresent(Double.self, forKey: .curveHighY) ?? 1,
             curvePoints: try c.decodeIfPresent([BWCurvePoint].self, forKey: .curvePoints) ?? []
         )
+    }
+
+    /// Set the six sensitivity dials to a film response profile (the picker
+    /// behavior: choosing a film re-tunes the dials, which stay editable —
+    /// tonality and curve settings are left untouched).
+    public func applyingResponse(_ newResponse: BWFilmResponse) -> BWFilmShaderParams {
+        var updated = self
+        let s = newResponse.sensitivities
+        updated.response = newResponse
+        updated.sensRed = s.r
+        updated.sensYellow = s.ye
+        updated.sensGreen = s.g
+        updated.sensCyan = s.cy
+        updated.sensBlue = s.b
+        updated.sensMagenta = s.mg
+        return updated
     }
 }
 
