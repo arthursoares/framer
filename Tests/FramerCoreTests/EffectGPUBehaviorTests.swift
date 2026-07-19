@@ -654,6 +654,22 @@ final class EffectGPUBehaviorTests: XCTestCase {
         XCTAssertEqual(triX.softness, FilmGrainStock.kodakTriX400.grainProfile.softness)
     }
 
+    func testFilmGrainStockProfilesArePairwiseDistinct() {
+        // Two stocks with the same (grainsPerPixel, softness) render
+        // identically — a silent duplicate in the catalog (Retro 80S and
+        // Delta 100 shipped as exact twins before this lock).
+        let stocks = FilmGrainStock.allCases
+        for i in 0..<stocks.count {
+            for j in (i + 1)..<stocks.count {
+                let a = stocks[i].grainProfile
+                let b = stocks[j].grainProfile
+                XCTAssertFalse(
+                    a.grainsPerPixel == b.grainsPerPixel && a.softness == b.softness,
+                    "\(stocks[i]) and \(stocks[j]) share an identical grain profile")
+            }
+        }
+    }
+
     func testFilmGrainRoundTripsThroughJSON() throws {
         // All fields non-default so a dropped encode key can't hide behind
         // decode fallbacks (same discipline as the rough-border round-trip).

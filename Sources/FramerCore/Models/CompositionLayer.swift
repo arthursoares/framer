@@ -1667,7 +1667,7 @@ public enum FilmGrainStock: String, Codable, CaseIterable, Sendable {
         case .custom:         return (250, 0.5)
         case .rolleiOrtho25:  return (500, 0.6)
         case .ilfordPanF50:   return (480, 0.55)
-        case .rolleiRetro80s: return (430, 0.5)
+        case .rolleiRetro80s: return (415, 0.45)
         case .agfaAPX100:     return (400, 0.5)
         case .fujiAcros100:   return (440, 0.55)
         case .ilfordDelta100: return (430, 0.5)
