@@ -3250,7 +3250,7 @@ private struct ShaderControls: View {
         sliderRow(
             label: "Size",
             value: roughBorderParams.size,
-            range: 0...0.05,
+            range: 0.001...0.05,
             step: 0.001,
             resetValue: RoughBorderShaderParams().size
         ) { value in
