@@ -45,6 +45,13 @@ public enum ShaderRenderer {
             return try KuwaharaRenderer.render(to: image, params: params)
         case .roughBorder:
             return try RoughBorderRenderer.render(to: image, params: params, sourceIdentity: sourceIdentity)
+        case .filmGrain:
+            return try FilmGrainRenderer.render(
+                to: image,
+                params: params,
+                previewBaseDimension: previewBaseDimension,
+                sourceIdentity: sourceIdentity
+            )
         }
     }
 }

@@ -41,6 +41,7 @@ let package = Package(
                 .process("Effects/Metal/EdgeField.metal"),
                 .process("Effects/Metal/Glitch.metal"),
                 .process("Effects/Metal/RoughBorder.metal"),
+                .process("Effects/Metal/FilmGrain.metal"),
                 // ASCII LUT atlases — duplicated here from assets/textures/ so
                 // the CLI / test runner / any FramerCore consumer can reach
                 // them via Bundle.module without depending on the macOS app

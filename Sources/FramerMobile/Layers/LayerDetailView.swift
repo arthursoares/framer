@@ -2588,6 +2588,8 @@ private struct ShaderControls: View {
                 kuwaharaControls(kuwaharaParams)
             case .roughBorder(let roughBorderParams):
                 roughBorderControls(roughBorderParams)
+            case .filmGrain(let filmGrainParams):
+                filmGrainControls(filmGrainParams)
             }
         }
     }
@@ -3304,6 +3306,83 @@ private struct ShaderControls: View {
                     guard let hex = newColor.hexString, let codable = try? CodableColor(hex: hex) else { return }
                     var updated = roughBorderParams; updated.borderColor = codable
                     onChange(params.withParams(.roughBorder(updated)))
+                }
+            ))
+            .labelsHidden()
+        }
+    }
+
+    @ViewBuilder
+    private func filmGrainControls(_ filmGrainParams: FilmGrainShaderParams) -> some View {
+        ControlRow(label: "Film Stock") {
+            Picker("Film Stock", selection: Binding(
+                get: { filmGrainParams.stock },
+                set: { value in
+                    onChange(params.withParams(.filmGrain(filmGrainParams.applyingStockProfile(value))))
+                }
+            )) {
+                ForEach(FilmGrainStock.allCases, id: \.self) { stock in
+                    Text(stock.label).tag(stock)
+                }
+            }
+            .pickerStyle(.menu)
+        }
+        sliderRow(
+            label: "Grain per Pixel",
+            value: filmGrainParams.grainsPerPixel,
+            range: 1...500,
+            step: 1,
+            resetValue: filmGrainParams.stock.grainProfile.grainsPerPixel
+        ) { value in
+            var updated = filmGrainParams; updated.grainsPerPixel = value
+            onChange(params.withParams(.filmGrain(updated)))
+        }
+        sliderRow(
+            label: "Soft / Hard",
+            value: filmGrainParams.softness,
+            range: 0...1,
+            step: 0.05,
+            resetValue: filmGrainParams.stock.grainProfile.softness
+        ) { value in
+            var updated = filmGrainParams; updated.softness = value
+            onChange(params.withParams(.filmGrain(updated)))
+        }
+        sliderRow(
+            label: "Protect Highlights",
+            value: filmGrainParams.protectHighlights,
+            range: 0...1,
+            step: 0.05,
+            resetValue: FilmGrainShaderParams().protectHighlights
+        ) { value in
+            var updated = filmGrainParams; updated.protectHighlights = value
+            onChange(params.withParams(.filmGrain(updated)))
+        }
+        sliderRow(
+            label: "Protect Shadows",
+            value: filmGrainParams.protectShadows,
+            range: 0...1,
+            step: 0.05,
+            resetValue: FilmGrainShaderParams().protectShadows
+        ) { value in
+            var updated = filmGrainParams; updated.protectShadows = value
+            onChange(params.withParams(.filmGrain(updated)))
+        }
+        sliderRow(
+            label: "Seed",
+            value: Double(filmGrainParams.seed),
+            range: 0...9999,
+            step: 1,
+            resetValue: Double(FilmGrainShaderParams().seed)
+        ) { value in
+            var updated = filmGrainParams; updated.seed = Int(value.rounded())
+            onChange(params.withParams(.filmGrain(updated)))
+        }
+        ControlRow(label: "Vary per Image") {
+            Toggle("", isOn: Binding(
+                get: { filmGrainParams.varyPerImage },
+                set: { value in
+                    var updated = filmGrainParams; updated.varyPerImage = value
+                    onChange(params.withParams(.filmGrain(updated)))
                 }
             ))
             .labelsHidden()

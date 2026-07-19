@@ -1024,6 +1024,7 @@ public enum ShaderStyle: String, Codable, CaseIterable, Sendable {
     case halftone
     case kuwahara
     case roughBorder
+    case filmGrain
 
     public var label: String {
         switch self {
@@ -1037,6 +1038,7 @@ public enum ShaderStyle: String, Codable, CaseIterable, Sendable {
         case .halftone: return "Halftone"
         case .kuwahara: return "Kuwahara"
         case .roughBorder: return "Rough Border"
+        case .filmGrain: return "Film Grain"
         }
     }
 
@@ -1056,6 +1058,7 @@ public enum ShaderStyle: String, Codable, CaseIterable, Sendable {
         case .halftone:    return "circle.dotted"
         case .kuwahara:    return "paintbrush.pointed"
         case .roughBorder: return "square.dashed"
+        case .filmGrain:   return "circle.grid.3x3"
         }
     }
 
@@ -1614,6 +1617,149 @@ public struct RoughBorderShaderParams: Codable, Equatable, Sendable {
     }
 }
 
+/// Film stocks for the Film Grain effect — the Silver Efex Pro 2 film-type
+/// roster (SEP3 renamed these to fictional names; we keep the real ones).
+/// Each stock is a grain profile: a grains-per-pixel density and a soft↔hard
+/// character, applied when the user picks the stock. Raw values are stored
+/// in presets — never rename or remove cases (house rule 4).
+public enum FilmGrainStock: String, Codable, CaseIterable, Sendable {
+    case custom
+    case agfaAPX100, agfaAPX400
+    case fujiAcros100, fujiNeopan1600
+    case ilfordPanF50, ilfordFP4, ilfordDelta100, ilfordDelta400
+    case ilfordHP5, ilfordXP2, ilfordDelta3200
+    case kodakTMax100, kodakTMax400, kodakBW400CN, kodakTriX400, kodakP3200
+    case rolleiOrtho25, rolleiRetro80s, rolleiRetro100, rolleiIR400
+
+    public var label: String {
+        switch self {
+        case .custom:         return "Custom"
+        case .agfaAPX100:     return "Agfa APX 100"
+        case .agfaAPX400:     return "Agfa APX 400"
+        case .fujiAcros100:   return "Fuji Neopan Acros 100"
+        case .fujiNeopan1600: return "Fuji Neopan 1600"
+        case .ilfordPanF50:   return "Ilford Pan F Plus 50"
+        case .ilfordFP4:      return "Ilford FP4 Plus 125"
+        case .ilfordDelta100: return "Ilford Delta 100"
+        case .ilfordDelta400: return "Ilford Delta 400"
+        case .ilfordHP5:      return "Ilford HP5 Plus 400"
+        case .ilfordXP2:      return "Ilford XP2 Super 400"
+        case .ilfordDelta3200: return "Ilford Delta 3200"
+        case .kodakTMax100:   return "Kodak 100 TMAX"
+        case .kodakTMax400:   return "Kodak 400 TMAX"
+        case .kodakBW400CN:   return "Kodak BW 400CN"
+        case .kodakTriX400:   return "Kodak Tri-X 400"
+        case .kodakP3200:     return "Kodak P3200 TMAX"
+        case .rolleiOrtho25:  return "Rollei Ortho 25"
+        case .rolleiRetro80s: return "Rollei Retro 80S"
+        case .rolleiRetro100: return "Rollei Retro 100 Tonal"
+        case .rolleiIR400:    return "Rollei IR 400"
+        }
+    }
+
+    /// Grain profile: (grains per pixel 1…500 — higher = finer/tighter,
+    /// SEP's inverse mapping; softness 0 = hard crisp specks, 1 = soft
+    /// blobs). Values are tuned by ISO class: slow ortho/pan films are
+    /// nearly invisible fine, Tri-X is the iconic gritty mid, the 3200s
+    /// are chunky. `custom` is the neutral starting point.
+    public var grainProfile: (grainsPerPixel: Double, softness: Double) {
+        switch self {
+        case .custom:         return (250, 0.5)
+        case .rolleiOrtho25:  return (500, 0.6)
+        case .ilfordPanF50:   return (480, 0.55)
+        case .rolleiRetro80s: return (430, 0.5)
+        case .agfaAPX100:     return (400, 0.5)
+        case .fujiAcros100:   return (440, 0.55)
+        case .ilfordDelta100: return (430, 0.5)
+        case .ilfordFP4:      return (400, 0.45)
+        case .kodakTMax100:   return (450, 0.55)
+        case .rolleiRetro100: return (390, 0.45)
+        case .agfaAPX400:     return (300, 0.4)
+        case .ilfordDelta400: return (330, 0.45)
+        case .ilfordHP5:      return (280, 0.35)
+        case .ilfordXP2:      return (380, 0.6)
+        case .kodakTMax400:   return (350, 0.5)
+        case .kodakBW400CN:   return (400, 0.65)
+        case .kodakTriX400:   return (250, 0.3)
+        case .rolleiIR400:    return (310, 0.5)
+        case .fujiNeopan1600: return (150, 0.35)
+        case .kodakP3200:     return (100, 0.4)
+        case .ilfordDelta3200: return (90, 0.45)
+        }
+    }
+}
+
+/// Seeded procedural film grain (FilmGrain.metal). Modeled on Silver Efex's
+/// grain engine (`NewFilmType` grainSliderStrength/grainSliderSoftness plus
+/// `Film_Grain_1`'s protect_hilights/protect_shadows, characterized by
+/// bundle inspection — procedural, no scanned plates): grains-per-pixel
+/// density, a soft↔hard kernel, and midtone weighting so grain thins out in
+/// highlights and shadows like real film. Achromatic (applied to luminance).
+public struct FilmGrainShaderParams: Codable, Equatable, Sendable {
+    public var stock: FilmGrainStock
+    /// SEP's "Grain per pixel": 1…500, HIGHER = finer, tighter grain.
+    public var grainsPerPixel: Double
+    /// 0 = hard crisp specks, 1 = soft blobs.
+    public var softness: Double
+    /// 0…1 — how strongly grain is suppressed near white.
+    public var protectHighlights: Double
+    /// 0…1 — how strongly grain is suppressed near black.
+    public var protectShadows: Double
+    /// Same seed reproduces the identical grain field.
+    public var seed: Int
+    /// Derive the seed per image from the source filename (see RoughBorder).
+    public var varyPerImage: Bool
+
+    public init(
+        stock: FilmGrainStock = .custom,
+        grainsPerPixel: Double? = nil,
+        softness: Double? = nil,
+        protectHighlights: Double = 0.15,
+        protectShadows: Double = 0.15,
+        seed: Int = 1,
+        varyPerImage: Bool = false
+    ) {
+        self.stock = stock
+        let profile = stock.grainProfile
+        self.grainsPerPixel = max(1, min(500, grainsPerPixel ?? profile.grainsPerPixel))
+        self.softness = max(0, min(1, softness ?? profile.softness))
+        self.protectHighlights = max(0, min(1, protectHighlights))
+        self.protectShadows = max(0, min(1, protectShadows))
+        self.seed = seed
+        self.varyPerImage = varyPerImage
+    }
+
+    private enum CodingKeys: String, CodingKey {
+        case stock, grainsPerPixel, softness, protectHighlights, protectShadows
+        case seed, varyPerImage
+    }
+
+    public init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        self.init(
+            stock: try c.decodeIfPresent(FilmGrainStock.self, forKey: .stock) ?? .custom,
+            grainsPerPixel: try c.decodeIfPresent(Double.self, forKey: .grainsPerPixel),
+            softness: try c.decodeIfPresent(Double.self, forKey: .softness),
+            protectHighlights: try c.decodeIfPresent(Double.self, forKey: .protectHighlights) ?? 0.15,
+            protectShadows: try c.decodeIfPresent(Double.self, forKey: .protectShadows) ?? 0.15,
+            seed: try c.decodeIfPresent(Int.self, forKey: .seed) ?? 1,
+            varyPerImage: try c.decodeIfPresent(Bool.self, forKey: .varyPerImage) ?? false
+        )
+    }
+
+    /// Reset the grain sliders to the stock's profile (the picker behavior:
+    /// choosing a film re-tunes the dials, which stay editable afterwards).
+    public func applyingStockProfile(_ newStock: FilmGrainStock) -> FilmGrainShaderParams {
+        FilmGrainShaderParams(
+            stock: newStock,
+            protectHighlights: protectHighlights,
+            protectShadows: protectShadows,
+            seed: seed,
+            varyPerImage: varyPerImage
+        )
+    }
+}
+
 public enum ShaderStyleParams: Codable, Equatable, Sendable {
     case ascii(ASCIIShaderParams)
     case crimewave(CrimewaveShaderParams)
@@ -1625,6 +1771,7 @@ public enum ShaderStyleParams: Codable, Equatable, Sendable {
     case halftone(HalftoneShaderParams)
     case kuwahara(KuwaharaShaderParams)
     case roughBorder(RoughBorderShaderParams)
+    case filmGrain(FilmGrainShaderParams)
 
     private enum CodingKeys: String, CodingKey {
         case type, params
@@ -1642,6 +1789,7 @@ public enum ShaderStyleParams: Codable, Equatable, Sendable {
         case .halftone: return .halftone
         case .kuwahara: return .kuwahara
         case .roughBorder: return .roughBorder
+        case .filmGrain: return .filmGrain
         }
     }
 
@@ -1657,6 +1805,7 @@ public enum ShaderStyleParams: Codable, Equatable, Sendable {
         case .halftone: return .halftone(HalftoneShaderParams())
         case .kuwahara: return .kuwahara(KuwaharaShaderParams())
         case .roughBorder: return .roughBorder(RoughBorderShaderParams())
+        case .filmGrain: return .filmGrain(FilmGrainShaderParams())
         }
     }
 
@@ -1684,6 +1833,8 @@ public enum ShaderStyleParams: Codable, Equatable, Sendable {
             self = .kuwahara(try container.decode(KuwaharaShaderParams.self, forKey: .params))
         case "roughBorder":
             self = .roughBorder(try container.decode(RoughBorderShaderParams.self, forKey: .params))
+        case "filmGrain":
+            self = .filmGrain(try container.decode(FilmGrainShaderParams.self, forKey: .params))
         default:
             throw DecodingError.dataCorruptedError(
                 forKey: .type, in: container,
@@ -1724,6 +1875,9 @@ public enum ShaderStyleParams: Codable, Equatable, Sendable {
             try container.encode(params, forKey: .params)
         case .roughBorder(let params):
             try container.encode("roughBorder", forKey: .type)
+            try container.encode(params, forKey: .params)
+        case .filmGrain(let params):
+            try container.encode("filmGrain", forKey: .type)
             try container.encode(params, forKey: .params)
         }
     }

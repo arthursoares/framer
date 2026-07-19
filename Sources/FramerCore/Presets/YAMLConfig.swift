@@ -119,6 +119,13 @@ public enum YAMLConfig {
         var shader_border_seed: Int?
         var shader_border_vary_per_image: Bool?
         var shader_border_color: String?
+        var shader_grain_stock: String?
+        var shader_grains_per_pixel: Double?
+        var shader_grain_softness: Double?
+        var shader_grain_protect_highlights: Double?
+        var shader_grain_protect_shadows: Double?
+        var shader_grain_seed: Int?
+        var shader_grain_vary_per_image: Bool?
         var gpu_effect_kind: String?
         var gpu_common_brightness: Double?
         var gpu_common_contrast: Double?
@@ -994,6 +1001,14 @@ public enum YAMLConfig {
             schema.shader_border_seed = p.seed
             if p.varyPerImage { schema.shader_border_vary_per_image = true }
             schema.shader_border_color = p.borderColor.hex
+        case .filmGrain(let p):
+            schema.shader_grain_stock = p.stock.rawValue
+            schema.shader_grains_per_pixel = p.grainsPerPixel
+            schema.shader_grain_softness = p.softness
+            schema.shader_grain_protect_highlights = p.protectHighlights
+            schema.shader_grain_protect_shadows = p.protectShadows
+            schema.shader_grain_seed = p.seed
+            if p.varyPerImage { schema.shader_grain_vary_per_image = true }
         }
     }
 
@@ -1109,6 +1124,16 @@ public enum YAMLConfig {
                 seed: schema.shader_border_seed ?? 1,
                 varyPerImage: schema.shader_border_vary_per_image ?? false,
                 borderColor: (schema.shader_border_color.flatMap { try? CodableColor(hex: $0) }) ?? .black
+            ))
+        case .filmGrain:
+            return .filmGrain(FilmGrainShaderParams(
+                stock: schema.shader_grain_stock.flatMap(FilmGrainStock.init(rawValue:)) ?? .custom,
+                grainsPerPixel: schema.shader_grains_per_pixel,
+                softness: schema.shader_grain_softness,
+                protectHighlights: schema.shader_grain_protect_highlights ?? 0.15,
+                protectShadows: schema.shader_grain_protect_shadows ?? 0.15,
+                seed: schema.shader_grain_seed ?? 1,
+                varyPerImage: schema.shader_grain_vary_per_image ?? false
             ))
         }
     }

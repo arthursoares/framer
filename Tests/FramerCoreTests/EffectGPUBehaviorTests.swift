@@ -578,6 +578,98 @@ final class EffectGPUBehaviorTests: XCTestCase {
         XCTAssertEqual(offMax, 0, "with varyPerImage off, identity must not affect the border")
     }
 
+    // MARK: - FilmGrain invariants
+
+    private func filmGrainParams(
+        stock: FilmGrainStock = .custom, grainsPerPixel: Double? = nil,
+        softness: Double? = nil, protectHighlights: Double = 0.15,
+        protectShadows: Double = 0.15, seed: Int = 7, intensity: Double = 1.0
+    ) -> ShaderLayerParams {
+        ShaderLayerParams(
+            style: .filmGrain, intensity: intensity,
+            params: .filmGrain(FilmGrainShaderParams(
+                stock: stock, grainsPerPixel: grainsPerPixel, softness: softness,
+                protectHighlights: protectHighlights, protectShadows: protectShadows,
+                seed: seed))
+        )
+    }
+
+    func testFilmGrainDeterministicPerSeedAndVariesAcrossSeeds() throws {
+        try requireMetal()
+        let img = makeTestImage()
+        let a1 = try FilmGrainRenderer.render(to: img, params: filmGrainParams(seed: 42))
+        let a2 = try FilmGrainRenderer.render(to: img, params: filmGrainParams(seed: 42))
+        let b = try FilmGrainRenderer.render(to: img, params: filmGrainParams(seed: 43))
+        let (_, sameMax) = compare(a1, a2)
+        XCTAssertEqual(sameMax, 0, "same seed must reproduce the identical grain field")
+        let (diffMean, _) = compare(a1, b)
+        XCTAssertGreaterThan(diffMean, 0.05, "different seeds should differ (mean \(diffMean))")
+    }
+
+    func testFilmGrainActuallyGrainsAndDensityMatters() throws {
+        try requireMetal()
+        let img = makeTestImage()
+        let fine = try FilmGrainRenderer.render(to: img, params: filmGrainParams(grainsPerPixel: 500))
+        let chunky = try FilmGrainRenderer.render(to: img, params: filmGrainParams(grainsPerPixel: 30))
+        let (fineMean, _) = compare(img, fine)
+        XCTAssertGreaterThan(fineMean, 0.3, "fine grain should visibly alter the image")
+        let (densityMean, _) = compare(fine, chunky)
+        XCTAssertGreaterThan(densityMean, 0.5,
+                             "grains-per-pixel should change the grain character (mean \(densityMean))")
+    }
+
+    func testFilmGrainProtectsTonalExtremes() throws {
+        try requireMetal()
+        // Flat near-white image with full highlight protection: grain must
+        // be (near) absent. Same with protection off: grain must appear.
+        let width = 128, height = 128
+        let colorSpace = CGColorSpaceCreateDeviceRGB()
+        let ctx = CGContext(
+            data: nil, width: width, height: height, bitsPerComponent: 8,
+            bytesPerRow: width * 4, space: colorSpace,
+            bitmapInfo: CGImageAlphaInfo.premultipliedLast.rawValue)!
+        ctx.setFillColor(CGColor(srgbRed: 0.97, green: 0.97, blue: 0.97, alpha: 1))
+        ctx.fill(CGRect(x: 0, y: 0, width: width, height: height))
+        let white = ctx.makeImage()!
+
+        let protected = try FilmGrainRenderer.render(
+            to: white, params: filmGrainParams(protectHighlights: 1.0))
+        let unprotected = try FilmGrainRenderer.render(
+            to: white, params: filmGrainParams(protectHighlights: 0.0))
+        let (protMean, _) = compare(white, protected)
+        let (openMean, _) = compare(white, unprotected)
+        XCTAssertLessThan(protMean, 0.5,
+                          "protected highlights should carry almost no grain (mean \(protMean))")
+        XCTAssertGreaterThan(openMean, protMean * 2,
+                             "disabling protection should let grain through (\(openMean) vs \(protMean))")
+    }
+
+    func testFilmGrainStockProfileApplies() {
+        // Picking a stock re-tunes the dials to its profile; sliders stay
+        // editable afterwards. No Metal needed.
+        let start = FilmGrainShaderParams(stock: .custom, grainsPerPixel: 111, softness: 0.9)
+        let triX = start.applyingStockProfile(.kodakTriX400)
+        XCTAssertEqual(triX.stock, .kodakTriX400)
+        XCTAssertEqual(triX.grainsPerPixel, FilmGrainStock.kodakTriX400.grainProfile.grainsPerPixel)
+        XCTAssertEqual(triX.softness, FilmGrainStock.kodakTriX400.grainProfile.softness)
+    }
+
+    func testFilmGrainRoundTripsThroughJSON() throws {
+        // All fields non-default so a dropped encode key can't hide behind
+        // decode fallbacks (same discipline as the rough-border round-trip).
+        var original = FilmGrainShaderParams(
+            stock: .ilfordDelta3200, grainsPerPixel: 77, softness: 0.9,
+            protectHighlights: 0.6, protectShadows: 0.4, seed: 4242)
+        original.varyPerImage = true
+        let layer = ShaderLayerParams(style: .filmGrain, params: .filmGrain(original))
+        let data = try JSONEncoder().encode(layer)
+        let decoded = try JSONDecoder().decode(ShaderLayerParams.self, from: data)
+        guard case .filmGrain(let roundTripped) = decoded.params else {
+            return XCTFail("style did not round-trip")
+        }
+        XCTAssertEqual(roundTripped, original)
+    }
+
     func testRoughBorderRoundTripsThroughJSON() throws {
         // Codable round-trip (preset safety, house rule 4). No Metal needed.
         // Every field must be NON-default (Codex review on PR #17): with
