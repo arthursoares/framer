@@ -552,7 +552,6 @@ final class EffectGPUBehaviorTests: XCTestCase {
                           "ortho film must render red much darker than neutral")
     }
 
-<<<<<<< HEAD
     func testBWFilmToningTintsHighlightsAndShadowsSeparately() throws {
         try requireMetal()
         let img = makeTestImage()
@@ -629,7 +628,8 @@ final class EffectGPUBehaviorTests: XCTestCase {
         XCTAssertLessThan(rowMean(tb, 2), rowMean(pb, 2) - 15, "top rows should burn darker")
         XCTAssertEqual(rowMean(tb, h - 3), rowMean(pb, h - 3), accuracy: 3,
                        "bottom rows should be untouched by a top-only burn")
-=======
+    }
+
     func testBWFilmUnknownResponseDecodesToCustomInsteadOfThrowing() throws {
         // Forward-compat guard: a preset written by a FUTURE version with a
         // new film name must not make this version's decode throw —
@@ -646,7 +646,6 @@ final class EffectGPUBehaviorTests: XCTestCase {
         let decoded = try JSONDecoder().decode(ShaderLayerParams.self, from: data)
         guard case .bwFilm(let p) = decoded.params else { return XCTFail("style lost") }
         XCTAssertEqual(p.response, .custom, "unknown film must fall back, not throw")
->>>>>>> feat/bw-film-effect
     }
 
     func testBWFilmDeterministicAndRoundTrips() throws {
