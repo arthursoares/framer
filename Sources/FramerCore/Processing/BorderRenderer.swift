@@ -53,7 +53,8 @@ public enum BorderRenderer {
         to image: CGImage,
         sourceImage: CGImage,
         exif: ExifData,
-        previewBaseDimension: Int? = nil
+        previewBaseDimension: Int? = nil,
+        sourceIdentity: String? = nil
     ) throws -> BorderResult {
         var current = image
         var imageOrigin: CGPoint?
@@ -213,7 +214,8 @@ public enum BorderRenderer {
                     to: current,
                     params: params,
                     previewBaseDimension: previewBaseDimension,
-                    sourceImage: sourceImage
+                    sourceImage: sourceImage,
+                    sourceIdentity: sourceIdentity
                 )
                 current = try LayerCompositor.compose(
                     base: current, over: rendered,

@@ -7,6 +7,78 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [2.1.0] - 2026-07-20
+
+The Silver Efex replication release: three new effect layers that together
+reproduce the Silver Efex Pro darkroom stack (B&W conversion → film grain →
+rough border), built by measuring Silver Efex Pro 3 itself rather than
+tuning by eye — its GUI was driven programmatically to export calibration
+ramps, and the extracted transfer curves were fit into the shaders
+(measurement kit and datasets in `tools/sep-measurement/`).
+
+### Added
+
+#### Rough Border (new shader layer)
+- 14 procedural border types (clean line, double rebate, torn, brushed,
+  jagged, dashed, soft fade, spatter, wavy, turbulent, grunge band, …) —
+  seeded and exactly reproducible; proportional at any resolution or aspect
+  ratio (all geometry in min-dimension units)
+- Seed field with one-tap shuffle, plus "Vary per Image": each image in a
+  batch derives its own border from a stable hash of its filename, so
+  preview always matches export and re-runs reproduce
+- Border color picker (defaults to black); Size displayed 2–100
+
+#### Film Grain (new shader layer)
+- Silver Efex grain model: grains-per-pixel density (higher = finer),
+  soft↔hard kernel, and highlight/shadow protection so grain lives in the
+  midtones
+- 30 film stocks under their real names (Kodak, Ilford, Fuji, Agfa, Rollei,
+  Adox, Fomapan, Bergger) with per-stock grain values **measured from Silver
+  Efex Pro 3's own defaults**; manufacturer-grouped picker
+- Same seed / shuffle / vary-per-image system as Rough Border; grain size
+  is preview→export compensated
+
+#### B&W Film (new shader layer)
+- Six-channel spectral sensitivity conversion (R/Ye/G/Cy/B/Mg) — the film
+  way of rendering color into gray; achromatic pixels are untouched
+- Tonality engine **fit to measured Silver Efex transfer curves**:
+  brightness is an exact gamma law (`2^(-slider/50)`), contrast a pinned
+  log-odds sigmoid, zone dials use measured weight functions, and every
+  control pins pure black and pure white like the original
+- 30 film response profiles; the 25 films Silver Efex Pro 3 carries install
+  their **measured characteristic curves** (Tri-X's S-curve, Delta 3200's
+  deep toe, PAN F's paper-white shoulder, …)
+- Full finishing block: split toning with the 24-preset darkroom table
+  (sepia, selenium, copper, cyan, split toners, ambrotype, …), aspect-true
+  vignette with shape dial, per-edge burn edges
+- Two-scale structure (local contrast) with zone dials and fine structure,
+  soft-limited so edges don't halo
+- Levels & curves: gamma, black/white points, and the film's installed
+  curve surfaced in the UI with a one-tap reset
+
+#### Sidebar UX (from a three-lens adversarial design review)
+- B&W Film and Film Grain panels organized into captioned collapsible
+  sections with persisted expansion state
+- Honest preset provenance: hand-editing a profile-owned dial flips the
+  film / toning / stock picker to "Custom" instead of claiming a profile
+  the dials no longer match; double-click reset returns dials to the
+  selected profile's values
+- Out-of-range preset values widen sliders instead of being silently
+  clamped; accessibility labels on hidden-label pickers and icon buttons
+
+#### Tooling
+- `tools/sep-measurement/`: the GUI-automation measurement kit (CGEvent
+  driver, focus-guarded export scripts, curve extraction) and the measured
+  datasets — 13 tonality curves and 25 per-film characteristic curves
+
+### Fixed
+- Tone-curve bake had halved boundary tangents, bending the default curve
+  into a subtle S (up to 13/255 at the quarter-tones) — caught by ramp
+  parity against Silver Efex, now locked by identity tests
+- Enum fields decoded from presets now fall back tolerantly on unknown raw
+  values instead of throwing (a throwing decode makes PresetStore delete
+  the preset file)
+
 ## [2.0.0] - 2026-07-09
 
 Complete rewrite from Go CLI to Swift, and everything built on top of it since.

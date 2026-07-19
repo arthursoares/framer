@@ -112,6 +112,60 @@ public enum YAMLConfig {
         // Kuwahara legacy: 0..8 (0 = full effect). Replaced by shader_softness
         // (already declared above; shared with Crimewave/Narc/Shiba/DistantPast).
         var shader_sharpness: Double?
+        var shader_border_type: String?
+        var shader_border_size: Double?
+        var shader_border_spread: Double?
+        var shader_border_roughness: Double?
+        var shader_border_seed: Int?
+        var shader_border_vary_per_image: Bool?
+        var shader_border_color: String?
+        var shader_grain_stock: String?
+        var shader_grains_per_pixel: Double?
+        var shader_grain_softness: Double?
+        var shader_grain_protect_highlights: Double?
+        var shader_grain_protect_shadows: Double?
+        var shader_grain_seed: Int?
+        var shader_grain_vary_per_image: Bool?
+        var shader_bw_response: String?
+        var shader_bw_sens_red: Double?
+        var shader_bw_sens_yellow: Double?
+        var shader_bw_sens_green: Double?
+        var shader_bw_sens_cyan: Double?
+        var shader_bw_sens_blue: Double?
+        var shader_bw_sens_magenta: Double?
+        var shader_bw_brightness: Double?
+        var shader_bw_brightness_highlights: Double?
+        var shader_bw_brightness_midtones: Double?
+        var shader_bw_brightness_shadows: Double?
+        var shader_bw_contrast: Double?
+        var shader_bw_protect_highlights: Double?
+        var shader_bw_protect_shadows: Double?
+        var shader_bw_curve_gamma: Double?
+        var shader_bw_curve_low_x: Double?
+        var shader_bw_curve_low_y: Double?
+        var shader_bw_curve_high_x: Double?
+        var shader_bw_curve_high_y: Double?
+        // Interior curve points, flattened [x1, y1, x2, y2, ...]
+        var shader_bw_curve_points: [Double]?
+        var shader_bw_structure: Double?
+        var shader_bw_structure_highlights: Double?
+        var shader_bw_structure_midtones: Double?
+        var shader_bw_structure_shadows: Double?
+        var shader_bw_fine_structure: Double?
+        var shader_bw_toning_preset: Int?
+        var shader_bw_toning_strength: Double?
+        var shader_bw_tone_hue_high: Double?
+        var shader_bw_tone_strength_high: Double?
+        var shader_bw_tone_hue_low: Double?
+        var shader_bw_tone_strength_low: Double?
+        var shader_bw_tone_balance: Double?
+        var shader_bw_vig_strength: Double?
+        var shader_bw_vig_size: Double?
+        var shader_bw_vig_shape: Double?
+        // Burn edges, [top, bottom, left, right] per group.
+        var shader_bw_burn_strengths: [Double]?
+        var shader_bw_burn_sizes: [Double]?
+        var shader_bw_burn_transitions: [Double]?
         var gpu_effect_kind: String?
         var gpu_common_brightness: Double?
         var gpu_common_contrast: Double?
@@ -979,6 +1033,63 @@ public enum YAMLConfig {
         case .kuwahara(let p):
             schema.shader_kernel_size = p.kernelSize
             schema.shader_softness = p.softness
+        case .roughBorder(let p):
+            schema.shader_border_type = p.borderType.rawValue
+            schema.shader_border_size = p.size
+            schema.shader_border_spread = p.spread
+            schema.shader_border_roughness = p.roughness
+            schema.shader_border_seed = p.seed
+            if p.varyPerImage { schema.shader_border_vary_per_image = true }
+            schema.shader_border_color = p.borderColor.hex
+        case .filmGrain(let p):
+            schema.shader_grain_stock = p.stock.rawValue
+            schema.shader_grains_per_pixel = p.grainsPerPixel
+            schema.shader_grain_softness = p.softness
+            schema.shader_grain_protect_highlights = p.protectHighlights
+            schema.shader_grain_protect_shadows = p.protectShadows
+            schema.shader_grain_seed = p.seed
+            if p.varyPerImage { schema.shader_grain_vary_per_image = true }
+        case .bwFilm(let p):
+            schema.shader_bw_response = p.response.rawValue
+            schema.shader_bw_sens_red = p.sensRed
+            schema.shader_bw_sens_yellow = p.sensYellow
+            schema.shader_bw_sens_green = p.sensGreen
+            schema.shader_bw_sens_cyan = p.sensCyan
+            schema.shader_bw_sens_blue = p.sensBlue
+            schema.shader_bw_sens_magenta = p.sensMagenta
+            schema.shader_bw_brightness = p.brightness
+            schema.shader_bw_brightness_highlights = p.brightnessHighlights
+            schema.shader_bw_brightness_midtones = p.brightnessMidtones
+            schema.shader_bw_brightness_shadows = p.brightnessShadows
+            schema.shader_bw_contrast = p.contrast
+            schema.shader_bw_protect_highlights = p.protectHighlights
+            schema.shader_bw_protect_shadows = p.protectShadows
+            schema.shader_bw_curve_gamma = p.curveGamma
+            schema.shader_bw_curve_low_x = p.curveLowX
+            schema.shader_bw_curve_low_y = p.curveLowY
+            schema.shader_bw_curve_high_x = p.curveHighX
+            schema.shader_bw_curve_high_y = p.curveHighY
+            if !p.curvePoints.isEmpty {
+                schema.shader_bw_curve_points = p.curvePoints.flatMap { [$0.x, $0.y] }
+            }
+            schema.shader_bw_structure = p.structure
+            schema.shader_bw_structure_highlights = p.structureHighlights
+            schema.shader_bw_structure_midtones = p.structureMidtones
+            schema.shader_bw_structure_shadows = p.structureShadows
+            schema.shader_bw_fine_structure = p.fineStructure
+            schema.shader_bw_toning_preset = p.toningPreset.rawValue
+            schema.shader_bw_toning_strength = p.toningStrength
+            schema.shader_bw_tone_hue_high = p.toneHueHigh
+            schema.shader_bw_tone_strength_high = p.toneStrengthHigh
+            schema.shader_bw_tone_hue_low = p.toneHueLow
+            schema.shader_bw_tone_strength_low = p.toneStrengthLow
+            schema.shader_bw_tone_balance = p.toneBalance
+            schema.shader_bw_vig_strength = p.vigStrength
+            schema.shader_bw_vig_size = p.vigSize
+            schema.shader_bw_vig_shape = p.vigShape
+            schema.shader_bw_burn_strengths = [p.beStrengthTop, p.beStrengthBottom, p.beStrengthLeft, p.beStrengthRight]
+            schema.shader_bw_burn_sizes = [p.beSizeTop, p.beSizeBottom, p.beSizeLeft, p.beSizeRight]
+            schema.shader_bw_burn_transitions = [p.beTransitionTop, p.beTransitionBottom, p.beTransitionLeft, p.beTransitionRight]
         }
     }
 
@@ -1084,6 +1195,82 @@ public enum YAMLConfig {
             return .kuwahara(KuwaharaShaderParams(
                 kernelSize: schema.shader_kernel_size ?? 4,
                 softness: softness
+            ))
+        case .roughBorder:
+            return .roughBorder(RoughBorderShaderParams(
+                borderType: schema.shader_border_type.flatMap(RoughBorderType.init(rawValue:)) ?? .type3,
+                size: schema.shader_border_size ?? 0.01,
+                spread: schema.shader_border_spread ?? 0.5,
+                roughness: schema.shader_border_roughness ?? 0.5,
+                seed: schema.shader_border_seed ?? 1,
+                varyPerImage: schema.shader_border_vary_per_image ?? false,
+                borderColor: (schema.shader_border_color.flatMap { try? CodableColor(hex: $0) }) ?? .black
+            ))
+        case .filmGrain:
+            return .filmGrain(FilmGrainShaderParams(
+                stock: schema.shader_grain_stock.flatMap(FilmGrainStock.init(rawValue:)) ?? .custom,
+                grainsPerPixel: schema.shader_grains_per_pixel,
+                softness: schema.shader_grain_softness,
+                protectHighlights: schema.shader_grain_protect_highlights ?? 0.15,
+                protectShadows: schema.shader_grain_protect_shadows ?? 0.15,
+                seed: schema.shader_grain_seed ?? 1,
+                varyPerImage: schema.shader_grain_vary_per_image ?? false
+            ))
+        case .bwFilm:
+            var points: [BWCurvePoint] = []
+            if let flat = schema.shader_bw_curve_points {
+                var i = 0
+                while i + 1 < flat.count {
+                    points.append(BWCurvePoint(x: flat[i], y: flat[i + 1]))
+                    i += 2
+                }
+            }
+            let burnS = schema.shader_bw_burn_strengths ?? []
+            let burnSz = schema.shader_bw_burn_sizes ?? []
+            let burnT = schema.shader_bw_burn_transitions ?? []
+            func at(_ a: [Double], _ i: Int, _ d: Double) -> Double { i < a.count ? a[i] : d }
+            return .bwFilm(BWFilmShaderParams(
+                response: schema.shader_bw_response.flatMap(BWFilmResponse.init(rawValue:)) ?? .custom,
+                sensRed: schema.shader_bw_sens_red ?? 0,
+                sensYellow: schema.shader_bw_sens_yellow ?? 0,
+                sensGreen: schema.shader_bw_sens_green ?? 0,
+                sensCyan: schema.shader_bw_sens_cyan ?? 0,
+                sensBlue: schema.shader_bw_sens_blue ?? 0,
+                sensMagenta: schema.shader_bw_sens_magenta ?? 0,
+                brightness: schema.shader_bw_brightness ?? 0,
+                brightnessHighlights: schema.shader_bw_brightness_highlights ?? 0,
+                brightnessMidtones: schema.shader_bw_brightness_midtones ?? 0,
+                brightnessShadows: schema.shader_bw_brightness_shadows ?? 0,
+                contrast: schema.shader_bw_contrast ?? 0,
+                protectHighlights: schema.shader_bw_protect_highlights ?? 0,
+                protectShadows: schema.shader_bw_protect_shadows ?? 0,
+                structure: schema.shader_bw_structure ?? 0,
+                structureHighlights: schema.shader_bw_structure_highlights ?? 0,
+                structureMidtones: schema.shader_bw_structure_midtones ?? 0,
+                structureShadows: schema.shader_bw_structure_shadows ?? 0,
+                fineStructure: schema.shader_bw_fine_structure ?? 0,
+                toningPreset: schema.shader_bw_toning_preset.flatMap(BWToningPreset.init(rawValue:)) ?? .neutral,
+                toningStrength: schema.shader_bw_toning_strength ?? 0,
+                toneHueHigh: schema.shader_bw_tone_hue_high ?? 40,
+                toneStrengthHigh: schema.shader_bw_tone_strength_high ?? 0,
+                toneHueLow: schema.shader_bw_tone_hue_low ?? 40,
+                toneStrengthLow: schema.shader_bw_tone_strength_low ?? 0,
+                toneBalance: schema.shader_bw_tone_balance ?? 0,
+                vigStrength: schema.shader_bw_vig_strength ?? 0,
+                vigSize: schema.shader_bw_vig_size ?? 50,
+                vigShape: schema.shader_bw_vig_shape ?? 3,
+                beStrengthTop: at(burnS, 0, 0), beStrengthBottom: at(burnS, 1, 0),
+                beStrengthLeft: at(burnS, 2, 0), beStrengthRight: at(burnS, 3, 0),
+                beSizeTop: at(burnSz, 0, 25), beSizeBottom: at(burnSz, 1, 25),
+                beSizeLeft: at(burnSz, 2, 25), beSizeRight: at(burnSz, 3, 25),
+                beTransitionTop: at(burnT, 0, 50), beTransitionBottom: at(burnT, 1, 50),
+                beTransitionLeft: at(burnT, 2, 50), beTransitionRight: at(burnT, 3, 50),
+                curveGamma: schema.shader_bw_curve_gamma ?? 0,
+                curveLowX: schema.shader_bw_curve_low_x ?? 0,
+                curveLowY: schema.shader_bw_curve_low_y ?? 0,
+                curveHighX: schema.shader_bw_curve_high_x ?? 1,
+                curveHighY: schema.shader_bw_curve_high_y ?? 1,
+                curvePoints: points
             ))
         }
     }

@@ -4076,6 +4076,19 @@ struct ShaderLayerControls: View {
     var params: ShaderLayerParams
     var onChange: (ShaderLayerParams) -> Void
 
+    // B&W Film section expansion (persisted; UX review finding #1 — the
+    // ~42-control panel needs SEP-style captioned collapsible groups).
+    @AppStorage("bwFilmSensitivityExpanded") private var bwSensitivityExpanded = true
+    @AppStorage("bwFilmTonalityExpanded") private var bwTonalityExpanded = true
+    @AppStorage("bwFilmStructureExpanded") private var bwStructureExpanded = false
+    @AppStorage("bwFilmCurvesExpanded") private var bwCurvesExpanded = false
+    @AppStorage("bwFilmToningExpanded") private var bwToningExpanded = false
+    @AppStorage("bwFilmVignetteExpanded") private var bwVignetteExpanded = false
+    @AppStorage("bwFilmBurnExpanded") private var bwBurnExpanded = false
+    @AppStorage("filmGrainGrainExpanded") private var grainGrainExpanded = true
+    @AppStorage("filmGrainProtectionExpanded") private var grainProtectionExpanded = false
+    @AppStorage("filmGrainVariationExpanded") private var grainVariationExpanded = false
+
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
             BlendModeControls(
@@ -4124,7 +4137,195 @@ struct ShaderLayerControls: View {
                 halftoneControls(halftoneParams)
             case .kuwahara(let kuwaharaParams):
                 kuwaharaControls(kuwaharaParams)
+            case .roughBorder(let roughBorderParams):
+                roughBorderControls(roughBorderParams)
+            case .filmGrain(let filmGrainParams):
+                filmGrainControls(filmGrainParams)
+            case .bwFilm(let bwFilmParams):
+                bwFilmControls(bwFilmParams)
             }
+        }
+    }
+
+    @ViewBuilder
+    private func bwFilmControls(_ bw: BWFilmShaderParams) -> some View {
+        Picker("", selection: Binding(
+            get: { bw.response },
+            set: { value in
+                guard case .bwFilm(var current) = params.params else { return }
+                if value == .custom {
+                    // "Custom" claims the current hand-tuned state — it must
+                    // not reset the dials.
+                    current.response = .custom
+                    onChange(params.withParams(.bwFilm(current)))
+                } else {
+                    onChange(params.withParams(.bwFilm(current.applyingResponse(value))))
+                }
+            }
+        )) {
+            bwFilmMenuItems
+        }
+        .pickerStyle(.menu)
+        .labelsHidden()
+        .accessibilityLabel("Film Response")
+        .help("Selecting a film retunes the six sensitivity dials and installs the film's measured characteristic curve.")
+        .denseControlRow("Film Response")
+
+        CollapsibleSidebarSection("SENSITIVITY", isExpanded: $bwSensitivityExpanded) {
+            bwFilmSlider("Red", bw.sensRed, resetValue: bw.response.sensitivities.r, group: .film) { v, p in var u = p; u.sensRed = v; return u }
+            bwFilmSlider("Yellow", bw.sensYellow, resetValue: bw.response.sensitivities.ye, group: .film) { v, p in var u = p; u.sensYellow = v; return u }
+            bwFilmSlider("Green", bw.sensGreen, resetValue: bw.response.sensitivities.g, group: .film) { v, p in var u = p; u.sensGreen = v; return u }
+            bwFilmSlider("Cyan", bw.sensCyan, resetValue: bw.response.sensitivities.cy, group: .film) { v, p in var u = p; u.sensCyan = v; return u }
+            bwFilmSlider("Blue", bw.sensBlue, resetValue: bw.response.sensitivities.b, group: .film) { v, p in var u = p; u.sensBlue = v; return u }
+            bwFilmSlider("Magenta", bw.sensMagenta, resetValue: bw.response.sensitivities.mg, group: .film) { v, p in var u = p; u.sensMagenta = v; return u }
+        } collapsedContent: { EmptyView() }
+
+        CollapsibleSidebarSection("TONALITY", isExpanded: $bwTonalityExpanded) {
+            bwFilmSlider("Brightness", bw.brightness) { v, p in var u = p; u.brightness = v; return u }
+            bwFilmSlider("Brightness Highlights", bw.brightnessHighlights) { v, p in var u = p; u.brightnessHighlights = v; return u }
+            bwFilmSlider("Brightness Midtones", bw.brightnessMidtones) { v, p in var u = p; u.brightnessMidtones = v; return u }
+            bwFilmSlider("Brightness Shadows", bw.brightnessShadows) { v, p in var u = p; u.brightnessShadows = v; return u }
+            bwFilmSlider("Contrast", bw.contrast) { v, p in var u = p; u.contrast = v; return u }
+            bwFilmSlider("Protect Highlights", bw.protectHighlights, range: 0...100) { v, p in var u = p; u.protectHighlights = v; return u }
+            bwFilmSlider("Protect Shadows", bw.protectShadows, range: 0...100) { v, p in var u = p; u.protectShadows = v; return u }
+        } collapsedContent: { EmptyView() }
+
+        CollapsibleSidebarSection("STRUCTURE", isExpanded: $bwStructureExpanded) {
+            bwFilmSlider("Structure", bw.structure) { v, p in var u = p; u.structure = v; return u }
+            bwFilmSlider("Structure Highlights", bw.structureHighlights) { v, p in var u = p; u.structureHighlights = v; return u }
+            bwFilmSlider("Structure Midtones", bw.structureMidtones) { v, p in var u = p; u.structureMidtones = v; return u }
+            bwFilmSlider("Structure Shadows", bw.structureShadows) { v, p in var u = p; u.structureShadows = v; return u }
+            bwFilmSlider("Fine Structure", bw.fineStructure, range: 0...100) { v, p in var u = p; u.fineStructure = v; return u }
+        } collapsedContent: { EmptyView() }
+
+        CollapsibleSidebarSection("LEVELS & CURVES", isExpanded: $bwCurvesExpanded) {
+            bwFilmSlider("Gamma", bw.curveGamma, range: -1...1, step: 0.02, group: .film) { v, p in var u = p; u.curveGamma = v; return u }
+            bwFilmSlider("Black Point", bw.curveLowX, range: 0...0.5, step: 0.01, group: .film) { v, p in var u = p; u.curveLowX = v; return u }
+            bwFilmSlider("Black Lift", bw.curveLowY, range: 0...0.5, step: 0.01, resetValue: bw.response.measuredCurve?.lowY ?? 0, group: .film) { v, p in var u = p; u.curveLowY = v; return u }
+            bwFilmSlider("White Point", bw.curveHighX, range: 0.5...1, step: 0.01, resetValue: 1, group: .film) { v, p in var u = p; u.curveHighX = v; return u }
+            bwFilmSlider("White Cap", bw.curveHighY, range: 0.5...1, step: 0.01, resetValue: bw.response.measuredCurve?.highY ?? 1, group: .film) { v, p in var u = p; u.curveHighY = v; return u }
+
+            // The film's measured characteristic curve installs as control
+            // points with no slider of their own — surface their presence so
+            // the curve isn't invisibly shaping the render.
+            if !bw.curvePoints.isEmpty {
+                SidebarControlRow("Film Curve") {
+                    Button {
+                        guard case .bwFilm(var current) = params.params else { return }
+                        current.curvePoints = []
+                        current.curveLowY = 0
+                        current.curveHighY = 1
+                        current.response = .custom
+                        onChange(params.withParams(.bwFilm(current)))
+                    } label: {
+                        Label("\(bw.curvePoints.count) points · Reset", systemImage: "point.topleft.down.curvedto.point.bottomright.up")
+                            .font(AppFont.controlLabel)
+                    }
+                    .buttonStyle(.plain)
+                    .foregroundStyle(Color.text1)
+                    .accessibilityLabel("Reset film curve to linear")
+                    .help("The selected film installed its measured characteristic curve. Reset to a linear curve.")
+                }
+            }
+        } collapsedContent: { EmptyView() }
+
+        CollapsibleSidebarSection("TONING", isExpanded: $bwToningExpanded) {
+            Picker("", selection: Binding(
+                get: { bw.toningPreset },
+                set: { value in
+                    guard case .bwFilm(var current) = params.params else { return }
+                    if value == .custom {
+                        current.toningPreset = .custom
+                        onChange(params.withParams(.bwFilm(current)))
+                    } else {
+                        onChange(params.withParams(.bwFilm(current.applyingToningPreset(value))))
+                    }
+                }
+            )) {
+                ForEach(BWToningPreset.allCases, id: \.self) { preset in
+                    Text(preset.label).tag(preset)
+                }
+            }
+            .pickerStyle(.menu)
+            .labelsHidden()
+            .accessibilityLabel("Toning Preset")
+            .help("Selecting a toning preset retunes the six toning dials.")
+            .denseControlRow("Preset")
+
+            bwFilmSlider("Strength", bw.toningStrength, range: 0...100, resetValue: bw.toningPreset.toning.strength, group: .toning) { v, p in var u = p; u.toningStrength = v; return u }
+            bwFilmSlider("Silver Hue", bw.toneHueHigh, range: 0...360, resetValue: bw.toningPreset.toning.hueHigh, group: .toning) { v, p in var u = p; u.toneHueHigh = v; return u }
+            bwFilmSlider("Silver Toning", bw.toneStrengthHigh, range: 0...100, resetValue: bw.toningPreset.toning.strengthHigh, group: .toning) { v, p in var u = p; u.toneStrengthHigh = v; return u }
+            bwFilmSlider("Paper Hue", bw.toneHueLow, range: 0...360, resetValue: bw.toningPreset.toning.hueLow, group: .toning) { v, p in var u = p; u.toneHueLow = v; return u }
+            bwFilmSlider("Paper Toning", bw.toneStrengthLow, range: 0...100, resetValue: bw.toningPreset.toning.strengthLow, group: .toning) { v, p in var u = p; u.toneStrengthLow = v; return u }
+            bwFilmSlider("Balance", bw.toneBalance, resetValue: bw.toningPreset.toning.balance, group: .toning) { v, p in var u = p; u.toneBalance = v; return u }
+        } collapsedContent: { EmptyView() }
+
+        CollapsibleSidebarSection("VIGNETTE", isExpanded: $bwVignetteExpanded) {
+            bwFilmSlider("Vignette", bw.vigStrength) { v, p in var u = p; u.vigStrength = v; return u }
+            bwFilmSlider("Vignette Size", bw.vigSize, range: 0...100, resetValue: 50) { v, p in var u = p; u.vigSize = v; return u }
+            bwFilmSlider("Vignette Shape", bw.vigShape, range: 1...5, step: 0.1, resetValue: 3) { v, p in var u = p; u.vigShape = v; return u }
+        } collapsedContent: { EmptyView() }
+
+        CollapsibleSidebarSection("BURN EDGES", isExpanded: $bwBurnExpanded) {
+            bwFilmSlider("Burn Top", bw.beStrengthTop, range: 0...100) { v, p in var u = p; u.beStrengthTop = v; return u }
+            bwFilmSlider("Burn Bottom", bw.beStrengthBottom, range: 0...100) { v, p in var u = p; u.beStrengthBottom = v; return u }
+            bwFilmSlider("Burn Left", bw.beStrengthLeft, range: 0...100) { v, p in var u = p; u.beStrengthLeft = v; return u }
+            bwFilmSlider("Burn Right", bw.beStrengthRight, range: 0...100) { v, p in var u = p; u.beStrengthRight = v; return u }
+            bwFilmSlider("Size (all edges)", bw.beSizeTop, range: 0...100, resetValue: 25) { v, p in
+                var u = p; u.beSizeTop = v; u.beSizeBottom = v; u.beSizeLeft = v; u.beSizeRight = v; return u
+            }
+            bwFilmSlider("Transition (all edges)", bw.beTransitionTop, range: 0...100, resetValue: 50) { v, p in
+                var u = p; u.beTransitionTop = v; u.beTransitionBottom = v; u.beTransitionLeft = v; u.beTransitionRight = v; return u
+            }
+        } collapsedContent: { EmptyView() }
+    }
+
+    /// Film menu grouped by manufacturer (UX review: a flat 30-item list is
+    /// slow to scan). Grouping is derived from the label's first word so new
+    /// films join automatically.
+    @ViewBuilder
+    private var bwFilmMenuItems: some View {
+        Text(BWFilmResponse.custom.label).tag(BWFilmResponse.custom)
+        let films = BWFilmResponse.allCases.filter { $0 != .custom }
+        let groups = Dictionary(grouping: films) { String($0.label.split(separator: " ").first ?? "") }
+        ForEach(groups.keys.sorted(), id: \.self) { maker in
+            Divider()
+            ForEach(groups[maker] ?? [], id: \.self) { response in
+                Text(response.label).tag(response)
+            }
+        }
+    }
+
+    /// Which preset-provenance field a dial edit invalidates.
+    private enum BWDialGroup { case film, toning, plain }
+
+    private func bwFilmSlider(
+        _ title: String,
+        _ value: Double,
+        range: ClosedRange<Double> = -100...100,
+        step: Double = 1,
+        resetValue: Double = 0,
+        group: BWDialGroup = .plain,
+        update: @escaping (Double, BWFilmShaderParams) -> BWFilmShaderParams
+    ) -> some View {
+        sliderRow(
+            title: title,
+            value: value,
+            range: expandedRange(range, including: value),
+            step: step,
+            resetValue: resetValue
+        ) { newValue in
+            guard case .bwFilm(let current) = params.params else { return }
+            var updated = update(newValue, current)
+            // Honest provenance: hand-editing a profile-owned dial flips the
+            // owning picker to Custom so its label stops claiming a film /
+            // toning preset the dials no longer match (UX review finding).
+            switch group {
+            case .film: updated.response = .custom
+            case .toning: updated.toningPreset = .custom
+            case .plain: break
+            }
+            onChange(params.withParams(.bwFilm(updated)))
         }
     }
 
@@ -4772,6 +4973,221 @@ struct ShaderLayerControls: View {
         ) { value in
             var updated = kuwaharaParams; updated.softness = value
             onChange(params.withParams(.kuwahara(updated)))
+        }
+    }
+
+    @ViewBuilder
+    private func roughBorderControls(_ roughBorderParams: RoughBorderShaderParams) -> some View {
+        Picker("", selection: Binding(
+            get: { roughBorderParams.borderType },
+            set: { value in
+                var updated = roughBorderParams; updated.borderType = value
+                onChange(params.withParams(.roughBorder(updated)))
+            }
+        )) {
+            ForEach(RoughBorderType.allCases, id: \.self) { type in
+                Text(type.label).tag(type)
+            }
+        }
+        .pickerStyle(.menu)
+        .labelsHidden()
+        .accessibilityLabel("Border Type")
+        .denseControlRow("Type")
+
+        // Size is stored as a fraction of min(w,h); shown 2–100 so the
+        // readout is a sensible magnitude, not "0.005" (UX review).
+        sliderRow(
+            title: "Size",
+            value: roughBorderParams.size * 2000,
+            range: expandedRange(2...100, including: roughBorderParams.size * 2000),
+            step: 1,
+            resetValue: RoughBorderShaderParams().size * 2000
+        ) { value in
+            var updated = roughBorderParams; updated.size = value / 2000
+            onChange(params.withParams(.roughBorder(updated)))
+        }
+        sliderRow(
+            title: "Spread",
+            value: roughBorderParams.spread,
+            range: expandedRange(0...1, including: roughBorderParams.spread),
+            step: 0.05,
+            resetValue: RoughBorderShaderParams().spread
+        ) { value in
+            var updated = roughBorderParams; updated.spread = value
+            onChange(params.withParams(.roughBorder(updated)))
+        }
+        sliderRow(
+            title: "Roughness",
+            value: roughBorderParams.roughness,
+            range: expandedRange(0...1, including: roughBorderParams.roughness),
+            step: 0.05,
+            resetValue: RoughBorderShaderParams().roughness
+        ) { value in
+            var updated = roughBorderParams; updated.roughness = value
+            onChange(params.withParams(.roughBorder(updated)))
+        }
+        seedRow(
+            seed: roughBorderParams.seed,
+            varyPerImage: roughBorderParams.varyPerImage
+        ) { newSeed in
+            var updated = roughBorderParams; updated.seed = newSeed
+            onChange(params.withParams(.roughBorder(updated)))
+        }
+        SidebarControlRow("Vary per Image") {
+            StyledToggle(isOn: Binding(
+                get: { roughBorderParams.varyPerImage },
+                set: { value in
+                    var updated = roughBorderParams; updated.varyPerImage = value
+                    onChange(params.withParams(.roughBorder(updated)))
+                }
+            ))
+        }
+        labeledColorPicker("Color", selection: Binding(
+            get: { Color(nsColor: NSColor(cgColor: roughBorderParams.borderColor.cgColor) ?? .white) },
+            set: { newColor in
+                guard let hex = newColor.hexString, let codable = try? CodableColor(hex: hex) else { return }
+                var updated = roughBorderParams; updated.borderColor = codable
+                onChange(params.withParams(.roughBorder(updated)))
+            }
+        ))
+    }
+
+    /// Seed control: a numeric field + one-tap shuffle (a 10,000-step
+    /// slider can't land a nominal identifier — UX review). Dimmed and
+    /// relabeled when Vary-per-Image derives the effective seed from the
+    /// filename, because then the number shown is not what renders.
+    private func seedRow(
+        seed: Int,
+        varyPerImage: Bool,
+        onSeed: @escaping (Int) -> Void
+    ) -> some View {
+        SidebarControlRow(varyPerImage ? "Seed · varies per image" : "Seed") {
+            HStack(spacing: 6) {
+                TextField("", value: Binding(get: { seed }, set: { onSeed(max(0, $0)) }), format: .number)
+                    .simpleLayerEditorInputStyle()
+                    .accessibilityLabel("Seed value")
+                Button {
+                    onSeed(Int.random(in: 0...9999))
+                } label: {
+                    Image(systemName: "shuffle")
+                        .font(AppFont.controlLabel)
+                }
+                .buttonStyle(.plain)
+                .foregroundStyle(Color.text1)
+                .accessibilityLabel("Shuffle seed")
+                .help("Pick a new random seed.")
+            }
+            .opacity(varyPerImage ? 0.4 : 1.0)
+            .disabled(varyPerImage)
+        }
+    }
+
+    @ViewBuilder
+    private func filmGrainControls(_ filmGrainParams: FilmGrainShaderParams) -> some View {
+        Picker("", selection: Binding(
+            get: { filmGrainParams.stock },
+            set: { value in
+                guard case .filmGrain(var current) = params.params else { return }
+                if value == .custom {
+                    // "Custom" claims the current hand-tuned dials without
+                    // resetting them.
+                    current.stock = .custom
+                    onChange(params.withParams(.filmGrain(current)))
+                } else {
+                    onChange(params.withParams(.filmGrain(current.applyingStockProfile(value))))
+                }
+            }
+        )) {
+            filmStockMenuItems
+        }
+        .pickerStyle(.menu)
+        .labelsHidden()
+        .accessibilityLabel("Film Stock")
+        .help("Selecting a film retunes the grain density and hardness dials.")
+        .denseControlRow("Film Stock")
+
+        CollapsibleSidebarSection("GRAIN", isExpanded: $grainGrainExpanded) {
+            sliderRow(
+                title: "Grain per Pixel",
+                value: filmGrainParams.grainsPerPixel,
+                range: expandedRange(1...500, including: filmGrainParams.grainsPerPixel),
+                step: 1,
+                resetValue: filmGrainParams.stock.grainProfile.grainsPerPixel
+            ) { value in
+                guard case .filmGrain(var current) = params.params else { return }
+                current.grainsPerPixel = value
+                current.stock = .custom
+                onChange(params.withParams(.filmGrain(current)))
+            }
+            sliderRow(
+                title: "Soft / Hard",
+                value: filmGrainParams.softness,
+                range: expandedRange(0...1, including: filmGrainParams.softness),
+                step: 0.05,
+                resetValue: filmGrainParams.stock.grainProfile.softness
+            ) { value in
+                guard case .filmGrain(var current) = params.params else { return }
+                current.softness = value
+                current.stock = .custom
+                onChange(params.withParams(.filmGrain(current)))
+            }
+        } collapsedContent: { EmptyView() }
+
+        CollapsibleSidebarSection("TONAL PROTECTION", isExpanded: $grainProtectionExpanded) {
+            sliderRow(
+                title: "Protect Highlights",
+                value: filmGrainParams.protectHighlights,
+                range: expandedRange(0...1, including: filmGrainParams.protectHighlights),
+                step: 0.05,
+                resetValue: FilmGrainShaderParams().protectHighlights
+            ) { value in
+                var updated = filmGrainParams; updated.protectHighlights = value
+                onChange(params.withParams(.filmGrain(updated)))
+            }
+            sliderRow(
+                title: "Protect Shadows",
+                value: filmGrainParams.protectShadows,
+                range: expandedRange(0...1, including: filmGrainParams.protectShadows),
+                step: 0.05,
+                resetValue: FilmGrainShaderParams().protectShadows
+            ) { value in
+                var updated = filmGrainParams; updated.protectShadows = value
+                onChange(params.withParams(.filmGrain(updated)))
+            }
+        } collapsedContent: { EmptyView() }
+
+        CollapsibleSidebarSection("VARIATION", isExpanded: $grainVariationExpanded) {
+            seedRow(
+                seed: filmGrainParams.seed,
+                varyPerImage: filmGrainParams.varyPerImage
+            ) { newSeed in
+                var updated = filmGrainParams; updated.seed = newSeed
+                onChange(params.withParams(.filmGrain(updated)))
+            }
+            SidebarControlRow("Vary per Image") {
+                StyledToggle(isOn: Binding(
+                    get: { filmGrainParams.varyPerImage },
+                    set: { value in
+                        var updated = filmGrainParams; updated.varyPerImage = value
+                        onChange(params.withParams(.filmGrain(updated)))
+                    }
+                ))
+            }
+        } collapsedContent: { EmptyView() }
+    }
+
+    /// Film-stock menu grouped by manufacturer, same derivation as the B&W
+    /// film menu — new stocks file themselves.
+    @ViewBuilder
+    private var filmStockMenuItems: some View {
+        Text(FilmGrainStock.custom.label).tag(FilmGrainStock.custom)
+        let stocks = FilmGrainStock.allCases.filter { $0 != .custom }
+        let groups = Dictionary(grouping: stocks) { String($0.label.split(separator: " ").first ?? "") }
+        ForEach(groups.keys.sorted(), id: \.self) { maker in
+            Divider()
+            ForEach(groups[maker] ?? [], id: \.self) { stock in
+                Text(stock.label).tag(stock)
+            }
         }
     }
 

@@ -11,7 +11,8 @@ public enum ShaderRenderer {
         to image: CGImage,
         params: ShaderLayerParams,
         previewBaseDimension: Int? = nil,
-        sourceImage: CGImage? = nil
+        sourceImage: CGImage? = nil,
+        sourceIdentity: String? = nil
     ) throws -> CGImage {
         try Task.checkCancellation()
 
@@ -42,6 +43,17 @@ public enum ShaderRenderer {
             return try HalftoneRenderer.render(to: image, params: params)
         case .kuwahara:
             return try KuwaharaRenderer.render(to: image, params: params)
+        case .roughBorder:
+            return try RoughBorderRenderer.render(to: image, params: params, sourceIdentity: sourceIdentity)
+        case .filmGrain:
+            return try FilmGrainRenderer.render(
+                to: image,
+                params: params,
+                previewBaseDimension: previewBaseDimension,
+                sourceIdentity: sourceIdentity
+            )
+        case .bwFilm:
+            return try BWFilmRenderer.render(to: image, params: params)
         }
     }
 }
