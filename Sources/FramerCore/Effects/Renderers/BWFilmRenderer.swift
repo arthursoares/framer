@@ -57,7 +57,17 @@ public enum BWFilmRenderer {
         var beTransitionBottom: Float = 50
         var beTransitionLeft: Float = 50
         var beTransitionRight: Float = 50
+        var structureGlobal: Float = 0
+
+        var structureHighlights: Float = 0
+        var structureMidtones: Float = 0
+        var structureShadows: Float = 0
+        var fineStructure: Float = 0
+
         var _pad0: Float = 0
+        var _pad1: Float = 0
+        var _pad2: Float = 0
+        var _pad3: Float = 0
     }
 
     /// Bake the tone curve into 256 output samples. SEP lacdata semantics:
@@ -164,11 +174,18 @@ public enum BWFilmRenderer {
         uniforms.beTransitionBottom = Float(bw.beTransitionBottom)
         uniforms.beTransitionLeft = Float(bw.beTransitionLeft)
         uniforms.beTransitionRight = Float(bw.beTransitionRight)
+        uniforms.structureGlobal = Float(bw.structure)
+        uniforms.structureHighlights = Float(bw.structureHighlights)
+        uniforms.structureMidtones = Float(bw.structureMidtones)
+        uniforms.structureShadows = Float(bw.structureShadows)
+        uniforms.fineStructure = Float(bw.fineStructure)
 
         let pipeline = try library.pipeline(for: "bwFilmFragment")
-        // Nearest sampler — the shader reads only its own pinned pixel;
-        // the curve LUT is read via .read(), no sampler involved.
-        let sampler = try library.nearestClamp()
+        // Linear sampler — the structure kernel takes sub-pixel ring taps
+        // around each pixel; the center read stays pixel-pinned via its
+        // exact texel-center coordinate, so linear filtering returns the
+        // exact texel there. Curve LUT uses .read(), no sampler involved.
+        let sampler = try library.linearClamp()
         let sourceTexture = try MetalTextureSupport.makeTexture(from: image, device: library.device)
         let curveTexture = try makeCurveTexture(bakeCurve(bw), device: library.device)
 

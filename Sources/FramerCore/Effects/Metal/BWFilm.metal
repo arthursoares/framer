@@ -67,7 +67,17 @@ struct BWFilmUniforms {
     float beTransitionBottom;
     float beTransitionLeft;
     float beTransitionRight;
+    float structureGlobal;    // -100..100
+
+    float structureHighlights;
+    float structureMidtones;
+    float structureShadows;
+    float fineStructure;      // 0..100
+
     float _pad0;
+    float _pad1;
+    float _pad2;
+    float _pad3;
 };
 
 /// HSV -> RGB for the toning tints (h degrees, s/v 0..1).
@@ -104,6 +114,54 @@ inline float bwfHueLobe(float h, float center) {
     return max(0.0, 1.0 - d / 60.0);
 }
 
+/// Spectral-sensitivity conversion of one RGB sample to gray — shared by
+/// the center pixel and the structure kernel's neighbor samples.
+inline float bwfConvertGray(float3 src, constant BWFilmUniforms& uniforms) {
+    float mx = max(src.r, max(src.g, src.b));
+    float mn = min(src.r, min(src.g, src.b));
+    float chroma = mx - mn;
+    float g = luminance(src);
+    if (chroma > 1e-5) {
+        float hue;
+        if (mx == src.r)      hue = fmod((src.g - src.b) / chroma, 6.0);
+        else if (mx == src.g) hue = (src.b - src.r) / chroma + 2.0;
+        else                  hue = (src.r - src.g) / chroma + 4.0;
+        hue *= 60.0;
+        if (hue < 0.0) hue += 360.0;
+        float shift =
+            uniforms.sensR  * bwfHueLobe(hue,   0.0) +
+            uniforms.sensYe * bwfHueLobe(hue,  60.0) +
+            uniforms.sensG  * bwfHueLobe(hue, 120.0) +
+            uniforms.sensCy * bwfHueLobe(hue, 180.0) +
+            uniforms.sensB  * bwfHueLobe(hue, 240.0) +
+            uniforms.sensMg * bwfHueLobe(hue, 300.0);
+        // 0.6: full +100 sensitivity on a saturated hue moves it ~60% of
+        // the range — comparable to SEP's strongest film responses.
+        g += (shift / 100.0) * chroma * 0.6;
+    }
+    return saturate(g);
+}
+
+/// Mean converted gray over a sparse two-ring disc of radius `radius`
+/// (uv units). 12 outer + 6 inner samples — a cheap Gaussian-ish blur for
+/// the structure unsharp mask, deterministic fixed offsets.
+inline float bwfBlurGray(texture2d<float> source, sampler s, float2 uv,
+                         float2 radius, constant BWFilmUniforms& uniforms) {
+    constexpr float TWO_PI = 6.28318530718;
+    float total = 0.0;
+    for (int i = 0; i < 12; i++) {
+        float a = TWO_PI * (float(i) + 0.5) / 12.0;
+        float2 o = float2(cos(a), sin(a)) * radius;
+        total += bwfConvertGray(source.sample(s, uv + o).rgb, uniforms);
+    }
+    for (int i = 0; i < 6; i++) {
+        float a = TWO_PI * (float(i) + 0.25) / 6.0;
+        float2 o = float2(cos(a), sin(a)) * radius * 0.5;
+        total += bwfConvertGray(source.sample(s, uv + o).rgb, uniforms);
+    }
+    return total / 18.0;
+}
+
 fragment float4 bwFilmFragment(
     VertexOut                in         [[stage_in]],
     texture2d<float>         source     [[texture(0)]],
@@ -118,31 +176,30 @@ fragment float4 bwFilmFragment(
     float3 src = source.sample(texSampler, selfUV).rgb;
 
     // --- 1. Spectral-sensitivity conversion -----------------------------
-    float mx = max(src.r, max(src.g, src.b));
-    float mn = min(src.r, min(src.g, src.b));
-    float chroma = mx - mn;
+    float g = bwfConvertGray(src, uniforms);
 
-    float g = luminance(src);
-    if (chroma > 1e-5) {
-        float hue;
-        if (mx == src.r)      hue = fmod((src.g - src.b) / chroma, 6.0);
-        else if (mx == src.g) hue = (src.b - src.r) / chroma + 2.0;
-        else                  hue = (src.r - src.g) / chroma + 4.0;
-        hue *= 60.0;
-        if (hue < 0.0) hue += 360.0;
-
-        float shift =
-            uniforms.sensR  * bwfHueLobe(hue,   0.0) +
-            uniforms.sensYe * bwfHueLobe(hue,  60.0) +
-            uniforms.sensG  * bwfHueLobe(hue, 120.0) +
-            uniforms.sensCy * bwfHueLobe(hue, 180.0) +
-            uniforms.sensB  * bwfHueLobe(hue, 240.0) +
-            uniforms.sensMg * bwfHueLobe(hue, 300.0);
-        // 0.6: full +100 sensitivity on a saturated hue moves it ~60% of
-        // the range — comparable to SEP's strongest film responses.
-        g += (shift / 100.0) * chroma * 0.6;
+    // --- 1.5 Structure (two-scale unsharp mask on the converted gray) ---
+    // Radii are fractions of min(w,h) so the effect is proportional at any
+    // resolution; sampled with the linear sampler over a sparse disc.
+    {
+        float minDim = min(dims.x, dims.y);
+        float zoneStructure = uniforms.structureGlobal
+            + uniforms.structureShadows   * (1.0 - smoothstep(0.25, 0.6, g))
+            + uniforms.structureHighlights * smoothstep(0.4, 0.75, g)
+            + uniforms.structureMidtones
+              * saturate(1.0 - (1.0 - smoothstep(0.25, 0.6, g)) - smoothstep(0.4, 0.75, g));
+        if (fabs(zoneStructure) > 0.5) {
+            float2 radius = float2(0.012 * minDim) / dims;
+            float blurred = bwfBlurGray(source, texSampler, selfUV, radius, uniforms);
+            g += (g - blurred) * zoneStructure / 100.0 * 1.6;
+        }
+        if (uniforms.fineStructure > 0.5) {
+            float2 radius = float2(0.0035 * minDim) / dims;
+            float blurred = bwfBlurGray(source, texSampler, selfUV, radius, uniforms);
+            g += (g - blurred) * uniforms.fineStructure / 100.0 * 1.2;
+        }
+        g = saturate(g);
     }
-    g = saturate(g);
 
     // --- 2. Zone tonality ----------------------------------------------
     float shMask  = 1.0 - smoothstep(0.25, 0.6, g);

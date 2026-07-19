@@ -2620,6 +2620,11 @@ private struct ShaderControls: View {
         bwFilmSlider("Contrast", bw.contrast) { v, p in var u = p; u.contrast = v; return u }
         bwFilmSlider("Protect Highlights", bw.protectHighlights, range: 0...100) { v, p in var u = p; u.protectHighlights = v; return u }
         bwFilmSlider("Protect Shadows", bw.protectShadows, range: 0...100) { v, p in var u = p; u.protectShadows = v; return u }
+        bwFilmSlider("Structure", bw.structure) { v, p in var u = p; u.structure = v; return u }
+        bwFilmSlider("Structure Highlights", bw.structureHighlights) { v, p in var u = p; u.structureHighlights = v; return u }
+        bwFilmSlider("Structure Midtones", bw.structureMidtones) { v, p in var u = p; u.structureMidtones = v; return u }
+        bwFilmSlider("Structure Shadows", bw.structureShadows) { v, p in var u = p; u.structureShadows = v; return u }
+        bwFilmSlider("Fine Structure", bw.fineStructure, range: 0...100) { v, p in var u = p; u.fineStructure = v; return u }
         bwFilmSlider("Gamma", bw.curveGamma, range: -1...1, step: 0.02) { v, p in var u = p; u.curveGamma = v; return u }
         bwFilmSlider("Black Point", bw.curveLowX, range: 0...0.5, step: 0.01) { v, p in var u = p; u.curveLowX = v; return u }
         bwFilmSlider("Black Lift", bw.curveLowY, range: 0...0.5, step: 0.01) { v, p in var u = p; u.curveLowY = v; return u }

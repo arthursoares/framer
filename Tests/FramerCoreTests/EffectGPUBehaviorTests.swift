@@ -630,6 +630,53 @@ final class EffectGPUBehaviorTests: XCTestCase {
                        "bottom rows should be untouched by a top-only burn")
     }
 
+    func testBWFilmStructureAmplifiesLocalContrast() throws {
+        try requireMetal()
+        let img = makeTestImage()
+        func highFreqEnergy(_ image: CGImage) -> Double {
+            // Mean |horizontal neighbor delta| of the red channel — a cheap
+            // local-contrast metric.
+            let bytes = drawToBytes(image)
+            let w = image.width
+            var total = 0.0, n = 0.0
+            for y in 0..<image.height {
+                for x in 1..<w {
+                    total += abs(Double(bytes[(y * w + x) * 4]) - Double(bytes[(y * w + x - 1) * 4]))
+                    n += 1
+                }
+            }
+            return total / n
+        }
+        let neutral = highFreqEnergy(try BWFilmRenderer.render(to: img, params: bwParams(BWFilmShaderParams())))
+        let boosted = highFreqEnergy(try BWFilmRenderer.render(to: img, params: bwParams(BWFilmShaderParams(structure: 80))))
+        let softened = highFreqEnergy(try BWFilmRenderer.render(to: img, params: bwParams(BWFilmShaderParams(structure: -80))))
+        let fine = highFreqEnergy(try BWFilmRenderer.render(to: img, params: bwParams(BWFilmShaderParams(fineStructure: 90))))
+        XCTAssertGreaterThan(boosted, neutral * 1.1,
+                             "positive structure should amplify local contrast (\(neutral) → \(boosted))")
+        XCTAssertLessThan(softened, neutral * 0.97,
+                          "negative structure should soften (\(neutral) → \(softened))")
+        XCTAssertGreaterThan(fine, neutral * 1.1,
+                             "fine structure should amplify detail (\(neutral) → \(fine))")
+    }
+
+    func testBWFilmStructureLeavesFlatFieldsUntouched() throws {
+        try requireMetal()
+        // Unsharp masking has nothing to amplify on a constant field.
+        let width = 96, height = 96
+        let ctx = CGContext(
+            data: nil, width: width, height: height, bitsPerComponent: 8,
+            bytesPerRow: width * 4, space: CGColorSpaceCreateDeviceRGB(),
+            bitmapInfo: CGImageAlphaInfo.premultipliedLast.rawValue)!
+        ctx.setFillColor(CGColor(srgbRed: 0.5, green: 0.5, blue: 0.5, alpha: 1))
+        ctx.fill(CGRect(x: 0, y: 0, width: width, height: height))
+        let flat = ctx.makeImage()!
+        let plain = try BWFilmRenderer.render(to: flat, params: bwParams(BWFilmShaderParams()))
+        let structured = try BWFilmRenderer.render(
+            to: flat, params: bwParams(BWFilmShaderParams(structure: 100, fineStructure: 100)))
+        let (mean, _) = compare(plain, structured)
+        XCTAssertLessThan(mean, 0.5, "flat field should be unaffected by structure (mean \(mean))")
+    }
+
     func testBWFilmDeterministicAndRoundTrips() throws {
         try requireMetal()
         let img = makeTestImage()
@@ -647,6 +694,8 @@ final class EffectGPUBehaviorTests: XCTestCase {
             brightness: 5, brightnessHighlights: -10, brightnessMidtones: 15,
             brightnessShadows: -20, contrast: 25, protectHighlights: 30,
             protectShadows: 35,
+            structure: 22, structureHighlights: -11, structureMidtones: 12,
+            structureShadows: 13, fineStructure: 27,
             toningPreset: .selenium2, toningStrength: 44, toneHueHigh: 100,
             toneStrengthHigh: 22, toneHueLow: 200, toneStrengthLow: 33,
             toneBalance: -12, vigStrength: -40, vigSize: 60, vigShape: 4.2,

@@ -133,6 +133,11 @@ public enum YAMLConfig {
         var shader_bw_curve_high_y: Double?
         // Interior curve points, flattened [x1, y1, x2, y2, ...]
         var shader_bw_curve_points: [Double]?
+        var shader_bw_structure: Double?
+        var shader_bw_structure_highlights: Double?
+        var shader_bw_structure_midtones: Double?
+        var shader_bw_structure_shadows: Double?
+        var shader_bw_fine_structure: Double?
         var shader_bw_toning_preset: Int?
         var shader_bw_toning_strength: Double?
         var shader_bw_tone_hue_high: Double?
@@ -1037,6 +1042,11 @@ public enum YAMLConfig {
             if !p.curvePoints.isEmpty {
                 schema.shader_bw_curve_points = p.curvePoints.flatMap { [$0.x, $0.y] }
             }
+            schema.shader_bw_structure = p.structure
+            schema.shader_bw_structure_highlights = p.structureHighlights
+            schema.shader_bw_structure_midtones = p.structureMidtones
+            schema.shader_bw_structure_shadows = p.structureShadows
+            schema.shader_bw_fine_structure = p.fineStructure
             schema.shader_bw_toning_preset = p.toningPreset.rawValue
             schema.shader_bw_toning_strength = p.toningStrength
             schema.shader_bw_tone_hue_high = p.toneHueHigh
@@ -1184,6 +1194,11 @@ public enum YAMLConfig {
                 contrast: schema.shader_bw_contrast ?? 0,
                 protectHighlights: schema.shader_bw_protect_highlights ?? 0,
                 protectShadows: schema.shader_bw_protect_shadows ?? 0,
+                structure: schema.shader_bw_structure ?? 0,
+                structureHighlights: schema.shader_bw_structure_highlights ?? 0,
+                structureMidtones: schema.shader_bw_structure_midtones ?? 0,
+                structureShadows: schema.shader_bw_structure_shadows ?? 0,
+                fineStructure: schema.shader_bw_fine_structure ?? 0,
                 toningPreset: schema.shader_bw_toning_preset.flatMap(BWToningPreset.init(rawValue:)) ?? .neutral,
                 toningStrength: schema.shader_bw_toning_strength ?? 0,
                 toneHueHigh: schema.shader_bw_tone_hue_high ?? 40,

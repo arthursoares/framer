@@ -1706,6 +1706,13 @@ public struct BWFilmShaderParams: Codable, Equatable, Sendable {
     public var protectHighlights: Double
     public var protectShadows: Double
 
+    // Structure — multi-scale local contrast (SEP GlobalAdjustments).
+    public var structure: Double            // -100 (soften) ... 100
+    public var structureHighlights: Double  // -100...100 zone boosts
+    public var structureMidtones: Double
+    public var structureShadows: Double
+    public var fineStructure: Double        // 0...100
+
     // Finishing — toning (SEP FinishingAdjustments).
     public var toningPreset: BWToningPreset
     public var toningStrength: Double    // 0...100 overall
@@ -1749,6 +1756,9 @@ public struct BWFilmShaderParams: Codable, Equatable, Sendable {
         brightness: Double = 0, brightnessHighlights: Double = 0,
         brightnessMidtones: Double = 0, brightnessShadows: Double = 0,
         contrast: Double = 0, protectHighlights: Double = 0, protectShadows: Double = 0,
+        structure: Double = 0, structureHighlights: Double = 0,
+        structureMidtones: Double = 0, structureShadows: Double = 0,
+        fineStructure: Double = 0,
         toningPreset: BWToningPreset = .neutral, toningStrength: Double = 0,
         toneHueHigh: Double = 40, toneStrengthHigh: Double = 0,
         toneHueLow: Double = 40, toneStrengthLow: Double = 0, toneBalance: Double = 0,
@@ -1778,6 +1788,11 @@ public struct BWFilmShaderParams: Codable, Equatable, Sendable {
         self.contrast = clampSens(contrast)
         self.protectHighlights = max(0, min(100, protectHighlights))
         self.protectShadows = max(0, min(100, protectShadows))
+        self.structure = clampSens(structure)
+        self.structureHighlights = clampSens(structureHighlights)
+        self.structureMidtones = clampSens(structureMidtones)
+        self.structureShadows = clampSens(structureShadows)
+        self.fineStructure = max(0, min(100, fineStructure))
         func clamp01_100(_ v: Double) -> Double { max(0, min(100, v)) }
         func clampHue(_ v: Double) -> Double { max(0, min(360, v)) }
         self.toningPreset = toningPreset
@@ -1815,6 +1830,8 @@ public struct BWFilmShaderParams: Codable, Equatable, Sendable {
         case sensRed, sensYellow, sensGreen, sensCyan, sensBlue, sensMagenta
         case brightness, brightnessHighlights, brightnessMidtones, brightnessShadows
         case contrast, protectHighlights, protectShadows
+        case structure, structureHighlights, structureMidtones, structureShadows
+        case fineStructure
         case toningPreset, toningStrength, toneHueHigh, toneStrengthHigh
         case toneHueLow, toneStrengthLow, toneBalance
         case vigStrength, vigSize, vigShape
@@ -1841,6 +1858,11 @@ public struct BWFilmShaderParams: Codable, Equatable, Sendable {
             contrast: try c.decodeIfPresent(Double.self, forKey: .contrast) ?? 0,
             protectHighlights: try c.decodeIfPresent(Double.self, forKey: .protectHighlights) ?? 0,
             protectShadows: try c.decodeIfPresent(Double.self, forKey: .protectShadows) ?? 0,
+            structure: try c.decodeIfPresent(Double.self, forKey: .structure) ?? 0,
+            structureHighlights: try c.decodeIfPresent(Double.self, forKey: .structureHighlights) ?? 0,
+            structureMidtones: try c.decodeIfPresent(Double.self, forKey: .structureMidtones) ?? 0,
+            structureShadows: try c.decodeIfPresent(Double.self, forKey: .structureShadows) ?? 0,
+            fineStructure: try c.decodeIfPresent(Double.self, forKey: .fineStructure) ?? 0,
             toningPreset: try c.decodeIfPresent(BWToningPreset.self, forKey: .toningPreset) ?? .neutral,
             toningStrength: try c.decodeIfPresent(Double.self, forKey: .toningStrength) ?? 0,
             toneHueHigh: try c.decodeIfPresent(Double.self, forKey: .toneHueHigh) ?? 40,
