@@ -4181,6 +4181,27 @@ struct ShaderLayerControls: View {
         bwFilmSlider("White Point", bw.curveHighX, range: 0.5...1, step: 0.01, resetValue: 1) { v, p in var u = p; u.curveHighX = v; return u }
         bwFilmSlider("White Cap", bw.curveHighY, range: 0.5...1, step: 0.01, resetValue: 1) { v, p in var u = p; u.curveHighY = v; return u }
 
+        // The film's measured characteristic curve installs as control
+        // points with no slider of their own — surface their presence so
+        // the curve isn't invisibly shaping the render.
+        if !bw.curvePoints.isEmpty {
+            SidebarControlRow("Film Curve") {
+                Button {
+                    guard case .bwFilm(var current) = params.params else { return }
+                    current.curvePoints = []
+                    current.curveLowY = 0
+                    current.curveHighY = 1
+                    onChange(params.withParams(.bwFilm(current)))
+                } label: {
+                    Label("\(bw.curvePoints.count) points · Reset", systemImage: "point.topleft.down.curvedto.point.bottomright.up")
+                        .font(AppFont.controlLabel)
+                }
+                .buttonStyle(.plain)
+                .foregroundStyle(Color.text2)
+                .help("The selected film installed its measured characteristic curve. Reset to a linear curve.")
+            }
+        }
+
         SimpleLayerEditorDivider()
 
         Picker("", selection: Binding(
