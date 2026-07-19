@@ -1633,6 +1633,10 @@ public enum FilmGrainStock: String, Codable, CaseIterable, Sendable {
     case ilfordHP5, ilfordXP2, ilfordDelta3200
     case kodakTMax100, kodakTMax400, kodakBW400CN, kodakTriX400, kodakP3200
     case rolleiOrtho25, rolleiRetro80s, rolleiRetro100, rolleiIR400
+    // Films present in SEP3's own picker (grain measured 2026-07-19) that
+    // were not in the original SEP2-name roster:
+    case kodakPanatomicX32, adoxSilvermax21, fomapan100, ilfordPan100
+    case kodakPlusX125, agfaScala200, berggerBRF400, ilfordPan400, fujiNeopan400
 
     public var label: String {
         switch self {
@@ -1657,6 +1661,15 @@ public enum FilmGrainStock: String, Codable, CaseIterable, Sendable {
         case .rolleiRetro80s: return "Rollei Retro 80S"
         case .rolleiRetro100: return "Rollei Retro 100 Tonal"
         case .rolleiIR400:    return "Rollei IR 400"
+        case .kodakPanatomicX32: return "Kodak Panatomic-X 32"
+        case .adoxSilvermax21:   return "Adox Silvermax 21"
+        case .fomapan100:        return "Fomapan 100 Classic"
+        case .ilfordPan100:      return "Ilford Pan 100"
+        case .kodakPlusX125:     return "Kodak Plus-X 125"
+        case .agfaScala200:      return "Agfa Scala 200x"
+        case .berggerBRF400:    return "Bergger BRF 400 Plus"
+        case .ilfordPan400:      return "Ilford Pan 400"
+        case .fujiNeopan400:     return "Fuji Neopan 400"
         }
     }
 
@@ -1665,29 +1678,42 @@ public enum FilmGrainStock: String, Codable, CaseIterable, Sendable {
     /// blobs). Values are tuned by ISO class: slow ortho/pan films are
     /// nearly invisible fine, Tri-X is the iconic gritty mid, the 3200s
     /// are chunky. `custom` is the neutral starting point.
+    /// MEASURED from SEP3's per-film grain defaults (2026-07-19; hardness
+    /// -100..100 mapped to softness = (100 - hardness) / 200). Films SEP3
+    /// does not carry (P3200, Ortho 25, Retro 80S, IR 400) keep their
+    /// reconstructed values.
     public var grainProfile: (grainsPerPixel: Double, softness: Double) {
         switch self {
         case .custom:         return (250, 0.5)
+        case .ilfordPanF50:   return (442, 0.295)
+        case .agfaAPX100:     return (445, 0.125)
+        case .fujiAcros100:   return (448, 0.77)
+        case .ilfordDelta100: return (445, 0.115)
+        case .ilfordFP4:      return (389, 0.23)
+        case .kodakTMax100:   return (451, 0.63)
+        case .rolleiRetro100: return (410, 0.99)
+        case .agfaAPX400:     return (400, 0.375)
+        case .ilfordDelta400: return (360, 0.115)
+        case .ilfordHP5:      return (257, 0.5)
+        case .ilfordXP2:      return (320, 0.715)
+        case .kodakTMax400:   return (235, 0.0)
+        case .kodakBW400CN:   return (312, 0.635)
+        case .kodakTriX400:   return (330, 0.705)
+        case .fujiNeopan1600: return (215, 0.925)
+        case .ilfordDelta3200: return (170, 1.0)
+        case .kodakPanatomicX32: return (465, 0.89)
+        case .adoxSilvermax21:   return (402, 0.81)
+        case .fomapan100:        return (378, 1.0)
+        case .ilfordPan100:      return (460, 1.0)
+        case .kodakPlusX125:     return (410, 0.035)
+        case .agfaScala200:      return (489, 0.06)
+        case .berggerBRF400:    return (304, 1.0)
+        case .ilfordPan400:      return (326, 0.26)
+        case .fujiNeopan400:     return (313, 0.26)
         case .rolleiOrtho25:  return (500, 0.6)
-        case .ilfordPanF50:   return (480, 0.55)
         case .rolleiRetro80s: return (415, 0.45)
-        case .agfaAPX100:     return (400, 0.5)
-        case .fujiAcros100:   return (440, 0.55)
-        case .ilfordDelta100: return (430, 0.5)
-        case .ilfordFP4:      return (400, 0.45)
-        case .kodakTMax100:   return (450, 0.55)
-        case .rolleiRetro100: return (390, 0.45)
-        case .agfaAPX400:     return (300, 0.4)
-        case .ilfordDelta400: return (330, 0.45)
-        case .ilfordHP5:      return (280, 0.35)
-        case .ilfordXP2:      return (380, 0.6)
-        case .kodakTMax400:   return (350, 0.5)
-        case .kodakBW400CN:   return (400, 0.65)
-        case .kodakTriX400:   return (250, 0.3)
         case .rolleiIR400:    return (310, 0.5)
-        case .fujiNeopan1600: return (150, 0.35)
         case .kodakP3200:     return (100, 0.4)
-        case .ilfordDelta3200: return (90, 0.45)
         }
     }
 }
