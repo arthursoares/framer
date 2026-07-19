@@ -190,15 +190,21 @@ fragment float4 bwFilmFragment(
             + uniforms.structureHighlights * smoothstep(0.45, 0.85, g)
             + uniforms.structureMidtones
               * saturate(1.0 - (1.0 - smoothstep(0.15, 0.55, g)) - smoothstep(0.45, 0.85, g));
+        // Same progressive-response retune as the tonality block: the
+        // detail term is soft-limited so strong edges can't blow into
+        // halos at high settings — small texture detail passes nearly
+        // linearly, large deltas roll off.
         if (fabs(zoneStructure) > 0.5) {
             float2 radius = float2(0.012 * minDim) / dims;
             float blurred = bwfBlurGray(source, texSampler, selfUV, radius, uniforms);
-            g += (g - blurred) * zoneStructure / 100.0 * 1.6;
+            float detail = g - blurred;
+            g += zoneStructure / 100.0 * detail / (1.0 + 3.0 * fabs(detail));
         }
         if (uniforms.fineStructure > 0.5) {
             float2 radius = float2(0.0035 * minDim) / dims;
             float blurred = bwfBlurGray(source, texSampler, selfUV, radius, uniforms);
-            g += (g - blurred) * uniforms.fineStructure / 100.0 * 1.2;
+            float detail = g - blurred;
+            g += uniforms.fineStructure / 100.0 * 0.8 * detail / (1.0 + 3.0 * fabs(detail));
         }
         g = saturate(g);
     }
