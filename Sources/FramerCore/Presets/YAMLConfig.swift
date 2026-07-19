@@ -1105,7 +1105,7 @@ public enum YAMLConfig {
                 roughness: schema.shader_border_roughness ?? 0.5,
                 seed: schema.shader_border_seed ?? 1,
                 varyPerImage: schema.shader_border_vary_per_image ?? false,
-                borderColor: (schema.shader_border_color.flatMap { try? CodableColor(hex: $0) }) ?? .white
+                borderColor: (schema.shader_border_color.flatMap { try? CodableColor(hex: $0) }) ?? .black
             ))
         }
     }

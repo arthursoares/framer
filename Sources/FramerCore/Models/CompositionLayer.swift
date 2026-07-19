@@ -1540,7 +1540,7 @@ public struct RoughBorderShaderParams: Codable, Equatable, Sendable {
         roughness: Double = 0.5,
         seed: Int = 1,
         varyPerImage: Bool = false,
-        borderColor: CodableColor = .white
+        borderColor: CodableColor = .black
     ) {
         self.size = max(0, min(0.25, size))
         self.spread = max(0, min(1, spread))
@@ -1562,7 +1562,7 @@ public struct RoughBorderShaderParams: Codable, Equatable, Sendable {
             roughness: try c.decodeIfPresent(Double.self, forKey: .roughness) ?? 0.5,
             seed: try c.decodeIfPresent(Int.self, forKey: .seed) ?? 1,
             varyPerImage: try c.decodeIfPresent(Bool.self, forKey: .varyPerImage) ?? false,
-            borderColor: try c.decodeIfPresent(CodableColor.self, forKey: .borderColor) ?? .white
+            borderColor: try c.decodeIfPresent(CodableColor.self, forKey: .borderColor) ?? .black
         )
     }
 }
