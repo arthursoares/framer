@@ -580,9 +580,15 @@ final class EffectGPUBehaviorTests: XCTestCase {
 
     func testRoughBorderRoundTripsThroughJSON() throws {
         // Codable round-trip (preset safety, house rule 4). No Metal needed.
+        // Every field must be NON-default (Codex review on PR #17): with
+        // default values, an accidentally dropped key still round-trips via
+        // the decode fallback and the regression goes unseen — a user preset
+        // saved as Type 14 + vary-per-image would silently reopen as Type 3.
         let original = RoughBorderShaderParams(
+            borderType: .type14,
             size: 0.12, spread: 0.79, roughness: 0.67, seed: 2201,
-            borderColor: .black)
+            varyPerImage: true,
+            borderColor: .white)
         let layer = ShaderLayerParams(style: .roughBorder, params: .roughBorder(original))
         let data = try JSONEncoder().encode(layer)
         let decoded = try JSONDecoder().decode(ShaderLayerParams.self, from: data)
@@ -590,5 +596,61 @@ final class EffectGPUBehaviorTests: XCTestCase {
             return XCTFail("style did not round-trip")
         }
         XCTAssertEqual(roundTripped, original)
+    }
+
+    func testRoughBorderTypeShaderIndicesAreLocked() {
+        // The enum label ↔ shader recipe mapping is load-bearing: a swapped
+        // shaderIndex would render the wrong recipe under a correct label
+        // while every behavioral test still passes (all outputs remain
+        // distinct). Lock the full table (Codex review on PR #17).
+        let expected: [RoughBorderType: Int] = [
+            .type1: 1, .type2: 2, .type3: 3, .type4: 4, .type5: 5,
+            .type6: 6, .type7: 7, .type8: 8, .type9: 9, .type10: 10,
+            .type11: 11, .type12: 12, .type13: 13, .type14: 14,
+        ]
+        for (type, index) in expected {
+            XCTAssertEqual(type.shaderIndex, index, "\(type) maps to wrong shader recipe")
+        }
+    }
+
+    func testRoughBorderNoisyShapeIsResolutionIndependent() throws {
+        try requireMetal()
+        // Unlike testRoughBorderShapeScalesWithResolution (spread 0, straight
+        // edge), this locks the NOISY path: with spread on, the displaced
+        // boundary must still be a pure function of normalized position, so
+        // the border-depth profile measured at the same normalized columns
+        // must match across resolutions (Codex review on PR #17 — a shader
+        // regression from normalized to raw pixel coords would pass the
+        // spread-0 test).
+        let p = ShaderLayerParams(
+            style: .roughBorder, intensity: 1.0,
+            params: .roughBorder(RoughBorderShaderParams(
+                borderType: .type3, size: 0.1, spread: 0.6, roughness: 0.5,
+                seed: 7, borderColor: .white)))
+        let outSmall = try RoughBorderRenderer.render(to: makeTestImage(width: 128, height: 128), params: p)
+        let outLarge = try RoughBorderRenderer.render(to: makeTestImage(width: 256, height: 256), params: p)
+
+        func topBorderFraction(_ image: CGImage, atNormalizedX x: Double) -> Double {
+            let bytes = drawToBytes(image)
+            let w = image.width
+            let col = min(w - 1, Int(Double(w) * x))
+            var rows = 0
+            for y in 0..<image.height {
+                let idx = (y * w + col) * 4
+                if bytes[idx] > 250 && bytes[idx + 1] > 250 && bytes[idx + 2] > 250 {
+                    rows += 1
+                } else {
+                    break
+                }
+            }
+            return Double(rows) / Double(image.height)
+        }
+
+        for x in [0.2, 0.35, 0.5, 0.65, 0.8] {
+            let small = topBorderFraction(outSmall, atNormalizedX: x)
+            let large = topBorderFraction(outLarge, atNormalizedX: x)
+            XCTAssertEqual(small, large, accuracy: 0.03,
+                           "noisy border depth at x=\(x) drifts across resolutions (\(small) vs \(large))")
+        }
     }
 }
