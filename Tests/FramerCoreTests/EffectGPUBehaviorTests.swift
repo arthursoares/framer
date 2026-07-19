@@ -706,6 +706,22 @@ final class EffectGPUBehaviorTests: XCTestCase {
         }
     }
 
+    func testFilmGrainUnknownStockDecodesToCustomInsteadOfThrowing() throws {
+        // Forward-compat: same preset-deletion guard as the border type.
+        let layer = ShaderLayerParams(style: .filmGrain, params: .filmGrain(FilmGrainShaderParams()))
+        var json = try JSONSerialization.jsonObject(
+            with: JSONEncoder().encode(layer)) as! [String: Any]
+        var paramsObj = json["params"] as! [String: Any]
+        var inner = paramsObj["params"] as! [String: Any]
+        inner["stock"] = "kodakFuture9000"
+        paramsObj["params"] = inner
+        json["params"] = paramsObj
+        let data = try JSONSerialization.data(withJSONObject: json)
+        let decoded = try JSONDecoder().decode(ShaderLayerParams.self, from: data)
+        guard case .filmGrain(let p) = decoded.params else { return XCTFail("style lost") }
+        XCTAssertEqual(p.stock, .custom, "unknown stock must fall back, not throw")
+    }
+
     func testFilmGrainRoundTripsThroughJSON() throws {
         // All fields non-default so a dropped encode key can't hide behind
         // decode fallbacks (same discipline as the rough-border round-trip).
@@ -720,6 +736,24 @@ final class EffectGPUBehaviorTests: XCTestCase {
             return XCTFail("style did not round-trip")
         }
         XCTAssertEqual(roundTripped, original)
+    }
+
+    func testRoughBorderUnknownTypeDecodesToType3InsteadOfThrowing() throws {
+        // Forward-compat: a preset written by a future version with a new
+        // border type must not throw — PresetStore deletes files that fail
+        // to decode (house rule 4).
+        let layer = ShaderLayerParams(style: .roughBorder, params: .roughBorder(RoughBorderShaderParams()))
+        var json = try JSONSerialization.jsonObject(
+            with: JSONEncoder().encode(layer)) as! [String: Any]
+        var paramsObj = json["params"] as! [String: Any]
+        var inner = paramsObj["params"] as! [String: Any]
+        inner["borderType"] = "type99"
+        paramsObj["params"] = inner
+        json["params"] = paramsObj
+        let data = try JSONSerialization.data(withJSONObject: json)
+        let decoded = try JSONDecoder().decode(ShaderLayerParams.self, from: data)
+        guard case .roughBorder(let p) = decoded.params else { return XCTFail("style lost") }
+        XCTAssertEqual(p.borderType, .type3, "unknown border type must fall back, not throw")
     }
 
     func testRoughBorderRoundTripsThroughJSON() throws {
