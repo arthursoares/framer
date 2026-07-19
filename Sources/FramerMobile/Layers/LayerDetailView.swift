@@ -3232,6 +3232,21 @@ private struct ShaderControls: View {
 
     @ViewBuilder
     private func roughBorderControls(_ roughBorderParams: RoughBorderShaderParams) -> some View {
+        ControlRow(label: "Type") {
+            Picker("Type", selection: Binding(
+                get: { roughBorderParams.borderType },
+                set: { value in
+                    var updated = roughBorderParams; updated.borderType = value
+                    onChange(params.withParams(.roughBorder(updated)))
+                }
+            )) {
+                ForEach(RoughBorderType.allCases, id: \.self) { type in
+                    Text(type.label).tag(type)
+                }
+            }
+            .pickerStyle(.menu)
+        }
+
         sliderRow(
             label: "Size",
             value: roughBorderParams.size,

@@ -23,7 +23,7 @@ public enum RoughBorderRenderer {
         var seed: Float = 1
         var widthPx: Float = 0
         var heightPx: Float = 0
-        var _pad0: Float = 0
+        var borderType: UInt32 = 3
 
         var borderRGBA = SIMD4<Float>(1, 1, 1, 1)
     }
@@ -68,6 +68,7 @@ public enum RoughBorderRenderer {
         uniforms.seed = Float(((effectiveSeed % 100_000) + 100_000) % 100_000)
         uniforms.widthPx = Float(image.width)
         uniforms.heightPx = Float(image.height)
+        uniforms.borderType = UInt32(rb.borderType.shaderIndex)
         uniforms.borderRGBA = SIMD4<Float>(
             Float(rb.borderColor.red),
             Float(rb.borderColor.green),

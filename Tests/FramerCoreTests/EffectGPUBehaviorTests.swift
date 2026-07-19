@@ -520,6 +520,38 @@ final class EffectGPUBehaviorTests: XCTestCase {
                        "border fraction should be resolution-independent (\(smallFrac) vs \(largeFrac))")
     }
 
+    func testRoughBorderAllTypesRenderDeterministicallyAndDistinctly() throws {
+        try requireMetal()
+        let img = makeTestImage(width: 192, height: 192)
+
+        var outputs: [RoughBorderType: CGImage] = [:]
+        for type in RoughBorderType.allCases {
+            let p = RoughBorderShaderParams(
+                borderType: type, size: 0.08, spread: 0.6, roughness: 0.6, seed: 7)
+            let layer = ShaderLayerParams(style: .roughBorder, intensity: 1.0,
+                                          params: .roughBorder(p))
+            let a = try RoughBorderRenderer.render(to: img, params: layer)
+            let b = try RoughBorderRenderer.render(to: img, params: layer)
+            XCTAssertEqual(a.width, img.width, "\(type) wrong width")
+            let (_, maxDelta) = compare(a, b)
+            XCTAssertEqual(maxDelta, 0, "\(type) not deterministic")
+            outputs[type] = a
+        }
+
+        // Every type must be visually distinct from every other at the same
+        // settings — if two recipes render identically, one of them isn't
+        // wired to the switch.
+        let all = RoughBorderType.allCases
+        for i in 0..<all.count {
+            for j in (i + 1)..<all.count {
+                let (mean, _) = compare(outputs[all[i]]!, outputs[all[j]]!)
+                XCTAssertGreaterThan(
+                    mean, 0.01,
+                    "\(all[i]) and \(all[j]) render identically (mean delta \(mean))")
+            }
+        }
+    }
+
     func testRoughBorderVaryPerImageDerivesStableSeedFromIdentity() throws {
         try requireMetal()
         let img = makeTestImage()

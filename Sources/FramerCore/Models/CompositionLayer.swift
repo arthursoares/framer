@@ -1513,12 +1513,54 @@ public struct KuwaharaShaderParams: Codable, Equatable, Sendable {
     }
 }
 
+/// The 14 edge characters of the rough border, mirroring Silver Efex Pro 3's
+/// Image Borders Type 1–14 picker. All are procedural recipes over the same
+/// seeded noise field (RoughBorder.metal `roughBorderFragment` switch) — the
+/// numbering is SEP3's; each case's raw value is what presets store, so
+/// cases must never be renamed or removed (house rule 4).
+public enum RoughBorderType: String, Codable, CaseIterable, Sendable {
+    case type1, type2, type3, type4, type5, type6, type7
+    case type8, type9, type10, type11, type12, type13, type14
+
+    public var label: String {
+        switch self {
+        case .type1:  return "Type 1 · Clean Line"
+        case .type2:  return "Type 2 · Double Rebate"
+        case .type3:  return "Type 3 · Torn"
+        case .type4:  return "Type 4 · Fine Ragged"
+        case .type5:  return "Type 5 · Brushed"
+        case .type6:  return "Type 6 · Heavy Torn"
+        case .type7:  return "Type 7 · Jagged"
+        case .type8:  return "Type 8 · Dashed"
+        case .type9:  return "Type 9 · Soft Fade"
+        case .type10: return "Type 10 · Torn + Line"
+        case .type11: return "Type 11 · Spatter"
+        case .type12: return "Type 12 · Wavy"
+        case .type13: return "Type 13 · Turbulent"
+        case .type14: return "Type 14 · Grunge Band"
+        }
+    }
+
+    /// Uniform payload value consumed by the shader's recipe switch.
+    public var shaderIndex: Int {
+        switch self {
+        case .type1: return 1;  case .type2: return 2;  case .type3: return 3
+        case .type4: return 4;  case .type5: return 5;  case .type6: return 6
+        case .type7: return 7;  case .type8: return 8;  case .type9: return 9
+        case .type10: return 10; case .type11: return 11; case .type12: return 12
+        case .type13: return 13; case .type14: return 14
+        }
+    }
+}
+
 /// Seeded procedural darkroom border (RoughBorder.metal). Behavior modeled
 /// on Silver Efex Pro 3's Image Borders: thickness and noise are computed
 /// in units of min(width, height), so the border stays proportional across
 /// resolutions and aspect ratios, and `seed` makes each variation exactly
 /// reproducible (SEP3's "Vary Border" number).
 public struct RoughBorderShaderParams: Codable, Equatable, Sendable {
+    /// Which of the 14 edge characters to render.
+    public var borderType: RoughBorderType
     /// Border thickness as a fraction of min(width, height). 0..0.25.
     public var size: Double
     /// How far the boundary wanders, as a fraction of `size`. 0..1.
@@ -1535,6 +1577,7 @@ public struct RoughBorderShaderParams: Codable, Equatable, Sendable {
     public var borderColor: CodableColor
 
     public init(
+        borderType: RoughBorderType = .type3,
         size: Double = 0.01,
         spread: Double = 0.5,
         roughness: Double = 0.5,
@@ -1542,6 +1585,7 @@ public struct RoughBorderShaderParams: Codable, Equatable, Sendable {
         varyPerImage: Bool = false,
         borderColor: CodableColor = .black
     ) {
+        self.borderType = borderType
         self.size = max(0, min(0.25, size))
         self.spread = max(0, min(1, spread))
         self.roughness = max(0, min(1, roughness))
@@ -1551,12 +1595,15 @@ public struct RoughBorderShaderParams: Codable, Equatable, Sendable {
     }
 
     private enum CodingKeys: String, CodingKey {
-        case size, spread, roughness, seed, varyPerImage, borderColor
+        case borderType, size, spread, roughness, seed, varyPerImage, borderColor
     }
 
     public init(from decoder: Decoder) throws {
         let c = try decoder.container(keyedBy: CodingKeys.self)
         self.init(
+            // .type3 (torn) was the only recipe before the Type picker
+            // existed — layers saved then keep their look.
+            borderType: try c.decodeIfPresent(RoughBorderType.self, forKey: .borderType) ?? .type3,
             size: try c.decodeIfPresent(Double.self, forKey: .size) ?? 0.01,
             spread: try c.decodeIfPresent(Double.self, forKey: .spread) ?? 0.5,
             roughness: try c.decodeIfPresent(Double.self, forKey: .roughness) ?? 0.5,

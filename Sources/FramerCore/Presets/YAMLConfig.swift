@@ -112,6 +112,7 @@ public enum YAMLConfig {
         // Kuwahara legacy: 0..8 (0 = full effect). Replaced by shader_softness
         // (already declared above; shared with Crimewave/Narc/Shiba/DistantPast).
         var shader_sharpness: Double?
+        var shader_border_type: String?
         var shader_border_size: Double?
         var shader_border_spread: Double?
         var shader_border_roughness: Double?
@@ -986,6 +987,7 @@ public enum YAMLConfig {
             schema.shader_kernel_size = p.kernelSize
             schema.shader_softness = p.softness
         case .roughBorder(let p):
+            schema.shader_border_type = p.borderType.rawValue
             schema.shader_border_size = p.size
             schema.shader_border_spread = p.spread
             schema.shader_border_roughness = p.roughness
@@ -1100,6 +1102,7 @@ public enum YAMLConfig {
             ))
         case .roughBorder:
             return .roughBorder(RoughBorderShaderParams(
+                borderType: schema.shader_border_type.flatMap(RoughBorderType.init(rawValue:)) ?? .type3,
                 size: schema.shader_border_size ?? 0.01,
                 spread: schema.shader_border_spread ?? 0.5,
                 roughness: schema.shader_border_roughness ?? 0.5,
