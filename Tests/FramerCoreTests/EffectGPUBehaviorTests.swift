@@ -578,6 +578,24 @@ final class EffectGPUBehaviorTests: XCTestCase {
         XCTAssertEqual(offMax, 0, "with varyPerImage off, identity must not affect the border")
     }
 
+    func testRoughBorderUnknownTypeDecodesToType3InsteadOfThrowing() throws {
+        // Forward-compat: a preset written by a future version with a new
+        // border type must not throw — PresetStore deletes files that fail
+        // to decode (house rule 4).
+        let layer = ShaderLayerParams(style: .roughBorder, params: .roughBorder(RoughBorderShaderParams()))
+        var json = try JSONSerialization.jsonObject(
+            with: JSONEncoder().encode(layer)) as! [String: Any]
+        var paramsObj = json["params"] as! [String: Any]
+        var inner = paramsObj["params"] as! [String: Any]
+        inner["borderType"] = "type99"
+        paramsObj["params"] = inner
+        json["params"] = paramsObj
+        let data = try JSONSerialization.data(withJSONObject: json)
+        let decoded = try JSONDecoder().decode(ShaderLayerParams.self, from: data)
+        guard case .roughBorder(let p) = decoded.params else { return XCTFail("style lost") }
+        XCTAssertEqual(p.borderType, .type3, "unknown border type must fall back, not throw")
+    }
+
     func testRoughBorderRoundTripsThroughJSON() throws {
         // Codable round-trip (preset safety, house rule 4). No Metal needed.
         // Every field must be NON-default (Codex review on PR #17): with

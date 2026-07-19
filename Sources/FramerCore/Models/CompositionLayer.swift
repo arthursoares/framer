@@ -1602,8 +1602,11 @@ public struct RoughBorderShaderParams: Codable, Equatable, Sendable {
         let c = try decoder.container(keyedBy: CodingKeys.self)
         self.init(
             // .type3 (torn) was the only recipe before the Type picker
-            // existed — layers saved then keep their look.
-            borderType: try c.decodeIfPresent(RoughBorderType.self, forKey: .borderType) ?? .type3,
+            // existed — layers saved then keep their look. Raw-string decode
+            // so an unknown FUTURE type falls back instead of throwing —
+            // a throwing decode makes PresetStore delete the preset file.
+            borderType: (try c.decodeIfPresent(String.self, forKey: .borderType))
+                .flatMap(RoughBorderType.init(rawValue:)) ?? .type3,
             size: try c.decodeIfPresent(Double.self, forKey: .size) ?? 0.01,
             spread: try c.decodeIfPresent(Double.self, forKey: .spread) ?? 0.5,
             roughness: try c.decodeIfPresent(Double.self, forKey: .roughness) ?? 0.5,
