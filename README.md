@@ -29,12 +29,20 @@ Every render is a fold over one ordered layer stack — the CLI, the app, and ev
 - **Orientation**: force landscape or portrait via 90-degree rotation
 - **Caption**: EXIF-based captions with template tokens and font styling
 - **Overlay**: 168 bundled texture overlays (dirt, film dust, light leaks, wet plate, frames) with blend modes
-- **Dither**: 17 algorithms — Bayer (ordered), Floyd–Steinberg, Atkinson, Sierra / Sierra Two-Row / Sierra Lite, Jarvis–Judice–Ninke, Burkes, Stucki, Riemersma (Hilbert curve), Blue Noise, Interleaved Gradient Noise, White Noise, Artistic Drip, Halftone, CMYK Halftone — with B&W, two-tone, dominant-two-tone, per-channel color, and vintage-palette color modes
+- **Dither**: 16 algorithms — Bayer (ordered), Floyd–Steinberg, Atkinson, Sierra / Sierra Two-Row / Sierra Lite, Jarvis–Judice–Ninke, Burkes, Stucki, Riemersma (Hilbert curve), Blue Noise, Interleaved Gradient Noise, White Noise, Artistic Drip, Halftone, CMYK Halftone — with B&W, two-tone, dominant-two-tone, per-channel color, and vintage-palette color modes
 - **LUT**: `.cube` color lookup tables with Metal-compute rendering and a user LUT library
-- **Shader**: 9 stylized looks — ASCII, Pixel Sort, Crimewave, Narc, Shiba, Distant Past, CRT, Halftone, Kuwahara
+- **Shader**: 12 stylized looks — ASCII, Pixel Sort, Crimewave, Narc, Shiba, Distant Past, CRT, Halftone, Kuwahara, and the B&W film stack (B&W Film, Film Grain, Rough Border — see below)
 - **GPU Effects**: 12 Metal effects across four families — dots, blockify, matrix rain, threshold, crosshatch, edge detection, contour, wave lines, voronoi, noise field, pixel sort, VHS
 
 Effects render on the GPU. Metal is a hard requirement for the dither/shader/GPU-effect layers as of v2.0.0 (present on every supported Mac); output is regression-locked by golden-reference tests rather than eyeballing.
+
+### B&W Film Stack (v2.1.0)
+
+Three shader looks that together reproduce the classic Silver Efex Pro darkroom stack — B&W conversion → film grain → rough border — built by *measuring* Silver Efex Pro 3 rather than imitating it by eye: its GUI was driven programmatically to export calibration ramps, and the extracted transfer curves were fit directly into the shaders (measurement kit and datasets in [`tools/sep-measurement/`](tools/sep-measurement/)).
+
+- **B&W Film**: six-channel spectral sensitivity conversion (R/Ye/G/Cy/B/Mg), a tonality engine fit to measured transfer curves, 30 film response profiles (25 with measured characteristic curves), split toning with a 24-preset darkroom table, vignette, burn edges, and two-scale structure
+- **Film Grain**: grains-per-pixel density, soft↔hard kernel, highlight/shadow protection, and 30 real-name film stocks (Kodak, Ilford, Fuji, Agfa, Rollei, Adox, Fomapan, Bergger) with grain values measured from Silver Efex Pro 3's own defaults
+- **Rough Border**: 14 seeded procedural border types — exactly reproducible, proportional at any resolution, with per-image variation that keeps preview identical to export
 
 ### Caption Templates
 - **EXIF Date Extraction**: Automatically displays date as "MON 'YY" format
