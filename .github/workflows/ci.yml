@@ -19,7 +19,7 @@ jobs:
       # no tier-1 test reads it (the ASCII LUT atlases EffectGPUGoldenTests
       # needs are plain-git PNGs under Sources/FramerCore/Resources/textures/).
       # Fetching LFS here would drain the bandwidth quota on every run.
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
 
       - name: Toolchain versions
         run: |

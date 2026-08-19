@@ -19,7 +19,7 @@ jobs:
     steps:
       # No LFS: the CLI binary embeds only Sources/FramerCore/Resources
       # (plain git); the overlay textures are runtime assets, not build inputs.
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
 
       - name: Build release binary
         run: swift build -c release
