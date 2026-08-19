@@ -55,9 +55,11 @@ committed pbxproj is a snapshot (framer-build-and-env).
 5. **Bump the other three version locations** (+ `xcodegen generate`).
 6. **Validate (the local Mac gate is authoritative)** — CI
    (`.github/workflows/ci.yml`, added 2026-08-19) runs `swift build && swift
-   test` on PRs and main, but its runner may lack a Metal device, so
-   EffectGPUGoldenTests can XCTSkip there — green CI does NOT replace this
-   step. On the dev Mac:
+   test` on PRs and main. Observed on its first run (2026-08-19, macos-15
+   arm64): the runner DOES expose a Metal device — all 308 tests executed,
+   0 skips, EffectGPUGoldenTests passed within tolerance on the virtualized
+   GPU. Runner images can change, so a skip-count regression there is
+   possible; green CI still does not replace this step. On the dev Mac:
    `swift build && swift test` and quote the executed/failed/skipped counts
    (expect 0 skips on the dev Mac; framer-validation-and-qa);
    `swift run framer --version` must print X.Y.Z; a CLI smoke render
