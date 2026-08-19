@@ -1,6 +1,6 @@
 ---
 name: release
-description: Project release config and ceremony for framer — load when cutting a release, bumping versions, updating CHANGELOG for a release, tagging, or publishing a GitHub release. Encodes the trunk-based flow (release branch → PR → human merges → tag → gh release), all four version locations, artifact build commands, and the no-CI validation gate. Extends the generic release-manager skill; this file wins on conflicts.
+description: Project release config and ceremony for framer — load when cutting a release, bumping versions, updating CHANGELOG for a release, tagging, or publishing a GitHub release. Encodes the trunk-based flow (release branch → PR → human merges → tag → gh release), all four version locations, artifact build commands, and the validation gate (local Mac gate is authoritative; GitHub Actions CI is advisory). Extends the generic release-manager skill; this file wins on conflicts.
 ---
 
 # framer — release ceremony
@@ -53,7 +53,11 @@ committed pbxproj is a snapshot (framer-build-and-env).
    commit subjects; mark breaking changes with **BREAKING**. Backfill any gap
    since the last entry — this file has drifted before.
 5. **Bump the other three version locations** (+ `xcodegen generate`).
-6. **Validate (no CI — local gate is the only gate)** —
+6. **Validate (the local Mac gate is authoritative)** — CI
+   (`.github/workflows/ci.yml`, added 2026-08-19) runs `swift build && swift
+   test` on PRs and main, but its runner may lack a Metal device, so
+   EffectGPUGoldenTests can XCTSkip there — green CI does NOT replace this
+   step. On the dev Mac:
    `swift build && swift test` and quote the executed/failed/skipped counts
    (expect 0 skips on the dev Mac; framer-validation-and-qa);
    `swift run framer --version` must print X.Y.Z; a CLI smoke render
@@ -69,7 +73,11 @@ committed pbxproj is a snapshot (framer-build-and-env).
    git tag -a vX.Y.Z -m "vX.Y.Z"
    git push origin vX.Y.Z
    ```
-10. **Artifact** — release-built CLI binary (unsigned; arm64 on the dev Mac):
+10. **Artifact** — as of 2026-08-19 the tag push in step 9 triggers
+    `.github/workflows/release.yml`, which builds the release binary, verifies
+    `--version` == tag, and attaches the tarball (draft release if none
+    exists). Watch that run; if it fails or is not yet proven, build manually
+    (unsigned; arm64 on the dev Mac):
     ```bash
     swift build -c release
     BIN=.build/release/framer
@@ -93,7 +101,14 @@ committed pbxproj is a snapshot (framer-build-and-env).
 ## What does NOT apply here (generic-skill deltas)
 
 - No `develop` → no merge-back phase.
-- No CI → skip CI monitoring; the local test gate replaces it.
+- CI is advisory, not the gate: `.github/workflows/ci.yml` (build + tier-1
+  tests) and `release.yml` (tag push → builds the arm64 binary, verifies
+  `--version` == tag, attaches it; creates a DRAFT release if none exists)
+  were added 2026-08-19 and are **unverified until their first real runs** —
+  on the first tagged release after that date, watch the release workflow and
+  fall back to the manual artifact commands (steps 10–11) if it misbehaves.
+  The local dev-Mac test gate remains the release gate (golden tests may
+  XCTSkip on runners without Metal).
 - Release notes strategy: `agent-creates`, reviewed via the PR body (step 7),
   not via a separate approval round-trip.
 - Squash-vs-merge: the maintainer merges however they like; true merge commits
