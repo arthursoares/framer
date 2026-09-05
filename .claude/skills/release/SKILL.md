@@ -1,124 +1,119 @@
 ---
 name: release
-description: Project release config and ceremony for framer — load when cutting a release, bumping versions, updating CHANGELOG for a release, tagging, or publishing a GitHub release. Encodes the trunk-based flow (release branch → PR → human merges → tag → gh release), all four version locations, artifact build commands, and the validation gate (local Mac gate is authoritative; GitHub Actions CI is advisory). Extends the generic release-manager skill; this file wins on conflicts.
+description: Framer release ceremony: prepare metadata on develop, validate, merge develop to main with explicit maintainer authorization, tag, verify the CLI package, and publish GitHub release notes and checksums.
 ---
 
-# framer — release ceremony
+# framer release ceremony
 
-Project extension for the generic `release-manager` skill. Where this file and
-the generic skill disagree, **this file wins**. First executed for v2.0.0
-(2026-07-09); the ceremony below is that release, generalized.
+Updated 2026-09-05 for the maintained `develop` → `main` release flow.
+The old main-only branch model is superseded.
 
-## Branch model (overrides release-manager defaults)
-
-Trunk-based: `main` is the only long-lived branch — there is **no `develop`**.
-Releases cut from `main` via a release branch:
+## Authorization and branch flow
 
 ```
-main ──► release/vX.Y.Z ──► PR ──► human merges ──► tag vX.Y.Z on main ──► gh release
+develop → release/vX.Y.Z → preparation PR to develop
+        → release PR from develop to main → tag vX.Y.Z → GitHub release
 ```
 
-House rule 1 (framer-change-control) applies: the agent never merges the
-release PR — the maintainer's merge IS the changelog/notes approval gate.
-After the maintainer merges, tagging `main` and publishing the GitHub release
-are part of the commissioned ceremony (a tag push is not a commit push).
+A maintainer's explicit instruction to release `develop` into `main` authorizes
+these required merges, tagging, and publication. Without that instruction,
+prepare the release PR and stop before merging/publishing. Do not force-push,
+retag an existing release, or bypass required checks. Prefer merge commits so
+branch ancestry and the release decision record remain intact.
 
-## Version locations — ALL FOUR move together
+For explicitly commissioned releases only, this authorization rule is the scoped
+exception to the general no-autonomous-main-merge guidance in `CLAUDE.md` and
+`framer-change-control`. Ordinary coding tasks do not gain release authorization.
 
-| Location | What | Verify |
-|---|---|---|
-| `CHANGELOG.md` | `## [X.Y.Z] - YYYY-MM-DD` section (Keep a Changelog; keep an empty `## [Unreleased]` above it) | `grep -n '^## \[' CHANGELOG.md` |
-| `project.yml` — Framer (macOS) target | `MARKETING_VERSION: "X.Y.Z"` | `grep -n MARKETING_VERSION project.yml` (2 hits, both = X.Y.Z) |
-| `project.yml` — FramerMobile (iOS) target | `MARKETING_VERSION: "X.Y.Z"` | same |
-| `Sources/FramerCLI/Framer.swift` | `CommandConfiguration(version: "X.Y.Z")` | `swift run framer --version` |
+Complete the changelog, notes, artifacts, and verification before the merge.
+Put the exact intended GitHub notes in the release PR body and keep them in
+`docs/release-notes/vX.Y.Z.md` so the result is reviewable before publication.
 
-**After editing project.yml, run `xcodegen generate`** and commit the
-regenerated `Framer.xcodeproj/project.pbxproj` in the same commit — the
-committed pbxproj is a snapshot (framer-build-and-env).
+## Version locations
 
-## The ceremony, step by step
+Update all of these together:
 
-1. **Preflight** — `git switch main && git pull`; `gh pr list --state open`
-   (surface anything that should land first); `git tag --sort=-v:refname | head -3`
-   and `gh release list | head -3` (last release);
-   `git rev-list --count <last-tag>..main` (scope).
-2. **Version proposal** — semver over the commits/PRs since the last tag:
-   breaking behavior (e.g. the v2.0.0 Metal-required change) → major;
-   features → minor; fixes/docs only → patch. **The maintainer picks the final
-   number** — version questions in this repo have history (v2.0.0 sat untagged
-   in the CHANGELOG for five months; see framer-docs-and-writing §3).
-3. **Branch** — `git switch -c release/vX.Y.Z main`.
-4. **CHANGELOG** — roll `[Unreleased]` into `## [X.Y.Z] - date`; synthesize
-   human-quality entries from merged PRs (`gh pr list --state merged`), not raw
-   commit subjects; mark breaking changes with **BREAKING**. Backfill any gap
-   since the last entry — this file has drifted before.
-5. **Bump the other three version locations** (+ `xcodegen generate`).
-6. **Validate (the local Mac gate is authoritative)** — CI
-   (`.github/workflows/ci.yml`, added 2026-08-19) runs `swift build && swift
-   test` on PRs and main. Observed on its first run (2026-08-19, macos-15
-   arm64): the runner DOES expose a Metal device — all 308 tests executed,
-   0 skips, EffectGPUGoldenTests passed within tolerance on the virtualized
-   GPU. Runner images can change, so a skip-count regression there is
-   possible; green CI still does not replace this step. On the dev Mac:
-   `swift build && swift test` and quote the executed/failed/skipped counts
-   (expect 0 skips on the dev Mac; framer-validation-and-qa);
-   `swift run framer --version` must print X.Y.Z; a CLI smoke render
-   (framer-run-and-operate) for release sanity.
-7. **Release PR** — title `Release vX.Y.Z`; body = the new CHANGELOG section
-   + the draft GitHub release notes, so the maintainer reviews both in one
-   pass. Conventional commit for the bump:
-   `chore(release): vX.Y.Z — changelog, version bumps`.
-8. **Maintainer merges.** (Never `gh pr merge` yourself.)
-9. **Tag + publish** — on updated main:
-   ```bash
-   git switch main && git pull
-   git tag -a vX.Y.Z -m "vX.Y.Z"
-   git push origin vX.Y.Z
-   ```
-10. **Artifact** — as of 2026-08-19 the tag push in step 9 triggers
-    `.github/workflows/release.yml`, which builds the release binary, verifies
-    `--version` == tag, and attaches the tarball (draft release if none
-    exists). Watch that run; if it fails or is not yet proven, build manually
-    (unsigned; arm64 on the dev Mac):
-    ```bash
-    swift build -c release
-    BIN=.build/release/framer
-    "$BIN" --version                       # must print X.Y.Z
-    tar -czf framer-vX.Y.Z-macos-arm64.tar.gz -C .build/release framer
-    ```
-    The macOS **app** is NOT released while the signing cert is revoked
-    (framer-campaign-restore-validation P1); revisit when repaired.
-11. **GitHub release** —
-    ```bash
-    gh release create vX.Y.Z framer-vX.Y.Z-macos-arm64.tar.gz \
-      --title "vX.Y.Z" --notes-file <notes>
-    ```
-    Notes = CHANGELOG section + install snippet (`xattr -d
-    com.apple.quarantine`, `git lfs pull` for source builds) + full-changelog
-    compare link. Publish only notes the maintainer saw in the PR body.
-12. **Verify done** — `gh release view vX.Y.Z` shows the asset;
-    `git ls-remote --tags origin vX.Y.Z` resolves; CHANGELOG `[Unreleased]`
-    is empty and at the top.
+- `CHANGELOG.md`: an empty `[Unreleased]` section followed by `[X.Y.Z] - date`.
+- `project.yml`: both macOS and iOS `MARKETING_VERSION` values.
+- `Sources/FramerCLI/Framer.swift`: `CommandConfiguration.version`.
+- Regenerate and commit `Framer.xcodeproj/project.pbxproj` with `xcodegen generate`.
+- Refresh README release highlights/install filenames and the saved release notes.
 
-## What does NOT apply here (generic-skill deltas)
+Choose the version from the actual changes since the last tag: features usually
+mean a minor release, fixes/docs a patch, and incompatible contracts a major.
+State the proposed version early and honor a maintainer-specified number.
 
-- No `develop` → no merge-back phase.
-- CI is advisory, not the gate: `.github/workflows/ci.yml` (build + tier-1
-  tests) and `release.yml` (tag push → builds the arm64 binary, verifies
-  `--version` == tag, attaches it; creates a DRAFT release if none exists)
-  were added 2026-08-19 and are **unverified until their first real runs** —
-  on the first tagged release after that date, watch the release workflow and
-  fall back to the manual artifact commands (steps 10–11) if it misbehaves.
-  The local dev-Mac test gate remains the release gate (golden tests may
-  XCTSkip on runners without Metal).
-- Release notes strategy: `agent-creates`, reviewed via the PR body (step 7),
-  not via a separate approval round-trip.
-- Squash-vs-merge: the maintainer merges however they like; true merge commits
-  are the house preference (framer-change-control rule 6).
+## Preflight and preparation
 
-## Provenance and maintenance
+1. Fetch origin; inspect `origin/develop`, `origin/main`, open PRs, tags, and
+   published releases. Do not infer scope from the current worktree alone.
+2. Identify anything intended for the release that is not yet on develop.
+3. Create `release/vX.Y.Z` from current `origin/develop`. Preserve unrelated
+   working-tree files; use an isolated worktree if necessary.
+4. Draft a human-readable changelog from landed behavior, including CLI behavior
+   changes and install limitations. Do not copy raw commit subjects as notes.
+5. Bump versions, regenerate the project, prepare release notes, and review the diff.
 
-Written 2026-07-09 while executing the v2.0.0 release (first Swift-era
-release; v1.x releases are Go-era). Re-verify the version-location table with
-the commands in it; if a fifth version location appears (e.g. a Homebrew
-formula, an appcast), add it to the table in the same PR that introduces it.
+## Validation gate
+
+The local Mac gate is authoritative. Record exact executed/failed/skipped counts:
+
+- `swift build` and `swift test`; expect zero skips on the development Mac.
+- `swift run framer --version` must equal the proposed version.
+- Run both applicable Xcode app test targets for releases containing app changes.
+  Local unsigned validation uses `CODE_SIGNING_ALLOWED=NO`; it does not prove
+  distribution signing. Never blind-refresh UI or effect baselines.
+- Build the optimized CLI and verify the extracted distribution package with a
+  real shader/ASCII render, not only `--version`.
+- Check CI and obtain an independent review of consequential release changes.
+
+## Artifact contract
+
+The macOS arm64 CLI archive must include BOTH `framer` and
+`framer_FramerCore.bundle` beside it. SwiftPM resources are not embedded in the
+executable. The generated accessor also has an absolute build-path fallback,
+so a smoke test must make that fallback unavailable to prove relocation works.
+
+Publish the tarball and `SHA256SUMS`. Verify checksums and archive contents;
+keep the executable and bundle together when documenting installation.
+Overlay textures remain source/LFS assets and are not part of this CLI package.
+
+Use the same helper locally and in CI:
+
+```bash
+tools/release/package-cli.sh vX.Y.Z /tmp/framer-release-build /tmp/framer-release-artifacts
+```
+
+`.github/workflows/release.yml` runs on version-tag pushes and builds/uploads
+the package. It creates a draft release if needed. Watch every release run and
+inspect the actual uploaded assets; use the same packaging/verification helpers
+locally if the runner fails. Never label an unverified archive as ready.
+
+App distributions require separately verified signing/notarization. As checked
+2026-09-05, this Mac has no valid signing identity; the established distribution
+is the unsigned CLI plus source builds of the apps.
+
+## Merge, tag, and publish
+
+1. Push the preparation branch, open its PR to develop, and wait for checks.
+2. With the maintainer's release authorization, merge that reviewed PR using
+   an exact head-commit match. Create the release PR from develop to main with
+   the changelog and saved release notes in its body.
+3. Wait for release PR checks, verify the intended head, and merge. Do not use
+   admin bypasses. Use the user's Lore commit-message protocol for new commits
+   and merge messages.
+4. Fetch and fast-forward local main. Verify its source tree matches the tested
+   release tree and the CLI/app versions before creating the annotated tag.
+5. Push `vX.Y.Z`, watch the release-artifact workflow, download its archive and
+   checksums, and verify the published candidate independently of the build tree.
+6. Publish the draft with the saved notes, title, and latest-release flag. Confirm
+   the tag commit, publication state, asset names/digests, and printed CLI version.
+7. Fast-forward develop to the release merge when possible. If develop advanced
+   meanwhile, use a reviewed merge-back PR; never overwrite newer development.
+
+## Provenance
+
+The original ceremony shipped v2.0.0 in July 2026. The September 2026 release
+commission explicitly uses develop → main and authorizes release merges. Branch
+state, signing identities, test counts, and workflow behavior must be rechecked
+for each release rather than inferred from old incident notes.
