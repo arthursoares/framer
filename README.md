@@ -10,6 +10,13 @@ The border format is inspired by an old box of photos from my grandfather, featu
 
 ## Features
 
+### New in v2.2.0
+- Clear photo-import, loading, comparison, and error-recovery flows on macOS and iOS
+- Safer preset persistence, partial-import feedback, and collision-free CLI batches
+- Brighter labels, larger mobile controls, and accessible selection/export actions
+
+See the [v2.2.0 changelog](CHANGELOG.md#220---2026-09-05) for details and CLI compatibility notes.
+
 ### macOS App (SwiftUI)
 - **Photo Library Integration**: Browse and select photos from your library
 - **Live Preview**: Real-time, WYSIWYG preview — scale-sensitive effects render with the same pattern density the export will have
@@ -53,7 +60,7 @@ Three shader looks that together reproduce the classic Silver Efex Pro darkroom 
 - **Font Styling**: Bold and italic font style options, any installed font family
 
 ### Presets
-- **JSON presets** (app-managed): saved by the macOS app to `~/Library/Application Support/Framer/presets/` — not currently resolvable by name via CLI `--preset`. Note: saving a preset in the app replaces any same-named YAML file, so a built-in preset edited in the app stops resolving via the CLI
+- **JSON presets** (app-managed): saved by the macOS app to `~/Library/Application Support/Framer/presets/` — not currently resolvable by name via CLI `--preset`. Saving a YAML preset in the app retires the YAML file with that preset's identity after the JSON replacement succeeds, so that edited built-in preset stops resolving via the CLI. Unreadable preset files are preserved for recovery.
 - **YAML presets/configs**: v1-compatible schema; CLI discovery chain is `--config path` → `--preset name` (probes `~/Library/Application Support/Framer/presets/<name>.yaml`) → `./.framer.yaml` → `~/.config/framer/default.yaml`. If `--preset` finds no YAML file of that name it silently falls through to the next source
 - **Built-in presets** (seeded as YAML on first CLI run): `film`, `instagram`, `minimal`, `print 10x15`, `dark gradient`, `Shader ASCII`, `Shader Crimewave`
 
@@ -76,12 +83,22 @@ Dependencies:
 
 ### From a GitHub Release
 
-Download the `framer` CLI binary from the [latest release](https://github.com/arthursoares/framer/releases). The binary is unsigned — macOS will quarantine it on first download:
+Download `framer-v2.2.0-macos-arm64.tar.gz` and `SHA256SUMS` from the
+[latest release](https://github.com/arthursoares/framer/releases/latest).
+Verify and extract the unsigned CLI package:
 
 ```bash
-xattr -d com.apple.quarantine ./framer
+shasum -a 256 -c SHA256SUMS
+tar -xzf framer-v2.2.0-macos-arm64.tar.gz
 ./framer --version
 ```
+
+If macOS quarantines the downloaded executable, run
+`xattr -d com.apple.quarantine ./framer` and retry.
+
+Keep `framer_FramerCore.bundle` beside the executable, including when moving it
+to another installation directory. It contains the shaders and ASCII atlases.
+Texture overlays still require the source assets described below.
 
 ### From Source
 
@@ -111,6 +128,11 @@ open Framer.xcodeproj
 ```
 
 ## CLI Usage
+
+Explicit layer stacks retain their captions unless a caption or font flag is
+supplied. Use `--caption-template` to replace captions, font-only flags to update
+existing caption typography, or `--no-caption` to remove captions. Batch inputs
+that would overwrite the same output filename are rejected before processing.
 
 ```bash
 # Process a single image

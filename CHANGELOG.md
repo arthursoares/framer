@@ -7,6 +7,59 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [2.2.0] - 2026-09-05
+
+Safer presets and exports, clearer photo editing, and more accessible controls
+across macOS and iOS. Existing effect looks and legacy preset decoding are preserved.
+
+### Added
+- Direct photo-import actions in empty libraries, explicit preview/original
+  loading and failure states, and Retry / Show Edited recovery actions.
+- Visible Before/After controls on iOS, with press-to-compare behavior that
+  remains stable while loading or panning.
+- Preset name validation, save/import failure feedback, confirmation before
+  deleting saved presets, and partial-success reports for preset/photo imports.
+- Dedicated iOS regression tests, runtime text-contrast checks, and controlled
+  tests for overlapping preview, import, and thumbnail operations.
+
+### Changed
+- Secondary text is brighter while retaining the Darkroom palette. Mobile tabs
+  and layer visibility controls have larger hit areas, selected-state semantics,
+  and room for larger text; desktop filmstrip items support accessible selection.
+- Same-photo adjustments keep the current preview visible while rendering.
+  New selections immediately clear the previous photo's image and metadata.
+- Layer editors are organized into focused, platform-specific files instead of
+  two large coordinator files. Unreachable CPU effect implementations were removed;
+  supported legacy CPU paths and GPU output remain unchanged.
+- SwiftPM and Xcode now pin identical dependency revisions. CI covers `develop`
+  pushes as well as pull requests and `main`.
+
+### Fixed
+- Preset saves write their JSON replacement before retiring matching YAML and
+  match by stable identity instead of constructing deletion paths from names.
+- Listing presets preserves unreadable files for recovery instead of deleting
+  them. Failed saves no longer mark nonexistent presets active.
+- CLI processing preserves explicit caption layers unless caption/font flags
+  request a change. Font-only flags preserve unsupplied fields and layer identity.
+- CLI batches reject colliding output paths before writing, including case-only
+  conflicts on case-insensitive or unknown volumes.
+- Before previews respect photo rotation. Stale asynchronous work cannot overwrite
+  current previews, loading/error state, thumbnails, or photo-import results.
+- iOS layer navigation uses stable editor IDs without rewriting legacy rendering
+  configs. Preset thumbnails refresh after photo, rotation, or preset changes.
+- Mobile preset exports use importable JSON and safe temporary filenames; share
+  cleanup and partial-failure feedback are sequenced after sharing completes.
+- Export queues can clear finished failures, expose labeled actions, and announce
+  waiting jobs correctly.
+- CLI release archives include the shader/texture resource bundle required for
+  GPU effects on machines without the source checkout, plus SHA-256 checksums.
+
+### Compatibility
+- macOS 14+ and iOS 17+ deployment targets are unchanged. The downloadable binary
+  remains an unsigned macOS arm64 CLI; app builds are available from source.
+- Scripts that relied on a default caption being appended to an explicit layer
+  stack should now pass `--caption` or `--caption-template` explicitly.
+
 ## [2.1.0] - 2026-07-20
 
 The Silver Efex replication release: three new effect layers that together
