@@ -24,6 +24,9 @@ struct PresetPreviewGrid: View {
     @State private var renderTask: Task<Void, Never>?
     @State private var renamingPreset: Preset?
     @State private var renameText = ""
+    @State private var showingSavePrompt = false
+    @State private var saveText = ""
+    @State private var pendingDeletion: Preset?
 
     private let maxConcurrentPresetRenders = 4
 
@@ -45,6 +48,8 @@ struct PresetPreviewGrid: View {
     }
 
     var body: some View {
+        @Bindable var appState = appState
+
         VStack(alignment: .leading, spacing: metrics.expandedBodyInset) {
             LazyVGrid(columns: columns, spacing: metrics.expandedBodyInset) {
                 ForEach(appState.presets) { preset in
@@ -67,11 +72,7 @@ struct PresetPreviewGrid: View {
                             Label("Apply", systemImage: "checkmark.circle")
                         }
                         Button {
-                            let updated = Preset(id: preset.id, name: preset.name, config: appState.currentConfig)
-                            try? appState.presetStore.save(updated)
-                            appState.loadPresets()
-                            appState.activePresetName = preset.name
-                            appState.appliedPresetConfig = appState.currentConfig
+                            appState.updatePreset(preset)
                         } label: {
                             Label("Update with Current Settings", systemImage: "arrow.triangle.2.circlepath")
                         }
@@ -88,17 +89,28 @@ struct PresetPreviewGrid: View {
                         }
                         Divider()
                         Button(role: .destructive) {
-                            try? appState.presetStore.delete(id: preset.id)
-                            // Purge the thumbnail synchronously so a quick
-                            // re-open of the Presets section doesn't briefly
-                            // surface the dead entry before the renderKey
-                            // change fires `schedulePreviewRenders` and
-                            // invalidates the whole cache.
-                            appState.presetThumbnailCache.remove(presetID: preset.id)
-                            appState.loadPresets()
+                            pendingDeletion = preset
                         } label: {
                             Label("Delete", systemImage: "trash")
                         }
+                    }
+                    .confirmationDialog(
+                        "Delete “\(preset.name)”?",
+                        isPresented: Binding(
+                            get: { pendingDeletion?.id == preset.id },
+                            set: { if !$0, pendingDeletion?.id == preset.id { pendingDeletion = nil } }
+                        ),
+                        titleVisibility: .visible
+                    ) {
+                        Button("Delete Preset", role: .destructive) {
+                            if appState.deletePreset(preset) {
+                                appState.presetThumbnailCache.remove(presetID: preset.id)
+                            }
+                            pendingDeletion = nil
+                        }
+                        Button("Cancel", role: .cancel) { pendingDeletion = nil }
+                    } message: {
+                        Text("This removes the saved preset from Framer.")
                     }
                 }
 
@@ -135,23 +147,28 @@ struct PresetPreviewGrid: View {
             TextField("Preset name", text: $renameText)
             Button("Cancel", role: .cancel) { renamingPreset = nil }
             Button("Rename") {
-                if let preset = renamingPreset, !renameText.isEmpty {
-                    let updated = Preset(id: preset.id, name: renameText, config: preset.config)
-                    try? appState.presetStore.save(updated)
-                    if appState.activePresetName == preset.name {
-                        appState.activePresetName = renameText
-                    }
-                    appState.loadPresets()
+                if let preset = renamingPreset, appState.renamePreset(preset, to: renameText) {
+                    renamingPreset = nil
                 }
-                renamingPreset = nil
             }
+            .disabled(appState.presetNameProblem(renameText, excluding: renamingPreset?.id) != nil)
         } message: {
-            Text("Enter a new name for this preset.")
+            Text(appState.presetNameProblem(renameText, excluding: renamingPreset?.id) ?? "Choose a clear name for this preset.")
+        }
+        .alert(item: $appState.presetOperationAlert) { alert in
+            Alert(
+                title: Text(alert.title),
+                message: Text(alert.message),
+                dismissButton: .default(Text("OK"))
+            )
         }
     }
 
     private var saveCard: some View {
-        Button(action: saveCurrentAsPreset) {
+        Button {
+            saveText = suggestedPresetName
+            showingSavePrompt = true
+        } label: {
             let supportStyle = SidebarStateStyle.hover
 
             VStack(alignment: .leading, spacing: metrics.expandedBodyInset) {
@@ -198,6 +215,18 @@ struct PresetPreviewGrid: View {
             }
         }
         .buttonStyle(.plain)
+        .alert("Save Preset", isPresented: $showingSavePrompt) {
+            TextField("Preset name", text: $saveText)
+            Button("Cancel", role: .cancel) {}
+            Button("Save") {
+                if appState.saveCurrentPreset(named: saveText) {
+                    showingSavePrompt = false
+                }
+            }
+            .disabled(appState.presetNameProblem(saveText) != nil)
+        } message: {
+            Text(appState.presetNameProblem(saveText) ?? "Name these settings so you can find them again.")
+        }
     }
 
     private func supportActionButton(
@@ -318,9 +347,7 @@ struct PresetPreviewGrid: View {
         }
     }
 
-    // MARK: - Save Preset
-
-    private func saveCurrentAsPreset() {
+    private var suggestedPresetName: String {
         let baseName = "Preset"
         let existingNames = Set(appState.presets.map(\.name))
         var name = baseName
@@ -329,22 +356,22 @@ struct PresetPreviewGrid: View {
             counter += 1
             name = "\(baseName) \(counter)"
         }
-        let preset = Preset(name: name, config: appState.currentConfig)
-        try? appState.presetStore.save(preset)
-        appState.loadPresets()
-        appState.activePresetName = preset.name
-        appState.appliedPresetConfig = preset.config
+        return name
     }
 
     // MARK: - Import / Export
 
     private func exportPreset(_ preset: Preset) {
-        guard let data = try? appState.presetStore.exportData(for: preset) else { return }
+        guard let data = appState.presetExportData(preset) else { return }
         let panel = NSSavePanel()
-        panel.nameFieldStringValue = "\(preset.name).framerpreset"
+        panel.nameFieldStringValue = "\(safeFilenameStem(preset.name)).json"
         panel.allowedContentTypes = [.json]
         if panel.runModal() == .OK, let url = panel.url {
-            try? data.write(to: url)
+            do {
+                try data.write(to: url, options: .atomic)
+            } catch {
+                appState.reportPresetExportFailure(for: preset)
+            }
         }
     }
 
@@ -355,13 +382,16 @@ struct PresetPreviewGrid: View {
         panel.allowedContentTypes = [.json]
         panel.message = "Select .framerpreset or .json files to import"
         if panel.runModal() == .OK {
-            for url in panel.urls {
-                if let data = try? Data(contentsOf: url) {
-                    _ = try? appState.presetStore.importData(data)
-                }
-            }
-            appState.loadPresets()
+            appState.importPresets(from: panel.urls)
         }
+    }
+
+    private func safeFilenameStem(_ name: String) -> String {
+        let stem = name
+            .components(separatedBy: CharacterSet.alphanumerics.inverted)
+            .filter { !$0.isEmpty }
+            .joined(separator: "_")
+        return stem.isEmpty ? "Preset" : stem
     }
 
     private func showInFinder() {

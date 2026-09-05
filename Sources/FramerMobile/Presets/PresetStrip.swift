@@ -7,8 +7,12 @@ struct PresetStrip: View {
     @State private var showingImporter = false
     @State private var renamingPreset: Preset?
     @State private var renameText = ""
+    @State private var saveText = ""
+    @State private var pendingDeletion: Preset?
 
     var body: some View {
+        @Bindable var appState = appState
+
         ScrollView(.horizontal, showsIndicators: false) {
             HStack(spacing: 8) {
                 ForEach(appState.presets) { preset in
@@ -37,23 +41,44 @@ struct PresetStrip: View {
                             Label("Rename", systemImage: "pencil")
                         }
                         Button {
+                            appState.updatePreset(preset)
+                        } label: {
+                            Label("Update with Current Settings", systemImage: "arrow.triangle.2.circlepath")
+                        }
+                        Button {
                             exportPreset(preset)
                         } label: {
                             Label("Export", systemImage: "square.and.arrow.up")
                         }
                         Divider()
                         Button(role: .destructive) {
-                            try? appState.presetStore.delete(id: preset.id)
-                            appState.loadPresets()
+                            pendingDeletion = preset
                         } label: {
                             Label("Delete", systemImage: "trash")
                         }
+                    }
+                    .confirmationDialog(
+                        "Delete “\(preset.name)”?",
+                        isPresented: Binding(
+                            get: { pendingDeletion?.id == preset.id },
+                            set: { if !$0, pendingDeletion?.id == preset.id { pendingDeletion = nil } }
+                        ),
+                        titleVisibility: .visible
+                    ) {
+                        Button("Delete Preset", role: .destructive) {
+                            appState.deletePreset(preset)
+                            pendingDeletion = nil
+                        }
+                        Button("Cancel", role: .cancel) { pendingDeletion = nil }
+                    } message: {
+                        Text("This removes the saved preset from Framer.")
                     }
                 }
 
                 // Save card
                 Button {
-                    saveCurrentAsPreset()
+                    saveText = suggestedPresetName
+                    appState.showingSavePresetSheet = true
                 } label: {
                     VStack(spacing: 0) {
                         ZStack {
@@ -113,15 +138,15 @@ struct PresetStrip: View {
             allowedContentTypes: [.json],
             allowsMultipleSelection: true
         ) { result in
-            if case .success(let urls) = result {
-                for url in urls {
-                    guard url.startAccessingSecurityScopedResource() else { continue }
-                    defer { url.stopAccessingSecurityScopedResource() }
-                    if let data = try? Data(contentsOf: url) {
-                        try? appState.presetStore.importData(data)
-                    }
-                }
-                appState.loadPresets()
+            switch result {
+            case .success(let urls):
+                appState.importPresets(from: urls)
+            case .failure(let error):
+                if (error as? CocoaError)?.code == .userCancelled { return }
+                appState.presetOperationAlert = PresetOperationAlert(
+                    title: "Presets Not Imported",
+                    message: "Framer couldn’t open the selected files. Try choosing them again."
+                )
             }
         }
         .alert("Rename Preset", isPresented: Binding(
@@ -131,29 +156,34 @@ struct PresetStrip: View {
             TextField("Preset name", text: $renameText)
             Button("Cancel", role: .cancel) { renamingPreset = nil }
             Button("Rename") {
-                if let preset = renamingPreset, !renameText.isEmpty {
-                    let otherNames = appState.presets
-                        .filter { $0.id != preset.id }
-                        .map(\.name)
-                    guard !otherNames.contains(renameText) else {
-                        renamingPreset = nil
-                        return
-                    }
-                    let updated = Preset(id: preset.id, name: renameText, config: preset.config)
-                    try? appState.presetStore.save(updated)
-                    if appState.activePresetName == preset.name {
-                        appState.activePresetName = renameText
-                    }
-                    appState.loadPresets()
+                if let preset = renamingPreset, appState.renamePreset(preset, to: renameText) {
+                    renamingPreset = nil
                 }
-                renamingPreset = nil
             }
+            .disabled(appState.presetNameProblem(renameText, excluding: renamingPreset?.id) != nil)
         } message: {
-            Text("Enter a new name for this preset.")
+            Text(appState.presetNameProblem(renameText, excluding: renamingPreset?.id) ?? "Choose a clear name for this preset.")
+        }
+        .alert("Save Preset", isPresented: $appState.showingSavePresetSheet) {
+            TextField("Preset name", text: $saveText)
+            Button("Cancel", role: .cancel) {}
+            Button("Save") {
+                appState.saveCurrentPreset(named: saveText)
+            }
+            .disabled(appState.presetNameProblem(saveText) != nil)
+        } message: {
+            Text(appState.presetNameProblem(saveText) ?? "Name these settings so you can find them again.")
+        }
+        .alert(item: $appState.presetOperationAlert) { alert in
+            Alert(
+                title: Text(alert.title),
+                message: Text(alert.message),
+                dismissButton: .default(Text("OK"))
+            )
         }
     }
 
-    private func saveCurrentAsPreset() {
+    private var suggestedPresetName: String {
         let baseName = "Preset"
         let existingNames = Set(appState.presets.map(\.name))
         var name = baseName
@@ -162,21 +192,33 @@ struct PresetStrip: View {
             counter += 1
             name = "\(baseName) \(counter)"
         }
-        let preset = Preset(name: name, config: appState.currentConfig)
-        try? appState.presetStore.save(preset)
-        appState.loadPresets()
-        appState.activePresetName = preset.name
-        appState.appliedPresetConfig = preset.config
+        return name
     }
 
     private func exportPreset(_ preset: Preset) {
-        guard let data = try? appState.presetStore.exportData(for: preset) else { return }
-        let tempURL = FileManager.default.temporaryDirectory
-            .appendingPathComponent("\(preset.name).framerpreset")
-        try? data.write(to: tempURL)
+        guard let data = appState.presetExportData(preset) else { return }
+        let exportDirectory = FileManager.default.temporaryDirectory
+            .appendingPathComponent("FramerPresetExports", isDirectory: true)
+            .appendingPathComponent(UUID().uuidString, isDirectory: true)
+        let tempURL = exportDirectory.appendingPathComponent(AppState.safePresetFilename(for: preset.name))
+        do {
+            try FileManager.default.createDirectory(at: exportDirectory, withIntermediateDirectories: true)
+            try data.write(to: tempURL, options: .atomic)
+        } catch {
+            try? FileManager.default.removeItem(at: exportDirectory)
+            appState.reportPresetExportFailure(for: preset)
+            return
+        }
         let activityVC = UIActivityViewController(activityItems: [tempURL], applicationActivities: nil)
+        activityVC.completionWithItemsHandler = { _, _, _, _ in
+            try? FileManager.default.removeItem(at: exportDirectory)
+        }
         guard let windowScene = UIApplication.shared.connectedScenes.first as? UIWindowScene,
-              let rootVC = windowScene.windows.first?.rootViewController else { return }
+              let rootVC = windowScene.windows.first?.rootViewController else {
+            try? FileManager.default.removeItem(at: exportDirectory)
+            appState.reportPresetExportFailure(for: preset)
+            return
+        }
         var presenter = rootVC
         while let presented = presenter.presentedViewController { presenter = presented }
         activityVC.popoverPresentationController?.sourceView = presenter.view

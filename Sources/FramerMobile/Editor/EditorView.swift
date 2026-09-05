@@ -3,6 +3,40 @@ import PhotosUI
 import ImageIO
 import FramerCore
 
+struct EditorOperationAlert: Identifiable {
+    let id = UUID()
+    let title: String
+    let message: String
+}
+
+enum BatchShareCompletion {
+    static func partialFailureAlert(
+        exportedCount: Int,
+        totalCount: Int,
+        failedCount: Int
+    ) -> EditorOperationAlert? {
+        guard failedCount > 0 else { return nil }
+        return EditorOperationAlert(
+            title: "Some Photos Weren’t Prepared",
+            message: "Prepared \(exportedCount) of \(totalCount) photos. \(failedCount) couldn’t be processed."
+        )
+    }
+
+    @MainActor
+    static func finish(
+        temporaryFiles: [URL],
+        feedback: EditorOperationAlert?,
+        publish: (EditorOperationAlert) -> Void
+    ) {
+        for file in temporaryFiles {
+            try? FileManager.default.removeItem(at: file)
+        }
+        if let feedback {
+            publish(feedback)
+        }
+    }
+}
+
 struct EditorView: View {
     @Environment(AppState.self) var appState
     @Environment(\.undoManager) private var undoManager
@@ -15,7 +49,7 @@ struct EditorView: View {
     @State private var isExporting = false
     @State private var exportProgress: Double = 0
     @State private var exportTotal: Int = 0
-    @State private var exportStatusMessage: String?
+    @State private var operationAlert: EditorOperationAlert?
 
     private var layersBinding: Binding<[CompositionLayer]> {
         Binding(
@@ -34,6 +68,7 @@ struct EditorView: View {
 
     var body: some View {
         @Bindable var appState = appState
+
         NavigationStack {
             VStack(spacing: 0) {
                 // Preview area
@@ -204,16 +239,12 @@ struct EditorView: View {
         .onDisappear {
             photoImporter.cancel()
         }
-        .alert(
-            "Export",
-            isPresented: Binding(
-                get: { exportStatusMessage != nil },
-                set: { if !$0 { exportStatusMessage = nil } }
+        .alert(item: $operationAlert) { alert in
+            Alert(
+                title: Text(alert.title),
+                message: Text(alert.message),
+                dismissButton: .default(Text("OK"))
             )
-        ) {
-            Button("OK", role: .cancel) {}
-        } message: {
-            Text(exportStatusMessage ?? "")
         }
     }
 
@@ -308,26 +339,37 @@ struct EditorView: View {
         photoImporter.start {
             var newItems: [PhotoItem] = []
             var temporaryURLs: [URL] = []
+            var failureCount = 0
             for item in items {
                 guard !Task.isCancelled else { break }
-                if let data = try? await item.loadTransferable(type: Data.self) {
+                do {
+                    guard let data = try await item.loadTransferable(type: Data.self) else {
+                        failureCount += 1
+                        continue
+                    }
                     let tempURL = FileManager.default.temporaryDirectory
                         .appendingPathComponent(UUID().uuidString)
                         .appendingPathExtension("jpg")
-                    do {
-                        try data.write(to: tempURL)
-                        temporaryURLs.append(tempURL)
-                        newItems.append(PhotoItem(url: tempURL))
-                    } catch {
-                        // skip this item
-                    }
+                    try data.write(to: tempURL, options: .atomic)
+                    temporaryURLs.append(tempURL)
+                    newItems.append(PhotoItem(url: tempURL))
+                } catch {
+                    failureCount += 1
                 }
             }
-            return PhotoImportResult(items: newItems, temporaryURLs: temporaryURLs)
+            return PhotoImportResult(
+                items: newItems,
+                temporaryURLs: temporaryURLs,
+                failureCount: failureCount
+            )
         } onComplete: { newItems in
             appState.addPhotos(newItems)
         } clearSelection: {
             selectedPickerItems.removeAll()
+        } onFeedback: { result in
+            if let message = PhotoImportCoordinator.feedbackMessage(for: result) {
+                operationAlert = EditorOperationAlert(title: "Photos", message: message)
+            }
         }
     }
 
@@ -384,25 +426,34 @@ struct EditorView: View {
             }
 
             guard !exportedFiles.isEmpty else {
-                exportStatusMessage = "Could not process any photos for sharing."
+                operationAlert = EditorOperationAlert(
+                    title: "Photos Not Shared",
+                    message: "Framer couldn’t prepare any photos for sharing."
+                )
                 return
             }
-            if failedCount > 0 {
-                exportStatusMessage = "Processed \(exportedFiles.count) of \(items.count) photos. \(failedCount) failed."
-            }
+            let completionFeedback = BatchShareCompletion.partialFailureAlert(
+                exportedCount: exportedFiles.count,
+                totalCount: items.count,
+                failedCount: failedCount
+            )
             // Share all processed images
             let activityVC = UIActivityViewController(activityItems: exportedFiles, applicationActivities: nil)
             activityVC.completionWithItemsHandler = { _, _, _, _ in
-                for file in exportedFiles {
-                    try? FileManager.default.removeItem(at: file)
+                Task { @MainActor in
+                    BatchShareCompletion.finish(
+                        temporaryFiles: exportedFiles,
+                        feedback: completionFeedback
+                    ) { operationAlert = $0 }
                 }
             }
             guard let windowScene = UIApplication.shared.connectedScenes.first as? UIWindowScene,
                   let rootVC = windowScene.windows.first?.rootViewController else {
-                for file in exportedFiles {
-                    try? FileManager.default.removeItem(at: file)
-                }
-                exportStatusMessage = "Unable to present share sheet."
+                BatchShareCompletion.finish(temporaryFiles: exportedFiles, feedback: nil) { _ in }
+                operationAlert = EditorOperationAlert(
+                    title: "Photos Not Shared",
+                    message: "Framer couldn’t open the share sheet. Try again."
+                )
                 return
             }
             var presenter = rootVC
@@ -424,7 +475,13 @@ struct EditorView: View {
             applicationActivities: nil
         )
         guard let windowScene = UIApplication.shared.connectedScenes.first as? UIWindowScene,
-              let rootVC = windowScene.windows.first?.rootViewController else { return }
+              let rootVC = windowScene.windows.first?.rootViewController else {
+            operationAlert = EditorOperationAlert(
+                title: "Photo Not Shared",
+                message: "Framer couldn’t open the share sheet. Try again."
+            )
+            return
+        }
         // Find the topmost presented VC
         var presenter = rootVC
         while let presented = presenter.presentedViewController {
@@ -438,6 +495,13 @@ struct EditorView: View {
 struct PhotoImportResult: Sendable {
     let items: [PhotoItem]
     let temporaryURLs: [URL]
+    let failureCount: Int
+
+    init(items: [PhotoItem], temporaryURLs: [URL], failureCount: Int = 0) {
+        self.items = items
+        self.temporaryURLs = temporaryURLs
+        self.failureCount = failureCount
+    }
 }
 
 @MainActor
@@ -451,7 +515,8 @@ final class PhotoImportCoordinator {
     func start(
         operation: @escaping @MainActor () async -> PhotoImportResult,
         onComplete: @escaping @MainActor ([PhotoItem]) -> Void,
-        clearSelection: @escaping @MainActor () -> Void
+        clearSelection: @escaping @MainActor () -> Void,
+        onFeedback: @escaping @MainActor (PhotoImportResult) -> Void = { _ in }
     ) -> Task<Void, Never> {
         task?.cancel()
         generation &+= 1
@@ -467,6 +532,7 @@ final class PhotoImportCoordinator {
 
             onComplete(result.items)
             clearSelection()
+            onFeedback(result)
             finish(requestGeneration)
         }
         task = newTask
@@ -484,6 +550,17 @@ final class PhotoImportCoordinator {
         guard requestGeneration == generation else { return }
         task = nil
         isLoading = false
+    }
+
+    nonisolated static func feedbackMessage(for result: PhotoImportResult) -> String? {
+        guard result.failureCount > 0 else { return nil }
+        let failed = result.failureCount
+        let failedDescription = "\(failed) \(failed == 1 ? "photo couldn’t" : "photos couldn’t") be loaded."
+        if result.items.isEmpty {
+            return "No photos were added. \(failedDescription)"
+        }
+        let added = result.items.count
+        return "Added \(added) \(added == 1 ? "photo" : "photos"). \(failedDescription)"
     }
 
     private nonisolated static func removeTemporaryFiles(_ urls: [URL]) {

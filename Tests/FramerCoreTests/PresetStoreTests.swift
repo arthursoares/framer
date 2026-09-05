@@ -159,6 +159,27 @@ final class PresetStoreTests: XCTestCase {
         XCTAssertEqual(try store.load(id: preset.id), preset)
     }
 
+    func test_decodeImportData_acceptsSinglePresetAndArrayWithoutSaving() throws {
+        let store = PresetStore(directory: tempDir)
+        let first = Preset(name: "First", config: .default)
+        let second = Preset(name: "Second", config: .default)
+
+        XCTAssertEqual(try store.decodeImportData(JSONEncoder().encode(first)), [first])
+        XCTAssertEqual(try store.decodeImportData(JSONEncoder().encode([first, second])), [first, second])
+        XCTAssertTrue(try store.list().isEmpty)
+    }
+
+    func test_importData_stillImportsPresetArrays() throws {
+        let store = PresetStore(directory: tempDir)
+        let presets = [
+            Preset(name: "First", config: .default),
+            Preset(name: "Second", config: .default),
+        ]
+
+        XCTAssertEqual(try store.importData(JSONEncoder().encode(presets)), 2)
+        XCTAssertEqual(try store.list(), presets)
+    }
+
     func test_deletePreset_removesIt() throws {
         let store = PresetStore(directory: tempDir)
         let preset = Preset(name: "Delete Me", config: .default)
