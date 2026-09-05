@@ -5,28 +5,44 @@ import FramerCore
 @Observable
 final class PreviewViewModel {
     typealias Renderer = @Sendable (URL, ProcessingConfig, Int) async throws -> CGImage
+    typealias OriginalLoader = @Sendable (URL, Int) async throws -> CGImage
 
     var previewImage: UIImage?
     var originalImage: UIImage?
     var isLoading = false
     var error: String?
+    var isOriginalLoading = false
+    var originalError: String?
     var outputSize: CGSize?
 
     private var renderTask: Task<Void, Never>?
     private var originalLoadTask: Task<Void, Never>?
-    private var originalImageURL: URL?
     private let renderer: Renderer
+    private let originalLoader: OriginalLoader
     private var renderGeneration: UInt64 = 0
     private var originalLoadGeneration: UInt64 = 0
+    private var previewPhotoID: PhotoItem.ID?
+    private var previewRotation: Int?
+    private var originalPhotoID: PhotoItem.ID?
+    private var originalRotation: Int?
 
-    init(renderer: Renderer? = nil) {
+    init(renderer: Renderer? = nil, originalLoader: OriginalLoader? = nil) {
+        let processor = FrameProcessor()
+        let originalProcessor = FrameProcessor()
         if let renderer {
             self.renderer = renderer
         } else {
-            let processor = FrameProcessor()
             self.renderer = { url, config, rotation in
                 try await processor.previewCGImage(for: url, config: config, rotation: rotation)
             }
+        }
+        self.originalLoader = originalLoader ?? { url, rotation in
+            try await originalProcessor.previewCGImage(
+                for: url,
+                config: ProcessingConfig(layers: []),
+                rotation: rotation,
+                maxDimension: 1200
+            )
         }
     }
 
@@ -42,35 +58,39 @@ final class PreviewViewModel {
 
         guard let item else {
             renderTask = nil
-            originalLoadTask?.cancel()
-            originalLoadGeneration &+= 1
-            originalLoadTask = nil
-            originalImageURL = nil
+            previewPhotoID = nil
+            previewRotation = nil
             previewImage = nil
-            originalImage = nil
             error = nil
             outputSize = nil
             isLoading = false
+            resetOriginalState()
             return nil
         }
 
-        if originalImageURL != item.url {
-            originalLoadTask?.cancel()
-            originalLoadGeneration &+= 1
-            originalLoadTask = nil
-            originalImageURL = nil
-            originalImage = nil
+        let selectionChanged = previewPhotoID != item.id || previewRotation != item.rotation
+        previewPhotoID = item.id
+        previewRotation = item.rotation
+        if selectionChanged {
+            previewImage = nil
+            outputSize = nil
+            resetOriginalState()
+        }
+        isLoading = true
+        error = nil
+
+        if includeOriginal {
+            loadOriginalIfNeeded(for: item)
         }
 
         let task = Task {
             try? await Task.sleep(for: .milliseconds(150))
             guard !Task.isCancelled, generation == renderGeneration else { return }
 
-            isLoading = true
-            error = nil
             defer {
                 if generation == renderGeneration {
                     isLoading = false
+                    renderTask = nil
                 }
             }
 
@@ -82,9 +102,6 @@ final class PreviewViewModel {
                 guard !Task.isCancelled, generation == renderGeneration else { return }
                 previewImage = preview
                 outputSize = CGSize(width: cgPreview.width, height: cgPreview.height)
-                if includeOriginal {
-                    loadOriginalIfNeeded(for: item)
-                }
             } catch is CancellationError {
                 return
             } catch {
@@ -96,59 +113,66 @@ final class PreviewViewModel {
         return task
     }
 
-    func loadOriginalIfNeeded(for item: PhotoItem?) {
+    @discardableResult
+    func loadOriginalIfNeeded(for item: PhotoItem?) -> Task<Void, Never>? {
         guard let item else {
-            originalLoadTask?.cancel()
-            originalLoadGeneration &+= 1
-            originalLoadTask = nil
-            originalImageURL = nil
-            originalImage = nil
-            return
+            resetOriginalState()
+            return nil
         }
 
-        if originalImageURL == item.url, originalImage != nil {
-            return
+        let matchesRequest = originalPhotoID == item.id && originalRotation == item.rotation
+        if matchesRequest, originalImage != nil || isOriginalLoading {
+            return originalLoadTask
         }
 
         originalLoadTask?.cancel()
         originalLoadGeneration &+= 1
         let generation = originalLoadGeneration
+        let photoID = item.id
         let itemURL = item.url
-        originalImageURL = itemURL
-        originalLoadTask = Task {
-            let original = await Task.detached {
-                Self.loadOriginal(from: itemURL, maxDimension: 1200)
-            }.value
-            guard !Task.isCancelled,
-                  generation == originalLoadGeneration,
-                  originalImageURL == itemURL else { return }
-            originalImage = original
-            originalLoadTask = nil
+        let rotation = item.rotation
+        originalPhotoID = photoID
+        originalRotation = rotation
+        originalImage = nil
+        originalError = nil
+        isOriginalLoading = true
+
+        let task = Task(priority: .utility) {
+            defer {
+                if generation == originalLoadGeneration {
+                    isOriginalLoading = false
+                    originalLoadTask = nil
+                }
+            }
+            do {
+                let cgImage = try await originalLoader(itemURL, rotation)
+                guard !Task.isCancelled,
+                      generation == originalLoadGeneration,
+                      originalPhotoID == photoID,
+                      originalRotation == rotation else { return }
+                originalImage = UIImage(cgImage: cgImage)
+            } catch is CancellationError {
+                return
+            } catch {
+                guard !Task.isCancelled,
+                      generation == originalLoadGeneration,
+                      originalPhotoID == photoID,
+                      originalRotation == rotation else { return }
+                originalError = error.localizedDescription
+            }
         }
+        originalLoadTask = task
+        return task
     }
 
-    private nonisolated static func loadOriginal(from url: URL, maxDimension: Int) -> UIImage? {
-        guard let source = CGImageSourceCreateWithURL(url as CFURL, nil),
-              let cgImage = CGImageSourceCreateImageAtIndex(source, 0, nil) else {
-            return nil
-        }
-        let w = cgImage.width, h = cgImage.height
-        guard max(w, h) > maxDimension else {
-            return UIImage(cgImage: cgImage)
-        }
-        let scale = Double(maxDimension) / Double(max(w, h))
-        let newW = Int(Double(w) * scale)
-        let newH = Int(Double(h) * scale)
-        // Canonical premultipliedLast RGBA8 — see desktop PreviewViewModel
-        // for the context-compatibility rationale.
-        guard let ctx = CGContext(data: nil, width: newW, height: newH,
-                                  bitsPerComponent: 8,
-                                  bytesPerRow: newW * 4,
-                                  space: CGColorSpaceCreateDeviceRGB(),
-                                  bitmapInfo: CGImageAlphaInfo.premultipliedLast.rawValue),
-              let scaled = (ctx.draw(cgImage, in: CGRect(x: 0, y: 0, width: newW, height: newH)), ctx.makeImage()).1 else {
-            return UIImage(cgImage: cgImage)
-        }
-        return UIImage(cgImage: scaled)
+    private func resetOriginalState() {
+        originalLoadTask?.cancel()
+        originalLoadGeneration &+= 1
+        originalLoadTask = nil
+        originalPhotoID = nil
+        originalRotation = nil
+        originalImage = nil
+        originalError = nil
+        isOriginalLoading = false
     }
 }

@@ -41,6 +41,7 @@
 		49F7964DEFAF0AEBB4CFD3EB /* FramerMobileApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = 64DCA5495F4E52EE9549C498 /* FramerMobileApp.swift */; };
 		4F0B1273B9C8E44074975151 /* LayerFillPicker.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0D095FCC7254B8C31533A59A /* LayerFillPicker.swift */; };
 		50CB09A593BE412FD9FCC4E8 /* StyledSliderSuffixTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = EC736F64F5D3D3D0E3184EC9 /* StyledSliderSuffixTests.swift */; };
+		51D26045BFEF4890DFE439CA /* PreviewUXTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = F6B7311A8124ACC28422DD1C /* PreviewUXTests.swift */; };
 		520BFA062991397A6556B18B /* PresetPreviewCard.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1987EB46D78379EB25A7E6A5 /* PresetPreviewCard.swift */; };
 		561898C8DF6823EB3F4391AC /* AsyncThumbnail.swift in Sources */ = {isa = PBXBuildFile; fileRef = 419FD91DCB79FF87568D1118 /* AsyncThumbnail.swift */; };
 		5892BBEB7A0417F38655E94A /* EditorView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 64CED49C5EAE3C454E6EFF20 /* EditorView.swift */; };
@@ -233,6 +234,7 @@
 		F2A83CB3918A1EE6625E6CF0 /* CanvasLayerControls.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CanvasLayerControls.swift; sourceTree = "<group>"; };
 		F5FEA0A44FC6AF06DDC8F260 /* AppState.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppState.swift; sourceTree = "<group>"; };
 		F6480868FC28107D0497EDC8 /* DesignTokens.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DesignTokens.swift; sourceTree = "<group>"; };
+		F6B7311A8124ACC28422DD1C /* PreviewUXTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PreviewUXTests.swift; sourceTree = "<group>"; };
 		F74958A269010D4B0BF9A7DE /* fonts */ = {isa = PBXFileReference; lastKnownFileType = folder; name = fonts; path = assets/fonts; sourceTree = SOURCE_ROOT; };
 		F8107B69986D9272A1DAB32E /* LUTControls.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LUTControls.swift; sourceTree = "<group>"; };
 		F897939392FCE2D13C8C970F /* SidebarSection.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SidebarSection.swift; sourceTree = "<group>"; };
@@ -456,6 +458,7 @@
 			isa = PBXGroup;
 			children = (
 				42B8BF90CF0DBD054E2831BB /* AppLifecycleRegressionTests.swift */,
+				F6B7311A8124ACC28422DD1C /* PreviewUXTests.swift */,
 			);
 			name = FramerMobileTests;
 			path = Tests/FramerMobileTests;
@@ -843,6 +846,7 @@
 			buildActionMask = 2147483647;
 			files = (
 				8D1547759A37FB2911D033A8 /* AppLifecycleRegressionTests.swift in Sources */,
+				51D26045BFEF4890DFE439CA /* PreviewUXTests.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};

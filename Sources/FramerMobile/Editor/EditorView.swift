@@ -33,6 +33,7 @@ struct EditorView: View {
     }
 
     var body: some View {
+        @Bindable var appState = appState
         NavigationStack {
             VStack(spacing: 0) {
                 // Preview area
@@ -127,6 +128,12 @@ struct EditorView: View {
             .toolbarBackground(Color.surface1, for: .navigationBar)
             .toolbarBackground(.visible, for: .navigationBar)
         }
+        .photosPicker(
+            isPresented: $appState.showingPhotosPicker,
+            selection: $selectedPickerItems,
+            maxSelectionCount: 50,
+            matching: .images
+        )
         .overlay {
             if photoImporter.isLoading {
                 Color.black.opacity(0.5)
