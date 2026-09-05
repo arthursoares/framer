@@ -284,17 +284,16 @@ with the app target.
 
 ### Package.resolved drift (two lockfiles)
 
-There are two dependency lockfiles and they already disagree
-(as of 2026-07-09):
+There are two dependency lockfiles. Their pins were aligned on 2026-09-05:
 
 | File | swift-argument-parser |
 |---|---|
-| `Package.resolved` (root, used by `swift build`) | 1.7.0 |
+| `Package.resolved` (root, used by `swift build`) | 1.7.1 |
 | `Framer.xcodeproj/project.xcworkspace/xcshareddata/swiftpm/Package.resolved` (used by Xcode) | 1.7.1 |
 
-Low severity today (both satisfy `from: "1.3.0"`), but it means the CLI and
-the app can link different dependency versions. If you see a dependency-flavored
-discrepancy between `swift` and Xcode builds, check these two files first.
+Both also pin Yams 5.4.0. Compare the pin arrays, including revisions, after
+resolving dependencies; the resolver-specific origin hashes may differ. If
+SwiftPM and Xcode behave differently, check these two files first.
 
 ### Snapshot tests are machine-sensitive
 
@@ -375,7 +374,7 @@ grep -n 'DEVELOPMENT_TEAM\|CODE_SIGN_STYLE\|minimumXcodeGenVersion\|xcodeVersion
 grep -rn '@testable import' Tests/FramerAppTests/ | head -3
 
 # Package.resolved drift (was: 1.7.0 vs 1.7.1 for swift-argument-parser)
-grep -A5 'argument-parser' Package.resolved Framer.xcodeproj/project.xcworkspace/xcshareddata/swiftpm/Package.resolved | grep '"version"'
+python3 -c 'import json; a=json.load(open("Package.resolved")); b=json.load(open("Framer.xcodeproj/project.xcworkspace/xcshareddata/swiftpm/Package.resolved")); assert a["pins"] == b["pins"], "Dependency pins differ"'
 
 # Stale artifacts still present / still ignored
 ls -la framer Binary build Framer-iOS 2>/dev/null; grep -n 'framer\|^build/\|Framer.app' .gitignore

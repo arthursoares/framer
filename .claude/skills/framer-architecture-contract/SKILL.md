@@ -238,7 +238,7 @@ tests do `@testable import Framer` (Tests/FramerAppTests/*.swift). Writing
 | LUTMetalRenderer caches grow unboundedly | input/output textures keyed by (width,height), LUT textures keyed by full-data hash; no eviction anywhere in MetalContext (LUTMetalRenderer.swift:269-330; grep for `removeAll`/`evict` finds none) | Acceptable only because sizes are few in practice; a LUT-browsing feature would leak GPU memory |
 | AppState never got its planned Library/Editor split | Plan: docs/plans/2026-03-08-performance-optimizations.md "Fix 4: Split AppState into Library vs Editor"; reality: single `AppState` class, no `LibraryState`/`EditorState` symbols exist | Slider drags still invalidate library views and vice versa; the PresetThumbnailCache extraction was a partial mitigation, the full split is still open |
 | `LUTProvider.bundledLUTs()` executable-relative lookup appears dead | LUTProvider.swift:296-299 looks for `<executable dir>/assets/luts`; repo has `assets/luts/` (4 files) but neither project.yml nor Package.swift bundles it, and SPM puts binaries in `.build/debug/` with no assets sibling | Bundled LUTs are invisible in every standard run context; user-imported LUTs (Application Support) are the working path. Likely a Go-CLI-era leftover — confirm intent before "fixing" |
-| Two drifted `Package.resolved` files | `./Package.resolved` pins swift-argument-parser 1.7.0; `Framer.xcodeproj/project.xcworkspace/xcshareddata/swiftpm/Package.resolved` pins 1.7.1 | Xcode and `swift build` can silently use different dependency versions |
+| Two `Package.resolved` files must stay aligned (updated 2026-09-05) | Root and Xcode workspace both pin ArgumentParser 1.7.1 and Yams 5.4.0 at identical revisions | Compare pin arrays after resolving dependencies; resolver-specific origin hashes may differ |
 | Tests/FramerAppTests (incl. SHA-256 snapshot tests) are NOT in Package.swift | `grep FramerAppTests Package.swift` → no match; they run only via the xcodegen `Framer` scheme, whose xcodebuild tier is currently broken on this machine | The app-layer test estate is dark until framer-campaign-restore-validation completes |
 | Docs of record are partially stale (e.g. docs/gpu-effects-parameter-matrix.md predates later shader wiring; README.md predates several layers; CLAUDE.md was rewritten 2026-07-09 to route to this library) | staleness ledger: framer-docs-and-writing | Do not treat prose docs as ground truth for shader capabilities; `GPUEffectKind` capability flags (Sources/FramerCore/Effects/Models/GPUEffectKind.swift:81-124) + the `.metal` sources are ground truth |
 
@@ -301,7 +301,7 @@ wc -l Sources/FramerApp/Editor/LayerListSection.swift                        # 4
 git log --oneline --grep=fix -- Sources/FramerApp/Editor/LayerListSection.swift | wc -l   # 42
 grep -n "removeItem" Sources/FramerCore/Presets/PresetStore.swift
 grep -n "assets/luts" Sources/FramerCore/Processing/LUTProvider.swift
-diff Package.resolved Framer.xcodeproj/project.xcworkspace/xcshareddata/swiftpm/Package.resolved
+python3 -c 'import json; a=json.load(open("Package.resolved")); b=json.load(open("Framer.xcodeproj/project.xcworkspace/xcshareddata/swiftpm/Package.resolved")); assert a["pins"] == b["pins"], "Dependency pins differ"'
 grep -n "FramerAppTests" Package.swift || echo "still Xcode-only"
 grep -n "userFacingCases" Sources/FramerCore/Effects/Models/GPUEffectKind.swift
 ```
