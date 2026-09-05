@@ -1,0 +1,38 @@
+name: CI
+
+on:
+  push:
+    branches: [main, develop]
+  pull_request:
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  test:
+    name: swift build + test (macOS arm64)
+    runs-on: macos-15
+    timeout-minutes: 30
+    steps:
+      # LFS stays OFF: assets/textures/ is ~355 MB across 168 LFS objects and
+      # no tier-1 test reads it (the ASCII LUT atlases EffectGPUGoldenTests
+      # needs are plain-git PNGs under Sources/FramerCore/Resources/textures/).
+      # Fetching LFS here would drain the bandwidth quota on every run.
+      - uses: actions/checkout@v5
+
+      - name: Toolchain versions
+        run: |
+          swift --version
+          xcodebuild -version
+
+      - name: Build
+        run: swift build
+
+      # Tier 1 only (FramerCore + FramerCLI). Tier 2 (FramerAppTests via
+      # xcodebuild) is not run here — see framer-campaign-restore-validation.
+      # EffectGPUGoldenTests throws XCTSkip when the runner exposes no Metal
+      # device; a nonzero skip count in the log is expected on such hosts,
+      # not a green light to ignore skips locally (the dev-Mac gate expects 0).
+      - name: Test (tier 1)
+        run: swift test

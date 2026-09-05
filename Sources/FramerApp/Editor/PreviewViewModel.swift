@@ -5,6 +5,9 @@ import FramerCore
 @MainActor
 @Observable
 final class PreviewViewModel {
+    typealias Renderer = @Sendable (URL, ProcessingConfig, Int) async throws -> CGImage
+    typealias ExifLoader = @Sendable (URL) async -> ExifData?
+
     var previewImage: NSImage?
     var originalImage: NSImage?
     var isLoading = false
@@ -16,15 +19,35 @@ final class PreviewViewModel {
     private var renderTask: Task<Void, Never>?
     private var originalLoadTask: Task<Void, Never>?
     private var originalImageURL: URL?
-    private let processor = FrameProcessor()
+    private let renderer: Renderer
+    private let exifLoader: ExifLoader
     private var renderGeneration: UInt64 = 0
+    private var originalLoadGeneration: UInt64 = 0
 
-    func updatePreview(for item: PhotoItem?, config: ProcessingConfig, includeOriginal: Bool = false) {
+    init(renderer: Renderer? = nil, exifLoader: ExifLoader? = nil) {
+        let processor = FrameProcessor()
+        self.renderer = renderer ?? { url, config, rotation in
+            try await processor.previewCGImage(for: url, config: config, rotation: rotation)
+        }
+        self.exifLoader = exifLoader ?? { url in
+            await processor.exifData(for: url)
+        }
+    }
+
+    @discardableResult
+    func updatePreview(
+        for item: PhotoItem?,
+        config: ProcessingConfig,
+        includeOriginal: Bool = false
+    ) -> Task<Void, Never>? {
         renderTask?.cancel()
+        renderGeneration &+= 1
+        let generation = renderGeneration
 
         guard let item else {
             renderTask = nil
             originalLoadTask?.cancel()
+            originalLoadGeneration &+= 1
             originalLoadTask = nil
             originalImageURL = nil
             previewImage = nil
@@ -33,18 +56,16 @@ final class PreviewViewModel {
             error = nil
             outputSize = nil
             isLoading = false
-            return
+            return nil
         }
 
         if originalImageURL != item.url {
             originalLoadTask?.cancel()
+            originalLoadGeneration &+= 1
             originalLoadTask = nil
             originalImageURL = nil
             originalImage = nil
         }
-
-        renderGeneration &+= 1
-        let generation = renderGeneration
 
         // `.utility` priority keeps this off the User-initiated QoS band. The
         // render hops onto the `FrameProcessor` actor, which escalates to the
@@ -53,25 +74,29 @@ final class PreviewViewModel {
         // BorderRenderer's `ctx.draw`). Utility sits at/below those workers, so
         // no high-priority thread waits on a lower one. The 150ms debounce
         // already makes this non-instant, so the QoS drop is imperceptible.
-        renderTask = Task(priority: .utility) {
+        let task = Task(priority: .utility) {
             // Debounce: wait 150ms before rendering
             try? await Task.sleep(for: .milliseconds(150))
-            guard generation == renderGeneration else { return }
+            guard !Task.isCancelled, generation == renderGeneration else { return }
 
             isLoading = true
             error = nil
-            defer { isLoading = false }
+            defer {
+                if generation == renderGeneration {
+                    isLoading = false
+                }
+            }
 
             do {
                 let itemURL = item.url
                 let itemRotation = item.rotation
 
-                let exif = await processor.exifData(for: itemURL)
-                guard generation == renderGeneration else { return }
+                let exif = await exifLoader(itemURL)
+                guard !Task.isCancelled, generation == renderGeneration else { return }
                 exifData = exif
 
-                let cgPreview = try await processor.previewCGImage(for: itemURL, config: config, rotation: itemRotation)
-                guard generation == renderGeneration else { return }
+                let cgPreview = try await renderer(itemURL, config, itemRotation)
+                guard !Task.isCancelled, generation == renderGeneration else { return }
                 let scale = NSScreen.main?.backingScaleFactor ?? 2.0
                 let preview = NSImage(cgImage: cgPreview, size: NSSize(
                     width: CGFloat(cgPreview.width) / scale,
@@ -85,14 +110,18 @@ final class PreviewViewModel {
             } catch is CancellationError {
                 return
             } catch {
+                guard !Task.isCancelled, generation == renderGeneration else { return }
                 self.error = error.localizedDescription
             }
         }
+        renderTask = task
+        return task
     }
 
     func loadOriginalIfNeeded(for item: PhotoItem?) {
         guard let item else {
             originalLoadTask?.cancel()
+            originalLoadGeneration &+= 1
             originalLoadTask = nil
             originalImageURL = nil
             originalImage = nil
@@ -104,6 +133,8 @@ final class PreviewViewModel {
         }
 
         originalLoadTask?.cancel()
+        originalLoadGeneration &+= 1
+        let generation = originalLoadGeneration
         let itemURL = item.url
         originalImageURL = itemURL
         originalLoadTask = Task {
@@ -113,7 +144,10 @@ final class PreviewViewModel {
             let cgImage = await Task.detached {
                 Self.loadOriginalCGImage(from: itemURL, maxDimension: 1200)
             }.value
-            guard !Task.isCancelled, originalImageURL == itemURL, let cgImage else { return }
+            guard !Task.isCancelled,
+                  generation == originalLoadGeneration,
+                  originalImageURL == itemURL,
+                  let cgImage else { return }
             let scale = NSScreen.main?.backingScaleFactor ?? 2.0
             originalImage = NSImage(cgImage: cgImage, size: NSSize(
                 width: CGFloat(cgImage.width) / scale,

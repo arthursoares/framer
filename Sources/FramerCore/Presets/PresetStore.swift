@@ -19,15 +19,20 @@ public final class PresetStore {
     }
 
     public func save(_ preset: Preset) throws {
-        // Remove any YAML file for this preset name (e.g. upgrading a default preset)
-        let yamlURL = directory.appendingPathComponent("\(preset.name).yaml")
-        if FileManager.default.fileExists(atPath: yamlURL.path) {
-            try? FileManager.default.removeItem(at: yamlURL)
-        }
-
         let url = directory.appendingPathComponent("\(preset.id.uuidString).json")
         let data = try JSONEncoder().encode(preset)
         try data.write(to: url, options: .atomic)
+
+        // Retire the legacy file only after its replacement is safe. Match the
+        // stored identity, since display names may change or contain path separators.
+        // JSON already overrides YAML by ID, so cleanup failure is non-destructive.
+        let files = try FileManager.default.contentsOfDirectory(at: directory, includingPropertiesForKeys: nil)
+        for yamlURL in files where yamlURL.pathExtension == "yaml" {
+            let name = yamlURL.deletingPathExtension().lastPathComponent
+            if Self.deterministicUUID(from: name) == preset.id {
+                try FileManager.default.removeItem(at: yamlURL)
+            }
+        }
     }
 
     public func load(id: UUID) throws -> Preset {
@@ -59,8 +64,9 @@ public final class PresetStore {
                 let preset = try JSONDecoder().decode(Preset.self, from: data)
                 presetsById[preset.id] = preset
             } catch {
-                // Remove corrupted/empty JSON files so they don't persist.
-                try? FileManager.default.removeItem(at: url)
+                // Preserve unreadable or newer-format files for recovery.
+                // Listing presets must never delete their original data.
+                continue
             }
         }
 

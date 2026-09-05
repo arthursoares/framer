@@ -37,7 +37,7 @@ targets:
         PRODUCT_BUNDLE_IDENTIFIER: com.arthursoares.Framer
         DEVELOPMENT_TEAM: QLW5M4WG7H
         CODE_SIGN_STYLE: Automatic
-        MARKETING_VERSION: "2.0.0"
+        MARKETING_VERSION: "2.1.0"
         CURRENT_PROJECT_VERSION: "1"
         ASSETCATALOG_COMPILER_APPICON_NAME: AppIcon
         INFOPLIST_KEY_LSApplicationCategoryType: "public.app-category.photography"
@@ -87,7 +87,7 @@ targets:
         PRODUCT_BUNDLE_IDENTIFIER: com.arthursoares.FramerMobile
         DEVELOPMENT_TEAM: QLW5M4WG7H
         CODE_SIGN_STYLE: Automatic
-        MARKETING_VERSION: "2.0.0"
+        MARKETING_VERSION: "2.1.0"
         CURRENT_PROJECT_VERSION: "1"
         ASSETCATALOG_COMPILER_APPICON_NAME: AppIcon
         INFOPLIST_KEY_CFBundleDisplayName: "Framer"
@@ -102,6 +102,21 @@ targets:
           SWIFT_ACTIVE_COMPILATION_CONDITIONS: DEBUG
         Release:
           SWIFT_ACTIVE_COMPILATION_CONDITIONS: ""
+
+  FramerMobileTests:
+    type: bundle.unit-test
+    platform: iOS
+    deploymentTarget: "17.0"
+    sources:
+      - path: Tests/FramerMobileTests
+    dependencies:
+      - target: FramerMobile
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: com.arthursoares.FramerMobileTests
+        DEVELOPMENT_TEAM: QLW5M4WG7H
+        CODE_SIGN_STYLE: Automatic
+        GENERATE_INFOPLIST_FILE: YES
 
 schemes:
   Framer:
@@ -122,7 +137,12 @@ schemes:
     build:
       targets:
         FramerMobile: all
+        FramerMobileTests: [test]
     run:
       config: Debug
+    test:
+      config: Debug
+      targets:
+        - name: FramerMobileTests
     archive:
       config: Release

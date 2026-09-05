@@ -1,0 +1,52 @@
+name: Release artifact
+
+# Builds the CLI binary when a version tag is pushed and attaches it to the
+# GitHub release for that tag. If no release exists yet it creates a DRAFT —
+# publishing stays a human decision, and release notes come from the
+# CHANGELOG per .claude/skills/release/SKILL.md (never auto-generated here).
+on:
+  push:
+    tags: ["v*"]
+
+permissions:
+  contents: write
+
+jobs:
+  build-and-attach:
+    name: build framer (macOS arm64) and attach to release
+    runs-on: macos-15
+    timeout-minutes: 30
+    steps:
+      # No LFS: the CLI binary embeds only Sources/FramerCore/Resources
+      # (plain git); the overlay textures are runtime assets, not build inputs.
+      - uses: actions/checkout@v5
+
+      - name: Build release binary
+        run: swift build -c release
+
+      - name: Verify binary version matches tag
+        run: |
+          BIN=.build/release/framer
+          VERSION="$("$BIN" --version)"
+          EXPECTED="${GITHUB_REF_NAME#v}"
+          echo "binary: $VERSION / tag: $EXPECTED"
+          if [ "$VERSION" != "$EXPECTED" ]; then
+            echo "::error::Binary prints $VERSION but tag is $GITHUB_REF_NAME — version bump missing in Sources/FramerCLI/Framer.swift?"
+            exit 1
+          fi
+
+      - name: Package tarball
+        run: tar -czf "framer-${GITHUB_REF_NAME}-macos-arm64.tar.gz" -C .build/release framer
+
+      - name: Attach to release (draft if none exists)
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          ASSET="framer-${GITHUB_REF_NAME}-macos-arm64.tar.gz"
+          if gh release view "$GITHUB_REF_NAME" >/dev/null 2>&1; then
+            gh release upload "$GITHUB_REF_NAME" "$ASSET" --clobber
+          else
+            gh release create "$GITHUB_REF_NAME" "$ASSET" --draft \
+              --title "$GITHUB_REF_NAME" \
+              --notes "Draft created by CI. Replace with the CHANGELOG section + install snippet per .claude/skills/release/SKILL.md before publishing."
+          fi

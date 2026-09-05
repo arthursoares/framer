@@ -707,7 +707,7 @@ final class EffectGPUBehaviorTests: XCTestCase {
     }
 
     func testFilmGrainUnknownStockDecodesToCustomInsteadOfThrowing() throws {
-        // Forward-compat: same preset-deletion guard as the border type.
+        // Forward-compat: keep the preset readable, just as for the border type.
         let layer = ShaderLayerParams(style: .filmGrain, params: .filmGrain(FilmGrainShaderParams()))
         var json = try JSONSerialization.jsonObject(
             with: JSONEncoder().encode(layer)) as! [String: Any]
@@ -740,8 +740,7 @@ final class EffectGPUBehaviorTests: XCTestCase {
 
     func testRoughBorderUnknownTypeDecodesToType3InsteadOfThrowing() throws {
         // Forward-compat: a preset written by a future version with a new
-        // border type must not throw — PresetStore deletes files that fail
-        // to decode (house rule 4).
+        // border type must not throw and hide the preset (house rule 4).
         let layer = ShaderLayerParams(style: .roughBorder, params: .roughBorder(RoughBorderShaderParams()))
         var json = try JSONSerialization.jsonObject(
             with: JSONEncoder().encode(layer)) as! [String: Any]
@@ -1083,7 +1082,7 @@ final class EffectGPUBehaviorTests: XCTestCase {
     func testBWFilmUnknownResponseDecodesToCustomInsteadOfThrowing() throws {
         // Forward-compat guard: a preset written by a FUTURE version with a
         // new film name must not make this version's decode throw —
-        // PresetStore deletes files that fail to decode (house rule 4).
+        // PresetStore would hide an unreadable preset (house rule 4).
         let layer = ShaderLayerParams(style: .bwFilm, params: .bwFilm(BWFilmShaderParams()))
         var json = try JSONSerialization.jsonObject(
             with: JSONEncoder().encode(layer)) as! [String: Any]

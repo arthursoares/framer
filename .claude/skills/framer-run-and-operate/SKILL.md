@@ -108,14 +108,17 @@ Config/behavior:
 
 Behaviors worth knowing (all in `ProcessCommand.swift`):
 
-- **Caption default:** with no caption flags at all, the CLI appends a caption
-  layer with template `" - {{mon}} '{{year2}} -"` (e.g. `- JUL '26 -`).
-- **Caption override is destructive:** the CLI strips any caption layers that
-  came from the preset/config and appends its own. To keep a preset's caption
-  exactly, you cannot — re-specify it via `--caption-template`.
+- **Caption behavior (updated 2026-09-05):** an explicit layer stack is preserved
+  without caption/font flags. Legacy configs without a layer stack retain the
+  default `" - {{mon}} '{{year2}} -"` caption. `--caption` or
+  `--caption-template` replaces captions with one appended caption (template
+  takes precedence); font-only flags update supplied fields in existing captions
+  or append a default caption if none exists. `--no-caption` removes captions.
 - **Batch mode:** if `--input` is a directory, `--output` is required. Files
   with extensions jpg/jpeg/png/tiff/tif/heic are processed by a
   `withThrowingTaskGroup` worker pool; progress prints as `[n/total] name.jpg`.
+  Duplicate destination names are rejected before creating the output directory
+  or starting rendering, accounting for the destination volume's case sensitivity.
 
 Worked examples (single-image run verified end-to-end 2026-07-09; produced an
 8.4 MB `sample_solid.jpg` with correct EXIF + IPTC):
@@ -273,9 +276,10 @@ Preset-store behaviors that affect operations:
   first run — but seeding is **skipped entirely if any `.yaml` already exists**
   (`PresetStore.initializeDefaults`), so an older install may show only the
   original 5. `swift run framer presets list` prints `name (UUID)` per preset.
-- **Hazard**: `PresetStore.list()` silently **deletes** any `.json` preset file
-  it cannot decode. A Codable regression can destroy user presets on next
-  launch — see framer-architecture-contract before touching preset Codable.
+- **Recovery (updated 2026-09-05)**: `PresetStore.list()` skips unreadable
+  `.json` records and preserves their original files. A Codable regression
+  still hides valid presets — see framer-architecture-contract before editing
+  preset decoding. Listing must never delete data.
 - **Bundled LUTs are apparently latent**: `LUTProvider.bundledLUTs()` looks for
   `<executable-dir>/assets/luts` (`LUTProvider.swift` ~line 296), but nothing —
   neither `project.yml` nor SwiftPM — places an `assets/luts` folder next to

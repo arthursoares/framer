@@ -45,74 +45,7 @@ struct ProcessCommand: AsyncParsableCommand {
         // Build config: CLI flags → config file → preset → .framer.yaml → defaults
         let configURL = config.map { URL(fileURLWithPath: $0) }
         var cfg = YAMLConfig.loadDefault(configPath: configURL, preset: preset)
-
-        // Apply CLI overrides
-        if let s = borderStyle {
-            switch s {
-            case "solid": cfg.borderStyle = .solid
-            case "instagram": cfg.borderStyle = .instagram
-            case "print10x15": cfg.borderStyle = .print(.print10x15)
-            case "print":
-                let format = PrintFormat(
-                    widthMM: printWidth ?? 148,
-                    heightMM: printHeight ?? 100,
-                    dpi: printDpi ?? 300
-                )
-                cfg.borderStyle = .print(format)
-            default: break
-            }
-        }
-        // Apply print dimensions even without --border-style if already in print mode
-        if case .print(var format) = cfg.borderStyle {
-            if let w = printWidth { format.widthMM = w }
-            if let h = printHeight { format.heightMM = h }
-            if let d = printDpi { format.dpi = d }
-            cfg.borderStyle = .print(format)
-        }
-        if let t = borderThickness { cfg.borderThickness = BorderSize(string: t) }
-        if let c = borderColor, let color = try? CodableColor(hex: c) { cfg.borderColor = color }
-        if let p = padding { cfg.padding = p }
-        try Self.applyOutputFormatOverride(outputFormat, quality: quality, config: &cfg)
-        if let pp = postProcess { cfg.postProcess = pp }
-        if let bg = backgroundColor, let color = try? CodableColor(hex: bg) { cfg.backgroundColor = color }
-        Self.applyPaddingOverrides(outerPadding: outerPadding, captionPadding: captionPadding, config: &cfg)
-        if noMetadata { cfg.noMetadata = true }
-
-        // Build caption layer from CLI flags
-        var captionMode: CaptionMode = .template(" - {{mon}} '{{year2}} -")
-        if noCaption { captionMode = .none }
-        else if let t = captionTemplate { captionMode = .template(t) }
-        else if let c = caption { captionMode = .custom(c) }
-
-        var captionFontStyle: FontStyle = []
-        if fontBold { captionFontStyle.insert(.bold) }
-        if fontItalic { captionFontStyle.insert(.italic) }
-
-        let captionParams = CaptionLayerParams(
-            mode: captionMode,
-            fontName: fontName ?? "Courier New",
-            fontSize: fontSize.map { .fixed($0) } ?? .auto,
-            fontStyle: captionFontStyle,
-            fontColor: (fontColor.flatMap { try? CodableColor(hex: $0) }) ?? .black
-        )
-
-        // Ensure layers exist and add caption
-        if cfg.layers == nil {
-            cfg.layers = CompositionLayer.defaultLayers()
-        }
-
-        // Insert aspect ratio crop at the beginning of the layer stack
-        if let ratioStr = aspectRatio {
-            let parts = ratioStr.split(separator: ":").compactMap { Int($0) }
-            if parts.count == 2, parts[0] > 0, parts[1] > 0 {
-                cfg.layers?.insert(.aspectRatio(AspectRatioLayerParams(ratioWidth: parts[0], ratioHeight: parts[1])), at: 0)
-            }
-        }
-        // Remove any existing caption layers, then append
-        cfg.layers?.removeAll { if case .caption = $0 { return true }; return false }
-        if case .none = captionMode {} else {
-            cfg.layers?.append(.caption(captionParams))
-        }
+        try applyCLIOverrides(to: &cfg)
 
         let inputURL = URL(fileURLWithPath: input)
         var isDir: ObjCBool = false
@@ -144,15 +77,125 @@ struct ProcessCommand: AsyncParsableCommand {
         }
     }
 
-    private func batchProcess(directory: URL, outputDir: String, config: ProcessingConfig, workers: Int) async throws {
+    func applyCLIOverrides(to config: inout ProcessingConfig) throws {
+        if let borderStyle {
+            switch borderStyle {
+            case "solid": config.borderStyle = .solid
+            case "instagram": config.borderStyle = .instagram
+            case "print10x15": config.borderStyle = .print(.print10x15)
+            case "print":
+                config.borderStyle = .print(PrintFormat(
+                    widthMM: printWidth ?? 148,
+                    heightMM: printHeight ?? 100,
+                    dpi: printDpi ?? 300
+                ))
+            default: break
+            }
+        }
+
+        // Apply print dimensions even without --border-style if already in print mode.
+        if case .print(var format) = config.borderStyle {
+            if let printWidth { format.widthMM = printWidth }
+            if let printHeight { format.heightMM = printHeight }
+            if let printDpi { format.dpi = printDpi }
+            config.borderStyle = .print(format)
+        }
+        if let borderThickness { config.borderThickness = BorderSize(string: borderThickness) }
+        if let borderColor, let color = try? CodableColor(hex: borderColor) { config.borderColor = color }
+        if let padding { config.padding = padding }
+        try Self.applyOutputFormatOverride(outputFormat, quality: quality, config: &config)
+        if let postProcess { config.postProcess = postProcess }
+        if let backgroundColor, let color = try? CodableColor(hex: backgroundColor) {
+            config.backgroundColor = color
+        }
+        Self.applyPaddingOverrides(
+            outerPadding: outerPadding,
+            captionPadding: captionPadding,
+            config: &config
+        )
+        if noMetadata { config.noMetadata = true }
+
+        // A nil stack is the legacy CLI configuration. Materializing its
+        // default layers retains the caption that the command has always added.
+        if config.layers == nil {
+            config.layers = CompositionLayer.defaultLayers()
+        }
+
+        // Insert aspect ratio crop at the beginning of the layer stack.
+        if let aspectRatio {
+            let parts = aspectRatio.split(separator: ":").compactMap { Int($0) }
+            if parts.count == 2, parts[0] > 0, parts[1] > 0 {
+                config.layers?.insert(
+                    .aspectRatio(AspectRatioLayerParams(ratioWidth: parts[0], ratioHeight: parts[1])),
+                    at: 0
+                )
+            }
+        }
+
+        if noCaption {
+            config.layers?.removeAll { layer in
+                if case .caption = layer { return true }
+                return false
+            }
+            return
+        }
+
+        let replacementMode: CaptionMode?
+        if let captionTemplate {
+            replacementMode = .template(captionTemplate)
+        } else if let caption {
+            replacementMode = .custom(caption)
+        } else {
+            replacementMode = nil
+        }
+
+        let hasFontOverride = fontName != nil
+            || fontSize != nil
+            || fontBold
+            || fontItalic
+            || fontColor != nil
+
+        if let replacementMode {
+            config.layers?.removeAll { layer in
+                if case .caption = layer { return true }
+                return false
+            }
+            var params = CaptionLayerParams(mode: replacementMode)
+            applyFontOverrides(to: &params)
+            config.layers?.append(.caption(params))
+        } else if hasFontOverride {
+            var foundCaption = false
+            config.layers = config.layers?.map { layer in
+                guard case .caption(var params) = layer else { return layer }
+                foundCaption = true
+                applyFontOverrides(to: &params)
+                return .caption(params)
+            }
+            if !foundCaption {
+                var params = CaptionLayerParams()
+                applyFontOverrides(to: &params)
+                config.layers?.append(.caption(params))
+            }
+        }
+    }
+
+    private func applyFontOverrides(to params: inout CaptionLayerParams) {
+        if let fontName { params.fontName = fontName }
+        if let fontSize { params.fontSize = .fixed(fontSize) }
+        if fontBold { params.fontStyle.insert(.bold) }
+        if fontItalic { params.fontStyle.insert(.italic) }
+        if let fontColor {
+            params.fontColor = (try? CodableColor(hex: fontColor)) ?? .black
+        }
+    }
+
+    func batchProcess(directory: URL, outputDir: String, config: ProcessingConfig, workers: Int) async throws {
         guard workers > 0 else {
             throw ValidationError("--workers must be at least 1")
         }
 
         let fm = FileManager.default
         let outDir = URL(fileURLWithPath: outputDir)
-        try fm.createDirectory(at: outDir, withIntermediateDirectories: true)
-
         let images = try fm.contentsOfDirectory(at: directory, includingPropertiesForKeys: nil)
             .filter { ["jpg","jpeg","png","tiff","tif","heic"].contains($0.pathExtension.lowercased()) }
 
@@ -161,44 +204,112 @@ struct ProcessCommand: AsyncParsableCommand {
             return
         }
 
-        let total = images.count
+        let jobs = try Self.validatedBatchJobs(
+            images: images,
+            outputDirectory: outDir,
+            config: config,
+            caseSensitiveFileSystem: Self.isCaseSensitiveFileSystem(at: outDir, fileManager: fm)
+        )
+        try fm.createDirectory(at: outDir, withIntermediateDirectories: true)
+
+        let total = jobs.count
         print("Processing \(total) image\(total == 1 ? "" : "s") with \(workers) worker\(workers == 1 ? "" : "s")...")
 
         let counter = Counter()
 
         try await withThrowingTaskGroup(of: Void.self) { group in
-            var pending = images.makeIterator()
+            var pending = jobs.makeIterator()
 
             // Seed initial workers
             for _ in 0..<min(workers, total) {
-                if let url = pending.next() {
+                if let job = pending.next() {
                     group.addTask {
-                        let outURL = Self.outputName(for: url, in: outDir, style: config.borderStyle, format: config.outputFormat)
-                        let processor = FrameProcessor()
-                        try await processor.process(input: url, output: outURL, config: config)
-                        Self.runPostProcess(config.postProcess, file: outURL)
-                        let d = await counter.increment()
-                        print("[\(d)/\(total)] \(url.lastPathComponent)")
+                        try await Self.processBatchJob(job, config: config, counter: counter, total: total)
                     }
                 }
             }
 
             // As each finishes, schedule next
             for try await _ in group {
-                if let url = pending.next() {
+                if let job = pending.next() {
                     group.addTask {
-                        let outURL = Self.outputName(for: url, in: outDir, style: config.borderStyle, format: config.outputFormat)
-                        let processor = FrameProcessor()
-                        try await processor.process(input: url, output: outURL, config: config)
-                        Self.runPostProcess(config.postProcess, file: outURL)
-                        let d = await counter.increment()
-                        print("[\(d)/\(total)] \(url.lastPathComponent)")
+                        try await Self.processBatchJob(job, config: config, counter: counter, total: total)
                     }
                 }
             }
         }
 
         print("Done: \(total) images processed to \(outDir.path)")
+    }
+
+    struct BatchJob: Sendable {
+        let input: URL
+        let output: URL
+    }
+
+    static func validatedBatchJobs(
+        images: [URL],
+        outputDirectory: URL,
+        config: ProcessingConfig,
+        caseSensitiveFileSystem: Bool
+    ) throws -> [BatchJob] {
+        var inputsByDestination: [String: URL] = [:]
+        var jobs: [BatchJob] = []
+        jobs.reserveCapacity(images.count)
+
+        for input in images {
+            let output = outputName(
+                for: input,
+                in: outputDirectory,
+                style: config.borderStyle,
+                format: config.outputFormat
+            ).standardizedFileURL
+            let path = caseSensitiveFileSystem
+                ? output.path
+                : output.path.folding(options: [.caseInsensitive], locale: Locale(identifier: "en_US_POSIX"))
+
+            if let conflictingInput = inputsByDestination[path] {
+                throw ValidationError(
+                    "Batch inputs '\(conflictingInput.lastPathComponent)' and '\(input.lastPathComponent)' "
+                    + "resolve to the same output '\(output.lastPathComponent)'"
+                )
+            }
+            inputsByDestination[path] = input
+            jobs.append(BatchJob(input: input, output: output))
+        }
+
+        return jobs
+    }
+
+    static func isCaseSensitiveFileSystem(
+        at url: URL,
+        fileManager: FileManager,
+        readVolumeCapability: (URL) throws -> Bool? = {
+            try $0.resourceValues(forKeys: [.volumeSupportsCaseSensitiveNamesKey])
+                .volumeSupportsCaseSensitiveNames
+        }
+    ) -> Bool {
+        var existingURL = url.standardizedFileURL
+        while !fileManager.fileExists(atPath: existingURL.path) {
+            let parent = existingURL.deletingLastPathComponent()
+            guard parent.path != existingURL.path else { return false }
+            existingURL = parent
+        }
+        // Unknown volume capabilities must not permit potentially colliding writes.
+        return (try? readVolumeCapability(existingURL)) ?? false
+    }
+
+    private static func processBatchJob(
+        _ job: BatchJob,
+        config: ProcessingConfig,
+        counter: Counter,
+        total: Int
+    ) async throws {
+        let processor = FrameProcessor()
+        try await processor.process(input: job.input, output: job.output, config: config)
+        runPostProcess(config.postProcess, file: job.output)
+        let completed = await counter.increment()
+        print("[\(completed)/\(total)] \(job.input.lastPathComponent)")
     }
 
     static func validatedWorkers(_ workers: Int?) throws -> Int {
