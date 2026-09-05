@@ -1,0 +1,14 @@
+output_format: jpeg
+jpeg_quality: 85
+no_metadata: true
+layers:
+  - type: resize
+    max_width: 1600
+    max_height: 1600
+  - type: shader
+    shader_style: distantPast
+    intensity: 0.92
+    shader_palette_depth: 7
+    shader_fade: 0.24
+    shader_softness: 0.18
+    shader_grain: 0.12

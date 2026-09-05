@@ -1,0 +1,13 @@
+output_format: jpeg
+jpeg_quality: 85
+no_metadata: true
+layers:
+  - type: resize
+    max_width: 1200
+    max_height: 1200
+  - type: shader
+    shader_style: halftone
+    intensity: 1.0
+    shader_dot_size: 1.35
+    shader_contrast: 1.15
+    shader_monochrome: false

@@ -1,0 +1,20 @@
+output_format: jpeg
+jpeg_quality: 85
+no_metadata: true
+layers:
+  - type: resize
+    max_width: 1200
+    max_height: 1200
+  - type: shader
+    shader_style: ascii
+    intensity: 1.0
+    shader_cell_size: 9
+    shader_edge_bias: 0.42
+    shader_color_mode: gradient
+    shader_color1: "#E9A85E"
+    shader_color2: "#7F9DB2"
+    shader_background: "#111820"
+    shader_invert: false
+    shader_exposure: 1.08
+    shader_attenuation: 1.12
+    shader_black_level: 0.04
