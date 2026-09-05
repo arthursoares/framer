@@ -14,9 +14,20 @@ description: >
 
 # framer: build & environment runbook
 
-All facts verified 2026-07-09 on the maintainer's machine at commit `48d85a5`
-(main). Volatile numbers (test counts, versions, file counts) WILL drift — every
-one has a re-verification command in "Provenance and maintenance" at the bottom.
+## Current local status — 2026-09-05
+
+SPM build/tests and both Xcode test targets pass: 330 Core/CLI, 65 macOS, and
+7 iOS tests with zero failures/skips. Local Xcode validation uses
+`CODE_SIGNING_ALLOWED=NO`; distribution signing is not verified. Metal is
+installed. iOS validation required both the iOS 26.5 simulator runtime and
+the separate iOS 26.5.1 Platform Support component in Xcode's Components settings.
+If an installed runtime still produces an ineligible destination, check
+Platform Support separately. Downloading the runtime alone did not resolve it.
+
+These facts supersede the dated July availability/count statements below.
+Keep the historical incident details, and recheck tools before diagnosing the
+same symptoms on another machine. CI now runs the SPM tier for PRs and
+`main`/`develop` pushes.
 
 **Jargon, defined once:**
 

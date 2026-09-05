@@ -22,7 +22,21 @@ tests, and release branch configuration.
    CLI image smoke check for renderer changes. Review the integrated diff
    independently. No new dependencies or snapshot/golden refreshes.
 
-## Discussion backlog
+## Initial findings and final disposition
+
+The findings below describe the initial `1f15cb2` baseline. The completed PR
+stack addresses them as follows (merge from bottom to top):
+
+1. `chore/develop-release-baseline` → `develop`: released baseline, PR #24.
+2. `chore/develop-cleanup` → baseline: safe saves/dead renderer deletion, PR #25.
+3. `fix/preset-recovery` → cleanup: preserve unreadable originals, PR #26.
+4. `fix/cli-config-safety` → recovery: captions/output collision checks, PR #27.
+5. `chore/package-pin-parity` → CLI: identical dependency pins, PR #28.
+6. `fix/app-state-lifecycle` → pins: stable editor IDs and async state, PR #29.
+7. `refactor/layer-editors` → lifecycle: separate layer-control files.
+
+Retarget each upper PR to `develop` as lower PRs merge, preserving ancestry
+with merge commits. No merge was performed by the agent.
 
 - High: `PresetStore.list()` silently deletes unreadable JSON. Recommend preserving
   and skipping these files. Arthur authorized continuing with these findings
@@ -54,13 +68,18 @@ tests, and release branch configuration.
 - SwiftPM and Xcode pin ArgumentParser to 1.7.0 and 1.7.1 respectively. Align
   using package resolution in a separate dependency change.
 - `EffectPreviewComparator` has no call sites or tests, but is public API and
-  documented as a future validation hook. Decide whether to wire it into actual
-  preview/export tests before deleting it.
+  documented as a future validation hook. Retained for compatibility; removal
+  or adoption into new preview/export validation remains a separate decision.
 
-The app findings are supported by source-path inspection, not interactive UI
-reproduction. FramerMobile has no test target. Legacy decoding, the intentional
-CPU ASCII/Riemersma/LUT paths, and conditional sidebar result builders are
-required compatibility behavior, not deletion candidates.
+The initial app findings came from source inspection. The final stack adds a
+mobile test target and controlled regressions for the fixed lifecycle issues.
+Legacy decoding, intentional CPU ASCII/Riemersma/LUT paths, and conditional
+sidebar result builders remain required compatibility behavior.
+
+Final integrated validation: normal `swift build` and `swift test` pass
+**330 Core/CLI tests**; Xcode passes **65 macOS + 7 iOS tests**, all with zero
+failures/skips. App tests use signing disabled and unchanged visual snapshots.
+Physical-device signing is not verified; existing iOS warnings remain.
 
 ## Verification and remaining findings
 

@@ -14,9 +14,23 @@ description: >
 What counts as evidence in this repo, how the two test tiers work, the snapshot-hash
 house rule, how to write and add tests, and — just as important — what has NO tests.
 
-There is **no CI** (no `.github/`, no `scripts/`, no Makefile — as of 2026-07-09,
-commit 48d85a5). Every validation claim in this repo is a claim about commands YOU ran
-locally. That makes the evidence bar below load-bearing, not bureaucratic.
+## Current validation status — 2026-09-05
+
+CI runs the SPM build/tests on macOS for PRs and pushes to `main`/`develop`.
+The local cleanup stack passes 330 SPM tests, 65 macOS app tests, and 7 iOS app
+tests, with zero failures or skips. App tests are Xcode-only; the mobile target
+and scheme now include `FramerMobileTests`.
+
+Run app tests with `xcodebuild test -project Framer.xcodeproj -scheme Framer
+-destination 'platform=macOS' CODE_SIGNING_ALLOWED=NO`, or use scheme
+`FramerMobile` and an installed iOS Simulator destination. Local validation used
+iPhone 17 Pro / iOS 26.5, full asset catalogs, and unchanged snapshot hashes.
+Distribution signing was not tested. Metal and iOS Platform Support are now
+installed; the separate Platform Support component was required in addition
+to the simulator runtime.
+
+This status supersedes the dated July availability/count inventory below.
+Historical failure descriptions still explain the incidents behind the gates.
 
 ## When NOT to use this skill
 

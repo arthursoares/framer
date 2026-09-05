@@ -233,13 +233,13 @@ tests do `@testable import Framer` (Tests/FramerAppTests/*.swift). Writing
 
 | Weak point | Evidence (verified 2026-07-09) | Risk |
 |---|---|---|
-| `Sources/FramerApp/Editor/LayerListSection.swift` is 4,833 lines; 42 commits matching "fix" touch it (`git log --oneline --grep=fix -- Sources/FramerApp/Editor/LayerListSection.swift \| wc -l` → 42) | `wc -l` → 4833 | Every per-layer control panel lives here; highest-churn, highest-collision file in the repo. Decompose before adding panels. UI grammar: framer-ui-design-system |
+| Layer editors are split by layer (updated 2026-09-05) | macOS `LayerListSection.swift` is a coordinator with controls under `Editor/LayerControls/`; iOS `LayerDetailView.swift` coordinates controls under `Layers/Controls/` | Add controls to their owning files. The large GPU/shader structs remain intact; sidebar grammar and snapshot rules still apply. |
 | PresetStore skips unreadable presets but preserves their files (updated 2026-09-05) | PresetStore.list() has no deletion path; PresetStoreTests verifies original bytes survive malformed/unsupported records and read failures | A Codable regression still hides valid presets. Keep legacy decoding and never restore automatic deletion. |
 | LUTMetalRenderer caches grow unboundedly | input/output textures keyed by (width,height), LUT textures keyed by full-data hash; no eviction anywhere in MetalContext (LUTMetalRenderer.swift:269-330; grep for `removeAll`/`evict` finds none) | Acceptable only because sizes are few in practice; a LUT-browsing feature would leak GPU memory |
 | AppState never got its planned Library/Editor split | Plan: docs/plans/2026-03-08-performance-optimizations.md "Fix 4: Split AppState into Library vs Editor"; reality: single `AppState` class, no `LibraryState`/`EditorState` symbols exist | Slider drags still invalidate library views and vice versa; the PresetThumbnailCache extraction was a partial mitigation, the full split is still open |
 | `LUTProvider.bundledLUTs()` executable-relative lookup appears dead | LUTProvider.swift:296-299 looks for `<executable dir>/assets/luts`; repo has `assets/luts/` (4 files) but neither project.yml nor Package.swift bundles it, and SPM puts binaries in `.build/debug/` with no assets sibling | Bundled LUTs are invisible in every standard run context; user-imported LUTs (Application Support) are the working path. Likely a Go-CLI-era leftover — confirm intent before "fixing" |
 | Two `Package.resolved` files must stay aligned (updated 2026-09-05) | Root and Xcode workspace both pin ArgumentParser 1.7.1 and Yams 5.4.0 at identical revisions | Compare pin arrays after resolving dependencies; resolver-specific origin hashes may differ |
-| Tests/FramerAppTests (incl. SHA-256 snapshot tests) are NOT in Package.swift | `grep FramerAppTests Package.swift` → no match; they run only via the xcodegen `Framer` scheme, whose xcodebuild tier is currently broken on this machine | The app-layer test estate is dark until framer-campaign-restore-validation completes |
+| App tests remain Xcode-only (updated 2026-09-05) | `Framer` runs 65 macOS tests and `FramerMobile` runs 7 iOS tests via project.yml; both passed locally with signing disabled | `swift test` alone does not validate app changes. Run the applicable Xcode target. |
 | Docs of record are partially stale (e.g. docs/gpu-effects-parameter-matrix.md predates later shader wiring; README.md predates several layers; CLAUDE.md was rewritten 2026-07-09 to route to this library) | staleness ledger: framer-docs-and-writing | Do not treat prose docs as ground truth for shader capabilities; `GPUEffectKind` capability flags (Sources/FramerCore/Effects/Models/GPUEffectKind.swift:81-124) + the `.metal` sources are ground truth |
 
 ## Open architectural questions (undecided — do not resolve unilaterally)
@@ -297,7 +297,7 @@ grep -n "recommendedExportConcurrency" Sources/FramerApp/App/AppState.swift
 grep -n "@testable import Framer" Tests/FramerAppTests/LayerPanelRowLayoutTests.swift
 
 # Weak points
-wc -l Sources/FramerApp/Editor/LayerListSection.swift                        # 4833 as of 48d85a5
+wc -l Sources/FramerApp/Editor/LayerListSection.swift Sources/FramerMobile/Layers/LayerDetailView.swift
 git log --oneline --grep=fix -- Sources/FramerApp/Editor/LayerListSection.swift | wc -l   # 42
 grep -n "removeItem" Sources/FramerCore/Presets/PresetStore.swift
 grep -n "assets/luts" Sources/FramerCore/Processing/LUTProvider.swift
