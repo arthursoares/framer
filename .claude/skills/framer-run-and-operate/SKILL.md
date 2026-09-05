@@ -108,14 +108,17 @@ Config/behavior:
 
 Behaviors worth knowing (all in `ProcessCommand.swift`):
 
-- **Caption default:** with no caption flags at all, the CLI appends a caption
-  layer with template `" - {{mon}} '{{year2}} -"` (e.g. `- JUL '26 -`).
-- **Caption override is destructive:** the CLI strips any caption layers that
-  came from the preset/config and appends its own. To keep a preset's caption
-  exactly, you cannot — re-specify it via `--caption-template`.
+- **Caption behavior (updated 2026-09-05):** an explicit layer stack is preserved
+  without caption/font flags. Legacy configs without a layer stack retain the
+  default `" - {{mon}} '{{year2}} -"` caption. `--caption` or
+  `--caption-template` replaces captions with one appended caption (template
+  takes precedence); font-only flags update supplied fields in existing captions
+  or append a default caption if none exists. `--no-caption` removes captions.
 - **Batch mode:** if `--input` is a directory, `--output` is required. Files
   with extensions jpg/jpeg/png/tiff/tif/heic are processed by a
   `withThrowingTaskGroup` worker pool; progress prints as `[n/total] name.jpg`.
+  Duplicate destination names are rejected before creating the output directory
+  or starting rendering, accounting for the destination volume's case sensitivity.
 
 Worked examples (single-image run verified end-to-end 2026-07-09; produced an
 8.4 MB `sample_solid.jpg` with correct EXIF + IPTC):
