@@ -10,6 +10,7 @@
 		0239A652D93C03905A8C7A0E /* CaptionLayerControls.swift in Sources */ = {isa = PBXBuildFile; fileRef = 01EDEC90C6AB89059BEA32D6 /* CaptionLayerControls.swift */; };
 		02AB8ECED2BAEEB2B7CC18BA /* PreviewViewModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8A6E6F60B12048759BD1E60C /* PreviewViewModel.swift */; };
 		0974A12540B8D462AFB2C6CF /* textures in Resources */ = {isa = PBXBuildFile; fileRef = B1EC2164F8A3DF317311D2C8 /* textures */; };
+		0A6D4D6AC2806684ADD18632 /* DesktopInteractionUXTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 01EF65EB1520BFE66525A8E0 /* DesktopInteractionUXTests.swift */; };
 		0D238E724D1D19B9165D6D5A /* PreviewViewModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = 81F13602BA30AF5F90605B6C /* PreviewViewModel.swift */; };
 		0ED0C53D70F7DDB0D7E3FE16 /* ZoomState.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0688E0FFDF5CFC624EEB29D3 /* ZoomState.swift */; };
 		100AF36A76D44046D6CBA6AC /* FormatPicker.swift in Sources */ = {isa = PBXBuildFile; fileRef = F9159A274519F6AA116746B0 /* FormatPicker.swift */; };
@@ -52,6 +53,7 @@
 		5D092CBF6F855150B52A4BE1 /* UserPaletteMenu.swift in Sources */ = {isa = PBXBuildFile; fileRef = 285A8FC00C2D20C64541A8D0 /* UserPaletteMenu.swift */; };
 		5D88DB10337BFE8E0F0A5BC3 /* PresetThumbnailCache.swift in Sources */ = {isa = PBXBuildFile; fileRef = CD7D50222EA07D94CD173F52 /* PresetThumbnailCache.swift */; };
 		6008AC967F78C371F1DE8F51 /* PreviewArea.swift in Sources */ = {isa = PBXBuildFile; fileRef = B2205885A0B72C7BB1800460 /* PreviewArea.swift */; };
+		60CF0BF68845E76389BC1358 /* ThemeContrastTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 178A3F3BDE77AF770A75DB56 /* ThemeContrastTests.swift */; };
 		62B6DBD3B476520075DE5BB6 /* BottomPanel.swift in Sources */ = {isa = PBXBuildFile; fileRef = FC61E7BD757670C3FC26800E /* BottomPanel.swift */; };
 		66B12BD55EAE11AE1657CBAE /* SidebarLayoutPolicyTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = A8E704CEA7DD5812C7E8E102 /* SidebarLayoutPolicyTests.swift */; };
 		676D99BB05EACD4F6C22E4E9 /* LayerPanelRow.swift in Sources */ = {isa = PBXBuildFile; fileRef = D6C97FA89C679CAAAC4C845E /* LayerPanelRow.swift */; };
@@ -70,12 +72,14 @@
 		7C6992D5D4F4268C23016676 /* OrientationControls.swift in Sources */ = {isa = PBXBuildFile; fileRef = B3BF26B39AF832007BC0EEE8 /* OrientationControls.swift */; };
 		7E26ACB4EBE5DD197F9C9E0C /* ExifInfoBar.swift in Sources */ = {isa = PBXBuildFile; fileRef = 69843CE860C9D64774BF6A76 /* ExifInfoBar.swift */; };
 		7E2AB0E272826F543B864CC6 /* PreviewViewModelLifecycleTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 71665FD0A4B2C243C7182D15 /* PreviewViewModelLifecycleTests.swift */; };
+		807AC9A9994B6CEB135EF7BD /* ThemeContrastTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1A3AE43CE79034AF6753441F /* ThemeContrastTests.swift */; };
 		80C7332C66CEEAF7D7DFB228 /* StyledSliderValueResolverTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 86BC6ECDDBB38E03658D7114 /* StyledSliderValueResolverTests.swift */; };
 		83C339C5F6907392A7F11225 /* ImageThumbnailLoader.swift in Sources */ = {isa = PBXBuildFile; fileRef = D5BE1B7F799CD269EE2C1411 /* ImageThumbnailLoader.swift */; };
 		8B0B4CEE3882DC2ED4FBA8B3 /* LayerPanelRowStateResolverTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8F4005057620F710FB3C5103 /* LayerPanelRowStateResolverTests.swift */; };
 		8B4266040896BBED84762794 /* textures in Resources */ = {isa = PBXBuildFile; fileRef = B1EC2164F8A3DF317311D2C8 /* textures */; };
 		8D1547759A37FB2911D033A8 /* AppLifecycleRegressionTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 42B8BF90CF0DBD054E2831BB /* AppLifecycleRegressionTests.swift */; };
 		8F160BA890A60D6718F2A885 /* CollapsibleSidebarSection.swift in Sources */ = {isa = PBXBuildFile; fileRef = B16338D6414DE0340B3BABA3 /* CollapsibleSidebarSection.swift */; };
+		900FC897FB0CBA30FEF06BD9 /* MobileControlsUXTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = BE99C4E699B8F350E6E3595B /* MobileControlsUXTests.swift */; };
 		922190469E4BF28489790F32 /* SidebarHarmonySnapshotTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = DCC79DCD115A284F6B81A07B /* SidebarHarmonySnapshotTests.swift */; };
 		957CB6FB8DD1F99FEB60E414 /* ShaderLayerControls.swift in Sources */ = {isa = PBXBuildFile; fileRef = E9C5B94609C95B9A3045D44C /* ShaderLayerControls.swift */; };
 		9676A45F719921F4BD51F208 /* PaddingControls.swift in Sources */ = {isa = PBXBuildFile; fileRef = A28788CF3E9B5FBC26A9CB06 /* PaddingControls.swift */; };
@@ -139,6 +143,7 @@
 
 /* Begin PBXFileReference section */
 		01EDEC90C6AB89059BEA32D6 /* CaptionLayerControls.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CaptionLayerControls.swift; sourceTree = "<group>"; };
+		01EF65EB1520BFE66525A8E0 /* DesktopInteractionUXTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DesktopInteractionUXTests.swift; sourceTree = "<group>"; };
 		04ED7A26C243E674A008AF14 /* OverlayControls.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = OverlayControls.swift; sourceTree = "<group>"; };
 		0688E0FFDF5CFC624EEB29D3 /* ZoomState.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ZoomState.swift; sourceTree = "<group>"; };
 		07CE80E5C2C968E54B507CD5 /* LayerListSection.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LayerListSection.swift; sourceTree = "<group>"; };
@@ -146,8 +151,10 @@
 		09F1AD4BE3C7D66E551907F8 /* GPUEffectControls.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = GPUEffectControls.swift; sourceTree = "<group>"; };
 		0D095FCC7254B8C31533A59A /* LayerFillPicker.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LayerFillPicker.swift; sourceTree = "<group>"; };
 		124FCD0A6152E9E3838DD5A1 /* StyledSlider.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = StyledSlider.swift; sourceTree = "<group>"; };
+		178A3F3BDE77AF770A75DB56 /* ThemeContrastTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ThemeContrastTests.swift; sourceTree = "<group>"; };
 		182F4910673FFA5D2D0531C9 /* PresetOperationUXTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PresetOperationUXTests.swift; sourceTree = "<group>"; };
 		1987EB46D78379EB25A7E6A5 /* PresetPreviewCard.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PresetPreviewCard.swift; sourceTree = "<group>"; };
+		1A3AE43CE79034AF6753441F /* ThemeContrastTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ThemeContrastTests.swift; sourceTree = "<group>"; };
 		1DEB778B387F70ED23D4EBEB /* LayerDetailView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LayerDetailView.swift; sourceTree = "<group>"; };
 		216619F8FEAA17F4D627219B /* SidebarStateMatrixTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SidebarStateMatrixTests.swift; sourceTree = "<group>"; };
 		25B70C60CE00225EA953971F /* DesignTokens.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DesignTokens.swift; sourceTree = "<group>"; };
@@ -218,6 +225,7 @@
 		B3BF26B39AF832007BC0EEE8 /* OrientationControls.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = OrientationControls.swift; sourceTree = "<group>"; };
 		B7A795F9CA0BC01E3F2251A9 /* PreferencesView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PreferencesView.swift; sourceTree = "<group>"; };
 		BCAE8F662E1CB9362812ECF2 /* PresetOperationUXTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PresetOperationUXTests.swift; sourceTree = "<group>"; };
+		BE99C4E699B8F350E6E3595B /* MobileControlsUXTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MobileControlsUXTests.swift; sourceTree = "<group>"; };
 		C09A4DE3276B25184A9769BF /* SidebarMetricsTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SidebarMetricsTests.swift; sourceTree = "<group>"; };
 		C20010735E58CE243ED6744A /* FramerCommands.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FramerCommands.swift; sourceTree = "<group>"; };
 		CD7D50222EA07D94CD173F52 /* PresetThumbnailCache.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PresetThumbnailCache.swift; sourceTree = "<group>"; };
@@ -311,6 +319,7 @@
 		3D112084E55AB440513006CA /* FramerAppTests */ = {
 			isa = PBXGroup;
 			children = (
+				01EF65EB1520BFE66525A8E0 /* DesktopInteractionUXTests.swift */,
 				698051BBA81FC643D0AF94C7 /* InspectorOutputControlStateTests.swift */,
 				5EC113704BA8AB06C96F87E1 /* LayerPanelRowLayoutTests.swift */,
 				8F4005057620F710FB3C5103 /* LayerPanelRowStateResolverTests.swift */,
@@ -325,6 +334,7 @@
 				216619F8FEAA17F4D627219B /* SidebarStateMatrixTests.swift */,
 				EC736F64F5D3D3D0E3184EC9 /* StyledSliderSuffixTests.swift */,
 				86BC6ECDDBB38E03658D7114 /* StyledSliderValueResolverTests.swift */,
+				178A3F3BDE77AF770A75DB56 /* ThemeContrastTests.swift */,
 			);
 			name = FramerAppTests;
 			path = Tests/FramerAppTests;
@@ -465,9 +475,11 @@
 			isa = PBXGroup;
 			children = (
 				42B8BF90CF0DBD054E2831BB /* AppLifecycleRegressionTests.swift */,
+				BE99C4E699B8F350E6E3595B /* MobileControlsUXTests.swift */,
 				9730DC13B9A9E903578C1EE8 /* PhotoImportUXTests.swift */,
 				BCAE8F662E1CB9362812ECF2 /* PresetOperationUXTests.swift */,
 				F6B7311A8124ACC28422DD1C /* PreviewUXTests.swift */,
+				1A3AE43CE79034AF6753441F /* ThemeContrastTests.swift */,
 			);
 			name = FramerMobileTests;
 			path = Tests/FramerMobileTests;
@@ -834,6 +846,7 @@
 			isa = PBXSourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				0A6D4D6AC2806684ADD18632 /* DesktopInteractionUXTests.swift in Sources */,
 				BD2F6A5D479CEB7072CBE89E /* InspectorOutputControlStateTests.swift in Sources */,
 				F336B59AD1AE14EA68028F9D /* LayerPanelRowLayoutTests.swift in Sources */,
 				8B0B4CEE3882DC2ED4FBA8B3 /* LayerPanelRowStateResolverTests.swift in Sources */,
@@ -848,6 +861,7 @@
 				7BC8833066C978A17F077361 /* SidebarStateMatrixTests.swift in Sources */,
 				50CB09A593BE412FD9FCC4E8 /* StyledSliderSuffixTests.swift in Sources */,
 				80C7332C66CEEAF7D7DFB228 /* StyledSliderValueResolverTests.swift in Sources */,
+				60CF0BF68845E76389BC1358 /* ThemeContrastTests.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -856,9 +870,11 @@
 			buildActionMask = 2147483647;
 			files = (
 				8D1547759A37FB2911D033A8 /* AppLifecycleRegressionTests.swift in Sources */,
+				900FC897FB0CBA30FEF06BD9 /* MobileControlsUXTests.swift in Sources */,
 				1E00CC9147113F4257736AD3 /* PhotoImportUXTests.swift in Sources */,
 				7920C480A1833F9F37D1F1C6 /* PresetOperationUXTests.swift in Sources */,
 				51D26045BFEF4890DFE439CA /* PreviewUXTests.swift in Sources */,
+				807AC9A9994B6CEB135EF7BD /* ThemeContrastTests.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
