@@ -11,22 +11,22 @@ struct FilmstripView: View {
                 ScrollView(.horizontal, showsIndicators: false) {
                     HStack(spacing: 3) {
                         ForEach(appState.library) { item in
-                            FilmstripThumbnail(
-                                item: item,
-                                isSelected: appState.selectedItems.contains(item.id)
-                            )
-                            .id(item.id)
-                            .onTapGesture {
-                                if NSEvent.modifierFlags.contains(.command) {
-                                    if appState.selectedItems.contains(item.id) {
-                                        appState.selectedItems.remove(item.id)
-                                    } else {
-                                        appState.selectedItems.insert(item.id)
-                                    }
-                                } else {
-                                    appState.selectedItems = [item.id]
-                                }
+                            Button {
+                                select(item, extendingSelection: NSEvent.modifierFlags.contains(.command))
+                            } label: {
+                                FilmstripThumbnail(
+                                    item: item,
+                                    isSelected: appState.selectedItems.contains(item.id)
+                                )
                             }
+                            .buttonStyle(.plain)
+                            .id(item.id)
+                            .accessibilityLabel(item.url.lastPathComponent)
+                            .accessibilityAddTraits(appState.selectedItems.contains(item.id) ? .isSelected : [])
+                            .accessibilityAction(named: appState.selectedItems.contains(item.id) ? "Remove from selection" : "Add to selection") {
+                                select(item, extendingSelection: true)
+                            }
+                            .help(item.url.lastPathComponent)
                         }
 
                         // Divider + count
@@ -53,6 +53,8 @@ struct FilmstripView: View {
                                 }
                         }
                         .buttonStyle(.plain)
+                        .accessibilityLabel("Open more photos")
+                        .help("Open more photos (⌘O)")
                     }
                     .padding(.vertical, 6)
                     .padding(.horizontal, 10)
@@ -70,4 +72,16 @@ struct FilmstripView: View {
         .background(Color.clear)
     }
 
+    private func select(_ item: PhotoItem, extendingSelection: Bool) {
+        guard appState.library.contains(where: { $0.id == item.id }) else { return }
+        if extendingSelection {
+            if appState.selectedItems.contains(item.id) {
+                appState.selectedItems.remove(item.id)
+            } else {
+                appState.selectedItems.insert(item.id)
+            }
+        } else {
+            appState.selectedItems = [item.id]
+        }
+    }
 }

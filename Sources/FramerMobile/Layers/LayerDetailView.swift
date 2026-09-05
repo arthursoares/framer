@@ -42,23 +42,22 @@ struct LayerDetailView: View {
                         .foregroundStyle(Color.accent)
                         .frame(width: 36, height: 36)
                         .background(Color.surface3, in: RoundedRectangle(cornerRadius: CornerRadius.md))
+                        .accessibilityHidden(true)
 
                     Text(layer.label)
                         .font(AppFont.body(22, weight: .bold))
                         .foregroundStyle(Color.text0)
+                        .fixedSize(horizontal: false, vertical: true)
+                        .accessibilityAddTraits(.isHeader)
 
                     Spacer()
 
-                    Button {
-                        layer.isEnabled.toggle()
-                    } label: {
-                        Image(systemName: layer.isEnabled ? "eye" : "eye.slash")
-                            .font(.system(size: 15, weight: .semibold))
-                            .foregroundStyle(layer.isEnabled ? Color.text1 : Color.text3)
-                            .frame(width: 36, height: 36)
-                            .background(Color.surface3, in: RoundedRectangle(cornerRadius: CornerRadius.md))
-                    }
-                    .buttonStyle(.plain)
+                    LayerVisibilityButton(
+                        layerName: layer.label,
+                        isEnabled: layer.isEnabled,
+                        action: { layer.isEnabled.toggle() }
+                    )
+                    .background(Color.surface3, in: RoundedRectangle(cornerRadius: CornerRadius.md))
                 }
                 .padding(.horizontal, 16)
 
@@ -83,6 +82,8 @@ struct LayerDetailView: View {
                         .background(Color.surface2, in: RoundedRectangle(cornerRadius: CornerRadius.lg))
                 }
                 .padding(.horizontal, 16)
+                .accessibilityLabel("Delete \(layer.label) layer")
+                .accessibilityHint("Removes this layer. You can undo this action.")
             }
             .padding(.vertical, 16)
         }

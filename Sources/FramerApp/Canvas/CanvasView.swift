@@ -220,16 +220,13 @@ struct CanvasView: View {
                 endRadius: 400
             )
 
-            if viewModel.isLoading {
-                ProgressView()
-                    .scaleEffect(1.5)
-                    .tint(Color.text2)
-            } else if let img = showOriginal ? viewModel.originalImage : viewModel.previewImage {
+            if let img = displayedImage {
                 zoomableImage(img)
             } else {
-                emptyState
+                viewportState
             }
 
+            retainedPreviewProgress
             zoomOverlay
             errorOverlay
 
@@ -255,34 +252,138 @@ struct CanvasView: View {
         }
     }
 
+    @ViewBuilder
+    private var viewportState: some View {
+        if appState.selectedPhoto == nil {
+            emptyState
+        } else if showOriginal, viewModel.isOriginalLoading {
+            loadingState("Loading original…")
+        } else if showOriginal, let error = viewModel.originalError {
+            failureState(
+                title: "Original unavailable",
+                message: error,
+                retry: retryOriginal,
+                secondaryTitle: "Show Edited",
+                secondaryAction: showEdited
+            )
+        } else if !showOriginal, viewModel.isLoading {
+            loadingState("Rendering preview…")
+        } else if !showOriginal, let error = viewModel.error {
+            failureState(title: "Preview unavailable", message: error, retry: updatePreview)
+        } else {
+            loadingState(showOriginal ? "Loading original…" : "Rendering preview…")
+        }
+    }
+
     private var emptyState: some View {
         VStack(spacing: 16) {
             Image(systemName: "photo.artframe")
                 .font(.system(size: 48))
                 .foregroundStyle(Color.text3)
-            Text("No photo selected")
+            Text(appState.library.isEmpty ? "Open a photo to begin" : "Choose a photo")
                 .font(AppFont.body(16, weight: .medium))
                 .foregroundStyle(Color.text2)
-            Text("Select a photo from the filmstrip,\nor drag images here")
+            Text(appState.library.isEmpty
+                 ? "Add photos from your Mac, or drag them here"
+                 : "Select a photo from the filmstrip")
                 .font(AppFont.body(13))
                 .foregroundStyle(Color.text3)
                 .multilineTextAlignment(.center)
+            if appState.library.isEmpty {
+                Button("Open Photos…", systemImage: "photo.on.rectangle", action: openFilePicker)
+                    .font(AppFont.buttonText)
+                    .buttonStyle(.borderedProminent)
+                    .tint(Color.accentDim)
+            }
         }
     }
 
     @ViewBuilder
     private var errorOverlay: some View {
-        if let err = viewModel.error {
+        if !showOriginal, viewModel.previewImage != nil, let error = viewModel.error {
             VStack {
                 Spacer()
-                Label(err, systemImage: "exclamationmark.triangle")
-                    .font(AppFont.body(11))
-                    .foregroundStyle(Color.error)
-                    .padding(8)
-                    .background(Color.surface2, in: RoundedRectangle(cornerRadius: CornerRadius.md))
-                    .padding()
+                HStack(spacing: Spacing.md) {
+                    Label(error, systemImage: "exclamationmark.triangle")
+                        .lineLimit(2)
+                    Button("Retry", action: updatePreview)
+                        .buttonStyle(.bordered)
+                }
+                .font(AppFont.body(11))
+                .foregroundStyle(Color.error)
+                .padding(8)
+                .background(Color.surface2, in: RoundedRectangle(cornerRadius: CornerRadius.md))
+                .padding()
             }
         }
+    }
+
+    @ViewBuilder
+    private var retainedPreviewProgress: some View {
+        if !showOriginal, viewModel.previewImage != nil, viewModel.isLoading {
+            VStack {
+                Spacer()
+                HStack(spacing: Spacing.sm) {
+                    ProgressView()
+                        .controlSize(.small)
+                    Text("Updating preview…")
+                        .font(AppFont.body(11))
+                }
+                .foregroundStyle(Color.text1)
+                .padding(.horizontal, Spacing.md)
+                .padding(.vertical, Spacing.sm)
+                .background(Color.surface2, in: Capsule())
+                .padding()
+            }
+            .accessibilityElement(children: .combine)
+        }
+    }
+
+    private func loadingState(_ title: String) -> some View {
+        ProgressView(title)
+            .font(AppFont.body(13))
+            .foregroundStyle(Color.text2)
+            .tint(Color.accent)
+    }
+
+    private func failureState(
+        title: String,
+        message: String,
+        retry: @escaping () -> Void,
+        secondaryTitle: String? = nil,
+        secondaryAction: (() -> Void)? = nil
+    ) -> some View {
+        VStack(spacing: Spacing.md) {
+            Image(systemName: "exclamationmark.triangle")
+                .font(.system(size: 30))
+                .foregroundStyle(Color.error)
+            Text(title)
+                .font(AppFont.body(16, weight: .medium))
+                .foregroundStyle(Color.text1)
+            Text(message)
+                .font(AppFont.body(12))
+                .foregroundStyle(Color.text2)
+                .multilineTextAlignment(.center)
+                .lineLimit(3)
+            HStack(spacing: Spacing.sm) {
+                Button("Retry", action: retry)
+                    .buttonStyle(.borderedProminent)
+                    .tint(Color.accentDim)
+                if let secondaryTitle, let secondaryAction {
+                    Button(secondaryTitle, action: secondaryAction)
+                        .buttonStyle(.bordered)
+                }
+            }
+        }
+        .padding(Spacing.xl)
+    }
+
+    private func retryOriginal() {
+        viewModel.loadOriginalIfNeeded(for: appState.selectedPhoto)
+    }
+
+    private func showEdited() {
+        showOriginal = false
     }
 
     // MARK: - Zoomable Image

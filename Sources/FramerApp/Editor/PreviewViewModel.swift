@@ -7,30 +7,50 @@ import FramerCore
 final class PreviewViewModel {
     typealias Renderer = @Sendable (URL, ProcessingConfig, Int) async throws -> CGImage
     typealias ExifLoader = @Sendable (URL) async -> ExifData?
+    typealias OriginalLoader = @Sendable (URL, Int) async throws -> CGImage
 
     var previewImage: NSImage?
     var originalImage: NSImage?
     var isLoading = false
     var error: String?
+    var isOriginalLoading = false
+    var originalError: String?
     var exifData: ExifData?
     /// Pixel dimensions of the rendered output image.
     var outputSize: CGSize?
 
     private var renderTask: Task<Void, Never>?
     private var originalLoadTask: Task<Void, Never>?
-    private var originalImageURL: URL?
     private let renderer: Renderer
     private let exifLoader: ExifLoader
+    private let originalLoader: OriginalLoader
     private var renderGeneration: UInt64 = 0
     private var originalLoadGeneration: UInt64 = 0
+    private var previewPhotoID: PhotoItem.ID?
+    private var previewRotation: Int?
+    private var originalPhotoID: PhotoItem.ID?
+    private var originalRotation: Int?
 
-    init(renderer: Renderer? = nil, exifLoader: ExifLoader? = nil) {
+    init(
+        renderer: Renderer? = nil,
+        exifLoader: ExifLoader? = nil,
+        originalLoader: OriginalLoader? = nil
+    ) {
         let processor = FrameProcessor()
+        let originalProcessor = FrameProcessor()
         self.renderer = renderer ?? { url, config, rotation in
             try await processor.previewCGImage(for: url, config: config, rotation: rotation)
         }
         self.exifLoader = exifLoader ?? { url in
             await processor.exifData(for: url)
+        }
+        self.originalLoader = originalLoader ?? { url, rotation in
+            try await originalProcessor.previewCGImage(
+                for: url,
+                config: ProcessingConfig(layers: []),
+                rotation: rotation,
+                maxDimension: 1200
+            )
         }
     }
 
@@ -46,25 +66,31 @@ final class PreviewViewModel {
 
         guard let item else {
             renderTask = nil
-            originalLoadTask?.cancel()
-            originalLoadGeneration &+= 1
-            originalLoadTask = nil
-            originalImageURL = nil
+            previewPhotoID = nil
+            previewRotation = nil
             previewImage = nil
-            originalImage = nil
             exifData = nil
             error = nil
             outputSize = nil
             isLoading = false
+            resetOriginalState()
             return nil
         }
 
-        if originalImageURL != item.url {
-            originalLoadTask?.cancel()
-            originalLoadGeneration &+= 1
-            originalLoadTask = nil
-            originalImageURL = nil
-            originalImage = nil
+        let selectionChanged = previewPhotoID != item.id || previewRotation != item.rotation
+        previewPhotoID = item.id
+        previewRotation = item.rotation
+        if selectionChanged {
+            previewImage = nil
+            exifData = nil
+            outputSize = nil
+            resetOriginalState()
+        }
+        isLoading = true
+        error = nil
+
+        if includeOriginal {
+            loadOriginalIfNeeded(for: item)
         }
 
         // `.utility` priority keeps this off the User-initiated QoS band. The
@@ -79,11 +105,10 @@ final class PreviewViewModel {
             try? await Task.sleep(for: .milliseconds(150))
             guard !Task.isCancelled, generation == renderGeneration else { return }
 
-            isLoading = true
-            error = nil
             defer {
                 if generation == renderGeneration {
                     isLoading = false
+                    renderTask = nil
                 }
             }
 
@@ -104,9 +129,6 @@ final class PreviewViewModel {
                 ))
                 previewImage = preview
                 outputSize = CGSize(width: cgPreview.width, height: cgPreview.height)
-                if includeOriginal {
-                    loadOriginalIfNeeded(for: item)
-                }
             } catch is CancellationError {
                 return
             } catch {
@@ -118,75 +140,70 @@ final class PreviewViewModel {
         return task
     }
 
-    func loadOriginalIfNeeded(for item: PhotoItem?) {
+    @discardableResult
+    func loadOriginalIfNeeded(for item: PhotoItem?) -> Task<Void, Never>? {
         guard let item else {
-            originalLoadTask?.cancel()
-            originalLoadGeneration &+= 1
-            originalLoadTask = nil
-            originalImageURL = nil
-            originalImage = nil
-            return
+            resetOriginalState()
+            return nil
         }
 
-        if originalImageURL == item.url, originalImage != nil {
-            return
+        let matchesRequest = originalPhotoID == item.id && originalRotation == item.rotation
+        if matchesRequest, originalImage != nil || isOriginalLoading {
+            return originalLoadTask
         }
 
         originalLoadTask?.cancel()
         originalLoadGeneration &+= 1
         let generation = originalLoadGeneration
+        let photoID = item.id
         let itemURL = item.url
-        originalImageURL = itemURL
-        originalLoadTask = Task {
-            // The detached task returns a CGImage (Sendable) rather than an
-            // NSImage. NSImage's Sendable conformance is unavailable, so it
-            // cannot cross back to the main actor; we build it here instead.
-            let cgImage = await Task.detached {
-                Self.loadOriginalCGImage(from: itemURL, maxDimension: 1200)
-            }.value
-            guard !Task.isCancelled,
-                  generation == originalLoadGeneration,
-                  originalImageURL == itemURL,
-                  let cgImage else { return }
-            let scale = NSScreen.main?.backingScaleFactor ?? 2.0
-            originalImage = NSImage(cgImage: cgImage, size: NSSize(
-                width: CGFloat(cgImage.width) / scale,
-                height: CGFloat(cgImage.height) / scale
-            ))
-            originalLoadTask = nil
+        let rotation = item.rotation
+        originalPhotoID = photoID
+        originalRotation = rotation
+        originalImage = nil
+        originalError = nil
+        isOriginalLoading = true
+
+        let task = Task(priority: .utility) {
+            defer {
+                if generation == originalLoadGeneration {
+                    isOriginalLoading = false
+                    originalLoadTask = nil
+                }
+            }
+            do {
+                let cgImage = try await originalLoader(itemURL, rotation)
+                guard !Task.isCancelled,
+                      generation == originalLoadGeneration,
+                      originalPhotoID == photoID,
+                      originalRotation == rotation else { return }
+                let scale = NSScreen.main?.backingScaleFactor ?? 2.0
+                originalImage = NSImage(cgImage: cgImage, size: NSSize(
+                    width: CGFloat(cgImage.width) / scale,
+                    height: CGFloat(cgImage.height) / scale
+                ))
+            } catch is CancellationError {
+                return
+            } catch {
+                guard !Task.isCancelled,
+                      generation == originalLoadGeneration,
+                      originalPhotoID == photoID,
+                      originalRotation == rotation else { return }
+                originalError = error.localizedDescription
+            }
         }
+        originalLoadTask = task
+        return task
     }
 
-    /// Loads and downscales the source image for before/after comparison.
-    /// Returns a `CGImage` (which is Sendable) so the result can be handed
-    /// back to the main actor, where the caller wraps it in an `NSImage`.
-    private nonisolated static func loadOriginalCGImage(from url: URL, maxDimension: Int) -> CGImage? {
-        guard let source = CGImageSourceCreateWithURL(url as CFURL, nil),
-              let cgImage = CGImageSourceCreateImageAtIndex(source, 0, nil) else {
-            return nil
-        }
-        let w = cgImage.width, h = cgImage.height
-        guard max(w, h) > maxDimension else {
-            return cgImage
-        }
-        let scale = Double(maxDimension) / Double(max(w, h))
-        let newW = Int(Double(w) * scale)
-        let newH = Int(Double(h) * scale)
-        // Always downscale through a canonical premultipliedLast RGBA8
-        // context rather than copying the source's `bitmapInfo.rawValue`.
-        // Some ImageIO decoders hand back CGImages with combined flags
-        // (`kCGImageAlphaLast | kCGImagePixelFormatPacked` etc) that
-        // `CGBitmapContextCreate` rejects — leaving the whole preview
-        // path to silently skip the downscale and render the full-size
-        // image instead.
-        guard let ctx = CGContext(data: nil, width: newW, height: newH,
-                                  bitsPerComponent: 8,
-                                  bytesPerRow: newW * 4,
-                                  space: CGColorSpaceCreateDeviceRGB(),
-                                  bitmapInfo: CGImageAlphaInfo.premultipliedLast.rawValue) else {
-            return cgImage
-        }
-        ctx.draw(cgImage, in: CGRect(x: 0, y: 0, width: newW, height: newH))
-        return ctx.makeImage() ?? cgImage
+    private func resetOriginalState() {
+        originalLoadTask?.cancel()
+        originalLoadGeneration &+= 1
+        originalLoadTask = nil
+        originalPhotoID = nil
+        originalRotation = nil
+        originalImage = nil
+        originalError = nil
+        isOriginalLoading = false
     }
 }

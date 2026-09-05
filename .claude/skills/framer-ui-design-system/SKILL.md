@@ -56,8 +56,14 @@ or system semantic colors (`.secondary`, `.windowBackgroundColor`, etc.).
 |---|---|---|
 | `text0` | `#F0EDE8` | primary (layer names, filenames) |
 | `text1` | `#B8B4AD` | secondary (EXIF values, button text) |
-| `text2` | `#7D7A74` | tertiary (control labels) |
-| `text3` | `#4E4C48` | quaternary (section headers, counts, disabled) |
+| `text2` | `#A6A198` | secondary control labels (contrast update 2026-09-05) |
+| `text3` | `#96928B` | quiet section headers, counts, and readouts (contrast update 2026-09-05) |
+
+The 2026-09-05 UI/UX pass brightened these two warm text tokens on both
+platforms. Their normal-text contrast is at least 4.61:1 across the five app
+surfaces. The old briefing values are historical; runtime contrast tests guard
+the current tokens. This does not imply every opacity-modified or disabled
+control has the same contrast, or that the entire interface is certified.
 
 ### Accent + functional + border
 

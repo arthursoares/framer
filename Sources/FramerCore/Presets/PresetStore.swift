@@ -119,18 +119,42 @@ public final class PresetStore {
     /// Returns the number of presets imported.
     @discardableResult
     public func importData(_ data: Data) throws -> Int {
-        let decoder = JSONDecoder()
-        // Try array first
-        if let presets = try? decoder.decode([Preset].self, from: data) {
-            for preset in presets {
-                try save(preset)
-            }
-            return presets.count
+        let presets = try decodeImportData(data)
+        for preset in presets {
+            try save(preset)
         }
-        // Try single preset
-        let preset = try decoder.decode(Preset.self, from: data)
-        try save(preset)
-        return 1
+        return presets.count
+    }
+
+    /// Decodes the single-preset and preset-array formats accepted by `importData`.
+    /// Callers that need partial-success reporting can save the returned presets individually.
+    public func decodeImportData(_ data: Data) throws -> [Preset] {
+        let payload = try JSONDecoder().decode(PresetImportPayload.self, from: data)
+        return payload.presets
+    }
+
+    private enum PresetImportPayload: Decodable {
+        case single(Preset)
+        case multiple([Preset])
+
+        init(from decoder: Decoder) throws {
+            if var container = try? decoder.unkeyedContainer() {
+                var presets: [Preset] = []
+                while !container.isAtEnd {
+                    presets.append(try container.decode(Preset.self))
+                }
+                self = .multiple(presets)
+            } else {
+                self = .single(try Preset(from: decoder))
+            }
+        }
+
+        var presets: [Preset] {
+            switch self {
+            case .single(let preset): [preset]
+            case .multiple(let presets): presets
+            }
+        }
     }
 
     /// Creates a deterministic UUID from a name string (for stable YAML preset identity).
