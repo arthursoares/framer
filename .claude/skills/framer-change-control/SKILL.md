@@ -48,7 +48,7 @@ locally, and open PRs *when asked*. A human decides every merge to main. Never
 **Rationale:** Development here is heavily multi-agent (Claude Code, Codex,
 cloud Linux sessions, the Sisyphus orchestrator all appear in history).
 The human maintainer is the only serialization point. Merges also carry data
-risk here (see rule 4 — a bad decode change deletes user preset files).
+risk here (see rule 4 — a bad decode change can hide valid user presets).
 
 ### 2. Never blind-refresh snapshot-test hashes
 
@@ -108,22 +108,15 @@ keep decoding every value it ever encoded. Add fields as `decodeIfPresent`
 with legacy defaults; keep legacy keys readable forever; map old semantics in
 the decoder.
 
-**Rationale — this is a DATA-LOSS gate, not a style rule:**
-`PresetStore.list()` in `Sources/FramerCore/Presets/PresetStore.swift`
-(lines 56–65, as of commit 48d85a5) **deletes any preset JSON file that fails
-to decode**:
+**Rationale — compatibility protects users' saved work:**
+Before the 2026-09-05 recovery fix, `PresetStore.list()` deleted JSON files
+that failed to decode, so a Codable regression could permanently erase a
+preset library. Listing now skips unreadable files and preserves their bytes
+for recovery. Never restore automatic deletion: the reader cannot distinguish
+corrupt data from a newer schema or a temporary read failure.
 
-```swift
-} catch {
-    // Remove corrupted/empty JSON files so they don't persist.
-    try? FileManager.default.removeItem(at: url)
-}
-```
-
-The deletion is intentional (one corrupt file must not persist), but it means
-a Codable regression that makes *valid* stored presets undecodable will
-silently and permanently destroy the user's preset library on the first
-launch. There is no undo.
+Preserving files does not relax backward compatibility. A regression that
+hides a valid preset from the list still breaks the user's library.
 
 **Live exemplars of the pattern — study these before touching any schema:**
 
@@ -184,7 +177,7 @@ confirm its commits are patch-equivalent to main.
 | Change touches | Gate (in addition to `swift build && swift test`) | Why this bar |
 |---|---|---|
 | **Core render path** — `Sources/FramerCore/Processing/`, `Sources/FramerCore/Effects/` | Highest bar: `swift test --filter EffectGPUGoldenTests` and `--filter EffectGPUBehaviorTests` green; deliberate look changes regenerate goldens in the same commit with an explanation (rule 5); visual check of a real image through the CLI (framer-run-and-operate) | Pixel output is the product; silent render drift is the top historical bug class |
-| **Serialization / schema** — `CompositionLayer.swift`, `ProcessingConfig.swift`, `YAMLConfig.swift`, anything `Codable` in presets | Back-compat bar (rule 4): legacy keys keep decoding; round-trip tests (JSON + YAML) for new fields; NEVER remove a decode branch | `PresetStore.list()` deletes undecodable files — schema regressions destroy user data |
+| **Serialization / schema** — `CompositionLayer.swift`, `ProcessingConfig.swift`, `YAMLConfig.swift`, anything `Codable` in presets | Back-compat bar (rule 4): legacy keys keep decoding; round-trip tests (JSON + YAML) for new fields; NEVER remove a decode branch | Undecodable files are preserved for recovery, but schema regressions still hide valid user presets |
 | **macOS UI** — `Sources/FramerApp/`, especially `Sidebar/` | Snapshot-hash discipline (rule 2); `xcodegen generate` after adding files, then `xcodebuild test` (broken on some machines — see framer-build-and-env and framer-campaign-restore-validation); design rules in framer-ui-design-system | SHA-256 snapshots are the only layout regression guard |
 | **Metal shaders** — `Sources/FramerCore/Effects/Metal/*.metal` | Golden + behavior tests green; deliberate look changes regenerate goldens same-commit (rule 5); note `swift test` passing does NOT validate the Xcode-built Metal path (framer-metal-pipeline-reference) | Every new shader port has historically shipped 1–3 pixel bugs |
 | **Docs / skills** — `docs/`, `.claude/skills/` | Lowest gate: accuracy. Date-stamp volatile facts; never present unmerged work as shipped | Stale docs are an active hazard here (see staleness ledger in framer-docs-and-writing) |
@@ -279,12 +272,12 @@ treats every ❌ as its first task, in order.
 
 ## Provenance and maintenance
 
-All claims verified 2026-07-09 against main @ 48d85a5 by direct file reads and
-read-only git/gh commands. Re-verify volatile facts with:
+Historical claims verified 2026-07-09 against main @ 48d85a5. Preset recovery
+policy updated and regression-tested 2026-09-05. Re-verify volatile facts with:
 
 | Fact | Re-verification command |
 |---|---|
-| PresetStore deletes undecodable presets | `grep -n "removeItem" Sources/FramerCore/Presets/PresetStore.swift` (expect it inside `list()`'s catch) |
+| Preset listing preserves unreadable files | `swift test --filter PresetStoreTests.test_listPresets` (includes byte-preservation regressions) |
 | Kuwahara legacy sharpness mapping | `grep -n "sharpness" Sources/FramerCore/Models/CompositionLayer.swift` |
 | CaptionMode.none still present | `grep -n "case none" Sources/FramerCore/Models/ProcessingConfig.swift` |
 | Hidden GPUEffectKind cases | `grep -n "userFacingCases" Sources/FramerCore/Effects/Models/GPUEffectKind.swift` |

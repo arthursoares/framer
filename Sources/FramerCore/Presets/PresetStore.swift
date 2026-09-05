@@ -64,8 +64,9 @@ public final class PresetStore {
                 let preset = try JSONDecoder().decode(Preset.self, from: data)
                 presetsById[preset.id] = preset
             } catch {
-                // Remove corrupted/empty JSON files so they don't persist.
-                try? FileManager.default.removeItem(at: url)
+                // Preserve unreadable or newer-format files for recovery.
+                // Listing presets must never delete their original data.
+                continue
             }
         }
 

@@ -43,7 +43,7 @@ Details, rationale, and the incidents behind each: `framer-change-control` skill
 
 1. **No autonomous merges or pushes to main.** AI sessions branch, commit, and open PRs when asked; a human decides every merge.
 2. **Never blind-refresh snapshot SHA-256 hashes.** Read the rendered pixels and explain the shift; land the refresh in the same commit as its cause.
-3. **Schema/preset changes must keep legacy decoding.** `PresetStore` deletes undecodable preset files — a decode regression silently destroys user data.
+3. **Schema/preset changes must keep legacy decoding.** `PresetStore` preserves unreadable files for recovery and skips them when listing. Never restore automatic deletion; a decode regression must not hide valid presets either.
 4. **Shader changes keep `EffectGPUGoldenTests` green.** The CPU effect path was retired 2026-07-09 (docs/adr/2026-07-09-retire-cpu-effect-path.md); a deliberate look change regenerates the golden PNGs in the same commit with an explanation of the pixel shift — same discipline as rule 2. Riemersma dither and the hidden legacy bucket variants stay CPU by design.
 5. **Conventional commits with scopes**: `fix(sidebar): …`, `feat(gpu-effects): …`, one task per commit, buildable at every commit.
 

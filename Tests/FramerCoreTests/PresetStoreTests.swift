@@ -35,6 +35,42 @@ final class PresetStoreTests: XCTestCase {
         XCTAssertEqual(all.count, 2)
     }
 
+    func test_listPresets_preservesUnreadableFilesAndReturnsValidPresets() throws {
+        let store = PresetStore(directory: tempDir)
+        let first = Preset(name: "A", config: .default)
+        let last = Preset(name: "Z", config: .default)
+        try store.save(last)
+        try store.save(first)
+        let unreadable = [
+            ("malformed.json", Data("{incomplete".utf8)),
+            ("unsupported.json", Data("{\"future_schema\":3}".utf8)),
+            ("empty.json", Data()),
+        ]
+        for (name, data) in unreadable {
+            try data.write(to: tempDir.appendingPathComponent(name))
+        }
+
+        XCTAssertEqual(try store.list(), [first, last])
+        XCTAssertEqual(try store.list(), [first, last])
+
+        for (name, data) in unreadable {
+            XCTAssertEqual(try Data(contentsOf: tempDir.appendingPathComponent(name)), data)
+        }
+    }
+
+    func test_listPresets_doesNotRemoveUnreadableDirectory() throws {
+        let store = PresetStore(directory: tempDir)
+        let directory = tempDir.appendingPathComponent("archive.json", isDirectory: true)
+        try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
+        let original = Data("recoverable data".utf8)
+        let file = directory.appendingPathComponent("original")
+        try original.write(to: file)
+
+        XCTAssertTrue(try store.list().isEmpty)
+
+        XCTAssertEqual(try Data(contentsOf: file), original)
+    }
+
     func test_save_replacesMatchingYAMLPreset() throws {
         let store = PresetStore(directory: tempDir)
         let yamlURL = tempDir.appendingPathComponent("film.yaml")

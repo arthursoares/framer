@@ -273,9 +273,10 @@ Preset-store behaviors that affect operations:
   first run — but seeding is **skipped entirely if any `.yaml` already exists**
   (`PresetStore.initializeDefaults`), so an older install may show only the
   original 5. `swift run framer presets list` prints `name (UUID)` per preset.
-- **Hazard**: `PresetStore.list()` silently **deletes** any `.json` preset file
-  it cannot decode. A Codable regression can destroy user presets on next
-  launch — see framer-architecture-contract before touching preset Codable.
+- **Recovery (updated 2026-09-05)**: `PresetStore.list()` skips unreadable
+  `.json` records and preserves their original files. A Codable regression
+  still hides valid presets — see framer-architecture-contract before editing
+  preset decoding. Listing must never delete data.
 - **Bundled LUTs are apparently latent**: `LUTProvider.bundledLUTs()` looks for
   `<executable-dir>/assets/luts` (`LUTProvider.swift` ~line 296), but nothing —
   neither `project.yml` nor SwiftPM — places an `assets/luts` folder next to
