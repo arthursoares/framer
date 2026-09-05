@@ -1,0 +1,7 @@
+output_format: jpeg
+jpeg_quality: 85
+no_metadata: true
+layers:
+  - type: resize
+    max_width: 1200
+    max_height: 1200

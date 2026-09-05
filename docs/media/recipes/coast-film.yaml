@@ -1,0 +1,49 @@
+output_format: jpeg
+jpeg_quality: 85
+no_metadata: true
+layers:
+  - type: resize
+    max_width: 1600
+    max_height: 1600
+  - type: shader
+    shader_style: bwFilm
+    intensity: 1.0
+    shader_bw_response: kodakTriX400
+    shader_bw_sens_red: 10
+    shader_bw_sens_yellow: 15
+    shader_bw_sens_green: -10
+    shader_bw_sens_cyan: -15
+    shader_bw_sens_blue: -25
+    shader_bw_sens_magenta: 5
+    shader_bw_contrast: 18
+    shader_bw_protect_highlights: 24
+    shader_bw_protect_shadows: 12
+    shader_bw_structure: 12
+    shader_bw_fine_structure: 18
+    shader_bw_vig_strength: -14
+    shader_bw_vig_size: 66
+    shader_bw_vig_shape: 3.4
+    shader_bw_curve_gamma: -0.04
+    shader_bw_curve_low_x: 0.0
+    shader_bw_curve_low_y: 0.015
+    shader_bw_curve_high_x: 1.0
+    shader_bw_curve_high_y: 0.98
+    shader_bw_curve_points: [0.125, 0.047, 0.251, 0.173, 0.376, 0.333, 0.502, 0.518, 0.627, 0.710, 0.753, 0.875, 0.878, 0.961]
+  - type: shader
+    shader_style: filmGrain
+    intensity: 0.82
+    shader_grain_stock: kodakTriX400
+    shader_grains_per_pixel: 300
+    shader_grain_softness: 0.68
+    shader_grain_protect_highlights: 0.25
+    shader_grain_protect_shadows: 0.18
+    shader_grain_seed: 73
+  - type: shader
+    shader_style: roughBorder
+    intensity: 1.0
+    shader_border_type: type10
+    shader_border_size: 0.018
+    shader_border_spread: 0.62
+    shader_border_roughness: 0.72
+    shader_border_seed: 41
+    shader_border_color: "#0A0A0A"

@@ -3,427 +3,104 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Framer - Add elegant frames and captions to your photos</title>
-  <meta name="description" content="A powerful CLI tool for adding professional borders and EXIF-based captions to your photos. Perfect for photographers using Lightroom.">
+  <meta name="theme-color" content="#111214">
+  <title>Framer — Give your photos a proper finish</title>
+  <meta name="description" content="An open-source photo finishing toolkit for macOS, iOS, and the command line. Build a look with film grain, frames, captions, and GPU effects.">
+  <link rel="canonical" href="https://arthursoares.github.io/framer/">
+  <meta property="og:type" content="website">
+  <meta property="og:title" content="Framer — Give your photos a proper finish">
+  <meta property="og:description" content="Frames, film looks, grain, and captions. A native editor and a scriptable CLI, built around the same image engine.">
+  <meta property="og:url" content="https://arthursoares.github.io/framer/">
+  <meta property="og:image" content="https://arthursoares.github.io/framer/media/app-macos.jpg">
+  <meta name="twitter:card" content="summary_large_image">
+  <link rel="icon" type="image/png" href="media/favicon.png">
+  <link rel="preload" href="fonts/AtkinsonHyperlegibleNext-Regular.ttf" as="font" type="font/ttf" crossorigin>
   <link rel="stylesheet" href="css/style.css">
-  <link rel="icon" type="image/x-icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🖼</text></svg>">
+  <script src="js/site.js" defer></script>
 </head>
 <body>
-  <!-- Navigation -->
-  <nav>
-    <div class="container">
-      <a href="#" class="logo">framer</a>
-      <ul class="nav-links">
-        <li><a href="#features">Features</a></li>
-        <li><a href="#examples">Examples</a></li>
-        <li><a href="#installation">Install</a></li>
-        <li><a href="#usage">Usage</a></li>
-        <li><a href="https://github.com/arthursoares/framer">GitHub</a></li>
-      </ul>
-    </div>
-  </nav>
+  <a class="skip-link" href="#main">Skip to content</a>
+  <header class="site-header wrap">
+    <a class="wordmark" href="#" aria-label="Framer home"><span class="frame-mark" aria-hidden="true"></span>framer<span class="version">2.2.0</span></a>
+    <nav aria-label="Main navigation">
+      <a href="#workflow">The editor</a><a href="#looks">The looks</a><a href="#installation">Get Framer</a><a class="external" href="https://github.com/arthursoares/framer">GitHub <span aria-hidden="true">↗</span></a>
+    </nav>
+  </header>
 
-  <!-- Hero Section -->
-  <section class="hero">
-    <div class="container">
-      <h1>framer</h1>
-      <p class="tagline">Add elegant frames and captions to your photos. A CLI tool for photographers.</p>
-
-      <img src="sample_solid.jpg" alt="Framer example - photo with border and caption" class="hero-image">
-
-      <div class="install-command">
-        <code>brew install arthursoares/framer/framer</code>
-        <button class="copy-btn" onclick="copyCommand(this)">Copy</button>
+  <main id="main">
+    <section class="hero wrap" aria-labelledby="hero-title">
+      <div class="hero-copy">
+        <p class="eyebrow"><span class="status-dot" aria-hidden="true"></span>Open-source photo finishing</p>
+        <h1 id="hero-title">Give your photos<br>a proper <em>finish.</em></h1>
+        <p class="intro">The frame. The grain. That last bit of character.<br class="desktop-break"> Make it yours with a native photo editor and a CLI for the whole batch.</p>
+        <div class="actions">
+          <a class="button primary" href="https://github.com/arthursoares/framer/releases/download/v2.2.0/framer-v2.2.0-macos-arm64.tar.gz">Download CLI <span aria-hidden="true">↓</span></a>
+          <a class="button secondary" href="#source-build">Build the app <span aria-hidden="true">↗</span></a>
+        </div>
+        <p class="availability">CLI for Apple Silicon · macOS 14+<br>macOS and iOS apps available as source builds</p>
       </div>
+      <figure class="app-hero">
+        <a href="media/app-macos.jpg" aria-label="View the full-resolution macOS app screenshot"><img src="media/app-macos.jpg" width="1181" height="768" alt="Framer on macOS, with a black-and-white coastal photo, Film preset, and B&W Film and Film Grain layer controls." fetchpriority="high"></a>
+        <figcaption><span><span class="status-dot" aria-hidden="true"></span>The macOS editor · v2.2.0</span><span>Real app. Real render.</span></figcaption>
+      </figure>
+    </section>
 
-      <div class="hero-links">
-        <a href="https://github.com/arthursoares/framer" class="btn btn-primary">
-          View on GitHub
-        </a>
-        <a href="https://github.com/arthursoares/framer/releases" class="btn btn-secondary">
-          Download
-        </a>
+    <section id="workflow" class="workflow section wrap" aria-labelledby="workflow-title">
+      <div class="section-heading"><p class="eyebrow">01 / A little more character</p><h2 id="workflow-title">From a photo<br>to <em>your photograph.</em></h2><p>Start with a preset. Add a layer, adjust the details, and see the finish as you go.</p></div>
+      <div class="workflow-steps">
+        <article><span class="step-number">01</span><h3>Build your look</h3><p>Stack frames, captions, color LUTs, grain, and effects. Reorder layers to change how they work together.</p></article>
+        <article><span class="step-number">02</span><h3>See the difference</h3><p>Compare the original and the finished image in the editor. Fine-tune the effect with a live preview.</p></article>
+        <article><span class="step-number">03</span><h3>Make it repeatable</h3><p>Save app presets for your next edit. Use YAML recipes and the CLI to apply a consistent finish to a folder of photos.</p></article>
       </div>
-    </div>
-  </section>
+    </section>
 
-  <!-- Features Section -->
-  <section id="features">
-    <div class="container">
-      <h2>Features</h2>
-      <p class="section-desc">Everything you need to add professional borders and metadata captions to your photos.</p>
-
-      <div class="features-grid">
-        <div class="feature-card">
-          <h3><span class="feature-icon">🎨</span> Border Styles</h3>
-          <p>Choose from solid, instagram (4:5), print10x15, or vintage styles. Each optimized for different use cases.</p>
+    <section id="looks" class="looks section wrap" aria-labelledby="looks-title">
+      <div class="section-heading horizontal"><div><p class="eyebrow">02 / In the darkroom</p><h2 id="looks-title">Same photo.<br><em>Different feeling.</em></h2></div><p>A monochrome film response, textured grain, and a rough border. Three layers, one finished image.</p></div>
+      <figure class="comparison-figure">
+        <div class="comparison" id="film-comparison" style="--split: 50%">
+          <img src="media/coast-original.jpg" width="1600" height="1066" loading="lazy" alt="Original generated photograph of a rocky coastline under a cloudy sky, in muted natural colors.">
+          <div class="comparison-after"><img src="media/coast-film.jpg" width="1600" height="1066" loading="lazy" alt="The same coastline rendered by Framer with a black-and-white film response, grain, and a rough dark border."></div>
+          <span class="image-label label-after">Framer finish</span><span class="image-label label-before">Original</span><span class="comparison-line" aria-hidden="true"><span>↔</span></span>
         </div>
-
-        <div class="feature-card">
-          <h3><span class="feature-icon">📷</span> EXIF Captions</h3>
-          <p>Automatically extract date, camera, lens, and exposure info from your photos for dynamic captions.</p>
+        <div class="comparison-controls" hidden>
+          <label for="comparison-range">Compare the finish <span id="comparison-value">50%</span></label>
+          <input id="comparison-range" type="range" min="0" max="100" value="50" aria-controls="film-comparison" aria-describedby="comparison-hint">
+          <p id="comparison-hint">Drag the slider, or use the arrow keys.</p>
         </div>
-
-        <div class="feature-card">
-          <h3><span class="feature-icon">⚡</span> Batch Processing</h3>
-          <p>Process hundreds of images efficiently with multi-core worker pools and progress tracking.</p>
-        </div>
-
-        <div class="feature-card">
-          <h3><span class="feature-icon">⚙️</span> YAML Config</h3>
-          <p>Save complex configurations in YAML files. Auto-loads .framer.yaml from your project directory.</p>
-        </div>
-
-        <div class="feature-card">
-          <h3><span class="feature-icon">🏷️</span> Metadata Tagging</h3>
-          <p>Automatically adds IPTC keywords and XMP metadata to processed images for better organization.</p>
-        </div>
-
-        <div class="feature-card">
-          <h3><span class="feature-icon">🎯</span> Presets</h3>
-          <p>Built-in presets for vintage, instagram, and minimal styles. Create your own custom presets.</p>
-        </div>
+        <figcaption class="comparison-caption"><div><h3>The coastal film study</h3><p>B&W Film / Kodak Tri-X 400 response · Film Grain · Rough Border</p></div><div class="text-links"><a href="media/coast-original.jpg">View original <span aria-hidden="true">↗</span></a><a href="media/coast-film.jpg">View finish <span aria-hidden="true">↗</span></a><a href="media/recipes/coast-film.yaml" download>Get the recipe <span aria-hidden="true">↓</span></a></div></figcaption>
+      </figure>
+      <div class="look-grid">
+        <article class="look-card"><a href="media/coast-color.jpg"><img src="media/coast-color.jpg" width="1600" height="1066" loading="lazy" alt="Coastline with a faded, warm color treatment rendered using Framer's Distant Past shader."></a><div class="look-description"><p class="eyebrow">Color / Distant Past</p><h3>A softer memory</h3><p>Muted color and a faded warmth for a different take on the same coast.</p><a href="media/recipes/coast-color.yaml" download>Get the recipe <span aria-hidden="true">↓</span></a></div></article>
+        <article class="look-card"><a href="media/architecture-halftone.jpg"><img src="media/architecture-halftone.jpg" width="1200" height="800" loading="lazy" alt="Ochre architectural facade transformed into a fine colored halftone dot pattern by Framer."></a><div class="look-description"><p class="eyebrow">Shader / Color halftone</p><h3>Made of dots</h3><p>Turn light, shadow, and color into a print-like field of halftone texture.</p><a href="media/recipes/architecture-halftone.yaml" download>Get the recipe <span aria-hidden="true">↓</span></a></div></article>
+        <article class="look-card"><a href="media/architecture-ascii.jpg"><img src="media/architecture-ascii.jpg" width="1200" height="800" loading="lazy" alt="The same architectural facade rebuilt as a colored ASCII character pattern by Framer."></a><div class="look-description"><p class="eyebrow">Shader / ASCII</p><h3>A different language</h3><p>Rebuild the image from characters, keeping the geometry and color beneath.</p><a href="media/recipes/architecture-ascii.yaml" download>Get the recipe <span aria-hidden="true">↓</span></a></div></article>
       </div>
-    </div>
-  </section>
+      <p class="gallery-note">Every finish above was rendered with Framer v2.2.0. <a href="media/architecture-original.jpg">See the original architecture image <span aria-hidden="true">↗</span></a></p>
+    </section>
 
-  <!-- Examples Section -->
-  <section id="examples">
-    <div class="container">
-      <h2>Examples</h2>
-      <p class="section-desc">See the different border styles and customization options in action.</p>
+    <section class="mobile-section section wrap" aria-labelledby="mobile-title">
+      <div class="mobile-copy"><p class="eyebrow">03 / At your desk. In your hand.</p><h2 id="mobile-title">A native home<br>for your <em>next edit.</em></h2><p>Browse your photo library on macOS, shape a look with the layer controls, and export a batch. On iOS, work with the same core image engine in an interface made for touch.</p><ul class="feature-list"><li>Frames and EXIF-based captions</li><li>Color LUTs, film grain, and texture overlays</li><li>Dithering, ASCII, and Metal-powered effects</li><li>Presets and before/after comparison</li></ul><a class="inline-action" href="#source-build">Build for macOS or iOS <span aria-hidden="true">↗</span></a><p class="small-note">The iOS app is in active development. Both apps currently require a source build in Xcode.</p></div>
+      <figure class="phone-figure"><a href="media/app-ios.png" aria-label="View the full-resolution iOS app screenshot"><img src="media/app-ios.png" width="1206" height="2622" loading="lazy" alt="Framer on iOS showing a framed coastal image, Before and After controls, and the editable Film preset layer stack."></a><figcaption>Framer for iOS · actual app screenshot</figcaption></figure>
+    </section>
 
-      <!-- Border Styles -->
-      <h3 class="subsection-title">Border Styles</h3>
-      <div class="examples-grid">
-        <div class="example-card">
-          <img src="sample.jpg" alt="Original photo">
-          <div class="example-info">
-            <h3>Original</h3>
-            <p>Unprocessed photo straight from camera</p>
-          </div>
-        </div>
-
-        <div class="example-card">
-          <img src="examples/solid_black.jpg" alt="Solid black border">
-          <div class="example-info">
-            <h3>Solid (Default)</h3>
-            <p>Classic black border with date caption</p>
-            <code class="example-cmd">framer -i photo.jpg -o output/</code>
-          </div>
-        </div>
-
-        <div class="example-card">
-          <img src="examples/instagram_default.jpg" alt="Instagram format">
-          <div class="example-info">
-            <h3>Instagram</h3>
-            <p>4:5 ratio (1080x1350px) for Instagram</p>
-            <code class="example-cmd">framer -i photo.jpg -o output/ -s instagram</code>
-          </div>
-        </div>
-
-        <div class="example-card">
-          <img src="examples/print10x15.jpg" alt="Print 10x15 format">
-          <div class="example-info">
-            <h3>Print 10x15</h3>
-            <p>10x15cm @ 300 DPI for physical prints</p>
-            <code class="example-cmd">framer -i photo.jpg -o output/ -s print10x15</code>
-          </div>
-        </div>
-      </div>
-
-      <!-- Color Variations -->
-      <h3 class="subsection-title">Color Variations</h3>
-      <div class="examples-grid">
-        <div class="example-card">
-          <img src="examples/solid_white.jpg" alt="White border">
-          <div class="example-info">
-            <h3>White Border</h3>
-            <p>Clean white border with dark text</p>
-            <code class="example-cmd">--border-color "#FFFFFF" --font-color "#333333"</code>
-          </div>
-        </div>
-
-        <div class="example-card">
-          <img src="examples/solid_navy.jpg" alt="Navy border">
-          <div class="example-info">
-            <h3>Navy Border</h3>
-            <p>Deep navy with white caption text</p>
-            <code class="example-cmd">--border-color "#1a365d" --font-color "#FFFFFF"</code>
-          </div>
-        </div>
-
-        <div class="example-card">
-          <img src="examples/solid_vintage.jpg" alt="Vintage beige border">
-          <div class="example-info">
-            <h3>Vintage Beige</h3>
-            <p>Warm beige border with sepia caption</p>
-            <code class="example-cmd">--border-color "#f5f5dc" --font-color "#8B4513"</code>
-          </div>
-        </div>
-      </div>
-
-      <!-- Size Variations -->
-      <h3 class="subsection-title">Size &amp; Thickness</h3>
-      <div class="examples-grid">
-        <div class="example-card">
-          <img src="examples/solid_minimal.jpg" alt="Minimal thin border">
-          <div class="example-info">
-            <h3>Minimal</h3>
-            <p>Thin 2% border with small padding</p>
-            <code class="example-cmd">-t 2% --padding 30 --font-size 30</code>
-          </div>
-        </div>
-
-        <div class="example-card">
-          <img src="examples/solid_thick.jpg" alt="Thick border">
-          <div class="example-info">
-            <h3>Thick Border</h3>
-            <p>Bold 8% border with large padding</p>
-            <code class="example-cmd">-t 8% --padding 200 --font-size 60</code>
-          </div>
-        </div>
-      </div>
-
-      <!-- Caption Options -->
-      <h3 class="subsection-title">Caption Options</h3>
-      <div class="examples-grid">
-        <div class="example-card">
-          <img src="examples/custom_caption.jpg" alt="Custom caption">
-          <div class="example-info">
-            <h3>Custom Caption</h3>
-            <p>Camera model and exposure settings</p>
-            <code class="example-cmd">--caption-template "{{camera}} | {{aperture}} {{shutter}} ISO{{iso}}"</code>
-          </div>
-        </div>
-
-        <div class="example-card">
-          <img src="examples/no_caption.jpg" alt="No caption">
-          <div class="example-info">
-            <h3>No Caption</h3>
-            <p>Clean border without any text</p>
-            <code class="example-cmd">--no-caption</code>
-          </div>
-        </div>
-      </div>
-
-      <!-- Inspiration -->
-      <div class="inspiration mt-4" style="margin-top: 48px;">
-        <img src="inspiration.jpg" alt="Vintage photo inspiration">
-        <div class="inspiration-text">
-          <h3>Inspired by the Past</h3>
-          <blockquote>
-            The border format is inspired by an old box of photos from my grandfather, featuring white borders with machine-printed dates.
-          </blockquote>
-        </div>
-      </div>
-    </div>
-  </section>
-
-  <!-- Installation Section -->
-  <section id="installation">
-    <div class="container">
-      <h2>Installation</h2>
-      <p class="section-desc">Get started with framer in seconds.</p>
-
-      <div class="install-methods">
-        <div class="install-method recommended">
-          <h3>Homebrew (macOS)</h3>
-          <pre><code><span class="comment"># Add tap and install</span>
-brew tap arthursoares/framer
-brew install framer
-
-<span class="comment"># Update to latest version</span>
-brew upgrade framer</code></pre>
-        </div>
-
-        <div class="install-method">
-          <h3>Binary Download</h3>
-          <p style="color: var(--text-secondary); margin-bottom: 12px;">Download from <a href="https://github.com/arthursoares/framer/releases">Releases</a>:</p>
-          <pre><code><span class="comment"># Make executable (Linux/macOS)</span>
-chmod +x framer-*
-sudo mv framer-* /usr/local/bin/framer</code></pre>
-        </div>
-
-        <div class="install-method">
-          <h3>From Source</h3>
-          <p style="color: var(--text-secondary); margin-bottom: 12px;">Requires Go 1.22+</p>
-          <pre><code><span class="comment"># Clone and build</span>
-git clone https://github.com/arthursoares/framer.git
+    <section id="installation" class="install section wrap" aria-labelledby="install-title">
+      <div class="section-heading"><p class="eyebrow">04 / Make something yours</p><h2 id="install-title">Get into <em>Framer.</em></h2><p>Free, open source, and built with Swift. Choose the CLI download or build the native apps from source.</p></div>
+      <div class="install-grid">
+        <article class="install-card"><p class="eyebrow">Ready to run / Terminal</p><h3>Download the CLI</h3><p>The v2.2.0 package is an unsigned command-line executable for Apple Silicon Macs running macOS 14 or later.</p><div class="text-links"><a href="https://github.com/arthursoares/framer/releases/download/v2.2.0/framer-v2.2.0-macos-arm64.tar.gz">Download .tar.gz <span aria-hidden="true">↓</span></a><a href="https://github.com/arthursoares/framer/releases/download/v2.2.0/SHA256SUMS">SHA256SUMS <span aria-hidden="true">↓</span></a></div><p class="command-intro">Download both files into the same folder, then run:</p><div class="code-block"><button class="copy-button" type="button" data-copy="install-command" hidden>Copy</button><pre><code id="install-command">shasum -a 256 -c SHA256SUMS
+tar -xzf framer-v2.2.0-macos-arm64.tar.gz
+./framer --version</code></pre></div><p class="small-note">Keep <code>framer_FramerCore.bundle</code> beside the executable; it contains the shaders and ASCII atlases. Texture overlays require the source assets.</p><details><summary>If macOS quarantines the CLI</summary><p>After verifying the checksum, remove the quarantine flag from the downloaded executable and retry:</p><pre><code>xattr -d com.apple.quarantine ./framer</code></pre></details></article>
+        <article class="install-card" id="source-build"><p class="eyebrow">Build it yourself / Xcode</p><h3>The native apps</h3><p>Build for macOS 14+ or iOS 17+. You’ll need Xcode, <a href="https://git-lfs.com/">Git LFS</a>, and <a href="https://github.com/yonaskolb/XcodeGen">XcodeGen</a>.</p><div class="code-block"><button class="copy-button" type="button" data-copy="source-command" hidden>Copy</button><pre><code id="source-command">git clone https://github.com/arthursoares/framer.git
 cd framer
-go build framer.go fonts.go</code></pre>
-        </div>
+git lfs install
+git lfs pull
+xcodegen generate
+open Framer.xcodeproj</code></pre></div><p class="small-note">Choose the <code>Framer</code> scheme for macOS or <code>FramerMobile</code> for iOS. Select your signing team for a device build. Git LFS downloads the texture assets.</p><a class="inline-action" href="https://github.com/arthursoares/framer#installation">Read the build instructions <span aria-hidden="true">↗</span></a></article>
       </div>
-    </div>
-  </section>
-
-  <!-- Usage Section -->
-  <section id="usage">
-    <div class="container">
-      <h2>Usage</h2>
-      <p class="section-desc">Simple commands for powerful photo processing.</p>
-
-      <div class="usage-examples">
-        <div class="usage-block">
-          <h3>Basic Commands</h3>
-          <pre><code><span class="comment"># Process a single image</span>
-framer -i photo.jpg -o output/
-
-<span class="comment"># Process an entire folder</span>
-framer -i photos/ -o output/
-
-<span class="comment"># Use a preset</span>
-framer -i photo.jpg -o output/ --preset vintage
-
-<span class="comment"># Instagram format</span>
-framer -i photo.jpg -o output/ -s instagram</code></pre>
-        </div>
-
-        <div class="usage-block">
-          <h3>Custom Captions</h3>
-          <pre><code><span class="comment"># Camera and exposure info</span>
-framer -i photo.jpg -o output/ \
-  --caption-template "{{camera}} - {{iso}} {{aperture}} {{shutter}}"
-
-<span class="comment"># Date format</span>
-framer -i photo.jpg -o output/ \
-  --caption-template "{{mon}} '{{year2}}"
-
-<span class="comment"># Disable caption</span>
-framer -i photo.jpg -o output/ --no-caption</code></pre>
-        </div>
-      </div>
-
-      <!-- Placeholders -->
-      <details style="margin-top: 24px;">
-        <summary>Available Template Placeholders</summary>
-        <div class="content">
-          <div class="placeholders-grid">
-            <div class="placeholder-group">
-              <h4>Date/Time</h4>
-              <ul>
-                <li>{{year}} - Full year (2024)</li>
-                <li>{{year2}} - Short year (24)</li>
-                <li>{{month}} - Month name</li>
-                <li>{{mon}} - Short month (JAN)</li>
-                <li>{{day}} - Day number</li>
-                <li>{{date}} - Full date</li>
-              </ul>
-            </div>
-            <div class="placeholder-group">
-              <h4>Camera</h4>
-              <ul>
-                <li>{{camera}} - Camera model</li>
-                <li>{{lens}} - Lens name</li>
-              </ul>
-            </div>
-            <div class="placeholder-group">
-              <h4>Exposure</h4>
-              <ul>
-                <li>{{iso}} - ISO value</li>
-                <li>{{aperture}} - f-stop</li>
-                <li>{{shutter}} - Shutter speed</li>
-                <li>{{focal}} - Focal length</li>
-              </ul>
-            </div>
-          </div>
-        </div>
-      </details>
-
-      <!-- Config File -->
-      <details>
-        <summary>Configuration File Example</summary>
-        <div class="content">
-          <p style="color: var(--text-secondary); margin-bottom: 16px;">Create a <code>.framer.yaml</code> file in your project directory:</p>
-          <pre><code><span class="comment"># .framer.yaml</span>
-border_style: solid
-border_thickness: "5%"
-border_color: "#000000"
-padding: "150"
-
-<span class="comment"># Caption settings</span>
-caption_template: " - {{mon}} '{{year2}} -"
-font_name: CourierPrime-Bold
-font_size: "50"
-font_color: "#FFFFFF"
-
-<span class="comment"># Output settings</span>
-output_format: jpeg
-jpeg_quality: 100</code></pre>
-        </div>
-      </details>
-
-      <!-- CLI Arguments -->
-      <details>
-        <summary>All Command-line Arguments</summary>
-        <div class="content">
-          <pre><code><span class="comment"># Required</span>
---input, -i           Path to image file or directory
---output, -o          Output directory
-
-<span class="comment"># Border Style</span>
---border-style, -s    solid | instagram | print10x15 (default: solid)
---border-thickness,-t Thickness in pixels or % (e.g., "20" or "5%")
---border-color        Hex color (default: #000000)
---padding             Padding in pixels (default: 150)
-
-<span class="comment"># Caption</span>
---caption             Override caption with custom text
---caption-template    Template with {{placeholders}}
---no-caption          Disable caption entirely
---font-name           Font name (use --list-fonts to see options)
---font-size           Font size in pixels (auto-calculated if omitted)
---font-color          Hex color (default: #000000)
-
-<span class="comment"># Print 10x15 Specific</span>
---background-color    Background color for print10x15 (default: #FFFFFF)
---outer-padding       Outer padding from image to edge
---caption-padding     Padding between caption and image
-
-<span class="comment"># Output</span>
---output-format, -f   jpeg | png (default: jpeg)
---quality, -q         JPEG quality 60-100 (default: 100)
---no-metadata         Skip adding EXIF metadata to output
-
-<span class="comment"># Configuration</span>
---config              Path to YAML config file
---preset              Load preset (vintage, instagram, minimal)
-
-<span class="comment"># Performance</span>
---workers, -w         Concurrent workers (default: CPU cores)
-
-<span class="comment"># Utility</span>
---list-fonts          Show available fonts and exit</code></pre>
-        </div>
-      </details>
-    </div>
-  </section>
-
-  <!-- Footer -->
-  <footer>
-    <div class="container">
-      <p>MIT License</p>
-      <p>Built with <a href="https://docs.anthropic.com/en/docs/agents-and-tools/claude-code/overview">Claude Code</a></p>
-      <div class="footer-links">
-        <a href="https://github.com/arthursoares/framer">GitHub</a>
-        <a href="https://github.com/arthursoares/framer/releases">Releases</a>
-        <a href="https://github.com/arthursoares/framer/issues">Issues</a>
-      </div>
-    </div>
-  </footer>
-
-  <script>
-    function copyCommand(btn) {
-      const code = btn.previousElementSibling.textContent;
-      navigator.clipboard.writeText(code).then(() => {
-        btn.textContent = 'Copied!';
-        btn.classList.add('copied');
-        setTimeout(() => {
-          btn.textContent = 'Copy';
-          btn.classList.remove('copied');
-        }, 2000);
-      });
-    }
-  </script>
+      <div class="batch-example"><div><p class="eyebrow">One look. A whole folder.</p><h3>Take the recipe with you.</h3><p>Download the <a href="media/recipes/coast-film.yaml" download>coastal film YAML recipe</a> into your CLI folder, then apply it to your own photos.</p></div><div class="code-block"><button class="copy-button" type="button" data-copy="batch-command" hidden>Copy</button><pre><code id="batch-command">./framer -i photos/ -o finished/ \
+  --config coast-film.yaml</code></pre></div></div>
+      <p class="release-note">New in v2.2.0: clearer imports, better comparison controls, and safer batch exports. <a href="https://github.com/arthursoares/framer/releases/tag/v2.2.0">Read the release notes <span aria-hidden="true">↗</span></a></p>
+    </section>
+  </main>
+  <footer class="site-footer wrap"><div class="footer-top"><a class="wordmark" href="#"><span class="frame-mark" aria-hidden="true"></span>framer</a><p>A little character goes a long way.</p><div class="text-links"><a href="https://github.com/arthursoares/framer">Source <span aria-hidden="true">↗</span></a><a href="https://github.com/arthursoares/framer/blob/main/LICENSE">MIT license</a></div></div><p class="credits">Demo photography generated for this site; finishes rendered with Framer. App screenshots captured from v2.2.0 source builds. <a href="https://github.com/arthursoares/framer/blob/main/docs/media/README.md">Image credits &amp; recipes</a></p></footer>
+  <p id="copy-status" class="sr-only" role="status" aria-live="polite"></p>
 </body>
 </html>
