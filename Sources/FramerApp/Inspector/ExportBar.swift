@@ -7,6 +7,21 @@ private enum ExportBarLayout {
     static let queuePopoverWidth = 260.0
 }
 
+extension ExportJob.JobStatus {
+    var isFinished: Bool {
+        switch self {
+        case .done, .cancelled, .failed: return true
+        case .queued, .running: return false
+        }
+    }
+}
+
+extension AppState {
+    func clearFinishedExports() {
+        exportQueue.removeAll { $0.status.isFinished }
+    }
+}
+
 struct ExportBar: View {
     @Environment(AppState.self) var appState
     @Environment(\.sidebarMetrics) private var metrics
@@ -23,6 +38,7 @@ struct ExportBar: View {
             HStack(spacing: metrics.expandedBodyInset) {
                 actionButton(
                     title: "Selected",
+                    actionDescription: "Export selected photos",
                     systemImage: "square.and.arrow.up",
                     count: appState.selectedItems.isEmpty ? nil : appState.selectedItems.count,
                     stateStyle: .hover,
@@ -50,6 +66,9 @@ struct ExportBar: View {
                             }
                     }
                     .buttonStyle(.plain)
+                    .accessibilityLabel("Show export queue")
+                    .accessibilityValue(queueAccessibilityValue)
+                    .help("Show export progress and finished jobs")
                     .popover(isPresented: $showingQueuePopover) {
                         ExportQueuePopover()
                     }
@@ -57,6 +76,7 @@ struct ExportBar: View {
 
                 actionButton(
                     title: "All",
+                    actionDescription: "Export all photos",
                     systemImage: "square.and.arrow.up.on.square",
                     count: appState.library.isEmpty ? nil : appState.library.count,
                     stateStyle: .selectedCurrent,
@@ -103,6 +123,10 @@ struct ExportBar: View {
                 Image(systemName: "exclamationmark.triangle.fill")
                     .font(.system(size: 10))
                     .foregroundStyle(Color.error)
+            } else if summary.hasQueued {
+                Image(systemName: "clock")
+                    .font(.system(size: 10))
+                    .foregroundStyle(Color.text2)
             } else if summary.hasCancelled {
                 Image(systemName: "xmark.circle.fill")
                     .font(.system(size: 10))
@@ -118,6 +142,7 @@ struct ExportBar: View {
     private struct QueueSummary {
         var firstRunning: ExportJob?
         var hasFailed: Bool = false
+        var hasQueued: Bool = false
         var hasCancelled: Bool = false
     }
 
@@ -130,14 +155,28 @@ struct ExportBar: View {
                 summary.hasFailed = true
             case .cancelled:
                 summary.hasCancelled = true
-            case .queued, .done:
+            case .queued:
+                summary.hasQueued = true
+            case .done:
                 break
             }
         }
     }
 
+    private var queueAccessibilityValue: String {
+        let summary = queueSummary()
+        if let job = summary.firstRunning {
+            return "Exporting \(job.completedCount) of \(job.items.count) photos"
+        }
+        if summary.hasFailed { return "Some exports failed" }
+        if summary.hasQueued { return "Exports waiting to start" }
+        if summary.hasCancelled { return "Exports cancelled" }
+        return "Exports finished"
+    }
+
     private func actionButton(
         title: LocalizedStringKey,
+        actionDescription: LocalizedStringKey,
         systemImage: String,
         count: Int?,
         stateStyle: SidebarStateStyle,
@@ -172,6 +211,9 @@ struct ExportBar: View {
             .opacity(stateStyle.opacity)
         }
         .buttonStyle(.plain)
+        .accessibilityLabel(actionDescription)
+        .accessibilityValue("\(count ?? 0) photos")
+        .help(Text(actionDescription))
     }
 
     // MARK: - Export Logic
@@ -320,13 +362,14 @@ struct ExportQueuePopover: View {
                     .tracking(1.5)
                     .foregroundStyle(Color.text3)
                 Spacer()
-                if appState.exportQueue.contains(where: { $0.status == .done || $0.status == .cancelled }) {
-                    Button("Clear") {
-                        appState.exportQueue.removeAll { $0.status == .done || $0.status == .cancelled }
+                if appState.exportQueue.contains(where: { $0.status.isFinished }) {
+                    Button("Clear Finished") {
+                        appState.clearFinishedExports()
                     }
                     .font(AppFont.body(10))
                     .foregroundStyle(Color.text2)
                     .buttonStyle(.plain)
+                    .help("Clear finished, failed, and cancelled exports")
                 }
             }
 
@@ -362,6 +405,12 @@ struct ExportQueuePopover: View {
                         .tint(Color.accent)
                         .frame(height: 3)
                 }
+                if case .failed(let message) = job.status {
+                    Text(message)
+                        .font(AppFont.body(11))
+                        .foregroundStyle(Color.text1)
+                        .fixedSize(horizontal: false, vertical: true)
+                }
             }
             Spacer()
             if job.status == .done {
@@ -373,6 +422,8 @@ struct ExportQueuePopover: View {
                         .foregroundStyle(Color.text2)
                 }
                 .buttonStyle(.plain)
+                .accessibilityLabel("Reveal export folder")
+                .help("Reveal export folder")
             }
             if job.status == .running {
                 Button {
@@ -383,6 +434,8 @@ struct ExportQueuePopover: View {
                         .foregroundStyle(Color.text2)
                 }
                 .buttonStyle(.plain)
+                .accessibilityLabel("Cancel export")
+                .help("Cancel export")
             }
             if case .failed = job.status {
                 Button {
@@ -393,6 +446,8 @@ struct ExportQueuePopover: View {
                         .foregroundStyle(Color.text2)
                 }
                 .buttonStyle(.plain)
+                .accessibilityLabel("Retry failed export")
+                .help("Retry failed export")
             }
         }
         .padding(.horizontal, metrics.expandedBodyInset)

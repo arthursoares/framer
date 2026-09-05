@@ -12,6 +12,7 @@
 
 import XCTest
 import CoreGraphics
+import CryptoKit
 @testable import FramerCore
 
 final class GPUEffectBucketDispatchTests: XCTestCase {
@@ -137,6 +138,88 @@ final class GPUEffectBucketDispatchTests: XCTestCase {
     }
 
     // MARK: - Dispatch smoke test
+
+    /// The hidden legacy ASCII bucket remains CPU-rendered for saved projects.
+    /// Lock its exact RGBA output, including mismatched variant payloads that
+    /// still influence the CPU fallback's color and background styling.
+    func testLegacyCPUASCIIFallbackPreservesExactOutput() throws {
+        struct Scenario {
+            let name: String
+            let effect: GPUEffectKind
+            let parameters: GPUEffectParameters
+            let outputSize: CGSize
+            let expectedSHA256: String
+        }
+
+        let scenarios = [
+            Scenario(
+                name: "canonical dense ASCII with palette styling",
+                effect: .ascii,
+                parameters: .textCell(
+                    common: .init(brightness: 0.11, contrast: 1.27, saturation: 0.73, hueRotation: 18, gamma: 0.9),
+                    geometry: .init(scale: 1.4, spacing: 2.2, outputWidth: 211),
+                    color: .init(mode: .palette, backgroundIntensity: 0.42),
+                    textCell: .init(characterSet: .dense, variant: .ascii, intensity: 0.66)
+                ),
+                outputSize: CGSize(width: 31, height: 23),
+                expectedSHA256: "45790b7f1f1cabac8b8f4fd89f18a242910d3f1beb7391058d41bff3774d1766"
+            ),
+            Scenario(
+                name: "fallback effect with matrix-rain styling",
+                effect: .threshold,
+                parameters: .textCell(
+                    common: .init(brightness: -0.07, contrast: 0.91, saturation: 1.18, hueRotation: -25, gamma: 1.2),
+                    geometry: .init(scale: 0.85, spacing: 1.6, outputWidth: 173),
+                    color: .init(mode: .foregroundBackground, backgroundIntensity: 0.37),
+                    textCell: .init(characterSet: .binary, variant: .matrixRain, intensity: 0.82)
+                ),
+                outputSize: CGSize(width: 34, height: 27),
+                expectedSHA256: "e44e45e14d79daec5fb6390dd848cd7f07b5fbf32950b47516cd0418c1772d10"
+            ),
+            Scenario(
+                name: "fallback effect with monochrome dots styling",
+                effect: .threshold,
+                parameters: .textCell(
+                    common: .init(brightness: 0.08, contrast: 1.36, saturation: 0.64, hueRotation: 40, gamma: 0.8),
+                    geometry: .init(scale: 1.1, spacing: 0.7, outputWidth: 149),
+                    color: .init(mode: .monochrome, backgroundIntensity: 0.23),
+                    textCell: .init(characterSet: .blocks, variant: .dots, intensity: 0.74)
+                ),
+                outputSize: CGSize(width: 33, height: 25),
+                expectedSHA256: "e11cc79d3b9c9727ecd33d16fe64336480ffa0f9513ac1d74b16304a99e12570"
+            ),
+            Scenario(
+                name: "fallback effect with blockify source styling",
+                effect: .threshold,
+                parameters: .textCell(
+                    common: .init(brightness: 0.04, contrast: 1.12, saturation: 1.31, hueRotation: 12, gamma: 1.1),
+                    geometry: .init(scale: 1.25, spacing: 1.4, outputWidth: 187),
+                    color: .init(mode: .source, backgroundIntensity: 0.61),
+                    textCell: .init(characterSet: .classicASCII, variant: .blockify, intensity: 0.57)
+                ),
+                outputSize: CGSize(width: 35, height: 26),
+                expectedSHA256: "f42846439e2c988e954a0d9dacbb913f921ac492673d17d56bc0edf88414a180"
+            ),
+        ]
+
+        for scenario in scenarios {
+            // Avoid OS-dependent interpolation in exact pixel baselines.
+            let input = makeTestImage(
+                width: Int(scenario.outputSize.width),
+                height: Int(scenario.outputSize.height)
+            )
+            let output = try TextCellBucketRenderer.renderPreview(
+                input: input,
+                effect: scenario.effect,
+                parameters: scenario.parameters,
+                outputSize: scenario.outputSize
+            )
+            let digest = SHA256.hash(data: Data(readBytes(output)))
+                .map { String(format: "%02x", $0) }
+                .joined()
+            XCTAssertEqual(digest, scenario.expectedSHA256, scenario.name)
+        }
+    }
 
     /// For every GPUEffectKind, render the fixture through GPUEffectsPlatform
     /// and assert the output is structurally non-trivial: dimensions match

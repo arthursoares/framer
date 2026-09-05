@@ -19,15 +19,20 @@ public final class PresetStore {
     }
 
     public func save(_ preset: Preset) throws {
-        // Remove any YAML file for this preset name (e.g. upgrading a default preset)
-        let yamlURL = directory.appendingPathComponent("\(preset.name).yaml")
-        if FileManager.default.fileExists(atPath: yamlURL.path) {
-            try? FileManager.default.removeItem(at: yamlURL)
-        }
-
         let url = directory.appendingPathComponent("\(preset.id.uuidString).json")
         let data = try JSONEncoder().encode(preset)
         try data.write(to: url, options: .atomic)
+
+        // Retire the legacy file only after its replacement is safe. Match the
+        // stored identity, since display names may change or contain path separators.
+        // JSON already overrides YAML by ID, so cleanup failure is non-destructive.
+        let files = try FileManager.default.contentsOfDirectory(at: directory, includingPropertiesForKeys: nil)
+        for yamlURL in files where yamlURL.pathExtension == "yaml" {
+            let name = yamlURL.deletingPathExtension().lastPathComponent
+            if Self.deterministicUUID(from: name) == preset.id {
+                try FileManager.default.removeItem(at: yamlURL)
+            }
+        }
     }
 
     public func load(id: UUID) throws -> Preset {
@@ -59,8 +64,9 @@ public final class PresetStore {
                 let preset = try JSONDecoder().decode(Preset.self, from: data)
                 presetsById[preset.id] = preset
             } catch {
-                // Remove corrupted/empty JSON files so they don't persist.
-                try? FileManager.default.removeItem(at: url)
+                // Preserve unreadable or newer-format files for recovery.
+                // Listing presets must never delete their original data.
+                continue
             }
         }
 
@@ -113,18 +119,42 @@ public final class PresetStore {
     /// Returns the number of presets imported.
     @discardableResult
     public func importData(_ data: Data) throws -> Int {
-        let decoder = JSONDecoder()
-        // Try array first
-        if let presets = try? decoder.decode([Preset].self, from: data) {
-            for preset in presets {
-                try save(preset)
-            }
-            return presets.count
+        let presets = try decodeImportData(data)
+        for preset in presets {
+            try save(preset)
         }
-        // Try single preset
-        let preset = try decoder.decode(Preset.self, from: data)
-        try save(preset)
-        return 1
+        return presets.count
+    }
+
+    /// Decodes the single-preset and preset-array formats accepted by `importData`.
+    /// Callers that need partial-success reporting can save the returned presets individually.
+    public func decodeImportData(_ data: Data) throws -> [Preset] {
+        let payload = try JSONDecoder().decode(PresetImportPayload.self, from: data)
+        return payload.presets
+    }
+
+    private enum PresetImportPayload: Decodable {
+        case single(Preset)
+        case multiple([Preset])
+
+        init(from decoder: Decoder) throws {
+            if var container = try? decoder.unkeyedContainer() {
+                var presets: [Preset] = []
+                while !container.isAtEnd {
+                    presets.append(try container.decode(Preset.self))
+                }
+                self = .multiple(presets)
+            } else {
+                self = .single(try Preset(from: decoder))
+            }
+        }
+
+        var presets: [Preset] {
+            switch self {
+            case .single(let preset): [preset]
+            case .multiple(let presets): presets
+            }
+        }
     }
 
     /// Creates a deterministic UUID from a name string (for stable YAML preset identity).

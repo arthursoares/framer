@@ -1610,7 +1610,7 @@ public struct RoughBorderShaderParams: Codable, Equatable, Sendable {
             // .type3 (torn) was the only recipe before the Type picker
             // existed — layers saved then keep their look. Raw-string decode
             // so an unknown FUTURE type falls back instead of throwing —
-            // a throwing decode makes PresetStore delete the preset file.
+            // a throwing decode would hide the preset from the library.
             borderType: (try c.decodeIfPresent(String.self, forKey: .borderType))
                 .flatMap(RoughBorderType.init(rawValue:)) ?? .type3,
             size: try c.decodeIfPresent(Double.self, forKey: .size) ?? 0.01,
@@ -1771,7 +1771,7 @@ public struct FilmGrainShaderParams: Codable, Equatable, Sendable {
         self.init(
             // Raw-string decode so an unknown FUTURE stock falls back to
             // .custom instead of throwing — a throwing decode makes
-            // PresetStore delete the preset file (house rule 4).
+            // PresetStore hide the preset from the library (house rule 4).
             stock: (try c.decodeIfPresent(String.self, forKey: .stock))
                 .flatMap(FilmGrainStock.init(rawValue:)) ?? .custom,
             grainsPerPixel: try c.decodeIfPresent(Double.self, forKey: .grainsPerPixel),
@@ -2218,7 +2218,7 @@ public struct BWFilmShaderParams: Codable, Equatable, Sendable {
         self.init(
             // Decode via raw string so an UNKNOWN future film falls back to
             // .custom instead of throwing — a throwing decode makes
-            // PresetStore delete the preset file (house rule 4).
+            // PresetStore hide the preset from the library (house rule 4).
             response: (try c.decodeIfPresent(String.self, forKey: .response))
                 .flatMap(BWFilmResponse.init(rawValue:)) ?? .custom,
             sensRed: try c.decodeIfPresent(Double.self, forKey: .sensRed) ?? 0,

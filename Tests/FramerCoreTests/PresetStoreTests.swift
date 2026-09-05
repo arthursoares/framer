@@ -35,6 +35,151 @@ final class PresetStoreTests: XCTestCase {
         XCTAssertEqual(all.count, 2)
     }
 
+    func test_listPresets_preservesUnreadableFilesAndReturnsValidPresets() throws {
+        let store = PresetStore(directory: tempDir)
+        let first = Preset(name: "A", config: .default)
+        let last = Preset(name: "Z", config: .default)
+        try store.save(last)
+        try store.save(first)
+        let unreadable = [
+            ("malformed.json", Data("{incomplete".utf8)),
+            ("unsupported.json", Data("{\"future_schema\":3}".utf8)),
+            ("empty.json", Data()),
+        ]
+        for (name, data) in unreadable {
+            try data.write(to: tempDir.appendingPathComponent(name))
+        }
+
+        XCTAssertEqual(try store.list(), [first, last])
+        XCTAssertEqual(try store.list(), [first, last])
+
+        for (name, data) in unreadable {
+            XCTAssertEqual(try Data(contentsOf: tempDir.appendingPathComponent(name)), data)
+        }
+    }
+
+    func test_listPresets_doesNotRemoveUnreadableDirectory() throws {
+        let store = PresetStore(directory: tempDir)
+        let directory = tempDir.appendingPathComponent("archive.json", isDirectory: true)
+        try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
+        let original = Data("recoverable data".utf8)
+        let file = directory.appendingPathComponent("original")
+        try original.write(to: file)
+
+        XCTAssertTrue(try store.list().isEmpty)
+
+        XCTAssertEqual(try Data(contentsOf: file), original)
+    }
+
+    func test_save_replacesMatchingYAMLPreset() throws {
+        let store = PresetStore(directory: tempDir)
+        let yamlURL = tempDir.appendingPathComponent("film.yaml")
+        try "padding: 12\n".write(to: yamlURL, atomically: true, encoding: .utf8)
+        var preset = try XCTUnwrap(store.list().first)
+        preset.config.padding = 24
+
+        try store.save(preset)
+
+        XCTAssertFalse(FileManager.default.fileExists(atPath: yamlURL.path))
+        XCTAssertEqual(try store.load(id: preset.id), preset)
+        XCTAssertEqual(try store.list(), [preset])
+    }
+
+    func test_save_encodingFailurePreservesYAMLPreset() throws {
+        let store = PresetStore(directory: tempDir)
+        let yamlURL = tempDir.appendingPathComponent("film.yaml")
+        let original = Data("padding: 12\n".utf8)
+        try original.write(to: yamlURL)
+        var preset = try XCTUnwrap(store.list().first)
+        preset.config.borderStyle = .print(PrintFormat(widthMM: .nan))
+
+        XCTAssertThrowsError(try store.save(preset))
+
+        XCTAssertEqual(try Data(contentsOf: yamlURL), original)
+    }
+
+    func test_save_writeFailurePreservesYAMLPreset() throws {
+        let store = PresetStore(directory: tempDir)
+        let yamlURL = tempDir.appendingPathComponent("film.yaml")
+        let original = Data("padding: 12\n".utf8)
+        try original.write(to: yamlURL)
+        let preset = try XCTUnwrap(store.list().first)
+        // An occupied directory makes the replacement fail without relying on permissions.
+        let jsonURL = tempDir.appendingPathComponent("\(preset.id.uuidString).json")
+        try FileManager.default.createDirectory(at: jsonURL, withIntermediateDirectories: false)
+        try Data("occupied".utf8).write(to: jsonURL.appendingPathComponent("sentinel"))
+
+        XCTAssertThrowsError(try store.save(preset))
+
+        XCTAssertEqual(try Data(contentsOf: yamlURL), original)
+    }
+
+    func test_save_sameNameWithDifferentIDPreservesYAMLPreset() throws {
+        let store = PresetStore(directory: tempDir)
+        let yamlURL = tempDir.appendingPathComponent("film.yaml")
+        let original = Data("padding: 12\n".utf8)
+        try original.write(to: yamlURL)
+        let legacy = try XCTUnwrap(store.list().first)
+        let unrelated = Preset(name: "film", config: .default)
+
+        try store.save(unrelated)
+
+        XCTAssertEqual(try Data(contentsOf: yamlURL), original)
+        XCTAssertEqual(Set(try store.list().map(\.id)), [legacy.id, unrelated.id])
+    }
+
+    func test_save_renamedYAMLPresetReplacesOriginalByID() throws {
+        let store = PresetStore(directory: tempDir)
+        let yamlURL = tempDir.appendingPathComponent("film.yaml")
+        try "padding: 12\n".write(to: yamlURL, atomically: true, encoding: .utf8)
+        var preset = try XCTUnwrap(store.list().first)
+        preset.name = "Renamed film"
+
+        try store.save(preset)
+        XCTAssertFalse(FileManager.default.fileExists(atPath: yamlURL.path))
+        XCTAssertEqual(try store.list(), [preset])
+        try store.delete(id: preset.id)
+
+        XCTAssertFalse(FileManager.default.fileExists(atPath: yamlURL.path))
+        XCTAssertTrue(try store.list().isEmpty)
+    }
+
+    func test_import_nameWithParentPathDoesNotDeleteOutsideStore() throws {
+        let directory = tempDir.appendingPathComponent("presets", isDirectory: true)
+        try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
+        let store = PresetStore(directory: directory)
+        let outsideURL = tempDir.appendingPathComponent("victim.yaml")
+        let original = Data("padding: 12\n".utf8)
+        try original.write(to: outsideURL)
+        let preset = Preset(name: "../victim", config: .default)
+
+        XCTAssertEqual(try store.importData(JSONEncoder().encode(preset)), 1)
+
+        XCTAssertEqual(try Data(contentsOf: outsideURL), original)
+        XCTAssertEqual(try store.load(id: preset.id), preset)
+    }
+
+    func test_decodeImportData_acceptsSinglePresetAndArrayWithoutSaving() throws {
+        let store = PresetStore(directory: tempDir)
+        let first = Preset(name: "First", config: .default)
+        let second = Preset(name: "Second", config: .default)
+
+        XCTAssertEqual(try store.decodeImportData(JSONEncoder().encode(first)), [first])
+        XCTAssertEqual(try store.decodeImportData(JSONEncoder().encode([first, second])), [first, second])
+        XCTAssertTrue(try store.list().isEmpty)
+    }
+
+    func test_importData_stillImportsPresetArrays() throws {
+        let store = PresetStore(directory: tempDir)
+        let presets = [
+            Preset(name: "First", config: .default),
+            Preset(name: "Second", config: .default),
+        ]
+
+        XCTAssertEqual(try store.importData(JSONEncoder().encode(presets)), 2)
+        XCTAssertEqual(try store.list(), presets)
+    }
+
     func test_deletePreset_removesIt() throws {
         let store = PresetStore(directory: tempDir)
         let preset = Preset(name: "Delete Me", config: .default)
@@ -256,7 +401,7 @@ final class PresetStoreTests: XCTestCase {
         XCTAssertEqual(all.count, 20)
     }
 
-    func test_initializeDefaults_creates11Files() throws {
+    func test_initializeDefaults_createsExpectedPresetFiles() throws {
         let store = PresetStore(directory: tempDir)
         store.initializeDefaults()
 

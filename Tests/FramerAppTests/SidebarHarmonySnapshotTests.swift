@@ -51,7 +51,7 @@ final class SidebarHarmonySnapshotTests: XCTestCase {
                     .environment(makeExportState())
             },
             size: CGSize(width: 350, height: 320),
-            expectedSHA256: "917f9465082cd27a27055ec813b85a218fa78932807d205133f83de8426414a6"
+            expectedSHA256: "17d3b0cf4600b3e45f829572f86701d4c3778c3d50b3c9135f071a1c9232a5bf"
         )
     }
 
@@ -106,14 +106,14 @@ final class SidebarHarmonySnapshotTests: XCTestCase {
             named: "output-rows-png",
             of: makeOutputRows(outputFormat: .png, stripMetadata: true),
             size: CGSize(width: 350, height: 200),
-            expectedSHA256: "a353c3b59600b7ee1588e7333f281c54af4b24dfd60cfa162dd7507f92786ab9"
+            expectedSHA256: "9c7d3a0d0094a72f656b2cbd5ad271cdcd4c16df69b0549c4f0e693d23388375"
         )
 
         assertSnapshot(
             named: "output-rows-jpeg",
             of: makeOutputRows(outputFormat: .jpeg(quality: 85), stripMetadata: false),
             size: CGSize(width: 350, height: 260),
-            expectedSHA256: "7419a9e765c9ecee48da57e4cd05a1214b13bd37c97861520520ea97bb8e4dbf"
+            expectedSHA256: "2ca685cbb4104b348a173dc5e89b0a64155364e74dfd2f4546273bc89d5270a6"
         )
     }
 
@@ -122,14 +122,14 @@ final class SidebarHarmonySnapshotTests: XCTestCase {
             named: "simple-canvas-editor",
             of: CanvasLayerControls(params: CanvasLayerParams()) { _ in },
             size: CGSize(width: 350, height: 420),
-            expectedSHA256: "aa3258aeb7debbacc77f9dd4cf80afc90ff66c8f59d6039e3ea1cc3d6d9cd460"
+            expectedSHA256: "79af6e8d09c41412a776ff0aa06bc997567b92a1f3ef2fb35a295806ad3f5cad"
         )
 
         assertSnapshot(
             named: "simple-border-editor",
             of: BorderLayerControls(params: BorderLayerParams()) { _ in },
             size: CGSize(width: 350, height: 240),
-            expectedSHA256: "c2c87b969a04dbad779cfdc68805336ace395f5f32e50fd5aa69fc7d2f25b553"
+            expectedSHA256: "7f220827a6161a868996862324a48820d35496ea05a2485e78976ff9158fb9f2"
         )
     }
 
@@ -138,14 +138,14 @@ final class SidebarHarmonySnapshotTests: XCTestCase {
             named: "dense-caption-editor",
             of: CaptionLayerControls(params: CaptionLayerParams()) { _ in },
             size: CGSize(width: 350, height: 760),
-            expectedSHA256: "9432c597d81dfa7722fcc662298e6722ea063477f47108ae801e97bfb2701d91"
+            expectedSHA256: "bf6ef2b08a1a18bf701bcfe407b65252c4fd8caa6235a88e5153dd1d3930e45c"
         )
 
         assertSnapshot(
             named: "dense-dither-editor",
             of: DitherLayerControls(params: DitherLayerParams()) { _ in },
             size: CGSize(width: 350, height: 900),
-            expectedSHA256: "60cdda539ae8d9613cef1f3c520ca9ee121d936f179848f6896960115568c2ff"
+            expectedSHA256: "2c995cbba2094bb66a5149dbe523f4016afee669945795f959435f6dbcbda711"
         )
     }
 
@@ -154,7 +154,7 @@ final class SidebarHarmonySnapshotTests: XCTestCase {
             named: "overlay-editor",
             of: OverlayLayerControls(params: OverlayLayerParams()) { _ in },
             size: CGSize(width: 350, height: 420),
-            expectedSHA256: "ef203c160d6b9f9ff6b4debd318699c86a7aecb24debf87a3a5dbc81f2ce2a71"
+            expectedSHA256: "d477a152a5a45f8008f939effbdc8811ec404dd4da63c9422c50159b1403096e"
         )
     }
 
@@ -164,7 +164,7 @@ final class SidebarHarmonySnapshotTests: XCTestCase {
             of: PresetPreviewGrid()
                 .environment(makePresetState()),
             size: CGSize(width: 350, height: 300),
-            expectedSHA256: "7fa78863980d7d1884ff69a1c0f43c6815fe24e2d2e36dd20f521c7c41c2ded7"
+            expectedSHA256: "55f8cd9cee3c9851f331c2aa732919c3c5ae66c616e1ab2c57bfa79de116036a"
         )
 
         assertSnapshot(
@@ -176,7 +176,7 @@ final class SidebarHarmonySnapshotTests: XCTestCase {
             .environment(makeExportState())
             .background(Color.surface1),
             size: CGSize(width: 350, height: 320),
-            expectedSHA256: "846a578704cc9e59d7b9bc1d72cc1ecb4fa151c429e345037a9fb426ee54307e"
+            expectedSHA256: "f6377a827a731ce5feba53ddf1b527feaa4e40154e4484317148d0ecade28018"
         )
     }
 
@@ -294,6 +294,16 @@ final class SidebarHarmonySnapshotTests: XCTestCase {
         guard let data = bitmap.representation(using: .png, properties: [:]) else {
             XCTFail("Failed to encode PNG for snapshot \(name)", file: file, line: line)
             return
+        }
+
+        if let path = ProcessInfo.processInfo.environment["FRAMER_SNAPSHOT_ARTIFACT_DIR"] {
+            do {
+                let directory = URL(fileURLWithPath: path, isDirectory: true)
+                try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
+                try data.write(to: directory.appendingPathComponent(name).appendingPathExtension("png"), options: .atomic)
+            } catch {
+                XCTFail("Could not write snapshot artifact: \(error.localizedDescription)", file: file, line: line)
+            }
         }
 
         let actualSHA256 = SHA256.hash(data: data).map { String(format: "%02x", $0) }.joined()

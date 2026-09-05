@@ -3,11 +3,13 @@ import FramerCore
 
 struct LayerStrip: View {
     @Environment(AppState.self) var appState
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    @Environment(\.dynamicTypeSize) private var dynamicTypeSize
 
     private var layers: Binding<[CompositionLayer]> {
         Binding(
-            get: { appState.currentConfig.layers ?? CompositionLayer.defaultLayers() },
-            set: { appState.currentConfig.layers = $0 }
+            get: { appState.editorLayers },
+            set: { appState.editorLayers = $0 }
         )
     }
 
@@ -24,11 +26,33 @@ struct LayerStrip: View {
                             dropIndicator
                         }
 
-                        NavigationLink(value: layer.id) {
-                            LayerRow(layer: layer)
+                        HStack(spacing: 0) {
+                            NavigationLink(value: layer.id) {
+                                LayerRow(layer: layer)
+                            }
+                            .buttonStyle(.plain)
+                            .accessibilityElement(children: .ignore)
+                            .accessibilityLabel(layer.label)
+                            .accessibilityValue(layer.accessibilitySummary)
+                            .accessibilityHint("Opens controls for this layer")
+                            .accessibilityAction(named: Text("Move \(layer.label) up")) {
+                                moveLayer(layer.id, direction: .up)
+                            }
+                            .accessibilityAction(named: Text("Move \(layer.label) down")) {
+                                moveLayer(layer.id, direction: .down)
+                            }
+                            .accessibilityAction(named: Text("Delete \(layer.label) layer")) {
+                                deleteLayer(layer.id)
+                            }
+
+                            LayerVisibilityButton(
+                                layerName: layer.label,
+                                isEnabled: layer.isEnabled,
+                                action: { toggleVisibility(for: layer.id) }
+                            )
                         }
-                        .buttonStyle(.plain)
-                        .opacity(draggingID == layer.id ? 0.3 : 1.0)
+                        .background(Color.surface2, in: RoundedRectangle(cornerRadius: CornerRadius.md))
+                        .opacity(draggingID == layer.id ? 0.3 : (layer.isEnabled ? 1.0 : 0.65))
                         .draggable(layer.id.uuidString) {
                             Text(layer.label)
                                 .font(AppFont.layerName)
@@ -42,16 +66,10 @@ struct LayerStrip: View {
                             dropTargetIndex = nil
                             draggingID = nil
                             guard let droppedStr = items.first,
-                                  let droppedID = UUID(uuidString: droppedStr),
-                                  let fromIndex = layers.wrappedValue.firstIndex(where: { $0.id == droppedID }),
-                                  fromIndex != index else { return false }
-                            let toOffset = index > fromIndex ? index + 1 : index
-                            withAnimation(.easeInOut(duration: 0.2)) {
-                                layers.wrappedValue.move(fromOffsets: IndexSet(integer: fromIndex), toOffset: toOffset)
-                            }
-                            return true
+                                  let droppedID = UUID(uuidString: droppedStr) else { return false }
+                            return moveDroppedLayer(droppedID, to: layer.id)
                         } isTargeted: { targeted in
-                            withAnimation(.easeInOut(duration: 0.15)) {
+                            withAnimation(reduceMotion ? nil : .easeInOut(duration: 0.15)) {
                                 dropTargetIndex = targeted ? index : (dropTargetIndex == index ? nil : dropTargetIndex)
                             }
                         }
@@ -62,7 +80,7 @@ struct LayerStrip: View {
             }
             .padding(.horizontal, 16)
         }
-        .frame(maxHeight: 220)
+        .frame(maxHeight: dynamicTypeSize.isAccessibilitySize ? nil : 220)
     }
 
     private var dropIndicator: some View {
@@ -78,7 +96,7 @@ struct LayerStrip: View {
                 .frame(width: 5, height: 5)
         }
         .padding(.vertical, 2)
-        .transition(.opacity.combined(with: .scale(scale: 0.8)))
+        .transition(reduceMotion ? .identity : .opacity.combined(with: .scale(scale: 0.8)))
     }
 
     private var addLayerButton: some View {
@@ -150,14 +168,41 @@ struct LayerStrip: View {
             }
             .font(AppFont.controlLabel)
             .foregroundStyle(Color.text2)
-            .frame(maxWidth: .infinity)
-            .padding(.vertical, 10)
+            .frame(maxWidth: .infinity, minHeight: 44)
+            .contentShape(Rectangle())
             .background(Color.surface2, in: RoundedRectangle(cornerRadius: CornerRadius.md))
         }
     }
 
     private func addLayer(_ layer: CompositionLayer) {
         layers.wrappedValue.append(layer)
+    }
+
+    private func toggleVisibility(for layerID: UUID) {
+        updateLayers { LayerListMutation.toggleVisibility(of: layerID, in: &$0) }
+    }
+
+    private func moveLayer(_ layerID: UUID, direction: LayerMoveDirection) {
+        updateLayers { LayerListMutation.move(layerID, direction: direction, in: &$0) }
+    }
+
+    private func moveDroppedLayer(_ layerID: UUID, to targetID: UUID) -> Bool {
+        var updated = layers.wrappedValue
+        guard LayerListMutation.move(layerID, to: targetID, in: &updated) else { return false }
+        withAnimation(reduceMotion ? nil : .easeInOut(duration: 0.2)) {
+            layers.wrappedValue = updated
+        }
+        return true
+    }
+
+    private func deleteLayer(_ layerID: UUID) {
+        updateLayers { LayerListMutation.delete(layerID, in: &$0) }
+    }
+
+    private func updateLayers(_ mutation: (inout [CompositionLayer]) -> Bool) {
+        var updated = layers.wrappedValue
+        guard mutation(&updated) else { return }
+        layers.wrappedValue = updated
     }
 }
 
@@ -174,31 +219,99 @@ struct LayerRow: View {
                 Text(layer.label)
                     .font(AppFont.layerName)
                     .foregroundStyle(layer.isEnabled ? Color.text0 : Color.text2)
+                    .fixedSize(horizontal: false, vertical: true)
 
-                Text(layerSummary)
+                Text(layer.accessibilitySummary)
                     .font(AppFont.badgeSummary)
                     .foregroundStyle(Color.text3)
+                    .fixedSize(horizontal: false, vertical: true)
             }
 
             Spacer()
 
-            Image(systemName: layer.isEnabled ? "eye" : "eye.slash")
-                .font(.system(size: 12, weight: .medium))
-                .foregroundStyle(layer.isEnabled ? Color.text2 : Color.text3)
-
             Image(systemName: "chevron.right")
                 .font(.system(size: 11, weight: .semibold))
                 .foregroundStyle(Color.text3)
+                .accessibilityHidden(true)
         }
         .padding(.horizontal, 12)
         .padding(.vertical, 10)
-        .background(Color.surface2, in: RoundedRectangle(cornerRadius: CornerRadius.md))
-        .opacity(layer.isEnabled ? 1.0 : 0.65)
+        .frame(maxWidth: .infinity, minHeight: 44, alignment: .leading)
+    }
+}
+
+struct LayerVisibilityButton: View {
+    let layerName: String
+    let isEnabled: Bool
+    let action: () -> Void
+
+    var body: some View {
+        Button(action: action) {
+            Label(
+                "Visibility for \(layerName)",
+                systemImage: isEnabled ? "eye" : "eye.slash"
+            )
+                .labelStyle(.iconOnly)
+                .font(.system(size: 14, weight: .medium))
+                .foregroundStyle(isEnabled ? Color.text2 : Color.text3)
+                .frame(minWidth: 44, minHeight: 44)
+                .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+        .accessibilityLabel("Visibility for \(layerName)")
+        .accessibilityValue(isEnabled ? "Visible" : "Hidden")
+        .accessibilityHint(isEnabled ? "Hides this layer" : "Shows this layer")
+    }
+}
+
+enum LayerMoveDirection: Equatable {
+    case up
+    case down
+}
+
+enum LayerListMutation {
+    @discardableResult
+    static func toggleVisibility(of layerID: UUID, in layers: inout [CompositionLayer]) -> Bool {
+        guard let index = layers.firstIndex(where: { $0.id == layerID }) else { return false }
+        layers[index].isEnabled.toggle()
+        return true
     }
 
-    private var layerSummary: String {
-        if !layer.isEnabled { return "Disabled" }
-        switch layer {
+    @discardableResult
+    static func move(
+        _ layerID: UUID,
+        direction: LayerMoveDirection,
+        in layers: inout [CompositionLayer]
+    ) -> Bool {
+        guard let index = layers.firstIndex(where: { $0.id == layerID }) else { return false }
+        let destination = direction == .up ? index - 1 : index + 1
+        guard layers.indices.contains(destination) else { return false }
+        layers.swapAt(index, destination)
+        return true
+    }
+
+    @discardableResult
+    static func move(_ layerID: UUID, to targetID: UUID, in layers: inout [CompositionLayer]) -> Bool {
+        guard layerID != targetID,
+              let sourceIndex = layers.firstIndex(where: { $0.id == layerID }),
+              let targetIndex = layers.firstIndex(where: { $0.id == targetID }) else { return false }
+        let movedLayer = layers.remove(at: sourceIndex)
+        layers.insert(movedLayer, at: targetIndex)
+        return true
+    }
+
+    @discardableResult
+    static func delete(_ layerID: UUID, in layers: inout [CompositionLayer]) -> Bool {
+        guard let index = layers.firstIndex(where: { $0.id == layerID }) else { return false }
+        layers.remove(at: index)
+        return true
+    }
+}
+
+extension CompositionLayer {
+    var accessibilitySummary: String {
+        if !isEnabled { return "Disabled" }
+        switch self {
         case .border(let p):
             switch p.thickness {
             case .pixels(let px): return "\(px)px"

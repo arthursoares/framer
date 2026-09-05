@@ -13,8 +13,8 @@ extension Color {
     // Text hierarchy
     static let text0 = Color(red: 240/255, green: 237/255, blue: 232/255)   // #F0EDE8
     static let text1 = Color(red: 184/255, green: 180/255, blue: 173/255)   // #B8B4AD
-    static let text2 = Color(red: 125/255, green: 122/255, blue: 116/255)   // #7D7A74
-    static let text3 = Color(red: 78/255, green: 76/255, blue: 72/255)      // #4E4C48
+    static let text2 = Color(red: 166/255, green: 161/255, blue: 152/255)   // #A6A198
+    static let text3 = Color(red: 150/255, green: 146/255, blue: 139/255)   // #96928B
 
     // Accent (warm amber)
     static let accent = Color(red: 212/255, green: 149/255, blue: 106/255)  // #D4956A

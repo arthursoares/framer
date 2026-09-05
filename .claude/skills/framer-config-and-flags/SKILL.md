@@ -103,7 +103,7 @@ Hidden from the layer-add picker: **`.ascii`, `.halftone`, `.dithering`** — be
 
 - Stored as `<UUID>.json` in `~/Library/Application Support/Framer/presets/` (`Sources/FramerCore/Presets/PresetStore.swift:8-14`). **README.md line 52 claims `~/.config/framer/presets/` — that is WRONG for presets** (only the CLI's `default.yaml` fallback lives under `~/.config/framer/`). Do not "fix" code to match README.
 - `PresetStore.list()` loads YAML presets first, then JSON; JSON overrides a YAML preset with the same ID. YAML preset identity is a deterministic MD5-derived UUID of the preset name (`PresetStore.swift:131-138`).
-- **HAZARD — delete-on-decode-failure:** `list()` deletes any `.json` file it cannot decode (`PresetStore.swift:57-66`, "Remove corrupted/empty JSON files"). A decoding regression in `Preset`/`ProcessingConfig`/`CompositionLayer` will silently DESTROY user presets on next launch. There is currently NO fixture test guarding this (verified: `Tests/FramerCoreTests/PresetStoreTests.swift` has no corrupted/legacy-file fixture). Therefore: any change to these Codable models MUST be validated against saved-preset fixtures (old-format JSON committed as test resources) before merging — write the fixture test you wish existed. See framer-validation-and-qa for test conventions.
+- **Recovery policy (updated 2026-09-05):** `list()` skips unreadable JSON and preserves the original files. `PresetStoreTests` guards malformed/unsupported records and read failures against deletion. Keep saved-preset fixture coverage for changes to `Preset`/`ProcessingConfig`/`CompositionLayer`: a decoding regression still hides valid user presets. Never restore the old delete-on-decode-failure behavior.
 
 ### YAML presets / config files (Go-CLI-compatible)
 
@@ -164,7 +164,7 @@ House style, enforced by convention across every params struct:
    - `CaptionMode.none` case kept (ProcessingConfig.swift:146-150) even though the CLI strips `.none`-mode caption layers instead of persisting them (ProcessCommand.swift:112-115); YAML `caption_mode: "none"` must keep decoding (YAMLConfig.swift:537).
    - Hidden `GPUEffectKind` cases `.ascii`/`.halftone`/`.dithering` (see above).
 4. **New YAML key → new `Optional` field in `YAMLLayerSchema`**, snake_case, prefixed by owning layer family; decode with `?? default`.
-5. **Fixture-test the decode paths** before shipping — because of the PresetStore delete-on-decode-failure hazard, a broken decode doesn't just fail, it deletes user data.
+5. **Fixture-test the decode paths** before shipping — a broken decode hides valid presets even though the original files are preserved for recovery.
 
 ## CHECKLIST — adding a parameter to a GPU effect
 
@@ -198,8 +198,8 @@ Re-verification one-liners (run from repo root):
 | iOS flag parity still holds? | `grep -rn "usesCommonAdjustments\|usesGeometry" Sources/FramerMobile/` (expect hits in LayerDetailView.swift; zero hits = regression, update this skill) |
 | Defaults single source of truth intact? | `grep -rn "defaultParams(for" Sources/FramerApp Sources/FramerMobile` (expect ZERO hits) and `grep -n "defaultParameters" Sources/FramerCore/Effects/Models/GPUEffectKind.swift` (expect the func); `gh pr view 12 --json state` (expect MERGED) |
 | Preset directory | `grep -n "Framer/presets" Sources/FramerCore/Presets/PresetStore.swift` |
-| Delete-on-decode-failure hazard | `grep -n -B2 "removeItem(at: url)" Sources/FramerCore/Presets/PresetStore.swift` |
-| Fixture test still missing? | `grep -rn "corrupt\|fixture" Tests/FramerCoreTests/PresetStoreTests.swift` |
+| Preset listing preserves unreadable records | `swift test --filter PresetStoreTests.test_listPresets` |
+| Recovery regressions | `rg -n "preservesUnreadableFiles\|doesNotRemoveUnreadableDirectory" Tests/FramerCoreTests/PresetStoreTests.swift` |
 | Built-in preset count/names | `grep -n '("' Sources/FramerCore/Presets/PresetStore.swift \| grep ProcessingConfig` |
 | YAML field count (165) | `awk 'NR>=27 && /^    }/{print NR; exit}' Sources/FramerCore/Presets/YAMLConfig.swift` then `sed -n '27,<end>p' Sources/FramerCore/Presets/YAMLConfig.swift \| grep -c "var "` |
 | Config discovery chain | `grep -n -A 25 "func loadDefault" Sources/FramerCore/Presets/YAMLConfig.swift` |
