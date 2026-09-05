@@ -48,10 +48,12 @@
 		7BC8833066C978A17F077361 /* SidebarStateMatrixTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 216619F8FEAA17F4D627219B /* SidebarStateMatrixTests.swift */; };
 		7C5074968E49EFB00864AAFD /* SidebarFullWidthRow.swift in Sources */ = {isa = PBXBuildFile; fileRef = 83B7DA56C2ABCB90C958AC46 /* SidebarFullWidthRow.swift */; };
 		7E26ACB4EBE5DD197F9C9E0C /* ExifInfoBar.swift in Sources */ = {isa = PBXBuildFile; fileRef = 69843CE860C9D64774BF6A76 /* ExifInfoBar.swift */; };
+		7E2AB0E272826F543B864CC6 /* PreviewViewModelLifecycleTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 71665FD0A4B2C243C7182D15 /* PreviewViewModelLifecycleTests.swift */; };
 		80C7332C66CEEAF7D7DFB228 /* StyledSliderValueResolverTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 86BC6ECDDBB38E03658D7114 /* StyledSliderValueResolverTests.swift */; };
 		83C339C5F6907392A7F11225 /* ImageThumbnailLoader.swift in Sources */ = {isa = PBXBuildFile; fileRef = D5BE1B7F799CD269EE2C1411 /* ImageThumbnailLoader.swift */; };
 		8B0B4CEE3882DC2ED4FBA8B3 /* LayerPanelRowStateResolverTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8F4005057620F710FB3C5103 /* LayerPanelRowStateResolverTests.swift */; };
 		8B4266040896BBED84762794 /* textures in Resources */ = {isa = PBXBuildFile; fileRef = B1EC2164F8A3DF317311D2C8 /* textures */; };
+		8D1547759A37FB2911D033A8 /* AppLifecycleRegressionTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 42B8BF90CF0DBD054E2831BB /* AppLifecycleRegressionTests.swift */; };
 		8F160BA890A60D6718F2A885 /* CollapsibleSidebarSection.swift in Sources */ = {isa = PBXBuildFile; fileRef = B16338D6414DE0340B3BABA3 /* CollapsibleSidebarSection.swift */; };
 		922190469E4BF28489790F32 /* SidebarHarmonySnapshotTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = DCC79DCD115A284F6B81A07B /* SidebarHarmonySnapshotTests.swift */; };
 		9697B0B0347D866B638B319A /* SidebarChipFlow.swift in Sources */ = {isa = PBXBuildFile; fileRef = 63F8D48B85CFFCB8D0C09504 /* SidebarChipFlow.swift */; };
@@ -86,6 +88,13 @@
 /* End PBXBuildFile section */
 
 /* Begin PBXContainerItemProxy section */
+		C1499E6C6755DB6717A55A89 /* PBXContainerItemProxy */ = {
+			isa = PBXContainerItemProxy;
+			containerPortal = 270BB2514E9354A729F67D29 /* Project object */;
+			proxyType = 1;
+			remoteGlobalIDString = 6B6245F15EBD4BFE5457220B;
+			remoteInfo = FramerMobile;
+		};
 		E05152927DF696465425EDC2 /* PBXContainerItemProxy */ = {
 			isa = PBXContainerItemProxy;
 			containerPortal = 270BB2514E9354A729F67D29 /* Project object */;
@@ -114,6 +123,7 @@
 		3FE688FA9CD9246744F2CEAD /* SidebarLayoutContainmentTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SidebarLayoutContainmentTests.swift; sourceTree = "<group>"; };
 		414976629E834E023AEDF80D /* BlendModeControls.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BlendModeControls.swift; sourceTree = "<group>"; };
 		419FD91DCB79FF87568D1118 /* AsyncThumbnail.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AsyncThumbnail.swift; sourceTree = "<group>"; };
+		42B8BF90CF0DBD054E2831BB /* AppLifecycleRegressionTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppLifecycleRegressionTests.swift; sourceTree = "<group>"; };
 		448D6F42AA7A9F492A2E3436 /* ColorPickerWithHex.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ColorPickerWithHex.swift; sourceTree = "<group>"; };
 		47D49D16C308457CF2ABD0E6 /* SidebarControlRow.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SidebarControlRow.swift; sourceTree = "<group>"; };
 		4DE56DAAC5828B812648B0F7 /* ZoomIndicator.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ZoomIndicator.swift; sourceTree = "<group>"; };
@@ -129,6 +139,7 @@
 		64DCA5495F4E52EE9549C498 /* FramerMobileApp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FramerMobileApp.swift; sourceTree = "<group>"; };
 		698051BBA81FC643D0AF94C7 /* InspectorOutputControlStateTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = InspectorOutputControlStateTests.swift; sourceTree = "<group>"; };
 		69843CE860C9D64774BF6A76 /* ExifInfoBar.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ExifInfoBar.swift; sourceTree = "<group>"; };
+		71665FD0A4B2C243C7182D15 /* PreviewViewModelLifecycleTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PreviewViewModelLifecycleTests.swift; sourceTree = "<group>"; };
 		7A91B04DC698FB944769C025 /* SidebarMetrics.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SidebarMetrics.swift; sourceTree = "<group>"; };
 		8154A40DD384301E5946B867 /* ContentView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ContentView.swift; sourceTree = "<group>"; };
 		81F13602BA30AF5F90605B6C /* PreviewViewModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PreviewViewModel.swift; sourceTree = "<group>"; };
@@ -142,6 +153,7 @@
 		99841491BD0A545FF7E469B5 /* FramerMobile.app */ = {isa = PBXFileReference; includeInIndex = 0; lastKnownFileType = wrapper.application; path = FramerMobile.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		9B9A4BC738FB9F539C9A7AFB /* Framer.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = Framer.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		9FCDE64F375DC8E762C4EF08 /* SidebarCompoundControlBlock.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SidebarCompoundControlBlock.swift; sourceTree = "<group>"; };
+		A81F4578C02785541D03DE8E /* FramerMobileTests.xctest */ = {isa = PBXFileReference; includeInIndex = 0; lastKnownFileType = wrapper.cfbundle; path = FramerMobileTests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
 		A8E704CEA7DD5812C7E8E102 /* SidebarLayoutPolicyTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SidebarLayoutPolicyTests.swift; sourceTree = "<group>"; };
 		A9D4D6D84523CC9466E3CF9D /* framer */ = {isa = PBXFileReference; lastKnownFileType = folder; name = framer; path = .; sourceTree = SOURCE_ROOT; };
 		AF1AFA1E768D2A7B8991C8FA /* ZoomIndicator.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ZoomIndicator.swift; sourceTree = "<group>"; };
@@ -236,6 +248,7 @@
 				5EC113704BA8AB06C96F87E1 /* LayerPanelRowLayoutTests.swift */,
 				8F4005057620F710FB3C5103 /* LayerPanelRowStateResolverTests.swift */,
 				DF0D5CD48FC4441172220087 /* PresetPreviewRenderKeyTests.swift */,
+				71665FD0A4B2C243C7182D15 /* PreviewViewModelLifecycleTests.swift */,
 				580D78E9F4D73889390700DA /* SidebarEnvironmentTests.swift */,
 				DCC79DCD115A284F6B81A07B /* SidebarHarmonySnapshotTests.swift */,
 				3FE688FA9CD9246744F2CEAD /* SidebarLayoutContainmentTests.swift */,
@@ -358,12 +371,22 @@
 			path = Sidebar;
 			sourceTree = "<group>";
 		};
+		AF508E1FA6300883881A00EC /* FramerMobileTests */ = {
+			isa = PBXGroup;
+			children = (
+				42B8BF90CF0DBD054E2831BB /* AppLifecycleRegressionTests.swift */,
+			);
+			name = FramerMobileTests;
+			path = Tests/FramerMobileTests;
+			sourceTree = "<group>";
+		};
 		B5A0391E294805ACCD5427AD /* Products */ = {
 			isa = PBXGroup;
 			children = (
 				9B9A4BC738FB9F539C9A7AFB /* Framer.app */,
 				581B811C4BA8979C815A4C7F /* FramerAppTests.xctest */,
 				99841491BD0A545FF7E469B5 /* FramerMobile.app */,
+				A81F4578C02785541D03DE8E /* FramerMobileTests.xctest */,
 			);
 			name = Products;
 			sourceTree = "<group>";
@@ -404,6 +427,7 @@
 				296068F0A3104E65E2A4BB22 /* FramerApp */,
 				3D112084E55AB440513006CA /* FramerAppTests */,
 				7D825B17DCB66536061D7875 /* FramerMobile */,
+				AF508E1FA6300883881A00EC /* FramerMobileTests */,
 				BF7EB4914AD9DF4212A2FFEA /* Packages */,
 				B5A0391E294805ACCD5427AD /* Products */,
 			);
@@ -498,6 +522,24 @@
 			productReference = 581B811C4BA8979C815A4C7F /* FramerAppTests.xctest */;
 			productType = "com.apple.product-type.bundle.unit-test";
 		};
+		8DADBF7F3C81348349E4ABC7 /* FramerMobileTests */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = BA2C49B26FD88D1C46965936 /* Build configuration list for PBXNativeTarget "FramerMobileTests" */;
+			buildPhases = (
+				D3F72E74690BD165B2FFBF30 /* Sources */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+				F910A9544F286866A8465110 /* PBXTargetDependency */,
+			);
+			name = FramerMobileTests;
+			packageProductDependencies = (
+			);
+			productName = FramerMobileTests;
+			productReference = A81F4578C02785541D03DE8E /* FramerMobileTests.xctest */;
+			productType = "com.apple.product-type.bundle.unit-test";
+		};
 /* End PBXNativeTarget section */
 
 /* Begin PBXProject section */
@@ -516,6 +558,10 @@
 						ProvisioningStyle = Automatic;
 					};
 					7F92C54B63835D9A7829BB9B = {
+						DevelopmentTeam = QLW5M4WG7H;
+						ProvisioningStyle = Automatic;
+					};
+					8DADBF7F3C81348349E4ABC7 = {
 						DevelopmentTeam = QLW5M4WG7H;
 						ProvisioningStyle = Automatic;
 					};
@@ -541,6 +587,7 @@
 				7B53F10D445F75CF087CE1C4 /* Framer */,
 				7F92C54B63835D9A7829BB9B /* FramerAppTests */,
 				6B6245F15EBD4BFE5457220B /* FramerMobile */,
+				8DADBF7F3C81348349E4ABC7 /* FramerMobileTests */,
 			);
 		};
 /* End PBXProject section */
@@ -647,6 +694,7 @@
 				F336B59AD1AE14EA68028F9D /* LayerPanelRowLayoutTests.swift in Sources */,
 				8B0B4CEE3882DC2ED4FBA8B3 /* LayerPanelRowStateResolverTests.swift in Sources */,
 				BD3F5FF532F0A6B4AD5FB1CF /* PresetPreviewRenderKeyTests.swift in Sources */,
+				7E2AB0E272826F543B864CC6 /* PreviewViewModelLifecycleTests.swift in Sources */,
 				AE8F271EFAECBE9C1AA52A1C /* SidebarEnvironmentTests.swift in Sources */,
 				922190469E4BF28489790F32 /* SidebarHarmonySnapshotTests.swift in Sources */,
 				46CCDA87AAA5DDD9AB84615F /* SidebarLayoutContainmentTests.swift in Sources */,
@@ -658,6 +706,14 @@
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
+		D3F72E74690BD165B2FFBF30 /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				8D1547759A37FB2911D033A8 /* AppLifecycleRegressionTests.swift in Sources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
 /* End PBXSourcesBuildPhase section */
 
 /* Begin PBXTargetDependency section */
@@ -665,6 +721,11 @@
 			isa = PBXTargetDependency;
 			target = 7B53F10D445F75CF087CE1C4 /* Framer */;
 			targetProxy = E05152927DF696465425EDC2 /* PBXContainerItemProxy */;
+		};
+		F910A9544F286866A8465110 /* PBXTargetDependency */ = {
+			isa = PBXTargetDependency;
+			target = 6B6245F15EBD4BFE5457220B /* FramerMobile */;
+			targetProxy = C1499E6C6755DB6717A55A89 /* PBXContainerItemProxy */;
 		};
 /* End PBXTargetDependency section */
 
@@ -768,6 +829,46 @@
 				SWIFT_EMIT_LOC_STRINGS = YES;
 				SWIFT_OPTIMIZATION_LEVEL = "-O";
 				SWIFT_VERSION = 5.0;
+			};
+			name = Release;
+		};
+		4704612574F6EDCC5AB13AE3 /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				BUNDLE_LOADER = "$(TEST_HOST)";
+				CODE_SIGN_STYLE = Automatic;
+				DEVELOPMENT_TEAM = QLW5M4WG7H;
+				GENERATE_INFOPLIST_FILE = YES;
+				IPHONEOS_DEPLOYMENT_TARGET = 17.0;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+					"@loader_path/Frameworks",
+				);
+				PRODUCT_BUNDLE_IDENTIFIER = com.arthursoares.FramerMobileTests;
+				SDKROOT = iphoneos;
+				TARGETED_DEVICE_FAMILY = "1,2";
+				TEST_HOST = "$(BUILT_PRODUCTS_DIR)/FramerMobile.app/FramerMobile";
+			};
+			name = Debug;
+		};
+		606DE0D4026A3897984FE513 /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				BUNDLE_LOADER = "$(TEST_HOST)";
+				CODE_SIGN_STYLE = Automatic;
+				DEVELOPMENT_TEAM = QLW5M4WG7H;
+				GENERATE_INFOPLIST_FILE = YES;
+				IPHONEOS_DEPLOYMENT_TARGET = 17.0;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+					"@loader_path/Frameworks",
+				);
+				PRODUCT_BUNDLE_IDENTIFIER = com.arthursoares.FramerMobileTests;
+				SDKROOT = iphoneos;
+				TARGETED_DEVICE_FAMILY = "1,2";
+				TEST_HOST = "$(BUILT_PRODUCTS_DIR)/FramerMobile.app/FramerMobile";
 			};
 			name = Release;
 		};
@@ -962,6 +1063,15 @@
 			buildConfigurations = (
 				9962975C118DC3861230BF1C /* Debug */,
 				B0D32A6973F9D7F8161AA847 /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Debug;
+		};
+		BA2C49B26FD88D1C46965936 /* Build configuration list for PBXNativeTarget "FramerMobileTests" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				4704612574F6EDCC5AB13AE3 /* Debug */,
+				606DE0D4026A3897984FE513 /* Release */,
 			);
 			defaultConfigurationIsVisible = 0;
 			defaultConfigurationName = Debug;

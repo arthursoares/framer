@@ -11,17 +11,24 @@ struct EditorView: View {
     @State private var presetCache = PresetPreviewCache()
     @State private var showingOriginal = false
     @State private var selectedPickerItems: [PhotosPickerItem] = []
-    @State private var isLoadingPhotos = false
+    @State private var photoImporter = PhotoImportCoordinator()
     @State private var isExporting = false
     @State private var exportProgress: Double = 0
     @State private var exportTotal: Int = 0
-    @State private var loadPhotosTask: Task<Void, Never>?
     @State private var exportStatusMessage: String?
 
     private var layersBinding: Binding<[CompositionLayer]> {
         Binding(
-            get: { appState.currentConfig.layers ?? CompositionLayer.defaultLayers() },
-            set: { appState.currentConfig.layers = $0 }
+            get: { appState.editorLayers },
+            set: { appState.editorLayers = $0 }
+        )
+    }
+
+    private var presetPreviewRenderKey: MobilePresetPreviewRenderKey {
+        MobilePresetPreviewRenderKey(
+            photoID: appState.selectedPhoto?.id,
+            photoRotation: appState.selectedPhoto?.rotation,
+            presets: appState.presets
         )
     }
 
@@ -121,7 +128,7 @@ struct EditorView: View {
             .toolbarBackground(.visible, for: .navigationBar)
         }
         .overlay {
-            if isLoadingPhotos {
+            if photoImporter.isLoading {
                 Color.black.opacity(0.5)
                     .ignoresSafeArea()
                     .overlay {
@@ -163,7 +170,6 @@ struct EditorView: View {
         .onChange(of: appState.selectedIndex) { _, _ in
             showingOriginal = false
             updatePreview()
-            regeneratePresetPreviews()
         }
         .onChange(of: appState.currentConfig) { old, new in
             updatePreview()
@@ -180,6 +186,8 @@ struct EditorView: View {
         .onChange(of: appState.selectedPhoto?.rotation) { _, _ in updatePreview() }
         .onChange(of: appState.library.count) { _, _ in
             updatePreview()
+        }
+        .onChange(of: presetPreviewRenderKey) { _, _ in
             regeneratePresetPreviews()
         }
         .onAppear {
@@ -187,7 +195,7 @@ struct EditorView: View {
             regeneratePresetPreviews()
         }
         .onDisappear {
-            loadPhotosTask?.cancel()
+            photoImporter.cancel()
         }
         .alert(
             "Export",
@@ -290,30 +298,28 @@ struct EditorView: View {
     }
 
     private func loadPhotos(from items: [PhotosPickerItem]) {
-        loadPhotosTask?.cancel()
-        isLoadingPhotos = true
-        loadPhotosTask = Task {
-            defer {
-                isLoadingPhotos = false
-                loadPhotosTask = nil
-            }
+        photoImporter.start {
             var newItems: [PhotoItem] = []
+            var temporaryURLs: [URL] = []
             for item in items {
-                guard !Task.isCancelled else { return }
+                guard !Task.isCancelled else { break }
                 if let data = try? await item.loadTransferable(type: Data.self) {
                     let tempURL = FileManager.default.temporaryDirectory
                         .appendingPathComponent(UUID().uuidString)
                         .appendingPathExtension("jpg")
                     do {
                         try data.write(to: tempURL)
+                        temporaryURLs.append(tempURL)
                         newItems.append(PhotoItem(url: tempURL))
                     } catch {
                         // skip this item
                     }
                 }
             }
-            guard !Task.isCancelled else { return }
+            return PhotoImportResult(items: newItems, temporaryURLs: temporaryURLs)
+        } onComplete: { newItems in
             appState.addPhotos(newItems)
+        } clearSelection: {
             selectedPickerItems.removeAll()
         }
     }
@@ -419,6 +425,64 @@ struct EditorView: View {
         }
         activityVC.popoverPresentationController?.sourceView = presenter.view
         presenter.present(activityVC, animated: true)
+    }
+}
+
+struct PhotoImportResult: Sendable {
+    let items: [PhotoItem]
+    let temporaryURLs: [URL]
+}
+
+@MainActor
+@Observable
+final class PhotoImportCoordinator {
+    private(set) var isLoading = false
+    private var task: Task<Void, Never>?
+    private var generation: UInt64 = 0
+
+    @discardableResult
+    func start(
+        operation: @escaping @MainActor () async -> PhotoImportResult,
+        onComplete: @escaping @MainActor ([PhotoItem]) -> Void,
+        clearSelection: @escaping @MainActor () -> Void
+    ) -> Task<Void, Never> {
+        task?.cancel()
+        generation &+= 1
+        let requestGeneration = generation
+        isLoading = true
+
+        let newTask = Task {
+            let result = await operation()
+            guard !Task.isCancelled, requestGeneration == generation else {
+                Self.removeTemporaryFiles(result.temporaryURLs)
+                return
+            }
+
+            onComplete(result.items)
+            clearSelection()
+            finish(requestGeneration)
+        }
+        task = newTask
+        return newTask
+    }
+
+    func cancel() {
+        generation &+= 1
+        task?.cancel()
+        task = nil
+        isLoading = false
+    }
+
+    private func finish(_ requestGeneration: UInt64) {
+        guard requestGeneration == generation else { return }
+        task = nil
+        isLoading = false
+    }
+
+    private nonisolated static func removeTemporaryFiles(_ urls: [URL]) {
+        for url in urls {
+            try? FileManager.default.removeItem(at: url)
+        }
     }
 }
 

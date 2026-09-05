@@ -103,6 +103,21 @@ targets:
         Release:
           SWIFT_ACTIVE_COMPILATION_CONDITIONS: ""
 
+  FramerMobileTests:
+    type: bundle.unit-test
+    platform: iOS
+    deploymentTarget: "17.0"
+    sources:
+      - path: Tests/FramerMobileTests
+    dependencies:
+      - target: FramerMobile
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: com.arthursoares.FramerMobileTests
+        DEVELOPMENT_TEAM: QLW5M4WG7H
+        CODE_SIGN_STYLE: Automatic
+        GENERATE_INFOPLIST_FILE: YES
+
 schemes:
   Framer:
     build:
@@ -122,7 +137,12 @@ schemes:
     build:
       targets:
         FramerMobile: all
+        FramerMobileTests: [test]
     run:
       config: Debug
+    test:
+      config: Debug
+      targets:
+        - name: FramerMobileTests
     archive:
       config: Release

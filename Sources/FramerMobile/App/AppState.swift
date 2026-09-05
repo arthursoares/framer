@@ -16,6 +16,7 @@ final class AppState {
     var appliedPresetConfig: ProcessingConfig?
     var presets: [Preset] = []
     var presetStore = PresetStore()
+    private let fallbackEditorLayers = CompositionLayer.defaultLayers()
 
     // UI state
     var activeTab: BottomTab = .presets
@@ -39,6 +40,11 @@ final class AppState {
     var isPresetModified: Bool {
         guard activePresetName != nil, let applied = appliedPresetConfig else { return false }
         return currentConfig != applied
+    }
+
+    var editorLayers: [CompositionLayer] {
+        get { currentConfig.layers ?? fallbackEditorLayers }
+        set { currentConfig.layers = newValue }
     }
 
     // MARK: - Photo Management

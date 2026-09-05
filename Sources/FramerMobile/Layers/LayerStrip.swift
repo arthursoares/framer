@@ -6,8 +6,8 @@ struct LayerStrip: View {
 
     private var layers: Binding<[CompositionLayer]> {
         Binding(
-            get: { appState.currentConfig.layers ?? CompositionLayer.defaultLayers() },
-            set: { appState.currentConfig.layers = $0 }
+            get: { appState.editorLayers },
+            set: { appState.editorLayers = $0 }
         )
     }
 
