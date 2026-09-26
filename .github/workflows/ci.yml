@@ -29,10 +29,45 @@ jobs:
       - name: Build
         run: swift build
 
-      # Tier 1 only (FramerCore + FramerCLI). Tier 2 (FramerAppTests via
-      # xcodebuild) is not run here — see framer-campaign-restore-validation.
       # EffectGPUGoldenTests throws XCTSkip when the runner exposes no Metal
       # device; a nonzero skip count in the log is expected on such hosts,
       # not a green light to ignore skips locally (the dev-Mac gate expects 0).
       - name: Test (tier 1)
         run: swift test
+
+  native-apps:
+    name: macOS and iOS app checks
+    runs-on: macos-15
+    timeout-minutes: 45
+    steps:
+      # These checks compile the native apps and run focused interaction tests.
+      # They do not render texture fixtures, so LFS remains disabled.
+      - uses: actions/checkout@v5
+
+      - name: Test macOS app interactions
+        run: |
+          xcodebuild test \
+            -project Framer.xcodeproj -scheme Framer \
+            -destination 'platform=macOS' \
+            -only-testing:FramerAppTests/DesktopInteractionUXTests \
+            CODE_SIGNING_ALLOWED=NO
+
+      - name: Build iOS app for Simulator
+        run: |
+          xcodebuild build \
+            -project Framer.xcodeproj -scheme FramerMobile \
+            -destination 'generic/platform=iOS Simulator' \
+            CODE_SIGNING_ALLOWED=NO
+
+      - name: Test iOS app interactions
+        run: |
+          simulator_id="$(xcrun simctl list devices available -j | jq -r '[.devices[][] | select(.isAvailable and (.name | startswith("iPhone")))] | first | .udid // empty')"
+          if [ -z "$simulator_id" ]; then
+            echo 'No available iPhone Simulator' >&2
+            exit 1
+          fi
+          xcodebuild test \
+            -project Framer.xcodeproj -scheme FramerMobile \
+            -destination "platform=iOS Simulator,id=$simulator_id" \
+            -only-testing:FramerMobileTests/MobileControlsUXTests \
+            CODE_SIGNING_ALLOWED=NO
