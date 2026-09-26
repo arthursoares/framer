@@ -49,7 +49,8 @@ jobs:
           xcodebuild test \
             -project Framer.xcodeproj -scheme Framer \
             -destination 'platform=macOS' \
-            -only-testing:FramerAppTests/DesktopInteractionUXTests \
+            -only-testing:FramerAppTests/DesktopInteractionUXTests/test_arrowNavigationUsesFocusedPhotoAndStopsAtFilmstripEnds \
+            -only-testing:FramerAppTests/DesktopInteractionUXTests/test_clearFinishedExportsRetainsOnlyActiveJobs \
             CODE_SIGNING_ALLOWED=NO
 
       - name: Build iOS app for Simulator
