@@ -268,7 +268,7 @@ extension ProcessingConfig: Codable {
         outerPadding = (try? container.decodeIfPresent(Int.self, forKey: .outerPadding)) ?? 0
         noMetadata = (try? container.decodeIfPresent(Bool.self, forKey: .noMetadata)) ?? false
         backgroundMode = (try? container.decodeIfPresent(BackgroundMode.self, forKey: .backgroundMode)) ?? .color
-        layers = try? container.decodeIfPresent([CompositionLayer].self, forKey: .layers)
+        layers = try container.decodeIfPresent([CompositionLayer].self, forKey: .layers)
     }
 }
 

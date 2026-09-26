@@ -318,7 +318,15 @@ public enum YAMLConfig {
             config.backgroundMode = mode
         }
         if let yamlLayers = schema.layers {
-            config.layers = yamlLayers.compactMap { decodeLayers($0) }
+            config.layers = try yamlLayers.enumerated().map { index, layer in
+                guard let decoded = decodeLayers(layer) else {
+                    throw DecodingError.dataCorrupted(.init(
+                        codingPath: [],
+                        debugDescription: "Unsupported YAML layer \(index + 1): \(layer.type)"
+                    ))
+                }
+                return decoded
+            }
         }
 
         return config

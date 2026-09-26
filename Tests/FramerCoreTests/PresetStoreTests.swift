@@ -58,6 +58,20 @@ final class PresetStoreTests: XCTestCase {
         }
     }
 
+    func test_yamlConfig_rejectsUnsupportedLayersInsteadOfDroppingThem() throws {
+        let yaml = """
+        layers:
+          - type: border
+          - type: future_effect
+        """
+        XCTAssertThrowsError(try YAMLConfig.decode(yaml))
+
+        let url = tempDir.appendingPathComponent("future.yaml")
+        try yaml.write(to: url, atomically: true, encoding: .utf8)
+        XCTAssertTrue(try PresetStore(directory: tempDir).list().isEmpty)
+        XCTAssertEqual(try String(contentsOf: url, encoding: .utf8), yaml)
+    }
+
     func test_listPresets_doesNotRemoveUnreadableDirectory() throws {
         let store = PresetStore(directory: tempDir)
         let directory = tempDir.appendingPathComponent("archive.json", isDirectory: true)
