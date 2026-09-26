@@ -872,6 +872,7 @@ public struct AspectRatioLayerParams: Identifiable, Codable, Equatable, Sendable
     public var enabled: Bool
     public var ratioWidth: Int
     public var ratioHeight: Int
+    public var isCustomRatio: Bool
     public var offsetX: Double  // -1.0 (left) to 1.0 (right), 0 = center
     public var offsetY: Double  // -1.0 (bottom) to 1.0 (top), 0 = center
 
@@ -880,6 +881,7 @@ public struct AspectRatioLayerParams: Identifiable, Codable, Equatable, Sendable
         enabled: Bool = true,
         ratioWidth: Int = 1,
         ratioHeight: Int = 1,
+        isCustomRatio: Bool = false,
         offsetX: Double = 0,
         offsetY: Double = 0
     ) {
@@ -887,12 +889,13 @@ public struct AspectRatioLayerParams: Identifiable, Codable, Equatable, Sendable
         self.enabled = enabled
         self.ratioWidth = max(1, ratioWidth)
         self.ratioHeight = max(1, ratioHeight)
+        self.isCustomRatio = isCustomRatio
         self.offsetX = max(-1, min(1, offsetX))
         self.offsetY = max(-1, min(1, offsetY))
     }
 
     private enum CodingKeys: String, CodingKey {
-        case id, enabled, ratioWidth, ratioHeight, offsetX, offsetY
+        case id, enabled, ratioWidth, ratioHeight, isCustomRatio, offsetX, offsetY
     }
 
     public init(from decoder: Decoder) throws {
@@ -902,6 +905,7 @@ public struct AspectRatioLayerParams: Identifiable, Codable, Equatable, Sendable
             enabled: try container.decodeIfPresent(Bool.self, forKey: .enabled) ?? true,
             ratioWidth: try container.decode(Int.self, forKey: .ratioWidth),
             ratioHeight: try container.decode(Int.self, forKey: .ratioHeight),
+            isCustomRatio: try container.decodeIfPresent(Bool.self, forKey: .isCustomRatio) ?? false,
             offsetX: try container.decodeIfPresent(Double.self, forKey: .offsetX) ?? 0,
             offsetY: try container.decodeIfPresent(Double.self, forKey: .offsetY) ?? 0
         )

@@ -673,11 +673,20 @@ final class CompositionLayerTests: XCTestCase {
 
     func test_aspectRatioLayer_roundtripsJSON() throws {
         let layer = CompositionLayer.aspectRatio(AspectRatioLayerParams(
-            ratioWidth: 4, ratioHeight: 5, offsetX: 0.2, offsetY: -0.3
+            ratioWidth: 4, ratioHeight: 5, isCustomRatio: true, offsetX: 0.2, offsetY: -0.3
         ))
         let data = try JSONEncoder().encode(layer)
         let decoded = try JSONDecoder().decode(CompositionLayer.self, from: data)
         XCTAssertEqual(layer, decoded)
+    }
+
+    func test_aspectRatioLayer_decodesLegacyJSONWithoutCustomFlag() throws {
+        let id = UUID()
+        let json = """
+        {"id":"\(id.uuidString)","ratioWidth":4,"ratioHeight":5}
+        """
+        let decoded = try JSONDecoder().decode(AspectRatioLayerParams.self, from: Data(json.utf8))
+        XCTAssertFalse(decoded.isCustomRatio)
     }
 
     // MARK: - LUT Layer

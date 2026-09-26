@@ -229,6 +229,23 @@ final class PresetStoreTests: XCTestCase {
         XCTAssertEqual(decoded.layers?.last?.isEnabled, true)
     }
 
+    func test_yamlConfig_preservesCustomAspectRatioSelection() throws {
+        let config = ProcessingConfig(layers: [
+            .aspectRatio(AspectRatioLayerParams(ratioWidth: 1, ratioHeight: 1, isCustomRatio: true))
+        ])
+
+        let yaml = try YAMLConfig.encode(config)
+        let decoded = try YAMLConfig.decode(yaml)
+
+        XCTAssertTrue(yaml.contains("ratio_custom: true"))
+        guard case .aspectRatio(let params)? = decoded.layers?.first else {
+            return XCTFail("Expected aspect-ratio layer")
+        }
+        XCTAssertTrue(params.isCustomRatio)
+        XCTAssertEqual(params.ratioWidth, 1)
+        XCTAssertEqual(params.ratioHeight, 1)
+    }
+
     func test_yamlConfig_dominantTwoTonePreservesColorShifts() throws {
         var config = ProcessingConfig.default
         config.layers = [

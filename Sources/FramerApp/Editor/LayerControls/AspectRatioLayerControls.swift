@@ -17,7 +17,7 @@ struct AspectRatioLayerControls: View {
     ]
 
     private var isCustom: Bool {
-        !presets.contains { $0.w == params.ratioWidth && $0.h == params.ratioHeight }
+        params.isCustomRatio || !presets.contains { $0.w == params.ratioWidth && $0.h == params.ratioHeight }
     }
 
     var body: some View {
@@ -42,7 +42,12 @@ struct AspectRatioLayerControls: View {
                         SidebarTrailingUnitCluster(unit: "") {
                             TextField("", value: Binding(
                                 get: { params.ratioWidth },
-                                set: { onChange(AspectRatioLayerParams(id: params.id, ratioWidth: max(1, $0), ratioHeight: params.ratioHeight, offsetX: params.offsetX, offsetY: params.offsetY)) }
+                                set: {
+                                    var updated = params
+                                    updated.ratioWidth = max(1, $0)
+                                    updated.isCustomRatio = true
+                                    onChange(updated)
+                                }
                             ), format: .number)
                             .simpleLayerEditorInputStyle(accessibilityLabel: "Width")
                             .monospacedDigit()
@@ -55,7 +60,12 @@ struct AspectRatioLayerControls: View {
                         SidebarTrailingUnitCluster(unit: "") {
                             TextField("", value: Binding(
                                 get: { params.ratioHeight },
-                                set: { onChange(AspectRatioLayerParams(id: params.id, ratioWidth: params.ratioWidth, ratioHeight: max(1, $0), offsetX: params.offsetX, offsetY: params.offsetY)) }
+                                set: {
+                                    var updated = params
+                                    updated.ratioHeight = max(1, $0)
+                                    updated.isCustomRatio = true
+                                    onChange(updated)
+                                }
                             ), format: .number)
                             .simpleLayerEditorInputStyle(accessibilityLabel: "Height")
                             .monospacedDigit()
@@ -101,9 +111,18 @@ struct AspectRatioLayerControls: View {
                 return "\(params.ratioWidth):\(params.ratioHeight)"
             },
             set: { newValue in
-                if newValue == "custom" { return }
+                if newValue == "custom" {
+                    var updated = params
+                    updated.isCustomRatio = true
+                    onChange(updated)
+                    return
+                }
                 if let preset = presets.first(where: { "\($0.w):\($0.h)" == newValue }) {
-                    onChange(AspectRatioLayerParams(id: params.id, ratioWidth: preset.w, ratioHeight: preset.h, offsetX: params.offsetX, offsetY: params.offsetY))
+                    var updated = params
+                    updated.ratioWidth = preset.w
+                    updated.ratioHeight = preset.h
+                    updated.isCustomRatio = false
+                    onChange(updated)
                 }
             }
         )
@@ -112,17 +131,24 @@ struct AspectRatioLayerControls: View {
     private var offsetXBinding: Binding<Double> {
         Binding(
             get: { params.offsetX },
-            set: { onChange(AspectRatioLayerParams(id: params.id, ratioWidth: params.ratioWidth, ratioHeight: params.ratioHeight, offsetX: $0, offsetY: params.offsetY)) }
+            set: {
+                var updated = params
+                updated.offsetX = $0
+                onChange(updated)
+            }
         )
     }
 
     private var offsetYBinding: Binding<Double> {
         Binding(
             get: { params.offsetY },
-            set: { onChange(AspectRatioLayerParams(id: params.id, ratioWidth: params.ratioWidth, ratioHeight: params.ratioHeight, offsetX: params.offsetX, offsetY: $0)) }
+            set: {
+                var updated = params
+                updated.offsetY = $0
+                onChange(updated)
+            }
         )
     }
 }
 
 // MARK: - OrientationLayerControls
-
