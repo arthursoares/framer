@@ -6,6 +6,26 @@ import FramerCore
 
 @MainActor
 final class DesktopInteractionUXTests: XCTestCase {
+    func test_arrowNavigationUsesFocusedPhotoAndStopsAtFilmstripEnds() {
+        let state = AppState()
+        let photos = (0..<3).map { PhotoItem(url: URL(fileURLWithPath: "/tmp/photo-\($0).jpg")) }
+        state.library = photos
+        state.selectedItems = [photos[0].id, photos[2].id]
+
+        XCTAssertEqual(state.selectAdjacentPhoto(forward: true, from: photos[2].id), photos[2].id)
+        XCTAssertEqual(state.selectedItems, [photos[2].id])
+        XCTAssertEqual(state.selectAdjacentPhoto(forward: false), photos[1].id)
+        XCTAssertEqual(state.selectedItems, [photos[1].id])
+        XCTAssertEqual(state.selectAdjacentPhoto(forward: false), photos[0].id)
+        XCTAssertEqual(state.selectAdjacentPhoto(forward: false), photos[0].id)
+
+        state.selectedItems = []
+        XCTAssertEqual(state.selectAdjacentPhoto(forward: true, from: photos[1].id), photos[2].id,
+                       "Deselecting a focused thumbnail should still navigate from its position")
+        state.selectedItems = []
+        XCTAssertEqual(state.selectAdjacentPhoto(forward: true), photos[0].id)
+    }
+
     func test_queuedExportsAreNotAnnouncedAsFinished() {
         let state = AppState()
         state.exportQueue = [ExportJob(items: [], config: .default, outputDirectory: URL(fileURLWithPath: "/tmp"))]
