@@ -66,6 +66,7 @@ public enum YAMLConfig {
         var dither_flipped: Bool?
         var dither_palette: [String]?
         var ratio: String?
+        var ratio_custom: Bool?
         var offset_x: Double?
         var offset_y: Double?
         var lut_name: String?
@@ -474,6 +475,7 @@ public enum YAMLConfig {
             var schema = YAMLLayerSchema(type: "aspect_ratio")
             if !p.enabled { schema.enabled = false }
             schema.ratio = "\(p.ratioWidth):\(p.ratioHeight)"
+            if p.isCustomRatio { schema.ratio_custom = true }
             if p.offsetX != 0 { schema.offset_x = p.offsetX }
             if p.offsetY != 0 { schema.offset_y = p.offsetY }
             return schema
@@ -656,6 +658,7 @@ public enum YAMLConfig {
                 enabled: enabled,
                 ratioWidth: rw,
                 ratioHeight: rh,
+                isCustomRatio: schema.ratio_custom ?? false,
                 offsetX: schema.offset_x ?? 0,
                 offsetY: schema.offset_y ?? 0
             ))
