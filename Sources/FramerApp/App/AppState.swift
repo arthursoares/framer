@@ -27,6 +27,7 @@ final class AppState {
     var presetOperationAlert: PresetOperationAlert?
     var exportQueue: [ExportJob] = []
     private var exportTasks: [UUID: Task<Void, Never>] = [:]
+    private var reservedExportPaths: Set<String> = []
 
     /// Cached preset-preview thumbnails. A separate `@Observable` instance so
     /// writes during a background render batch invalidate only views that
@@ -254,6 +255,19 @@ final class AppState {
 
     private func exportItems(_ items: [PhotoItem], to directory: URL, config: ProcessingConfig, suffix: String) {
         var job = ExportJob(items: items, config: config, outputDirectory: directory, label: suffix)
+        let destinations: [URL]
+        do {
+            destinations = try Self.plannedOutputURLs(
+                for: items, config: config, directory: directory, suffix: suffix,
+                reservedPaths: reservedExportPaths
+            )
+        } catch {
+            job.status = .failed("Could not inspect the export folder: \(error.localizedDescription)")
+            exportQueue.append(job)
+            return
+        }
+        let paths = Set(destinations.map(Self.exportPathKey))
+        reservedExportPaths.formUnion(paths)
         job.status = .running
         exportQueue.append(job)
         let jobId = job.id
@@ -265,7 +279,10 @@ final class AppState {
         // internal threads. Export is batch work with its own progress UI, so
         // utility is the right band — TaskGroup children inherit this priority.
         let task = Task(priority: .utility) {
-            defer { exportTasks.removeValue(forKey: jobId) }
+            defer {
+                exportTasks.removeValue(forKey: jobId)
+                reservedExportPaths.subtract(paths)
+            }
             let maxConcurrency = Self.recommendedExportConcurrency(itemCount: items.count)
             var completed = 0
             var failedCount = 0
@@ -276,13 +293,11 @@ final class AppState {
                 // Seed initial batch up to max concurrency
                 for _ in 0..<min(maxConcurrency, items.count) {
                     let item = items[index]
-                    let idx = index
+                    let outURL = destinations[index]
                     index += 1
-                    _ = idx  // suppress unused warning; index tracks insertion order, not used inside closure
                     group.addTask {
                         if Task.isCancelled { return false }
                         let processor = FrameProcessor()
-                        let outURL = Self.outputURL(for: item, config: config, directory: directory, suffix: suffix)
                         do {
                             try await processor.process(input: item.url, output: outURL, config: config, rotation: item.rotation)
                             return true
@@ -309,11 +324,11 @@ final class AppState {
 
                     if index < items.count {
                         let item = items[index]
+                        let outURL = destinations[index]
                         index += 1
                         group.addTask {
                             if Task.isCancelled { return false }
                             let processor = FrameProcessor()
-                            let outURL = Self.outputURL(for: item, config: config, directory: directory, suffix: suffix)
                             do {
                                 try await processor.process(input: item.url, output: outURL, config: config, rotation: item.rotation)
                                 return true
@@ -342,6 +357,36 @@ final class AppState {
         let ext = config.outputFormat == .png ? "png" : "jpg"
         let stem = item.url.deletingPathExtension().lastPathComponent
         return directory.appendingPathComponent("\(stem)_\(suffix).\(ext)")
+    }
+
+    /// Reserve every destination before parallel rendering starts, including
+    /// names occupied by earlier jobs that have not written their files yet.
+    nonisolated static func plannedOutputURLs(
+        for items: [PhotoItem], config: ProcessingConfig, directory: URL,
+        suffix: String, reservedPaths: Set<String> = []
+    ) throws -> [URL] {
+        let existing = try FileManager.default.contentsOfDirectory(atPath: directory.path)
+        var occupied = reservedPaths
+        occupied.formUnion(existing.map { exportPathKey(directory.appendingPathComponent($0)) })
+
+        return items.map { item in
+            let preferred = outputURL(for: item, config: config, directory: directory, suffix: suffix)
+            let ext = preferred.pathExtension
+            let stem = preferred.deletingPathExtension().lastPathComponent
+            var candidate = preferred
+            var number = 2
+            while occupied.contains(exportPathKey(candidate)) {
+                candidate = directory.appendingPathComponent("\(stem)_\(number).\(ext)")
+                number += 1
+            }
+            occupied.insert(exportPathKey(candidate))
+            return candidate
+        }
+    }
+
+    nonisolated private static func exportPathKey(_ url: URL) -> String {
+        url.resolvingSymlinksInPath().standardizedFileURL.path
+            .precomposedStringWithCanonicalMapping.lowercased()
     }
 
     // MARK: - Photo Import

@@ -6,6 +6,49 @@ import FramerCore
 
 @MainActor
 final class DesktopInteractionUXTests: XCTestCase {
+    func test_exportDestinationsAvoidSameNameInputsAndExistingFiles() throws {
+        let directory = FileManager.default.temporaryDirectory
+            .appendingPathComponent("framer-export-\(UUID().uuidString)", isDirectory: true)
+        try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: directory) }
+
+        let existing = directory.appendingPathComponent("Photo_framed.jpg")
+        try Data("original export".utf8).write(to: existing)
+        let items = [
+            PhotoItem(url: URL(fileURLWithPath: "/first/Photo.jpg")),
+            PhotoItem(url: URL(fileURLWithPath: "/second/photo.png")),
+            PhotoItem(url: URL(fileURLWithPath: "/third/Photo.tif")),
+        ]
+
+        let destinations = try AppState.plannedOutputURLs(
+            for: items, config: .default, directory: directory, suffix: "framed"
+        )
+
+        XCTAssertEqual(destinations.map(\.lastPathComponent), [
+            "Photo_framed_2.jpg", "photo_framed_3.jpg", "Photo_framed_4.jpg",
+        ])
+        XCTAssertEqual(try Data(contentsOf: existing), Data("original export".utf8))
+    }
+
+    func test_exportDestinationsRespectOtherRunningJobs() throws {
+        let directory = FileManager.default.temporaryDirectory
+            .appendingPathComponent("framer-export-\(UUID().uuidString)", isDirectory: true)
+        try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: directory) }
+        let item = PhotoItem(url: URL(fileURLWithPath: "/first/photo.jpg"))
+
+        let first = try AppState.plannedOutputURLs(
+            for: [item], config: .default, directory: directory, suffix: "framed"
+        )
+        let second = try AppState.plannedOutputURLs(
+            for: [item], config: .default, directory: directory, suffix: "framed",
+            reservedPaths: Set(first.map { $0.standardizedFileURL.path.lowercased() })
+        )
+
+        XCTAssertEqual(first.first?.lastPathComponent, "photo_framed.jpg")
+        XCTAssertEqual(second.first?.lastPathComponent, "photo_framed_2.jpg")
+    }
+
     func test_arrowNavigationUsesFocusedPhotoAndStopsAtFilmstripEnds() {
         let state = AppState()
         let photos = (0..<3).map { PhotoItem(url: URL(fileURLWithPath: "/tmp/photo-\($0).jpg")) }
