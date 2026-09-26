@@ -1302,69 +1302,27 @@ struct GPUEffectControls: View {
     }
 
     private static func geometry(for params: GPUEffectParameters) -> GPUEffectGeometryParameters {
-        switch params {
-        case .textCell(_, let geometry, _, _), .printSampling(_, let geometry, _, _), .edgeField(_, let geometry, _, _), .glitch(_, let geometry, _, _):
-            return geometry
-        }
+        params.geometry
     }
 
     private static func common(for params: GPUEffectParameters) -> GPUEffectCommonParameters {
-        switch params {
-        case .textCell(let common, _, _, _), .printSampling(let common, _, _, _), .edgeField(let common, _, _, _), .glitch(let common, _, _, _):
-            return common
-        }
+        params.common
     }
 
     private static func color(for params: GPUEffectParameters) -> GPUEffectColorParameters {
-        switch params {
-        case .textCell(_, _, let color, _), .printSampling(_, _, let color, _), .edgeField(_, _, let color, _), .glitch(_, _, let color, _):
-            return color
-        }
+        params.color
     }
 
     private static func updatingGeometry(_ layer: GPUEffectLayerParams, scale: Double?, spacing: Double?, outputWidth: Int?) -> GPUEffectLayerParams {
-        var copy = layer
-        switch layer.params {
-        case .textCell(let common, let geometry, let color, let payload):
-            copy.params = .textCell(common: common, geometry: .init(scale: scale ?? geometry.scale, spacing: spacing ?? geometry.spacing, outputWidth: outputWidth ?? geometry.outputWidth), color: color, textCell: payload)
-        case .printSampling(let common, let geometry, let color, let payload):
-            copy.params = .printSampling(common: common, geometry: .init(scale: scale ?? geometry.scale, spacing: spacing ?? geometry.spacing, outputWidth: outputWidth ?? geometry.outputWidth), color: color, printSampling: payload)
-        case .edgeField(let common, let geometry, let color, let payload):
-            copy.params = .edgeField(common: common, geometry: .init(scale: scale ?? geometry.scale, spacing: spacing ?? geometry.spacing, outputWidth: outputWidth ?? geometry.outputWidth), color: color, edgeField: payload)
-        case .glitch(let common, let geometry, let color, let payload):
-            copy.params = .glitch(common: common, geometry: .init(scale: scale ?? geometry.scale, spacing: spacing ?? geometry.spacing, outputWidth: outputWidth ?? geometry.outputWidth), color: color, glitch: payload)
-        }
-        return copy
+        layer.updatingGeometry(scale: scale, spacing: spacing, outputWidth: outputWidth)
     }
 
     private static func updatingCommon(_ layer: GPUEffectLayerParams, common: GPUEffectCommonParameters) -> GPUEffectLayerParams {
-        var copy = layer
-        switch layer.params {
-        case .textCell(_, let geometry, let color, let payload):
-            copy.params = .textCell(common: common, geometry: geometry, color: color, textCell: payload)
-        case .printSampling(_, let geometry, let color, let payload):
-            copy.params = .printSampling(common: common, geometry: geometry, color: color, printSampling: payload)
-        case .edgeField(_, let geometry, let color, let payload):
-            copy.params = .edgeField(common: common, geometry: geometry, color: color, edgeField: payload)
-        case .glitch(_, let geometry, let color, let payload):
-            copy.params = .glitch(common: common, geometry: geometry, color: color, glitch: payload)
-        }
-        return copy
+        layer.updatingCommon(common)
     }
 
     private static func updatingColor(_ layer: GPUEffectLayerParams, color: GPUEffectColorParameters) -> GPUEffectLayerParams {
-        var copy = layer
-        switch layer.params {
-        case .textCell(let common, let geometry, _, let payload):
-            copy.params = .textCell(common: common, geometry: geometry, color: color, textCell: payload)
-        case .printSampling(let common, let geometry, _, let payload):
-            copy.params = .printSampling(common: common, geometry: geometry, color: color, printSampling: payload)
-        case .edgeField(let common, let geometry, _, let payload):
-            copy.params = .edgeField(common: common, geometry: geometry, color: color, edgeField: payload)
-        case .glitch(let common, let geometry, _, let payload):
-            copy.params = .glitch(common: common, geometry: geometry, color: color, glitch: payload)
-        }
-        return copy
+        layer.updatingColor(color)
     }
 
     private func updated(layer: GPUEffectLayerParams, params newParams: GPUEffectParameters) -> GPUEffectLayerParams {
