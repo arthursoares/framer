@@ -16,6 +16,41 @@ import CoreGraphics
 
 final class GPUEffectRegressionTests: XCTestCase {
 
+    func test_sharedParameterEditsPreserveFamilyPayloadAndLayerIdentity() {
+        for kind: GPUEffectKind in [.ascii, .dithering, .edgeDetection, .vhs] {
+            let original = GPUEffectLayerParams(
+                kind: kind, params: kind.defaultParameters(), opacity: 0.35, blendMode: .multiply
+            )
+            var common = original.params.common
+            common.brightness = 0.4
+            var color = original.params.color
+            color.backgroundIntensity = 0.7
+
+            let edited = original
+                .updatingGeometry(scale: 1.5, outputWidth: 480)
+                .updatingCommon(common)
+                .updatingColor(color)
+
+            XCTAssertEqual(edited.id, original.id)
+            XCTAssertEqual(edited.kind, kind)
+            XCTAssertEqual(edited.opacity, original.opacity)
+            XCTAssertEqual(edited.blendMode, original.blendMode)
+            XCTAssertEqual(edited.params.geometry.scale, 1.5)
+            XCTAssertEqual(edited.params.geometry.spacing, original.params.geometry.spacing)
+            XCTAssertEqual(edited.params.geometry.outputWidth, 480)
+            XCTAssertEqual(edited.params.common, common)
+            XCTAssertEqual(edited.params.color, color)
+            XCTAssertEqual(
+                edited.params
+                    .replacingCommon(original.params.common)
+                    .replacingGeometry(original.params.geometry)
+                    .replacingColor(original.params.color),
+                original.params,
+                "Family payload changed for \(kind)"
+            )
+        }
+    }
+
     // MARK: - Fixtures
 
     private func makeSolidImage(red: Double, green: Double, blue: Double, size: Int = 64) -> CGImage {
