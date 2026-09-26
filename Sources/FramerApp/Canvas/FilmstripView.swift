@@ -4,6 +4,8 @@ import FramerCore
 
 struct FilmstripView: View {
     @Environment(AppState.self) var appState
+    @FocusState private var focusedPhotoID: PhotoItem.ID?
+    var onToggleOriginal: () -> Void
 
     var body: some View {
         HStack(spacing: 0) {
@@ -13,6 +15,7 @@ struct FilmstripView: View {
                         ForEach(appState.library) { item in
                             Button {
                                 select(item, extendingSelection: NSEvent.modifierFlags.contains(.command))
+                                focusedPhotoID = item.id
                             } label: {
                                 FilmstripThumbnail(
                                     item: item,
@@ -20,6 +23,22 @@ struct FilmstripView: View {
                                 )
                             }
                             .buttonStyle(.plain)
+                            .focused($focusedPhotoID, equals: item.id)
+                            .onKeyPress(phases: .down) { press in
+                                guard press.modifiers.isEmpty else { return .ignored }
+                                if press.key == .space {
+                                    onToggleOriginal()
+                                    return .handled
+                                }
+                                let forward: Bool
+                                switch press.key {
+                                case .leftArrow: forward = false
+                                case .rightArrow: forward = true
+                                default: return .ignored
+                                }
+                                focusedPhotoID = appState.selectAdjacentPhoto(forward: forward, from: item.id)
+                                return .handled
+                            }
                             .id(item.id)
                             .accessibilityLabel(item.url.lastPathComponent)
                             .accessibilityAddTraits(appState.selectedItems.contains(item.id) ? .isSelected : [])
@@ -70,6 +89,14 @@ struct FilmstripView: View {
             }
         }
         .background(Color.clear)
+        .onChange(of: appState.selectedItems) { _, selected in
+            // Menu navigation updates selection outside the filmstrip. When a
+            // thumbnail still owns focus, move focus with that selection so
+            // the next arrow continues from the newly selected photo.
+            if focusedPhotoID != nil, selected.count == 1 {
+                focusedPhotoID = selected.first
+            }
+        }
     }
 
     private func select(_ item: PhotoItem, extendingSelection: Bool) {

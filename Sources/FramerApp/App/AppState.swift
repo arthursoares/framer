@@ -223,6 +223,22 @@ final class AppState {
         library.first { selectedItems.contains($0.id) }
     }
 
+    @discardableResult
+    func selectAdjacentPhoto(forward: Bool, from focusedPhotoID: PhotoItem.ID? = nil) -> PhotoItem.ID? {
+        guard !library.isEmpty else { return nil }
+        let currentID = focusedPhotoID ?? selectedPhoto?.id
+        let currentIndex = currentID.flatMap { id in library.firstIndex(where: { $0.id == id }) }
+        let nextIndex: Int
+        if let index = currentIndex {
+            nextIndex = forward ? min(index + 1, library.count - 1) : max(index - 1, 0)
+        } else {
+            nextIndex = 0
+        }
+        let nextID = library[nextIndex].id
+        selectedItems = [nextID]
+        return nextID
+    }
+
     // MARK: - Export
 
     func exportItems(_ items: [PhotoItem], to directory: URL) {
