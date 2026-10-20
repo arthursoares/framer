@@ -27,6 +27,9 @@ app and CLI changes focus on safer exports and recoverable saved data.
   their complete layer stack, using threshold/sharpen/contrast defaults of 0.5/0/0.
 
 ### Changed
+- Release downloads include the complete universal macOS app with textures,
+  fonts, icons, and shaders, plus its own checksum. The app is ad-hoc signed,
+  not notarized, and uses the non-sandbox Application Support preset folder.
 - macOS and iOS share common, geometry, and color parameter mutations in
   FramerCore, preserving layer identity, enabled state, and effect payloads.
 - CI compiles both native apps and runs focused macOS/iOS interaction tests.
