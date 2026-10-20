@@ -42,9 +42,7 @@ struct ProcessCommand: AsyncParsableCommand {
         // Initialize default presets if needed
         PresetStore().initializeDefaults()
 
-        // Build config: CLI flags → config file → preset → .framer.yaml → defaults
-        let configURL = config.map { URL(fileURLWithPath: $0) }
-        var cfg = YAMLConfig.loadDefault(configPath: configURL, preset: preset)
+        var cfg = try resolvedConfig()
         try applyCLIOverrides(to: &cfg)
 
         let inputURL = URL(fileURLWithPath: input)
@@ -70,6 +68,7 @@ struct ProcessCommand: AsyncParsableCommand {
                 try FileManager.default.createDirectory(at: outDir, withIntermediateDirectories: true)
                 outURL = Self.outputName(for: inputURL, in: outDir, style: cfg.borderStyle, format: cfg.outputFormat)
             }
+            try Self.validateDistinctInputAndOutput(input: inputURL, output: outURL)
             let processor = FrameProcessor()
             try await processor.process(input: inputURL, output: outURL, config: cfg)
             Self.runPostProcess(cfg.postProcess, file: outURL)
@@ -77,7 +76,45 @@ struct ProcessCommand: AsyncParsableCommand {
         }
     }
 
+    func resolvedConfig() throws -> ProcessingConfig {
+        if let config {
+            let url = URL(fileURLWithPath: config)
+            do { return try YAMLConfig.load(from: url) }
+            catch { throw ValidationError("Cannot load --config at \(url.path): \(error.localizedDescription)") }
+        }
+        if let preset {
+            guard !preset.isEmpty, !preset.contains("/"), !preset.contains("\\") else {
+                throw ValidationError("--preset must be a preset name")
+            }
+            let appSupport = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask).first
+                ?? FileManager.default.temporaryDirectory
+            let url = appSupport.appendingPathComponent("Framer/presets/\(preset).yaml")
+            do { return try YAMLConfig.load(from: url) }
+            catch { throw ValidationError("Cannot load --preset '\(preset)': \(error.localizedDescription)") }
+        }
+        return YAMLConfig.loadDefault()
+    }
+
+    static func validateDistinctInputAndOutput(input: URL, output: URL) throws {
+        let source = input.standardizedFileURL.resolvingSymlinksInPath()
+        let destination = output.standardizedFileURL.resolvingSymlinksInPath()
+        let samePath = source == destination
+        let sourceID = try? source.resourceValues(forKeys: [.fileResourceIdentifierKey]).fileResourceIdentifier as? NSObject
+        let destinationID = try? destination.resourceValues(forKeys: [.fileResourceIdentifierKey]).fileResourceIdentifier as? NSObject
+        let sameFile: Bool
+        if let sourceID, let destinationID {
+            sameFile = sourceID.isEqual(destinationID)
+        } else {
+            sameFile = false
+        }
+        guard !samePath && !sameFile else {
+            throw ValidationError("Output file must differ from the input photo")
+        }
+    }
+
     func applyCLIOverrides(to config: inout ProcessingConfig) throws {
+        try validateNumericOverrides()
+        let parsedFontColor = try fontColor.map { try Self.validatedColor($0, option: "--font-color") }
         if let borderStyle {
             switch borderStyle {
             case "solid": config.borderStyle = .solid
@@ -89,7 +126,7 @@ struct ProcessCommand: AsyncParsableCommand {
                     heightMM: printHeight ?? 100,
                     dpi: printDpi ?? 300
                 ))
-            default: break
+            default: throw ValidationError("Unknown --border-style '\(borderStyle)'")
             }
         }
 
@@ -100,14 +137,12 @@ struct ProcessCommand: AsyncParsableCommand {
             if let printDpi { format.dpi = printDpi }
             config.borderStyle = .print(format)
         }
-        if let borderThickness { config.borderThickness = BorderSize(string: borderThickness) }
-        if let borderColor, let color = try? CodableColor(hex: borderColor) { config.borderColor = color }
+        if let borderThickness { config.borderThickness = try Self.validatedBorderSize(borderThickness) }
+        if let borderColor { config.borderColor = try Self.validatedColor(borderColor, option: "--border-color") }
         if let padding { config.padding = padding }
         try Self.applyOutputFormatOverride(outputFormat, quality: quality, config: &config)
         if let postProcess { config.postProcess = postProcess }
-        if let backgroundColor, let color = try? CodableColor(hex: backgroundColor) {
-            config.backgroundColor = color
-        }
+        if let backgroundColor { config.backgroundColor = try Self.validatedColor(backgroundColor, option: "--background-color") }
         Self.applyPaddingOverrides(
             outerPadding: outerPadding,
             captionPadding: captionPadding,
@@ -123,13 +158,15 @@ struct ProcessCommand: AsyncParsableCommand {
 
         // Insert aspect ratio crop at the beginning of the layer stack.
         if let aspectRatio {
-            let parts = aspectRatio.split(separator: ":").compactMap { Int($0) }
-            if parts.count == 2, parts[0] > 0, parts[1] > 0 {
-                config.layers?.insert(
-                    .aspectRatio(AspectRatioLayerParams(ratioWidth: parts[0], ratioHeight: parts[1])),
-                    at: 0
-                )
+            let parts = aspectRatio.split(separator: ":", omittingEmptySubsequences: false)
+            guard parts.count == 2, let width = Int(parts[0]), let height = Int(parts[1]),
+                  width > 0, height > 0 else {
+                throw ValidationError("--aspect-ratio must be two positive integers, such as 4:5")
             }
+            config.layers?.insert(
+                .aspectRatio(AspectRatioLayerParams(ratioWidth: width, ratioHeight: height)),
+                at: 0
+            )
         }
 
         if noCaption {
@@ -161,32 +198,57 @@ struct ProcessCommand: AsyncParsableCommand {
                 return false
             }
             var params = CaptionLayerParams(mode: replacementMode)
-            applyFontOverrides(to: &params)
+            applyFontOverrides(to: &params, color: parsedFontColor)
             config.layers?.append(.caption(params))
         } else if hasFontOverride {
             var foundCaption = false
             config.layers = config.layers?.map { layer in
                 guard case .caption(var params) = layer else { return layer }
                 foundCaption = true
-                applyFontOverrides(to: &params)
+                applyFontOverrides(to: &params, color: parsedFontColor)
                 return .caption(params)
             }
             if !foundCaption {
                 var params = CaptionLayerParams()
-                applyFontOverrides(to: &params)
+                applyFontOverrides(to: &params, color: parsedFontColor)
                 config.layers?.append(.caption(params))
             }
         }
     }
 
-    private func applyFontOverrides(to params: inout CaptionLayerParams) {
+    private func applyFontOverrides(to params: inout CaptionLayerParams, color: CodableColor?) {
         if let fontName { params.fontName = fontName }
         if let fontSize { params.fontSize = .fixed(fontSize) }
         if fontBold { params.fontStyle.insert(.bold) }
         if fontItalic { params.fontStyle.insert(.italic) }
-        if let fontColor {
-            params.fontColor = (try? CodableColor(hex: fontColor)) ?? .black
+        if let color { params.fontColor = color }
+    }
+
+    private static func validatedColor(_ value: String, option: String) throws -> CodableColor {
+        do { return try CodableColor(hex: value) }
+        catch { throw ValidationError("\(option) must be a valid hex color") }
+    }
+
+    private static func validatedBorderSize(_ value: String) throws -> BorderSize {
+        if value.hasSuffix("%"), let percent = Double(value.dropLast()), percent.isFinite, percent >= 0 {
+            return .percent(percent)
         }
+        if let pixels = Int(value), pixels >= 0 { return .pixels(pixels) }
+        throw ValidationError("--border-thickness must be a non-negative number of pixels or percent")
+    }
+
+    private func validateNumericOverrides() throws {
+        if let fontSize, fontSize <= 0 { throw ValidationError("--font-size must be positive") }
+        if let padding, padding < 0 { throw ValidationError("--padding must be non-negative") }
+        if let outerPadding, outerPadding < 0 { throw ValidationError("--outer-padding must be non-negative") }
+        if let captionPadding, captionPadding < 0 { throw ValidationError("--caption-padding must be non-negative") }
+        if let printWidth, !printWidth.isFinite || printWidth <= 0 {
+            throw ValidationError("--print-width must be positive")
+        }
+        if let printHeight, !printHeight.isFinite || printHeight <= 0 {
+            throw ValidationError("--print-height must be positive")
+        }
+        if let printDpi, printDpi <= 0 { throw ValidationError("--print-dpi must be positive") }
     }
 
     func batchProcess(directory: URL, outputDir: String, config: ProcessingConfig, workers: Int) async throws {
@@ -327,6 +389,9 @@ struct ProcessCommand: AsyncParsableCommand {
         config: inout ProcessingConfig
     ) throws {
         if let quality {
+            guard (60...100).contains(quality) else {
+                throw ValidationError("--quality must be between 60 and 100")
+            }
             config.outputFormat = .jpeg(quality: quality)
         }
 

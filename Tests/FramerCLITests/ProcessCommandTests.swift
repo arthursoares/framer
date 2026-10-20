@@ -3,6 +3,60 @@ import XCTest
 @testable import FramerCore
 
 final class ProcessCommandTests: XCTestCase {
+    func test_explicitConfigFailureDoesNotFallBackToDefaults() throws {
+        let missing = FileManager.default.temporaryDirectory.appendingPathComponent("missing-\(UUID()).yaml")
+        XCTAssertThrowsError(try command("--config", missing.path).resolvedConfig())
+        XCTAssertThrowsError(try command("--preset", "missing-\(UUID())").resolvedConfig())
+
+        let malformed = FileManager.default.temporaryDirectory.appendingPathComponent("malformed-\(UUID()).yaml")
+        try Data("layers: [".utf8).write(to: malformed)
+        defer { try? FileManager.default.removeItem(at: malformed) }
+        XCTAssertThrowsError(try command("--config", malformed.path).resolvedConfig())
+    }
+
+    func test_invalidExplicitOverridesFailValidation() throws {
+        let invalidOptions = [
+            ["--border-style", "unknown"],
+            ["--border-thickness", "many"],
+            ["--border-color", "oops"],
+            ["--background-color", "oops"],
+            ["--font-color", "oops"],
+            ["--aspect-ratio", "4:zero"],
+            ["--font-size", "0"],
+            ["--padding=-1"],
+            ["--outer-padding=-1"],
+            ["--print-width", "0"],
+            ["--print-dpi", "0"],
+            ["--quality", "101"]
+        ]
+        for options in invalidOptions {
+            var config = ProcessingConfig.default
+            let parsed = try ProcessCommand.parse(["--input", "/tmp/input.jpg"] + options)
+            XCTAssertThrowsError(try parsed.applyCLIOverrides(to: &config), "Expected validation for \(options)")
+        }
+    }
+
+    func test_outputValidationRejectsSourceAliases() throws {
+        let directory = FileManager.default.temporaryDirectory
+            .appendingPathComponent("framer-cli-output-\(UUID())", isDirectory: true)
+        try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: directory) }
+        let source = directory.appendingPathComponent("photo.jpg")
+        let symlink = directory.appendingPathComponent("alias.jpg")
+        let hardlink = directory.appendingPathComponent("hardlink.jpg")
+        try Data("original".utf8).write(to: source)
+        try FileManager.default.createSymbolicLink(at: symlink, withDestinationURL: source)
+        try FileManager.default.linkItem(at: source, to: hardlink)
+
+        XCTAssertThrowsError(try ProcessCommand.validateDistinctInputAndOutput(input: source, output: source))
+        XCTAssertThrowsError(try ProcessCommand.validateDistinctInputAndOutput(input: source, output: symlink))
+        XCTAssertThrowsError(try ProcessCommand.validateDistinctInputAndOutput(input: source, output: hardlink))
+        XCTAssertNoThrow(try ProcessCommand.validateDistinctInputAndOutput(
+            input: source, output: directory.appendingPathComponent("framed.jpg")
+        ))
+        XCTAssertEqual(try Data(contentsOf: source), Data("original".utf8))
+    }
+
     func test_applyCLIOverrides_preservesEmptyExplicitStack() throws {
         var config = ProcessingConfig.default
         config.layers = []
