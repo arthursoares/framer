@@ -840,9 +840,9 @@ public struct DitherLayerParams: Identifiable, Codable, Equatable, Sendable {
             colorMode: try container.decode(DitherColorMode.self, forKey: .colorMode),
             bayerLevel: try container.decode(Int.self, forKey: .bayerLevel),
             pixelScale: try container.decode(Int.self, forKey: .pixelScale),
-            threshold: try container.decode(Double.self, forKey: .threshold),
-            sharpen: try container.decode(Double.self, forKey: .sharpen),
-            contrast: try container.decode(Double.self, forKey: .contrast),
+            threshold: try container.decodeIfPresent(Double.self, forKey: .threshold) ?? 0.5,
+            sharpen: try container.decodeIfPresent(Double.self, forKey: .sharpen) ?? 0,
+            contrast: try container.decodeIfPresent(Double.self, forKey: .contrast) ?? 0,
             opacity: try container.decodeIfPresent(Double.self, forKey: .opacity) ?? 1.0,
             blendMode: try container.decodeIfPresent(LayerBlendMode.self, forKey: .blendMode) ?? .normal
         )

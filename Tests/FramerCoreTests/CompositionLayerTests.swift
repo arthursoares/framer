@@ -630,6 +630,20 @@ final class CompositionLayerTests: XCTestCase {
 
     // MARK: - Dither Layer Codable
 
+    func test_ditherLayer_rejectsMalformedPreprocessingValues() throws {
+        let layer = CompositionLayer.dither(DitherLayerParams())
+        let encoded = try JSONEncoder().encode(layer)
+        for field in ["threshold", "sharpen", "contrast"] {
+            var json = try XCTUnwrap(JSONSerialization.jsonObject(with: encoded) as? [String: Any])
+            var params = try XCTUnwrap(json["params"] as? [String: Any])
+            params[field] = "invalid"
+            json["params"] = params
+            let malformed = try JSONSerialization.data(withJSONObject: json)
+
+            XCTAssertThrowsError(try JSONDecoder().decode(CompositionLayer.self, from: malformed), field)
+        }
+    }
+
     func test_ditherLayer_bw_roundtripsJSON() throws {
         let layer = CompositionLayer.dither(DitherLayerParams(
             algorithm: .atkinson,
