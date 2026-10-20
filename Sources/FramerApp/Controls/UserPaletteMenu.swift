@@ -13,6 +13,8 @@ struct UserPaletteMenu: View {
     @State private var palettes: [UserPalette] = []
     @State private var showingSavePrompt = false
     @State private var saveName = ""
+    @State private var paletteError: String?
+    @State private var showingPaletteError = false
 
     private let store = UserPaletteStore()
 
@@ -34,8 +36,12 @@ struct UserPaletteMenu: View {
                 Menu("Delete Palette") {
                     ForEach(palettes) { palette in
                         Button(palette.name, role: .destructive) {
-                            try? store.delete(id: palette.id)
-                            reload()
+                            do {
+                                try store.delete(id: palette.id)
+                                reload()
+                            } catch {
+                                report(error)
+                            }
                         }
                     }
                 }
@@ -53,16 +59,35 @@ struct UserPaletteMenu: View {
         } message: {
             Text("Saves the current \(currentColors.count) colours for reuse in any palette editor.")
         }
+        .alert("Saved Palettes Unavailable", isPresented: $showingPaletteError) {
+            Button("OK") { }
+        } message: {
+            Text(paletteError ?? "Check the saved palettes file and try again.")
+        }
     }
 
     private func reload() {
-        palettes = store.list()
+        do {
+            palettes = try store.list()
+        } catch {
+            palettes = []
+            report(error)
+        }
     }
 
     private func saveCurrent() {
         let trimmed = saveName.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !trimmed.isEmpty else { return }
-        try? store.save(UserPalette(name: trimmed, colors: currentColors))
-        reload()
+        do {
+            try store.save(UserPalette(name: trimmed, colors: currentColors))
+            reload()
+        } catch {
+            report(error)
+        }
+    }
+
+    private func report(_ error: Error) {
+        paletteError = "Framer couldn’t read or update saved palettes. \(error.localizedDescription)"
+        showingPaletteError = true
     }
 }

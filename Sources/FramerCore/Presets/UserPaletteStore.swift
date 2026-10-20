@@ -33,15 +33,16 @@ public final class UserPaletteStore {
         self.fileURL = fileURL
     }
 
-    public func list() -> [UserPalette] {
-        guard let data = try? Data(contentsOf: fileURL) else { return [] }
-        return (try? JSONDecoder().decode([UserPalette].self, from: data)) ?? []
+    public func list() throws -> [UserPalette] {
+        guard FileManager.default.fileExists(atPath: fileURL.path) else { return [] }
+        let data = try Data(contentsOf: fileURL)
+        return try JSONDecoder().decode([UserPalette].self, from: data)
     }
 
     /// Insert or update (by id). Names are not required to be unique —
     /// the id is the identity; duplicate names are the user's choice.
     public func save(_ palette: UserPalette) throws {
-        var palettes = list()
+        var palettes = try list()
         if let idx = palettes.firstIndex(where: { $0.id == palette.id }) {
             palettes[idx] = palette
         } else {
@@ -51,7 +52,7 @@ public final class UserPaletteStore {
     }
 
     public func delete(id: UUID) throws {
-        var palettes = list()
+        var palettes = try list()
         palettes.removeAll { $0.id == id }
         try write(palettes)
     }
