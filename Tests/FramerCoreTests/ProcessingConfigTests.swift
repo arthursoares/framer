@@ -63,6 +63,19 @@ final class ProcessingConfigTests: XCTestCase {
         XCTAssertEqual(config.padding, decoded.padding)
     }
 
+    func test_processingConfig_rejectsUnsupportedLayerInsteadOfUsingLegacyRendering() throws {
+        var config = ProcessingConfig.default
+        config.layers = [.border(BorderLayerParams())]
+        let data = try JSONEncoder().encode(config)
+        var json = try XCTUnwrap(JSONSerialization.jsonObject(with: data) as? [String: Any])
+        var layers = try XCTUnwrap(json["layers"] as? [[String: Any]])
+        layers.append(["type": "future_effect", "params": [:]])
+        json["layers"] = layers
+        let unsupported = try JSONSerialization.data(withJSONObject: json)
+
+        XCTAssertThrowsError(try JSONDecoder().decode(ProcessingConfig.self, from: unsupported))
+    }
+
     func test_exifData_resolveTemplate() {
         var exif = ExifData()
         exif.camera = "Sony A7IV"
