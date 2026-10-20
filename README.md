@@ -10,12 +10,13 @@ The border format is inspired by an old box of photos from my grandfather, featu
 
 ## Features
 
-### New in v2.2.0
-- Clear photo-import, loading, comparison, and error-recovery flows on macOS and iOS
-- Safer preset persistence, partial-import feedback, and collision-free CLI batches
-- Brighter labels, larger mobile controls, and accessible selection/export actions
+### New in v3.0.0
+- Explicit CLI validation and single-file source protection
+- Unique desktop export filenames and recoverable saved-palette failures
+- Strict preset layer validation with historical dither compatibility
+- Shared GPU parameter mutations and native macOS/iOS CI checks
 
-See the [v2.2.0 changelog](CHANGELOG.md#220---2026-09-05) for details and CLI compatibility notes.
+See the [v3.0.0 changelog](CHANGELOG.md#300---2026-10-19) for details and compatibility notes.
 
 ### macOS App (SwiftUI)
 - **Photo Library Integration**: Browse and select photos from your library
@@ -60,8 +61,18 @@ Three shader looks that together reproduce the classic Silver Efex Pro darkroom 
 - **Font Styling**: Bold and italic font style options, any installed font family
 
 ### Presets
-- **JSON presets** (app-managed): saved by the macOS app to `~/Library/Application Support/Framer/presets/` — not currently resolvable by name via CLI `--preset`. Saving a YAML preset in the app retires the YAML file with that preset's identity after the JSON replacement succeeds, so that edited built-in preset stops resolving via the CLI. Unreadable preset files are preserved for recovery.
-- **YAML presets/configs**: v1-compatible schema; CLI discovery chain is `--config path` → `--preset name` (probes `~/Library/Application Support/Framer/presets/<name>.yaml`) → `./.framer.yaml` → `~/.config/framer/default.yaml`. If `--preset` finds no YAML file of that name it silently falls through to the next source
+- **JSON presets** (app-managed): saved under the app's Application Support directory.
+  Sandboxed macOS builds use `~/Library/Containers/com.arthursoares.Framer/Data/Library/Application Support/Framer/presets/`;
+  unsandboxed builds and the CLI use `~/Library/Application Support/Framer/presets/`.
+  App-managed JSON presets are not currently resolvable by name via CLI `--preset`.
+  Saving a YAML preset in the app retires its matching YAML only after the JSON
+  replacement succeeds, so that edited preset stops resolving by CLI name.
+  Unreadable preset files are preserved for recovery.
+- **YAML presets/configs**: v1-compatible schema. Explicit `--config path` takes
+  precedence; otherwise `--preset name` loads `<name>.yaml` from the CLI preset
+  folder above. A missing, unreadable, or malformed explicit config/preset fails
+  with a validation error. With neither option, automatic discovery checks
+  `./.framer.yaml`, then `~/.config/framer/default.yaml`, then built-in defaults.
 - **Built-in presets** (seeded as YAML on first CLI run): `film`, `instagram`, `minimal`, `print 10x15`, `dark gradient`, `Shader ASCII`, `Shader Crimewave`
 
 ## Architecture
@@ -83,13 +94,13 @@ Dependencies:
 
 ### From a GitHub Release
 
-Download `framer-v2.2.0-macos-arm64.tar.gz` and `SHA256SUMS` from the
+Download `framer-v3.0.0-macos-arm64.tar.gz` and `SHA256SUMS` from the
 [latest release](https://github.com/arthursoares/framer/releases/latest).
 Verify and extract the unsigned CLI package:
 
 ```bash
 shasum -a 256 -c SHA256SUMS
-tar -xzf framer-v2.2.0-macos-arm64.tar.gz
+tar -xzf framer-v3.0.0-macos-arm64.tar.gz
 ./framer --version
 ```
 

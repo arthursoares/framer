@@ -7,6 +7,58 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [3.0.0] - 2026-10-19
+
+Major version for the source-breaking FramerCore saved-palette read API. Native
+app and CLI changes focus on safer exports and recoverable saved data.
+
+### Fixed
+- Explicit CLI config/preset failures and invalid override values now report
+  validation errors instead of silently using fallback settings.
+- Single-file CLI exports reject direct, normalized-path, symlink, and hard-link
+  aliases of their input photo before encoding.
+- Desktop exports plan unique filenames before rendering, avoid existing files,
+  and reserve destinations across concurrent jobs, including cancellation cleanup.
+- Unreadable saved-palette files are preserved when saving or deleting. Both
+  editors report read/write errors instead of silently replacing the collection.
+- Unsupported JSON/YAML layers and unknown YAML shader/effect kinds fail preset
+  loading instead of silently dropping layers or switching to legacy rendering.
+- Historical source-build dither presets missing preprocessing fields retain
+  their complete layer stack, using threshold/sharpen/contrast defaults of 0.5/0/0.
+
+### Changed
+- macOS and iOS share common, geometry, and color parameter mutations in
+  FramerCore, preserving layer identity, enabled state, and effect payloads.
+- CI compiles both native apps and runs focused macOS/iOS interaction tests.
+
+### Compatibility
+- Deployment targets remain macOS 14+ and iOS 17+. The downloadable CLI remains
+  an unsigned macOS arm64 executable packaged with its required resource bundle.
+- Callers of the public FramerCore `UserPaletteStore.list()` API must now handle
+  thrown read/decode errors. Saving and deleting propagate these failures.
+- CLI batch processing still requires a separate output folder to avoid writing
+  over another input photo; the new source-alias guard covers single-file exports.
+
+## [2.2.1] - 2026-10-19
+
+### Fixed
+- Selecting Custom in an Aspect Ratio layer reveals editable Width and Height
+  controls on macOS and iOS without changing the current crop. The choice survives
+  layer collapse, Undo, and preset save/load; parameter edits preserve layer visibility.
+- Left and Right arrows move between photos after a macOS filmstrip thumbnail
+  receives keyboard focus. Selection and focus stay in sync, including after
+  menu navigation, and navigation stops at the ends of the library.
+
+### Changed
+- GitHub Pages now presents the native editors, current photo finishes, and
+  downloadable effect recipes with updated installation examples.
+
+### Compatibility
+- macOS 14+ and iOS 17+ deployment targets are unchanged. Existing presets remain
+  readable; older aspect-ratio layers default to their existing editor behavior.
+- The downloadable CLI remains an unsigned macOS arm64 binary packaged with its
+  required resource bundle. Native app builds are validated locally from source.
+
 ## [2.2.0] - 2026-09-05
 
 Safer presets and exports, clearer photo editing, and more accessible controls
