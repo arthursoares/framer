@@ -85,13 +85,43 @@ tools/release/package-cli.sh vX.Y.Z /tmp/framer-release-build /tmp/framer-releas
 ```
 
 `.github/workflows/release.yml` runs on version-tag pushes and builds/uploads
-the package. It creates a draft release if needed. Watch every release run and
+the CLI and full universal macOS app. It creates a draft release if needed. Watch every release run and
 inspect the actual uploaded assets; use the same packaging/verification helpers
 locally if the runner fails. Never label an unverified archive as ready.
 
-App distributions require separately verified signing/notarization. As checked
-2026-09-05, this Mac has no valid signing identity; the established distribution
-is the unsigned CLI plus source builds of the apps.
+### Full macOS app artifact
+
+Release downloads also include `Framer-vX.Y.Z-macos-universal.zip` and its own
+`.zip.sha256` manifest. Keep the CLI's `SHA256SUMS` separate so app uploads
+cannot replace CLI checksums. The app requires hydrated LFS textures, fonts,
+icons, and the compiled FramerCore Metal resource bundle.
+
+Use the shared app helper with an explicit checkout of the requested tag:
+
+```bash
+tools/release/package-macos-app.sh vX.Y.Z /path/to/tagged/source /tmp/framer-app-build /tmp/framer-app-artifacts
+```
+
+The helper verifies source/tag identity, app version and bundle ID, both arm64
+and x86_64 slices, copied source assets, bundle resources, ad-hoc signing,
+archive integrity, extraction, and checksums. The default package has no sandbox
+entitlements and uses `~/Library/Application Support/Framer/presets/`. Sandboxed
+Application Support data and preferences (including saved palettes and user
+LUTs/overlays) are separate and must not be described as automatically migrated.
+
+The current release setup uses ad-hoc signing without Developer ID credentials
+or notarization. Label these limitations in the release notes; do not claim a
+notarized or Gatekeeper-trusted app. Verify distribution signing/notarization
+separately before making those claims. Keep user data and running apps out of
+packaging checks.
+
+For an existing tag, dispatch the workflow on current main with input `tag`.
+That path uses current packaging tools but builds application source from the
+requested immutable tag, hydrates its LFS assets, and uploads only the app and
+its checksum. It does not replace CLI assets or move tags. It may create a draft if needed,
+but never publishes the release.
+Download the uploaded app, verify its checksum and extracted signature/resources,
+and align the public release notes with the available app asset.
 
 ## Merge, tag, and publish
 

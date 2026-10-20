@@ -94,6 +94,30 @@ Dependencies:
 
 ### From a GitHub Release
 
+#### macOS app (Apple Silicon and Intel)
+
+Download `Framer-v3.0.0-macos-universal.zip` and
+`Framer-v3.0.0-macos-universal.zip.sha256` from the
+[latest release](https://github.com/arthursoares/framer/releases/latest).
+Verify and extract the full app:
+
+```bash
+shasum -a 256 -c Framer-v3.0.0-macos-universal.zip.sha256
+ditto -x -k Framer-v3.0.0-macos-universal.zip ./Framer-download
+```
+
+Move the extracted `Framer.app` to Applications. The app requires macOS 14+
+and includes its textures, fonts, icons, and Metal shaders. It is ad-hoc signed,
+not Developer ID-signed or notarized; macOS may block first launch of the download.
+This build is not sandboxed and uses the non-sandbox preset folder documented above.
+Sandboxed Application Support data (presets, saved palettes, user LUTs/overlays)
+and app preferences are separate and are not migrated automatically.
+If macOS blocks your first launch and you trust this build, open **System Settings →
+Privacy & Security → Open Anyway**, then confirm **Open**. See
+[Apple's instructions](https://support.apple.com/en-us/102445).
+
+#### CLI (Apple Silicon)
+
 Download `framer-v3.0.0-macos-arm64.tar.gz` and `SHA256SUMS` from the
 [latest release](https://github.com/arthursoares/framer/releases/latest).
 Verify and extract the unsigned CLI package:

@@ -1,19 +1,28 @@
 name: Release artifact
 
-# Builds the CLI and its SwiftPM resource bundle when a version tag is pushed,
-# verifies the relocated artifact, and attaches it with SHA-256 checksums to
-# the GitHub release for that tag. If no release exists yet it creates a DRAFT
-# — publishing is a separate, explicitly authorized step, and notes come from the
-# CHANGELOG per .claude/skills/release/SKILL.md (never auto-generated here).
+# Version-tag pushes publish the CLI and full universal macOS app to a draft
+# release. Manual dispatch adds/rebuilds the app for an existing tag without
+# changing the tag or replacing its CLI assets. Publication remains explicit.
 on:
   push:
     tags: ["v*"]
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: Existing version tag to build the full macOS app from (vX.Y.Z)
+        required: true
+        type: string
 
 permissions:
   contents: write
 
+concurrency:
+  group: release-${{ inputs.tag || github.ref_name }}
+  cancel-in-progress: false
+
 jobs:
   build-and-attach:
+    if: github.event_name == 'push'
     name: build framer (macOS arm64) and attach to release
     runs-on: macos-15
     timeout-minutes: 30
@@ -43,3 +52,71 @@ jobs:
               --title "$GITHUB_REF_NAME" \
               --notes-file "$NOTES"
           fi
+
+  macos-app:
+    name: build Framer.app (macOS universal) and attach to release
+    needs: build-and-attach
+    if: ${{ always() && !cancelled() && (github.event_name == 'workflow_dispatch' || needs.build-and-attach.result == 'success') }}
+    runs-on: macos-15
+    timeout-minutes: 45
+    env:
+      RELEASE_TAG: ${{ inputs.tag || github.ref_name }}
+    steps:
+      - name: Validate requested version tag
+        shell: bash
+        run: |
+          if [[ "$GITHUB_EVENT_NAME" == 'workflow_dispatch' && "$GITHUB_REF" != 'refs/heads/main' ]]; then
+            echo 'Dispatch app releases from the main branch' >&2
+            exit 1
+          fi
+          [[ "$RELEASE_TAG" =~ ^v[0-9]+\.[0-9]+\.[0-9]+$ ]] || {
+            echo 'Expected an existing vX.Y.Z tag' >&2
+            exit 1
+          }
+
+      # Keep packaging tools on the workflow revision so manual dispatch can
+      # package tags created before app packaging was added. App source is
+      # always checked out independently from the requested immutable tag.
+      - name: Check out release packaging tools
+        uses: actions/checkout@v5
+        with:
+          ref: ${{ github.sha }}
+          path: packaging
+          sparse-checkout: |
+            tools/release
+            docs/release-notes
+
+      # The full app requires texture/font assets. Hydrate LFS for this job;
+      # CLI-only packaging above intentionally avoids the large LFS download.
+      - name: Check out tagged app source and assets
+        uses: actions/checkout@v5
+        with:
+          ref: ${{ env.RELEASE_TAG }}
+          path: source
+          fetch-depth: 0
+          lfs: true
+
+      - name: Build and verify full macOS app
+        shell: bash
+        run: |
+          packaging/tools/release/package-macos-app.sh \
+            "$RELEASE_TAG" \
+            "$GITHUB_WORKSPACE/source" \
+            "$RUNNER_TEMP/framer-macos-app-build" \
+            "$GITHUB_WORKSPACE/app-artifacts"
+
+      - name: Attach app and its checksum
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: bash
+        run: |
+          APP="app-artifacts/Framer-${RELEASE_TAG}-macos-universal.zip"
+          NOTES="packaging/docs/release-notes/${RELEASE_TAG}.md"
+          if ! gh release view "$RELEASE_TAG" --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1; then
+            if ! gh release create "$RELEASE_TAG" --repo "$GITHUB_REPOSITORY" \
+              --draft --verify-tag --title "$RELEASE_TAG" --notes-file "$NOTES"; then
+              gh release view "$RELEASE_TAG" --repo "$GITHUB_REPOSITORY" >/dev/null
+            fi
+          fi
+          gh release upload "$RELEASE_TAG" --repo "$GITHUB_REPOSITORY" \
+            "$APP" "$APP.sha256" --clobber
