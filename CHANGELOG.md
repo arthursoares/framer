@@ -7,6 +7,26 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [2.2.1] - 2026-10-19
+
+### Fixed
+- Selecting Custom in an Aspect Ratio layer reveals editable Width and Height
+  controls on macOS and iOS without changing the current crop. The choice survives
+  layer collapse, Undo, and preset save/load; parameter edits preserve layer visibility.
+- Left and Right arrows move between photos after a macOS filmstrip thumbnail
+  receives keyboard focus. Selection and focus stay in sync, including after
+  menu navigation, and navigation stops at the ends of the library.
+
+### Changed
+- GitHub Pages now presents the native editors, current photo finishes, and
+  downloadable effect recipes with updated installation examples.
+
+### Compatibility
+- macOS 14+ and iOS 17+ deployment targets are unchanged. Existing presets remain
+  readable; older aspect-ratio layers default to their existing editor behavior.
+- The downloadable CLI remains an unsigned macOS arm64 binary packaged with its
+  required resource bundle. Native app builds are validated locally from source.
+
 ## [2.2.0] - 2026-09-05
 
 Safer presets and exports, clearer photo editing, and more accessible controls

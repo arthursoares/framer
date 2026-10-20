@@ -10,12 +10,12 @@ The border format is inspired by an old box of photos from my grandfather, featu
 
 ## Features
 
-### New in v2.2.0
-- Clear photo-import, loading, comparison, and error-recovery flows on macOS and iOS
-- Safer preset persistence, partial-import feedback, and collision-free CLI batches
-- Brighter labels, larger mobile controls, and accessible selection/export actions
+### New in v2.2.1
+- Editable Custom aspect ratios on macOS and iOS, preserved through Undo and presets
+- Reliable arrow-key photo navigation from focused macOS filmstrip thumbnails
+- Updated GitHub Pages with native editors, photo finishes, and effect recipes
 
-See the [v2.2.0 changelog](CHANGELOG.md#220---2026-09-05) for details and CLI compatibility notes.
+See the [v2.2.1 changelog](CHANGELOG.md#221---2026-10-19) for details.
 
 ### macOS App (SwiftUI)
 - **Photo Library Integration**: Browse and select photos from your library
@@ -83,13 +83,13 @@ Dependencies:
 
 ### From a GitHub Release
 
-Download `framer-v2.2.0-macos-arm64.tar.gz` and `SHA256SUMS` from the
+Download `framer-v2.2.1-macos-arm64.tar.gz` and `SHA256SUMS` from the
 [latest release](https://github.com/arthursoares/framer/releases/latest).
 Verify and extract the unsigned CLI package:
 
 ```bash
 shasum -a 256 -c SHA256SUMS
-tar -xzf framer-v2.2.0-macos-arm64.tar.gz
+tar -xzf framer-v2.2.1-macos-arm64.tar.gz
 ./framer --version
 ```
 
