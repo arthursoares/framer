@@ -516,6 +516,66 @@ public enum GPUEffectParameters: Codable, Equatable, Sendable {
     case edgeField(common: GPUEffectCommonParameters, geometry: GPUEffectGeometryParameters, color: GPUEffectColorParameters, edgeField: EdgeFieldParameters)
     case glitch(common: GPUEffectCommonParameters, geometry: GPUEffectGeometryParameters, color: GPUEffectColorParameters, glitch: GlitchParameters)
 
+    public var common: GPUEffectCommonParameters {
+        switch self {
+        case .textCell(let value, _, _, _), .printSampling(let value, _, _, _),
+             .edgeField(let value, _, _, _), .glitch(let value, _, _, _): value
+        }
+    }
+
+    public var geometry: GPUEffectGeometryParameters {
+        switch self {
+        case .textCell(_, let value, _, _), .printSampling(_, let value, _, _),
+             .edgeField(_, let value, _, _), .glitch(_, let value, _, _): value
+        }
+    }
+
+    public var color: GPUEffectColorParameters {
+        switch self {
+        case .textCell(_, _, let value, _), .printSampling(_, _, let value, _),
+             .edgeField(_, _, let value, _), .glitch(_, _, let value, _): value
+        }
+    }
+
+    public func replacingCommon(_ value: GPUEffectCommonParameters) -> Self {
+        switch self {
+        case .textCell(_, let geometry, let color, let payload):
+            .textCell(common: value, geometry: geometry, color: color, textCell: payload)
+        case .printSampling(_, let geometry, let color, let payload):
+            .printSampling(common: value, geometry: geometry, color: color, printSampling: payload)
+        case .edgeField(_, let geometry, let color, let payload):
+            .edgeField(common: value, geometry: geometry, color: color, edgeField: payload)
+        case .glitch(_, let geometry, let color, let payload):
+            .glitch(common: value, geometry: geometry, color: color, glitch: payload)
+        }
+    }
+
+    public func replacingGeometry(_ value: GPUEffectGeometryParameters) -> Self {
+        switch self {
+        case .textCell(let common, _, let color, let payload):
+            .textCell(common: common, geometry: value, color: color, textCell: payload)
+        case .printSampling(let common, _, let color, let payload):
+            .printSampling(common: common, geometry: value, color: color, printSampling: payload)
+        case .edgeField(let common, _, let color, let payload):
+            .edgeField(common: common, geometry: value, color: color, edgeField: payload)
+        case .glitch(let common, _, let color, let payload):
+            .glitch(common: common, geometry: value, color: color, glitch: payload)
+        }
+    }
+
+    public func replacingColor(_ value: GPUEffectColorParameters) -> Self {
+        switch self {
+        case .textCell(let common, let geometry, _, let payload):
+            .textCell(common: common, geometry: geometry, color: value, textCell: payload)
+        case .printSampling(let common, let geometry, _, let payload):
+            .printSampling(common: common, geometry: geometry, color: value, printSampling: payload)
+        case .edgeField(let common, let geometry, _, let payload):
+            .edgeField(common: common, geometry: geometry, color: value, edgeField: payload)
+        case .glitch(let common, let geometry, _, let payload):
+            .glitch(common: common, geometry: geometry, color: value, glitch: payload)
+        }
+    }
+
     private enum CodingKeys: String, CodingKey {
         case family, common, geometry, color, textCell, printSampling, edgeField, glitch
     }
@@ -608,6 +668,28 @@ public struct GPUEffectLayerParams: Identifiable, Codable, Equatable, Sendable {
         self.params = params
         self.opacity = max(0, min(1, opacity))
         self.blendMode = blendMode
+    }
+
+    public func updatingGeometry(scale: Double? = nil, spacing: Double? = nil, outputWidth: Int? = nil) -> Self {
+        var copy = self
+        var geometry = params.geometry
+        geometry.scale = scale ?? geometry.scale
+        geometry.spacing = spacing ?? geometry.spacing
+        geometry.outputWidth = outputWidth ?? geometry.outputWidth
+        copy.params = params.replacingGeometry(geometry)
+        return copy
+    }
+
+    public func updatingCommon(_ value: GPUEffectCommonParameters) -> Self {
+        var copy = self
+        copy.params = params.replacingCommon(value)
+        return copy
+    }
+
+    public func updatingColor(_ value: GPUEffectColorParameters) -> Self {
+        var copy = self
+        copy.params = params.replacingColor(value)
+        return copy
     }
 
     private enum CodingKeys: String, CodingKey {
