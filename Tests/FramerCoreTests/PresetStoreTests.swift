@@ -35,6 +35,39 @@ final class PresetStoreTests: XCTestCase {
         XCTAssertEqual(all.count, 2)
     }
 
+    func test_listPresets_preservesLegacyDitherStackWithoutPreprocessingFields() throws {
+        let dither = DitherLayerParams(algorithm: .bayer, bayerLevel: 3, pixelScale: 2)
+        var config = ProcessingConfig.default
+        config.layers = [
+            .border(BorderLayerParams(enabled: false, thickness: .pixels(7))),
+            .dither(dither),
+        ]
+        let preset = Preset(name: "Legacy Dither", config: config)
+        var json = try XCTUnwrap(JSONSerialization.jsonObject(
+            with: JSONEncoder().encode(preset)
+        ) as? [String: Any])
+        var storedConfig = try XCTUnwrap(json["config"] as? [String: Any])
+        var layers = try XCTUnwrap(storedConfig["layers"] as? [[String: Any]])
+        // The original source-build dither schema predates enabled and preprocessing.
+        layers[1]["params"] = [
+            "id": dither.id.uuidString,
+            "algorithm": "bayer",
+            "colorMode": ["type": "bw"],
+            "bayerLevel": 3,
+            "pixelScale": 2,
+        ]
+        storedConfig["layers"] = layers
+        json["config"] = storedConfig
+        let original = try JSONSerialization.data(withJSONObject: json)
+        let file = tempDir.appendingPathComponent("\(preset.id.uuidString).json")
+        try original.write(to: file)
+        let store = PresetStore(directory: tempDir)
+
+        XCTAssertEqual(try store.list(), [preset])
+        XCTAssertEqual(try store.load(id: preset.id), preset)
+        XCTAssertEqual(try Data(contentsOf: file), original)
+    }
+
     func test_listPresets_preservesUnreadableFilesAndReturnsValidPresets() throws {
         let store = PresetStore(directory: tempDir)
         let first = Preset(name: "A", config: .default)
